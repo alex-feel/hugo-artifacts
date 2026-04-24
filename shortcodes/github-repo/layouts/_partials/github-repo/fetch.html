@@ -7,7 +7,6 @@
   - .name (string) - Display name override (empty string for default)
   - .description (string) - Description override (empty string for default)
   - .position (text.Position) - Shortcode call position for error messages
-  - .site (Site) - Site object for data access
 
   Returns a normalized dict with repository metadata, formatted values,
   and variant-specific data (languages for V4, sparkline for V5).
@@ -18,7 +17,6 @@
 {{- $nameOverride := .name -}}
 {{- $descOverride := .description -}}
 {{- $position := .position -}}
-{{- $site := .site -}}
 
 {{/* Parse owner/repo from URL */}}
 {{- $path := replaceRE `^https?://github\.com/([^/]+/[^/]+)/?.*$` "$1" $url -}}
@@ -86,7 +84,7 @@
     {{- $lang := or $json.language "" -}}
     {{- $langColor := "" -}}
     {{- with $lang -}}
-      {{- with index $site.Data.github_lang_colors . -}}
+      {{- with index hugo.Data.github_lang_colors . -}}
         {{- $langColor = . -}}
       {{- end -}}
     {{- end -}}
@@ -145,7 +143,7 @@
         {{- range $lang, $bytes := $langMap -}}
           {{- $pct := math.Round (math.Mul (math.Div (float $bytes) $total) 100) -}}
           {{- $color := "#858585" -}}
-          {{- with index $site.Data.github_lang_colors $lang -}}
+          {{- with index hugo.Data.github_lang_colors $lang -}}
             {{- $color = . -}}
           {{- end -}}
           {{- $langSlice = $langSlice | append (dict "name" $lang "pct" $pct "color" $color) -}}
