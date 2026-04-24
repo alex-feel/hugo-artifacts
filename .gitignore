@@ -1,0 +1,29 @@
+# OS
+Thumbs.db
+.DS_Store
+
+# Hugo build artifacts
+public/
+resources/
+.hugo_build.lock
+
+# Go
+vendor/
+
+# Node.js
+node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Hugo module cache
+_vendor/
+
+# Tooling
+.serena/
+.claude/
+.context_server/
+.code-review-graph/
