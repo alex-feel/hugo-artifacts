@@ -1,0 +1,81 @@
+{{/*
+  Renders V2 editorial card variant of the GitHub repo shortcode (default).
+
+  Context expectations:
+  - . (dict) - Normalized repo data from fetch.html partial
+  - .url (string) - Full GitHub repository URL
+  - .owner (string) - Repository owner
+  - .name (string) - Display name
+  - .fullName (string) - "owner/repo"
+  - .description (string) - Repository description
+  - .language (string) - Primary language
+  - .langColor (string) - Language color hex
+  - .stars (int) - Star count
+  - .starsFormatted (string) - Formatted star count
+  - .forks (int) - Fork count
+  - .forksFormatted (string) - Formatted fork count
+  - .license (string) - SPDX license identifier
+  - .updated (string) - Relative time since last push
+  - .apiOk (bool) - Whether API fetch succeeded
+  - .extraClass (string) - Additional CSS classes
+
+  Output: An <a> element with BEM class github-repo github-repo--card
+*/}}
+
+{{- if .apiOk -}}
+<a href="{{ .url }}"
+   class="github-repo github-repo--card{{ with .extraClass }} {{ . }}{{ end }}"
+   target="_blank"
+   rel="noopener noreferrer"
+   data-repo="{{ .fullName }}"
+   data-variant="card">
+  <div class="github-repo__top">
+    <span class="github-repo__slug">
+      {{- partial "github-repo/icon.html" (dict "name" "github" "class" "github-repo__icon") }} GITHUB · REPOSITORY</span>
+    <span class="github-repo__external-badge">
+      {{- partial "github-repo/icon.html" (dict "name" "external") -}}
+    </span>
+  </div>
+  <h3 class="github-repo__title">
+    <span class="github-repo__owner">{{ .owner }} /</span> {{ .name }}
+  </h3>
+  {{- with .description }}
+  <p class="github-repo__description">{{ . }}</p>
+  {{- end }}
+  <div class="github-repo__footer">
+    {{- with .language }}
+    <span class="github-repo__meta-item">
+      <span class="github-repo__lang-dot" style="--github-repo-lang-color: {{ $.langColor }}"></span>
+      {{ . }}
+    </span>
+    {{- end }}
+    {{- if gt .stars 0 }}
+    <span class="github-repo__meta-item">
+      {{- partial "github-repo/icon.html" (dict "name" "star") }}
+      {{ .starsFormatted }}
+    </span>
+    {{- end }}
+    {{- if gt .forks 0 }}
+    <span class="github-repo__meta-item">
+      {{- partial "github-repo/icon.html" (dict "name" "fork") }}
+      {{ .forksFormatted }}
+    </span>
+    {{- end }}
+    {{- with .license }}
+    <span class="github-repo__meta-item">
+      {{- partial "github-repo/icon.html" (dict "name" "license") }}
+      {{ . }}
+    </span>
+    {{- end }}
+    {{- with .updated }}
+    <span class="github-repo__meta-item github-repo__meta-item--updated">
+      {{- partial "github-repo/icon.html" (dict "name" "clock") }}
+      updated {{ . }}
+    </span>
+    {{- end }}
+  </div>
+</a>
+{{- else -}}
+{{/* Degraded output: delegate to inline chip partial on API failure */}}
+{{- partial "github-repo/inline.html" (merge . (dict "variant" "card")) -}}
+{{- end -}}

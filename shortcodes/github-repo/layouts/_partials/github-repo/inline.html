@@ -1,0 +1,31 @@
+{{/*
+  Renders V1 inline chip variant of the GitHub repo shortcode.
+  Also serves as the degraded fallback for other variants when the API fails.
+
+  Context expectations:
+  - . (dict) - Normalized repo data from fetch.html partial
+  - .url (string) - Full GitHub repository URL
+  - .owner (string) - Repository owner
+  - .repo (string) - Repository name
+  - .fullName (string) - "owner/repo"
+  - .extraClass (string) - Additional CSS classes
+  - .variant (string, optional) - Originating variant name for data-variant attribute (default: "inline")
+
+  Output: An <a> element with BEM class github-repo github-repo--inline
+*/}}
+
+{{- $variant := .variant | default "inline" -}}
+<a href="{{ .url }}"
+   class="github-repo github-repo--inline{{ with .extraClass }} {{ . }}{{ end }}"
+   target="_blank"
+   rel="noopener noreferrer"
+   data-repo="{{ .fullName }}"
+   data-variant="{{ $variant }}">
+  {{- partial "github-repo/icon.html" (dict "name" "github" "class" "github-repo__icon") -}}
+  <span class="github-repo__name">
+    <span class="github-repo__owner">{{ .owner }}</span>
+    <span class="github-repo__separator">/</span>
+    {{ .repo -}}
+  </span>
+  {{- partial "github-repo/icon.html" (dict "name" "external" "class" "github-repo__external") -}}
+</a>

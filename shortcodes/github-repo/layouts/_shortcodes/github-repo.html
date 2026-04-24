@@ -1,0 +1,49 @@
+{{/*
+  Renders a GitHub repository link in one of five display variants.
+
+  Parameters:
+  - url (string, required): Full GitHub repository URL
+  - variant (string, optional): Display variant. One of: inline, card, stats, lang, hero. Default: "card"
+  - name (string, optional): Display name override (defaults to repo name from URL/API)
+  - description (string, optional): Description text override (defaults to API description)
+  - class (string, optional): Additional CSS class(es) appended to the root element
+
+  Usage:
+    {{</* github-repo url="https://github.com/owner/repo" */>}}
+    {{</* github-repo url="https://github.com/owner/repo" variant="hero" */>}}
+    {{</* github-repo url="https://github.com/owner/repo" variant="inline" name="My Fork" class="featured" */>}}
+*/}}
+
+{{- $url := .Get "url" -}}
+{{- $variant := .Get "variant" | default "card" -}}
+{{- $name := .Get "name" | default "" -}}
+{{- $description := .Get "description" | default "" -}}
+{{- $class := .Get "class" | default "" -}}
+
+{{/* Validate required url parameter */}}
+{{- if not $url -}}
+  {{- errorf "The %q shortcode requires a 'url' parameter. See %s" .Name .Position -}}
+{{- end -}}
+
+{{/* Validate variant against allowed values */}}
+{{- $validVariants := slice "inline" "card" "stats" "lang" "hero" -}}
+{{- if not (in $validVariants $variant) -}}
+  {{- errorf "The %q shortcode received invalid variant %q. Must be one of: inline, card, stats, lang, hero. See %s" .Name $variant .Position -}}
+{{- end -}}
+
+{{/* Fetch and normalize repository data */}}
+{{- $ctx := dict
+  "url" $url
+  "variant" $variant
+  "name" $name
+  "description" $description
+  "position" .Position
+  "site" .Site
+-}}
+{{- $data := partial "github-repo/fetch.html" $ctx -}}
+
+{{/* Merge extra class into data */}}
+{{- $data = merge $data (dict "extraClass" $class) -}}
+
+{{/* Dispatch to variant partial */}}
+{{- partial (printf "github-repo/%s.html" $variant) $data -}}

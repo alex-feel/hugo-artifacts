@@ -1,0 +1,175 @@
+{{/*
+  Fetches and normalizes GitHub repository data via the REST API.
+
+  Context expectations:
+  - .url (string) - Full GitHub repository URL
+  - .variant (string) - Display variant (inline, card, stats, lang, hero)
+  - .name (string) - Display name override (empty string for default)
+  - .description (string) - Description override (empty string for default)
+  - .position (text.Position) - Shortcode call position for error messages
+  - .site (Site) - Site object for data access
+
+  Returns a normalized dict with repository metadata, formatted values,
+  and variant-specific data (languages for V4, sparkline for V5).
+*/}}
+
+{{- $url := .url -}}
+{{- $variant := .variant -}}
+{{- $nameOverride := .name -}}
+{{- $descOverride := .description -}}
+{{- $position := .position -}}
+{{- $site := .site -}}
+
+{{/* Parse owner/repo from URL */}}
+{{- $path := replaceRE `^https?://github\.com/([^/]+/[^/]+)/?.*$` "$1" $url -}}
+{{- $parts := split $path "/" -}}
+{{- $owner := index $parts 0 -}}
+{{- $repo := index $parts 1 -}}
+
+{{/* Build fallback dict for API failure */}}
+{{- $fallback := dict
+  "owner" $owner
+  "repo" $repo
+  "fullName" (printf "%s/%s" $owner $repo)
+  "name" (or $nameOverride $repo)
+  "description" (or $descOverride "")
+  "language" ""
+  "langColor" ""
+  "stars" 0
+  "starsFormatted" "0"
+  "forks" 0
+  "forksFormatted" "0"
+  "watchers" 0
+  "license" ""
+  "topics" (slice)
+  "updated" ""
+  "url" $url
+  "apiOk" false
+  "languages" (slice)
+  "sparkline" (slice)
+  "extraClass" ""
+-}}
+
+{{/* Build request options with optional auth */}}
+{{- $headers := dict "Accept" "application/vnd.github+json" -}}
+{{- $token := os.Getenv "HUGO_GITHUB_TOKEN" -}}
+{{- if $token -}}
+  {{- $headers = merge $headers (dict "Authorization" (printf "Bearer %s" $token)) -}}
+{{- end -}}
+{{- $opts := dict "headers" $headers -}}
+
+{{/* API base URL */}}
+{{- $apiBase := printf "https://api.github.com/repos/%s/%s" $owner $repo -}}
+
+{{/* Fetch base repo data */}}
+{{- $data := $fallback -}}
+{{- with try (resources.GetRemote $apiBase $opts) -}}
+  {{- with .Err -}}
+    {{- warnf "[github-repo] API error for %s/%s: %s. See %s" $owner $repo . $position -}}
+  {{- else with .Value -}}
+    {{- $json := . | transform.Unmarshal -}}
+
+    {{/* Compact number formatting */}}
+    {{- $starsRaw := or $json.stargazers_count 0 -}}
+    {{- $forksRaw := or $json.forks_count 0 -}}
+
+    {{- $starsF := partial "github-repo/compact-number.html" $starsRaw -}}
+    {{- $forksF := partial "github-repo/compact-number.html" $forksRaw -}}
+
+    {{/* Relative time from pushed_at */}}
+    {{- $updatedStr := "" -}}
+    {{- with $json.pushed_at -}}
+      {{- $updatedStr = partial "github-repo/relative-time.html" . -}}
+    {{- end -}}
+
+    {{/* Language color lookup */}}
+    {{- $lang := or $json.language "" -}}
+    {{- $langColor := "" -}}
+    {{- with $lang -}}
+      {{- with index $site.Data.github_lang_colors . -}}
+        {{- $langColor = . -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{/* License extraction */}}
+    {{- $license := "" -}}
+    {{- with $json.license -}}
+      {{- with .spdx_id -}}
+        {{- if ne . "NOASSERTION" -}}
+          {{- $license = . -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{- $data = dict
+      "owner" $owner
+      "repo" $repo
+      "fullName" (printf "%s/%s" $owner $repo)
+      "name" (or $nameOverride $json.name $repo)
+      "description" (or $descOverride $json.description "")
+      "language" $lang
+      "langColor" $langColor
+      "stars" $starsRaw
+      "starsFormatted" $starsF
+      "forks" $forksRaw
+      "forksFormatted" $forksF
+      "watchers" (or $json.subscribers_count 0)
+      "license" $license
+      "topics" (or $json.topics (slice))
+      "updated" $updatedStr
+      "url" $url
+      "apiOk" true
+      "languages" (slice)
+      "sparkline" (slice)
+      "extraClass" ""
+    -}}
+  {{- else -}}
+    {{- warnf "[github-repo] Repository not found: %s/%s (HTTP 404). See %s" $owner $repo $position -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* V4 (lang): fetch language composition */}}
+{{- if and (eq $variant "lang") (eq (index $data "apiOk") true) -}}
+  {{- $langUrl := printf "%s/languages" $apiBase -}}
+  {{- with try (resources.GetRemote $langUrl $opts) -}}
+    {{- with .Err -}}
+      {{- warnf "[github-repo] Languages API error for %s/%s: %s. See %s" $owner $repo . $position -}}
+    {{- else with .Value -}}
+      {{- $langMap := . | transform.Unmarshal -}}
+      {{- $total := 0.0 -}}
+      {{- range $lang, $bytes := $langMap -}}
+        {{- $total = math.Add $total (float $bytes) -}}
+      {{- end -}}
+      {{- $langSlice := slice -}}
+      {{- if gt $total 0 -}}
+        {{- range $lang, $bytes := $langMap -}}
+          {{- $pct := math.Round (math.Mul (math.Div (float $bytes) $total) 100) -}}
+          {{- $color := "#858585" -}}
+          {{- with index $site.Data.github_lang_colors $lang -}}
+            {{- $color = . -}}
+          {{- end -}}
+          {{- $langSlice = $langSlice | append (dict "name" $lang "pct" $pct "color" $color) -}}
+        {{- end -}}
+        {{- $langSlice = sort $langSlice "pct" "desc" -}}
+      {{- end -}}
+      {{- $data = merge $data (dict "languages" $langSlice) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* V5 (hero): fetch participation sparkline */}}
+{{- if and (eq $variant "hero") (eq (index $data "apiOk") true) -}}
+  {{- $statsUrl := printf "%s/stats/participation" $apiBase -}}
+  {{- with try (resources.GetRemote $statsUrl $opts) -}}
+    {{- with .Err -}}
+      {{- warnf "[github-repo] Participation API error for %s/%s: %s. See %s" $owner $repo . $position -}}
+    {{- else with .Value -}}
+      {{- $statsJson := . | transform.Unmarshal -}}
+      {{- with $statsJson.all -}}
+        {{- $data = merge $data (dict "sparkline" .) -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $data -}}
