@@ -1,0 +1,68 @@
+{{/*
+  Renders V4 language-bar card variant of the GitHub repo shortcode.
+
+  Context expectations:
+  - . (dict) - Normalized repo data from fetch.html partial
+  - .url (string) - Full GitHub repository URL
+  - .owner (string) - Repository owner
+  - .name (string) - Display name
+  - .fullName (string) - "owner/repo"
+  - .description (string) - Repository description
+  - .starsFormatted (string) - Formatted star count
+  - .forksFormatted (string) - Formatted fork count
+  - .topics (slice) - Repository topic tags
+  - .languages (slice) - Language composition: [{name, pct, color}]
+  - .apiOk (bool) - Whether API fetch succeeded
+  - .extraClass (string) - Additional CSS classes
+
+  Output: An <a> element with BEM class github-repo github-repo--lang
+*/}}
+
+{{- if .apiOk -}}
+<a href="{{ .url }}"
+   class="github-repo github-repo--lang{{ with .extraClass }} {{ . }}{{ end }}"
+   target="_blank"
+   rel="noopener noreferrer"
+   data-repo="{{ .fullName }}"
+   data-variant="lang">
+  <div class="github-repo__top">
+    <span class="github-repo__slug">
+      {{- partial "github-repo/icon.html" (dict "name" "github" "class" "github-repo__icon") }} REPOSITORY</span>
+    <span class="github-repo__star-pill">
+      {{- partial "github-repo/icon.html" (dict "name" "star") }}
+      {{ .starsFormatted }} · {{ .forksFormatted }} forks
+    </span>
+  </div>
+  <h3 class="github-repo__title">
+    <span class="github-repo__owner">{{ .owner }} /</span> {{ .name }}
+  </h3>
+  {{- with .description }}
+  <p class="github-repo__description">{{ . }}</p>
+  {{- end }}
+  {{- with .topics }}
+  <div class="github-repo__topics">
+    {{- range . }}
+    <span class="github-repo__topic">#{{ . }}</span>
+    {{- end }}
+  </div>
+  {{- end }}
+  {{- with .languages }}
+  <div class="github-repo__langbar">
+    {{- range . }}
+    <span style="width: {{ .pct }}%; background: {{ .color }}"></span>
+    {{- end }}
+  </div>
+  <div class="github-repo__lang-legend">
+    {{- range . }}
+    <span class="github-repo__lang-legend-item">
+      <span class="github-repo__lang-dot" style="background: {{ .color }}"></span>
+      {{ .name }}<span class="github-repo__lang-pct">{{ .pct }}%</span>
+    </span>
+    {{- end }}
+  </div>
+  {{- end }}
+</a>
+{{- else -}}
+{{/* Degraded output: delegate to inline chip partial on API failure */}}
+{{- partial "github-repo/inline.html" (merge . (dict "variant" "lang")) -}}
+{{- end -}}

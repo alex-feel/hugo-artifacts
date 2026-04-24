@@ -27,6 +27,13 @@ hugo-artifacts/
     layouts/
     assets/
 
+  shortcodes/
+    github-repo/
+      go.mod                    # module github.com/alex-feel/hugo-artifacts/shortcodes/github-repo
+      hugo.toml
+      data/
+      layouts/
+
   <category>/
     <module-name>/
       go.mod                    # module github.com/alex-feel/hugo-artifacts/<category>/<module-name>

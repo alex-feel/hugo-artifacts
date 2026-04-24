@@ -1,0 +1,82 @@
+{{/*
+  Renders V3 stats card variant of the GitHub repo shortcode.
+
+  Context expectations:
+  - . (dict) - Normalized repo data from fetch.html partial
+  - .url (string) - Full GitHub repository URL
+  - .owner (string) - Repository owner
+  - .name (string) - Display name
+  - .fullName (string) - "owner/repo"
+  - .description (string) - Repository description
+  - .language (string) - Primary language
+  - .langColor (string) - Language color hex
+  - .starsFormatted (string) - Formatted star count
+  - .forksFormatted (string) - Formatted fork count
+  - .license (string) - SPDX license identifier
+  - .apiOk (bool) - Whether API fetch succeeded
+  - .extraClass (string) - Additional CSS classes
+
+  Output: An <a> element with BEM class github-repo github-repo--stats
+*/}}
+
+{{- if .apiOk -}}
+<a href="{{ .url }}"
+   class="github-repo github-repo--stats{{ with .extraClass }} {{ . }}{{ end }}"
+   target="_blank"
+   rel="noopener noreferrer"
+   data-repo="{{ .fullName }}"
+   data-variant="stats">
+  <div class="github-repo__head">
+    <div class="github-repo__avatar">
+      <span>{{ upper (substr .owner 0 1) }}</span>
+    </div>
+    <div class="github-repo__head-meta">
+      <div class="github-repo__eyebrow">
+        {{- partial "github-repo/icon.html" (dict "name" "github" "class" "github-repo__icon") }}
+        GITHUB / {{ upper .owner }}
+      </div>
+      <h3 class="github-repo__title">
+        <span class="github-repo__owner">{{ .owner }} /</span> {{ .name }}
+      </h3>
+    </div>
+    <span class="github-repo__external-badge">
+      {{- partial "github-repo/icon.html" (dict "name" "external") -}}
+    </span>
+  </div>
+  {{- with .description }}
+  <p class="github-repo__description">{{ . }}</p>
+  {{- end }}
+  <div class="github-repo__stat-row">
+    <div class="github-repo__stat">
+      <span class="github-repo__stat-label">Language</span>
+      <span class="github-repo__stat-value">
+        {{- with $.language -}}
+        <span class="github-repo__lang-dot" style="--github-repo-lang-color: {{ $.langColor }}"></span>
+        {{ . }}
+        {{- else -}}--{{- end -}}
+      </span>
+    </div>
+    <div class="github-repo__stat">
+      <span class="github-repo__stat-label">Stars</span>
+      <span class="github-repo__stat-value">
+        {{- partial "github-repo/icon.html" (dict "name" "star") }}
+        {{ .starsFormatted }}
+      </span>
+    </div>
+    <div class="github-repo__stat">
+      <span class="github-repo__stat-label">Forks</span>
+      <span class="github-repo__stat-value">
+        {{- partial "github-repo/icon.html" (dict "name" "fork") }}
+        {{ .forksFormatted }}
+      </span>
+    </div>
+    <div class="github-repo__stat">
+      <span class="github-repo__stat-label">License</span>
+      <span class="github-repo__stat-value">{{ or .license "--" }}</span>
+    </div>
+  </div>
+</a>
+{{- else -}}
+{{/* Degraded output: delegate to inline chip partial on API failure */}}
+{{- partial "github-repo/inline.html" (merge . (dict "variant" "stats")) -}}
+{{- end -}}
