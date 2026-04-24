@@ -24,6 +24,10 @@ A Hugo module may contain any subset of these seven directories; add only what t
 
 A shortcode module may only need `layouts/`. An asset library may only need `assets/`. Don't create empty directories.
 
+Inside `layouts/`, use Hugo 0.146+ underscore-prefixed subdirectories: `layouts/_shortcodes/`, `layouts/_partials/`, `layouts/_markup/`. The existing `shortcodes/github-repo` module follows this convention — mirror it for new modules. The legacy non-prefixed names still work but are not what this repo uses.
+
+Hugo reads environment variables only when they match `^HUGO_` or `^CI$` (default security policy). A module that needs an API token must document the `HUGO_`-prefixed name (e.g., `HUGO_GITHUB_TOKEN`); a bare `GITHUB_TOKEN` silently returns empty string and degrades at runtime with no build error.
+
 ## Creating a new module
 
 ```bash
@@ -38,6 +42,32 @@ mkdir -p <path>/<module-name>
 
 # 4. Add hugo.toml only if config is needed
 ```
+
+## Verifying a module locally
+
+A module in this repo cannot be run standalone — Hugo builds require a consuming site. Validate changes against an external site checkout using one of these mechanisms:
+
+**Option A — `hugo.work` (preferred for multi-module work).** In the consuming site root:
+
+```text
+go 1.22
+
+use .
+use ../hugo-artifacts/<module-path>
+```
+
+Add `hugo.work` to the consuming site's `.gitignore` — paths are machine-specific.
+
+**Option B — `module.replacements`.** In the consuming site's Hugo config:
+
+```toml
+[module]
+replacements = 'github.com/alex-feel/hugo-artifacts/<module-path> -> ../hugo-artifacts/<module-path>'
+```
+
+Either way, confirm resolution with `hugo mod graph` from the consuming site before tagging a release.
+
+For an end-to-end worked example of a module in this repo (shortcode with `data/`, partials, API fetching, graceful degradation), see `shortcodes/github-repo/` and its `README.md`.
 
 ## Tagging a release
 
