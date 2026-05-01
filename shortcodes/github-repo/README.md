@@ -19,7 +19,7 @@ Then fetch it:
 hugo mod get github.com/alex-feel/hugo-artifacts/shortcodes/github-repo
 ```
 
-**Important -- template lookup precedence:** If your site already has a file at `layouts/shortcodes/github-repo.html` or `layouts/_shortcodes/github-repo.html`, Hugo will use the local file instead of the module's shortcode. You must delete the local file for the module to take effect.
+**Important -- template lookup precedence:** If your site already has a file at `layouts/_shortcodes/github-repo.html`, Hugo will use the local file instead of the module's shortcode. You must delete the local file for the module to take effect.
 
 ## Requirements
 
