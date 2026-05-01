@@ -2,7 +2,7 @@
 
 Private multi-module Hugo monorepo for reusable artifacts: themes, shortcode libraries, utility modules, and other components shared across multiple Hugo sites.
 
-Each artifact lives in its own subdirectory with an independent `go.mod`, making it independently importable and versionable. This follows the [Go multi-module repository](https://go.dev/doc/modules/managing-source) pattern, proven in the companion [hugo-modules](https://github.com/alex-feel/hugo-modules) repository.
+Each artifact lives in its own subdirectory with an independent `go.mod`, making it independently importable and versionable. This follows the [Go multi-module repository](https://go.dev/doc/modules/managing-source) pattern.
 
 ## Repository Structure
 
