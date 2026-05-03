@@ -1,15 +1,54 @@
 {{/*
-  Fetches and normalizes GitHub repository data via the REST API.
+  Fetches and normalizes GitHub repository data via the REST API with
+  retry-and-classify resilience in front of the existing graceful
+  degradation. When all attempts fail, the partial returns a fallback dict
+  with `apiOk: false` and the variant partials degrade to the inline chip
+  -- the same final outcome as before this resilience layer was added.
+
+  Why retries (and only this much):
+  - resources.GetRemote in Hugo v0.160.1 has NO template-passed retry knobs
+    (no retryWaitMin / retryWaitMax / retryMax). Hugo's INTERNAL retry
+    covers only HTTP 408/429/500/502/503/504 -- it does NOT retry 403, the
+    response GitHub uses for primary rate-limit. Hugo also does not honor
+    Retry-After or X-RateLimit-Reset.
+  - Hugo templates have no sleep primitive, so true backoff between outer
+    attempts is structurally impossible. The closest approximation is to
+    drive multiple attempts with fresh cache keys (each attempt bypasses
+    Hugo's httpcache.Transport error caching) and to bound the whole thing
+    by an outer wall-clock budget so a misbehaving endpoint cannot stall
+    the build indefinitely.
+  - On retry exhaustion the widget degrades to the inline chip exactly as
+    it did before (variant partials' `else` branch -> inline.html). This
+    behavior is preserved as the final fallback by user requirement.
+
+  Retry constants (intentionally NOT shortcode parameters and NOT site
+  params -- the user requirement explicitly forbids new override surface):
+  - $attempts            5    Outer attempts per fetched endpoint.
+  - $perAttemptTimeout   30s  Per-request timeout for resources.GetRemote.
+  - $overallBudgetSec    120  Wall-clock cap per fetched endpoint.
+  - $waitHintCapSec      30   Display cap for waitHintSeconds in warnings;
+                              the full numeric hint is logged unconditionally
+                              so operators can act on it.
+
+  Early-break classes -- subsequent attempts are provably useless within a
+  single build, so the loop short-circuits when the prior attempt's
+  errorClass is one of:
+  - "primary-rate-limit"  Bucket is exhausted; reset is wall-clock-bound.
+  - "auth"                Token/permissions issue; another attempt cannot fix.
+  - "not-found"           Resource genuinely missing.
+  - "secondary-rate-limit" with waitHintSeconds > remaining budget.
 
   Context expectations:
-  - .url (string) - Full GitHub repository URL
-  - .variant (string) - Display variant (inline, card, stats, lang, hero)
-  - .name (string) - Display name override (empty string for default)
-  - .description (string) - Description override (empty string for default)
-  - .position (text.Position) - Shortcode call position for error messages
+  - .url (string)        Full GitHub repository URL.
+  - .variant (string)    Display variant (inline, card, stats, lang, hero).
+  - .name (string)       Display name override (empty for default).
+  - .description (string) Description override (empty for default).
+  - .position (text.Position) Shortcode call position (used in warnings).
 
-  Returns a normalized dict with repository metadata, formatted values,
-  and variant-specific data (languages for V4, sparkline for V5).
+  Returns: a normalized dict with repository metadata, formatted values,
+  and variant-specific data (`languages` for `lang`, `sparkline` for
+  `hero`). The dict's `apiOk` flag is the contract the variant partials
+  branch on.
 */}}
 
 {{- $url := .url -}}
@@ -18,13 +57,14 @@
 {{- $descOverride := .description -}}
 {{- $position := .position -}}
 
-{{/* Parse owner/repo from URL */}}
+{{/* Parse owner/repo from URL. */}}
 {{- $path := replaceRE `^https?://github\.com/([^/]+/[^/]+)/?.*$` "$1" $url -}}
 {{- $parts := split $path "/" -}}
 {{- $owner := index $parts 0 -}}
 {{- $repo := index $parts 1 -}}
 
-{{/* Build fallback dict for API failure */}}
+{{/* Build fallback dict for API failure. The variant partials branch on
+     `apiOk` and degrade to inline.html when it is false. */}}
 {{- $fallback := dict
   "owner" $owner
   "repo" $repo
@@ -48,125 +88,278 @@
   "extraClass" ""
 -}}
 
-{{/* Build request options with optional auth */}}
-{{- $headers := dict "Accept" "application/vnd.github+json" -}}
+{{/* Resolve the token once. Hugo's default security policy only exposes
+     env vars matching ^HUGO_ or ^CI$, so the prefix is mandatory. */}}
 {{- $token := os.Getenv "HUGO_GITHUB_TOKEN" -}}
-{{- if $token -}}
-  {{- $headers = merge $headers (dict "Authorization" (printf "Bearer %s" $token)) -}}
-{{- end -}}
-{{- $opts := dict "headers" $headers -}}
 
-{{/* API base URL */}}
+{{/* Token preflight: emit one warning per build when the token is missing.
+     Deduplication uses hugo.Store (build-scoped scratch) -- the first call
+     observes nil for the sentinel key and warns; subsequent calls observe
+     the sentinel and stay silent. */}}
+{{- if not $token -}}
+  {{- $warnedKey := "github-repo:warned-no-token" -}}
+  {{- if not (hugo.Store.Get $warnedKey) -}}
+    {{- hugo.Store.Set $warnedKey true -}}
+    {{- warnf "[github-repo] HUGO_GITHUB_TOKEN is not set. Unauthenticated GitHub API requests are limited to 60 per hour, which can cause shortcode renders to degrade to the inline chip during a build. Set HUGO_GITHUB_TOKEN to a personal access token (no scopes required for public repositories) to raise the limit to 5,000 per hour. See %s" $position -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Retry constants. Aggressive defaults per user-approved plan. */}}
+{{- $attempts := 5 -}}
+{{- $perAttemptTimeout := "30s" -}}
+{{- $overallBudgetSec := 120 -}}
+{{- $waitHintCapSec := 30 -}}
+
+{{/* Early-break classes shared across the three endpoint loops. */}}
+{{- $earlyBreakClasses := slice "primary-rate-limit" "auth" "not-found" -}}
+
+{{/* API base URL. */}}
 {{- $apiBase := printf "https://api.github.com/repos/%s/%s" $owner $repo -}}
 
-{{/* Fetch base repo data */}}
-{{- $data := $fallback -}}
-{{- with try (resources.GetRemote $apiBase $opts) -}}
-  {{- with .Err -}}
-    {{- warnf "[github-repo] API error for %s/%s: %s. See %s" $owner $repo . $position -}}
-  {{- else with .Value -}}
-    {{- $json := . | transform.Unmarshal -}}
-
-    {{/* Compact number formatting */}}
-    {{- $starsRaw := or $json.stargazers_count 0 -}}
-    {{- $forksRaw := or $json.forks_count 0 -}}
-
-    {{- $starsF := partial "github-repo/compact-number.html" $starsRaw -}}
-    {{- $forksF := partial "github-repo/compact-number.html" $forksRaw -}}
-
-    {{/* Relative time from pushed_at */}}
-    {{- $updatedStr := "" -}}
-    {{- with $json.pushed_at -}}
-      {{- $updatedStr = partial "github-repo/relative-time.html" . -}}
-    {{- end -}}
-
-    {{/* Language color lookup */}}
-    {{- $lang := or $json.language "" -}}
-    {{- $langColor := "" -}}
-    {{- with $lang -}}
-      {{- with index hugo.Data.github_lang_colors . -}}
-        {{- $langColor = . -}}
-      {{- end -}}
-    {{- end -}}
-
-    {{/* License extraction */}}
-    {{- $license := "" -}}
-    {{- with $json.license -}}
-      {{- with .spdx_id -}}
-        {{- if ne . "NOASSERTION" -}}
-          {{- $license = . -}}
-        {{- end -}}
-      {{- end -}}
-    {{- end -}}
-
-    {{- $data = dict
-      "owner" $owner
-      "repo" $repo
-      "fullName" (printf "%s/%s" $owner $repo)
-      "name" (or $nameOverride $json.name $repo)
-      "description" (or $descOverride $json.description "")
-      "language" $lang
-      "langColor" $langColor
-      "stars" $starsRaw
-      "starsFormatted" $starsF
-      "forks" $forksRaw
-      "forksFormatted" $forksF
-      "watchers" (or $json.subscribers_count 0)
-      "license" $license
-      "topics" (or $json.topics (slice))
-      "updated" $updatedStr
-      "url" $url
-      "apiOk" true
-      "languages" (slice)
-      "sparkline" (slice)
-      "extraClass" ""
-    -}}
+{{/* ---------- Endpoint 1 of up to 3: base repo ---------- */}}
+{{- $startSec := int now.Unix -}}
+{{- $repoResult := dict
+  "ok" false
+  "value" nil
+  "statusCode" 0
+  "headers" (dict)
+  "errorClass" "network"
+  "errorMessage" ""
+  "waitHintSeconds" 0
+-}}
+{{- $repoAttemptsUsed := 0 -}}
+{{- range $attempt := seq 1 $attempts -}}
+  {{- if $repoResult.ok -}}
+    {{/* Already succeeded; skip remaining attempts. */}}
   {{- else -}}
-    {{- warnf "[github-repo] Repository not found: %s/%s (HTTP 404). See %s" $owner $repo $position -}}
+    {{- $elapsed := sub (int now.Unix) $startSec -}}
+    {{- $remaining := sub $overallBudgetSec $elapsed -}}
+    {{- if le $remaining 0 -}}
+      {{/* Wall-clock budget exhausted; stop attempting. */}}
+    {{- else if and (gt $attempt 1) (in $earlyBreakClasses $repoResult.errorClass) -}}
+      {{/* Provably-useless class; further attempts within this build cannot succeed. */}}
+    {{- else if and (gt $attempt 1) (eq $repoResult.errorClass "secondary-rate-limit") (gt $repoResult.waitHintSeconds $remaining) -}}
+      {{/* Secondary rate-limit reset window exceeds remaining budget. */}}
+    {{- else -}}
+      {{- $cacheKey := printf "github-repo:%s/%s:repo:attempt%d" $owner $repo $attempt -}}
+      {{- $repoResult = partial "github-repo/fetch-once.html" (dict
+        "url" $apiBase
+        "cacheKey" $cacheKey
+        "token" $token
+        "timeout" $perAttemptTimeout
+      ) -}}
+      {{- $repoAttemptsUsed = $attempt -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 
-{{/* V4 (lang): fetch language composition */}}
-{{- if and (eq $variant "lang") (eq (index $data "apiOk") true) -}}
+{{/* Build the normalized data dict. On success, populate from the JSON
+     response; on failure, keep the fallback and emit a single structured
+     warning so operators can act. */}}
+{{- $data := $fallback -}}
+{{- if $repoResult.ok -}}
+  {{- $json := $repoResult.value -}}
+
+  {{/* Compact number formatting. */}}
+  {{- $starsRaw := or $json.stargazers_count 0 -}}
+  {{- $forksRaw := or $json.forks_count 0 -}}
+
+  {{- $starsF := partial "github-repo/compact-number.html" $starsRaw -}}
+  {{- $forksF := partial "github-repo/compact-number.html" $forksRaw -}}
+
+  {{/* Relative time from pushed_at. */}}
+  {{- $updatedStr := "" -}}
+  {{- with $json.pushed_at -}}
+    {{- $updatedStr = partial "github-repo/relative-time.html" . -}}
+  {{- end -}}
+
+  {{/* Language color lookup. */}}
+  {{- $lang := or $json.language "" -}}
+  {{- $langColor := "" -}}
+  {{- with $lang -}}
+    {{- with index hugo.Data.github_lang_colors . -}}
+      {{- $langColor = . -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* License extraction. */}}
+  {{- $license := "" -}}
+  {{- with $json.license -}}
+    {{- with .spdx_id -}}
+      {{- if ne . "NOASSERTION" -}}
+        {{- $license = . -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- $data = dict
+    "owner" $owner
+    "repo" $repo
+    "fullName" (printf "%s/%s" $owner $repo)
+    "name" (or $nameOverride $json.name $repo)
+    "description" (or $descOverride $json.description "")
+    "language" $lang
+    "langColor" $langColor
+    "stars" $starsRaw
+    "starsFormatted" $starsF
+    "forks" $forksRaw
+    "forksFormatted" $forksF
+    "watchers" (or $json.subscribers_count 0)
+    "license" $license
+    "topics" (or $json.topics (slice))
+    "updated" $updatedStr
+    "url" $url
+    "apiOk" true
+    "languages" (slice)
+    "sparkline" (slice)
+    "extraClass" ""
+  -}}
+{{- else -}}
+  {{- $hint := $repoResult.waitHintSeconds -}}
+  {{- $guidanceHint := "" -}}
+  {{- if gt $hint 0 -}}
+    {{- if gt $hint $waitHintCapSec -}}
+      {{- $guidanceHint = printf "wait %d seconds and rebuild (display capped at %ds)" $hint $waitHintCapSec -}}
+    {{- else -}}
+      {{- $guidanceHint = printf "wait %d seconds and rebuild" $hint -}}
+    {{- end -}}
+  {{- else -}}
+    {{- $guidanceHint = "see warning context for guidance" -}}
+  {{- end -}}
+  {{- warnf "[github-repo] Failed to fetch %s/%s after %d attempt(s) (errorClass=%s, statusCode=%d, message=%q). Hint: %s. See %s" $owner $repo $repoAttemptsUsed $repoResult.errorClass $repoResult.statusCode $repoResult.errorMessage $guidanceHint $position -}}
+{{- end -}}
+
+{{/* ---------- Endpoint 2: language composition (variant=lang only) ---------- */}}
+{{- if and (eq $variant "lang") $data.apiOk -}}
   {{- $langUrl := printf "%s/languages" $apiBase -}}
-  {{- with try (resources.GetRemote $langUrl $opts) -}}
-    {{- with .Err -}}
-      {{- warnf "[github-repo] Languages API error for %s/%s: %s. See %s" $owner $repo . $position -}}
-    {{- else with .Value -}}
-      {{- $langMap := . | transform.Unmarshal -}}
-      {{- $total := 0.0 -}}
-      {{- range $lang, $bytes := $langMap -}}
-        {{- $total = math.Add $total (float $bytes) -}}
+  {{- $langStartSec := int now.Unix -}}
+  {{- $langResult := dict
+    "ok" false
+    "value" nil
+    "statusCode" 0
+    "headers" (dict)
+    "errorClass" "network"
+    "errorMessage" ""
+    "waitHintSeconds" 0
+  -}}
+  {{- $langAttemptsUsed := 0 -}}
+  {{- range $attempt := seq 1 $attempts -}}
+    {{- if $langResult.ok -}}
+      {{/* Already succeeded; skip remaining attempts. */}}
+    {{- else -}}
+      {{- $elapsed := sub (int now.Unix) $langStartSec -}}
+      {{- $remaining := sub $overallBudgetSec $elapsed -}}
+      {{- if le $remaining 0 -}}
+        {{/* Budget exhausted. */}}
+      {{- else if and (gt $attempt 1) (in $earlyBreakClasses $langResult.errorClass) -}}
+        {{/* Provably-useless class. */}}
+      {{- else if and (gt $attempt 1) (eq $langResult.errorClass "secondary-rate-limit") (gt $langResult.waitHintSeconds $remaining) -}}
+        {{/* Reset window exceeds remaining budget. */}}
+      {{- else -}}
+        {{- $cacheKey := printf "github-repo:%s/%s:languages:attempt%d" $owner $repo $attempt -}}
+        {{- $langResult = partial "github-repo/fetch-once.html" (dict
+          "url" $langUrl
+          "cacheKey" $cacheKey
+          "token" $token
+          "timeout" $perAttemptTimeout
+        ) -}}
+        {{- $langAttemptsUsed = $attempt -}}
       {{- end -}}
-      {{- $langSlice := slice -}}
-      {{- if gt $total 0 -}}
-        {{- range $lang, $bytes := $langMap -}}
-          {{- $pct := math.Round (math.Mul (math.Div (float $bytes) $total) 100) -}}
-          {{- $color := "#858585" -}}
-          {{- with index hugo.Data.github_lang_colors $lang -}}
-            {{- $color = . -}}
-          {{- end -}}
-          {{- $langSlice = $langSlice | append (dict "name" $lang "pct" $pct "color" $color) -}}
-        {{- end -}}
-        {{- $langSlice = sort $langSlice "pct" "desc" -}}
-      {{- end -}}
-      {{- $data = merge $data (dict "languages" $langSlice) -}}
     {{- end -}}
+  {{- end -}}
+
+  {{- if $langResult.ok -}}
+    {{- $langMap := $langResult.value -}}
+    {{- $total := 0.0 -}}
+    {{- range $lang, $bytes := $langMap -}}
+      {{- $total = math.Add $total (float $bytes) -}}
+    {{- end -}}
+    {{- $langSlice := slice -}}
+    {{- if gt $total 0 -}}
+      {{- range $lang, $bytes := $langMap -}}
+        {{- $pct := math.Round (math.Mul (math.Div (float $bytes) $total) 100) -}}
+        {{- $color := "#858585" -}}
+        {{- with index hugo.Data.github_lang_colors $lang -}}
+          {{- $color = . -}}
+        {{- end -}}
+        {{- $langSlice = $langSlice | append (dict "name" $lang "pct" $pct "color" $color) -}}
+      {{- end -}}
+      {{- $langSlice = sort $langSlice "pct" "desc" -}}
+    {{- end -}}
+    {{- $data = merge $data (dict "languages" $langSlice) -}}
+  {{- else -}}
+    {{- $hint := $langResult.waitHintSeconds -}}
+    {{- $guidanceHint := "" -}}
+    {{- if gt $hint 0 -}}
+      {{- if gt $hint $waitHintCapSec -}}
+        {{- $guidanceHint = printf "wait %d seconds and rebuild (display capped at %ds)" $hint $waitHintCapSec -}}
+      {{- else -}}
+        {{- $guidanceHint = printf "wait %d seconds and rebuild" $hint -}}
+      {{- end -}}
+    {{- else -}}
+      {{- $guidanceHint = "see warning context for guidance" -}}
+    {{- end -}}
+    {{- warnf "[github-repo] Failed to fetch %s/%s languages after %d attempt(s) (errorClass=%s, statusCode=%d, message=%q). Hint: %s. See %s" $owner $repo $langAttemptsUsed $langResult.errorClass $langResult.statusCode $langResult.errorMessage $guidanceHint $position -}}
   {{- end -}}
 {{- end -}}
 
-{{/* V5 (hero): fetch participation sparkline */}}
-{{- if and (eq $variant "hero") (eq (index $data "apiOk") true) -}}
+{{/* ---------- Endpoint 3: participation sparkline (variant=hero only) ---------- */}}
+{{- if and (eq $variant "hero") $data.apiOk -}}
   {{- $statsUrl := printf "%s/stats/participation" $apiBase -}}
-  {{- with try (resources.GetRemote $statsUrl $opts) -}}
-    {{- with .Err -}}
-      {{- warnf "[github-repo] Participation API error for %s/%s: %s. See %s" $owner $repo . $position -}}
-    {{- else with .Value -}}
-      {{- $statsJson := . | transform.Unmarshal -}}
-      {{- with $statsJson.all -}}
-        {{- $data = merge $data (dict "sparkline" .) -}}
+  {{- $statsStartSec := int now.Unix -}}
+  {{- $statsResult := dict
+    "ok" false
+    "value" nil
+    "statusCode" 0
+    "headers" (dict)
+    "errorClass" "network"
+    "errorMessage" ""
+    "waitHintSeconds" 0
+  -}}
+  {{- $statsAttemptsUsed := 0 -}}
+  {{- range $attempt := seq 1 $attempts -}}
+    {{- if $statsResult.ok -}}
+      {{/* Already succeeded; skip remaining attempts. */}}
+    {{- else -}}
+      {{- $elapsed := sub (int now.Unix) $statsStartSec -}}
+      {{- $remaining := sub $overallBudgetSec $elapsed -}}
+      {{- if le $remaining 0 -}}
+        {{/* Budget exhausted. */}}
+      {{- else if and (gt $attempt 1) (in $earlyBreakClasses $statsResult.errorClass) -}}
+        {{/* Provably-useless class. */}}
+      {{- else if and (gt $attempt 1) (eq $statsResult.errorClass "secondary-rate-limit") (gt $statsResult.waitHintSeconds $remaining) -}}
+        {{/* Reset window exceeds remaining budget. */}}
+      {{- else -}}
+        {{- $cacheKey := printf "github-repo:%s/%s:participation:attempt%d" $owner $repo $attempt -}}
+        {{- $statsResult = partial "github-repo/fetch-once.html" (dict
+          "url" $statsUrl
+          "cacheKey" $cacheKey
+          "token" $token
+          "timeout" $perAttemptTimeout
+        ) -}}
+        {{- $statsAttemptsUsed = $attempt -}}
       {{- end -}}
     {{- end -}}
+  {{- end -}}
+
+  {{- if $statsResult.ok -}}
+    {{- $statsJson := $statsResult.value -}}
+    {{- with $statsJson.all -}}
+      {{- $data = merge $data (dict "sparkline" .) -}}
+    {{- end -}}
+  {{- else -}}
+    {{- $hint := $statsResult.waitHintSeconds -}}
+    {{- $guidanceHint := "" -}}
+    {{- if gt $hint 0 -}}
+      {{- if gt $hint $waitHintCapSec -}}
+        {{- $guidanceHint = printf "wait %d seconds and rebuild (display capped at %ds)" $hint $waitHintCapSec -}}
+      {{- else -}}
+        {{- $guidanceHint = printf "wait %d seconds and rebuild" $hint -}}
+      {{- end -}}
+    {{- else -}}
+      {{- $guidanceHint = "see warning context for guidance" -}}
+    {{- end -}}
+    {{- warnf "[github-repo] Failed to fetch %s/%s participation after %d attempt(s) (errorClass=%s, statusCode=%d, message=%q). Hint: %s. See %s" $owner $repo $statsAttemptsUsed $statsResult.errorClass $statsResult.statusCode $statsResult.errorMessage $guidanceHint $position -}}
   {{- end -}}
 {{- end -}}
 
