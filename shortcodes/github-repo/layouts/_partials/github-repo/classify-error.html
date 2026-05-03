@@ -1,0 +1,158 @@
+{{/*
+  Classifies a failed GitHub API response into a structured error category
+  and computes a wait-hint in seconds derived from rate-limit headers.
+
+  Inputs (context dict):
+  - .statusCode (int)        HTTP status code observed for the failed attempt.
+                              0 means no response was received (network/timeout).
+                              404 is used as a sentinel for the resources.GetRemote
+                              nil branch (Hugo returns nil on HTTP 404).
+  - .headers (map)            Response headers as exposed by Hugo's responseHeaders
+                              option. Each header value is a []string; lookups must
+                              extract index 0. Use the canonical GitHub casing
+                              (X-RateLimit-*, Retry-After) for both request and
+                              lookup -- GitHub returns headers in this exact case.
+  - .body (string)            Raw response body, used for best-effort diagnostic
+                              extraction (currently surfaced as a short message).
+
+  Output (returned dict):
+  - .errorClass (string)      One of:
+                                 "primary-rate-limit"   GitHub primary cap (HTTP 403,
+                                                        X-RateLimit-Remaining: 0).
+                                 "secondary-rate-limit" GitHub secondary cap (HTTP
+                                                        429), with Retry-After /
+                                                        X-RateLimit-Reset hints.
+                                 "auth"                 Authentication failure
+                                                        (401, or 403 not bearing
+                                                        rate-limit signals).
+                                 "server"               5xx server error.
+                                 "network"              No HTTP response (status 0).
+                                 "not-found"            Resource missing (404).
+                                 "media-type"           Unsupported media type
+                                                        (rarely surfaced here).
+                                 "other"                Anything else.
+  - .waitHintSeconds (int)    Suggested wait until the rate-limit window resets:
+                                 - primary-rate-limit:   X-RateLimit-Reset - now.Unix
+                                 - secondary-rate-limit: Retry-After (numeric) OR
+                                                         X-RateLimit-Reset - now.Unix
+                                                         OR 60 default.
+                                 - all other classes:    0
+                              The hint is informational; Hugo templates cannot
+                              sleep, so callers either decide to early-break
+                              (when the hint exceeds the remaining wall-clock
+                              budget) or surface the hint in a build warning.
+  - .errorMessage (string)    Short human-readable message derived from status
+                              code or, when available, the response body.
+*/}}
+
+{{- $statusCode := .statusCode | default 0 -}}
+{{- $headers := .headers | default (dict) -}}
+{{- $body := .body | default "" -}}
+
+{{/* Default classification: catch-all for unrecognized failures. */}}
+{{- $errorClass := "other" -}}
+{{- $waitHintSeconds := 0 -}}
+{{- $errorMessage := "" -}}
+
+{{/* Helper: extract first value of a header, returned as string. */}}
+{{- $rateLimitRemaining := "" -}}
+{{- with $headers -}}
+  {{- with index . "X-RateLimit-Remaining" -}}
+    {{- with index . 0 -}}
+      {{- $rateLimitRemaining = . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $rateLimitReset := 0 -}}
+{{- with $headers -}}
+  {{- with index . "X-RateLimit-Reset" -}}
+    {{- with index . 0 -}}
+      {{- $rateLimitReset = int . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $retryAfter := 0 -}}
+{{- $retryAfterPresent := false -}}
+{{- with $headers -}}
+  {{- with index . "Retry-After" -}}
+    {{- with index . 0 -}}
+      {{- $retryAfter = int . -}}
+      {{- $retryAfterPresent = true -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Status-code-driven classification. Order matters: more specific cases
+     (rate-limit signals on 403) must be checked before the generic 403 fallback. */}}
+{{- if eq $statusCode 0 -}}
+  {{- $errorClass = "network" -}}
+  {{- $errorMessage = "no response (network or timeout)" -}}
+{{- else if eq $statusCode 404 -}}
+  {{- $errorClass = "not-found" -}}
+  {{- $errorMessage = "HTTP 404" -}}
+{{- else if eq $statusCode 401 -}}
+  {{- $errorClass = "auth" -}}
+  {{- $errorMessage = "HTTP 401 (authentication failed)" -}}
+{{- else if eq $statusCode 403 -}}
+  {{/* Distinguish primary rate-limit from authorization failure.
+       Primary rate-limit responses always carry X-RateLimit-Remaining: 0. */}}
+  {{- if and (ne $rateLimitRemaining "") (eq $rateLimitRemaining "0") -}}
+    {{- $errorClass = "primary-rate-limit" -}}
+    {{- $errorMessage = "HTTP 403 (primary rate limit reached)" -}}
+    {{- if gt $rateLimitReset 0 -}}
+      {{- $delta := sub $rateLimitReset (int now.Unix) -}}
+      {{- if gt $delta 0 -}}
+        {{- $waitHintSeconds = $delta -}}
+      {{- end -}}
+    {{- end -}}
+  {{- else -}}
+    {{- $errorClass = "auth" -}}
+    {{- $errorMessage = "HTTP 403 (authorization failed)" -}}
+  {{- end -}}
+{{- else if eq $statusCode 429 -}}
+  {{- $errorClass = "secondary-rate-limit" -}}
+  {{- $errorMessage = "HTTP 429 (secondary rate limit reached)" -}}
+  {{/* Wait-hint preference order: explicit Retry-After header, then
+       X-RateLimit-Reset delta, then a 60-second default. */}}
+  {{- if and $retryAfterPresent (gt $retryAfter 0) -}}
+    {{- $waitHintSeconds = $retryAfter -}}
+  {{- else if gt $rateLimitReset 0 -}}
+    {{- $delta := sub $rateLimitReset (int now.Unix) -}}
+    {{- if gt $delta 0 -}}
+      {{- $waitHintSeconds = $delta -}}
+    {{- else -}}
+      {{- $waitHintSeconds = 60 -}}
+    {{- end -}}
+  {{- else -}}
+    {{- $waitHintSeconds = 60 -}}
+  {{- end -}}
+{{- else if ge $statusCode 500 -}}
+  {{- $errorClass = "server" -}}
+  {{- $errorMessage = printf "HTTP %d (server error)" $statusCode -}}
+{{- else -}}
+  {{- $errorMessage = printf "HTTP %d" $statusCode -}}
+{{- end -}}
+
+{{/* Best-effort enrichment: if GitHub returned a JSON error body with a
+     "message" field, surface it. Unmarshal failures are swallowed via try
+     so a malformed body cannot break the build. */}}
+{{- with $body -}}
+  {{- $trimmed := . -}}
+  {{- if hasPrefix $trimmed "{" -}}
+    {{- with try (transform.Unmarshal $trimmed) -}}
+      {{- with .Value -}}
+        {{- with .message -}}
+          {{- $errorMessage = printf "%s: %s" $errorMessage . -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return (dict
+  "errorClass" $errorClass
+  "waitHintSeconds" $waitHintSeconds
+  "errorMessage" $errorMessage
+) -}}

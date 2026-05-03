@@ -108,6 +108,8 @@ hugo
 
 The variable **must** be prefixed with `HUGO_`. Hugo's default security policy restricts `os.Getenv` to variables matching `^HUGO_` and `^CI$`. A variable named `GITHUB_TOKEN` (without the `HUGO_` prefix) will silently return an empty string.
 
+When `HUGO_GITHUB_TOKEN` is unset, the module emits a single warn-only preflight message per build (deduplicated via `hugo.Store`, so repeated shortcode invocations do not multiply the warning). The build always continues.
+
 ### Rate limits
 
 | Mode            | Limit               |
@@ -115,7 +117,7 @@ The variable **must** be prefixed with `HUGO_`. Hugo's default security policy r
 | Unauthenticated | 60 requests/hour    |
 | With token      | 5,000 requests/hour |
 
-Each shortcode invocation makes 1-3 API calls per unique repository depending on the variant:
+Each shortcode invocation makes 1-2 API calls per unique repository depending on the variant:
 
 | Variant          | API calls                                        |
 |------------------|--------------------------------------------------|
@@ -127,9 +129,84 @@ Each shortcode invocation makes 1-3 API calls per unique repository depending on
 
 Hugo caches remote resources to disk (`caches.getresource`), so repeated builds do not re-fetch until the cache expires.
 
+## Resilience and Retries
+
+Each API call is wrapped in an outer retry loop with header-aware error classification. The retry layer sits in front of the graceful-degradation behavior described in the next section: when retries exhaust, the widget degrades exactly as it did before this layer existed.
+
+### Retry parameters
+
+The constants are baked into `fetch.html` and are **not** exposed as shortcode parameters or site params. The intent is conservative resilience without configuration surface.
+
+| Constant            | Value | Purpose                                                      |
+|---------------------|-------|--------------------------------------------------------------|
+| `attempts`          | `5`   | Maximum outer attempts per fetched endpoint                  |
+| `perAttemptTimeout` | `30s` | Per-request timeout passed to `resources.GetRemote`          |
+| `overallBudgetSec`  | `120` | Wall-clock cap per fetched endpoint, in seconds              |
+| `waitHintCapSec`    | `30`  | Display cap for the wait hint in warning messages (the full numeric hint is still logged) |
+
+Each attempt uses a fresh cache key (`github-repo:OWNER/REPO:ENDPOINT:attemptN`) so that a response cached as an error by Hugo's `httpcache.Transport` on a prior attempt does not poison subsequent attempts within the same build.
+
+Hugo templates have no sleep primitive, so true backoff between outer attempts is structurally impossible. Hugo's own internal retry already provides a randomized exponential backoff (~100ms-5s per sleep step) for HTTP 408/429/500/502/503/504 within each attempt; outer attempts then drive a fresh request against the upstream API.
+
+### Error class taxonomy
+
+`classify-error.html` derives a structured `errorClass` from the failed response. Each class drives a different retry decision:
+
+| `errorClass`            | Trigger                                                          | Retry behavior                                                                                                              |
+|-------------------------|------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
+| `primary-rate-limit`    | HTTP 403 with `X-RateLimit-Remaining: 0`                         | Early break -- subsequent attempts cannot succeed within the same build. Wait hint computed from `X-RateLimit-Reset`.       |
+| `secondary-rate-limit`  | HTTP 429                                                         | Retry while the wait hint fits in the remaining wall-clock budget. Wait hint preference: `Retry-After`, then `X-RateLimit-Reset` delta, then `60s`. |
+| `auth`                  | HTTP 401, or HTTP 403 without rate-limit headers                 | Early break -- token / permissions issue cannot be fixed by retrying.                                                       |
+| `not-found`             | HTTP 404 (Hugo's `nil` branch from `resources.GetRemote`)        | Early break -- resource is genuinely missing.                                                                               |
+| `server`                | HTTP 5xx                                                         | Retry up to `attempts` or `overallBudgetSec`, whichever comes first.                                                        |
+| `network`               | No HTTP response (DNS failure, connection refused, host timeout) | Retry up to `attempts` or `overallBudgetSec`, whichever comes first.                                                        |
+| `other`                 | Anything else                                                    | Retry up to `attempts` or `overallBudgetSec`, whichever comes first.                                                        |
+
+The first attempt always runs regardless of the initial classification (the early-break check is gated on attempt > 1). On retry exhaustion -- whether by `attempts` count, `overallBudgetSec` cap, or early break -- the widget falls through to the graceful degradation path described below.
+
+### Header-aware diagnostics
+
+When retries exhaust, the module emits a single structured `warnf` per failed endpoint:
+
+```text
+[github-repo] Failed to fetch OWNER/REPO after N attempt(s) (errorClass=primary-rate-limit, statusCode=403, message="HTTP 403 (primary rate limit reached): API rate limit exceeded ..."). Hint: wait 1842 seconds and rebuild. See PATH:LINE:COL
+```
+
+The `Hint:` field surfaces the full numeric `waitHintSeconds` so an operator can act on it directly. When the hint exceeds `waitHintCapSec` (30 seconds), the message is suffixed with `(display capped at 30s)` to acknowledge the cap without truncating the actionable number.
+
+If the upstream response includes a JSON body with a `message` field (typical for GitHub error responses), the message is appended to the diagnostic. Malformed bodies are silently ignored so they cannot break the build.
+
+### Worst-case build time
+
+Under the constants above, the per-call worst case is bounded as follows:
+
+| Variant   | Endpoints fetched                              | Worst-case wall clock |
+|-----------|------------------------------------------------|----------------------:|
+| `inline`  | base repo                                      |              **120s** |
+| `card`    | base repo                                      |              **120s** |
+| `stats`   | base repo                                      |              **120s** |
+| `lang`    | base repo + `/languages`                       |              **240s** |
+| `hero`    | base repo + `/stats/participation`             |              **240s** |
+
+These caps apply only when every endpoint exhausts retries against `server`, `secondary-rate-limit` (with a short reset window), `network`, or `other` failures. The most common observed failure -- `primary-rate-limit` from an exhausted unauthenticated 60 req/h budget -- triggers an early break on attempt 2, so the realistic per-call cost is approximately one HTTP round-trip plus one classification.
+
+When the API is healthy, the retry layer adds **zero** measurable overhead: the first attempt succeeds and the loop short-circuits.
+
+Hugo's per-build resource cache also deduplicates same-URL calls within a build, so embedding the same repository in multiple shortcodes on a page pays the retry cost at most once per endpoint.
+
+### CI-level retry (cross-build resilience)
+
+A primary rate-limit window can span up to 60 minutes. Hugo templates cannot wait that long, so once a build hits the wall, the only remaining cure is to **rerun the build later**. Configure this at the CI level:
+
+- **Cloudflare Pages:** Use the dashboard's "Retry deployment" action, or trigger a redeploy via the API after a wait.
+- **GitHub Actions:** `gh run rerun --failed`, or an `if: failure()` step that schedules a delayed retry.
+- **Any CI:** Schedule a delayed retry of the deploy job, spaced by the wait hint surfaced in the build log (or a conservative 30-60 minute interval if the hint is unavailable).
+
+Setting `HUGO_GITHUB_TOKEN` reduces the likelihood of hitting the primary rate limit by raising the budget from 60 req/h to 5,000 req/h; it does not eliminate the need for CI-level retries on adversarial network conditions.
+
 ## Graceful Degradation
 
-When an API call fails (network error, 404, rate limit exceeded), the module does not break the build. Instead, it logs a warning (`warnf`) and degrades:
+When all retries for an endpoint exhaust, the module does not break the build. It logs the structured warning described above and degrades:
 
 - **`inline` variant:** Unaffected -- it only needs the owner/repo parsed from the URL.
 - **`card`, `stats`, `lang`, `hero` variants:** Fall back to the inline chip layout.
@@ -192,7 +269,9 @@ shortcodes/github-repo/
       github-repo.html              # Main shortcode (parameter validation + dispatch)
     _partials/
       github-repo/
-        fetch.html                  # API fetching and data normalization
+        fetch.html                  # API fetching, retry loop, data normalization
+        fetch-once.html             # Single-attempt fetch (normalized result dict)
+        classify-error.html         # HTTP error -> (errorClass, waitHintSeconds, errorMessage)
         compact-number.html         # Number formatting (e.g., 1500 -> "1.5k")
         relative-time.html          # Timestamp formatting (e.g., "3 days ago")
         icon.html                   # Centralized SVG icon rendering
