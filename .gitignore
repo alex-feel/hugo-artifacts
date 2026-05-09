@@ -27,3 +27,4 @@ _vendor/
 .claude/
 .context_server/
 .code-review-graph/
+.playwright-cli/
