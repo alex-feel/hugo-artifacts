@@ -1,0 +1,29 @@
+{{/*
+  Hugo PWA module -- theme-color meta tag(s).
+
+  Emits <meta name="theme-color"> -- single (default color) or per-color-scheme pair (light + dark).
+  Sources color from manifest.theme_color (single) or favicon.theme_color.{light,dark} (paired).
+
+  Per the W3C App Manifest spec, multiple theme-color meta tags can be paired with media queries
+  for prefers-color-scheme: light / prefers-color-scheme: dark to drive color-scheme-aware
+  browser chrome tinting.
+*/}}
+
+{{- $defaults := hugo.Data.pwa.defaults -}}
+{{- $params := site.Params.pwa | default dict -}}
+
+{{- $manifestParams := $params.manifest | default dict -}}
+{{- $faviconParams := $params.favicon | default dict -}}
+{{- $faviconThemeParams := $faviconParams.theme_color | default dict -}}
+
+{{- $manifestColor := (or $manifestParams.theme_color $defaults.manifest.theme_color) -}}
+{{- $faviconLight := (or $faviconThemeParams.light $defaults.favicon.theme_color.light) -}}
+{{- $faviconDark := (or $faviconThemeParams.dark $defaults.favicon.theme_color.dark) -}}
+
+{{- /* If light + dark are BOTH set, emit paired tags. Otherwise emit a single tag using the manifest color. */ -}}
+{{- if and $faviconLight $faviconDark }}
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="{{ $faviconLight }}">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="{{ $faviconDark }}">
+{{- else }}
+<meta name="theme-color" content="{{ $manifestColor }}">
+{{- end }}

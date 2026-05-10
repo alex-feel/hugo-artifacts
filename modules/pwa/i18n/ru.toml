@@ -1,0 +1,23 @@
+# Hugo PWA module -- Russian UI strings.
+
+# Install prompt
+pwa_install_button = "Установить приложение"
+pwa_install_dismiss = "Не сейчас"
+pwa_install_installed = "Приложение установлено"
+
+# Push subscription
+pwa_push_subscribe_button = "Включить уведомления"
+pwa_push_unsubscribe_button = "Отключить уведомления"
+pwa_push_subscribed = "Уведомления включены"
+pwa_push_unsubscribed = "Уведомления отключены"
+pwa_push_permission_denied = "Уведомления заблокированы. Включите их в настройках браузера."
+
+# Update banner
+pwa_update_available = "Доступна новая версия."
+pwa_update_apply = "Обновить"
+pwa_update_dismiss = "Позже"
+
+# Offline message
+pwa_offline_title = "Вы офлайн"
+pwa_offline_message = "Эта страница недоступна офлайн. Подключитесь к сети и повторите попытку."
+pwa_offline_retry = "Повторить"

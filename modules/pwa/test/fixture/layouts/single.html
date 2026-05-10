@@ -1,0 +1,12 @@
+{{ define "main" }}
+  <article>
+    <h2>{{ .Title }}</h2>
+    {{ .Content }}
+
+    <section class="pwa-controls">
+      <button data-pwa-install hidden>Install App</button>
+      <button data-pwa-subscribe>Enable Notifications</button>
+      <button data-pwa-unsubscribe hidden>Disable Notifications</button>
+    </section>
+  </article>
+{{ end }}

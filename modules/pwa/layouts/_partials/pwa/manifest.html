@@ -1,0 +1,23 @@
+{{/*
+  Hugo PWA module -- manifest <link> partial.
+
+  Emits <link rel="manifest" href="...">.
+
+  Branches on params.pwa.manifest.mode:
+    - "templated" (default): href = "/manifest.webmanifest" (matches Hugo's WebAppManifest output format default)
+    - "rfg-static":  href = params.pwa.manifest.href (consumer's static file path; falls back to "/site.webmanifest")
+*/}}
+
+{{- $defaults := hugo.Data.pwa.defaults.manifest -}}
+{{- $params := site.Params.pwa.manifest | default dict -}}
+{{- $mode := $params.mode | default $defaults.mode -}}
+{{- $href := "" -}}
+
+{{- if eq $mode "rfg-static" -}}
+  {{- $href = $params.href | default "/site.webmanifest" -}}
+{{- else -}}
+  {{- /* "templated" default: Hugo's WebAppManifest output format emits /manifest.webmanifest */ -}}
+  {{- $href = $params.href | default $defaults.href -}}
+{{- end -}}
+
+{{ printf "<link rel=\"manifest\" href=\"%s\">" $href | safeHTML }}

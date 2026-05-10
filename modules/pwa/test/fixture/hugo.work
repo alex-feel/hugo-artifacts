@@ -1,0 +1,6 @@
+go 1.22
+
+use ./
+use ../../../../modules/pwa
+use ../../../../modules/workbox
+use ../../../../modules/idb

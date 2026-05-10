@@ -1,0 +1,16 @@
+{
+  "name": "pwa-push-backend-cloudflare-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Reference Cloudflare Workers + KV push backend for the Hugo PWA module.",
+  "main": "worker.js",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "vapid": "npx web-push generate-vapid-keys"
+  },
+  "devDependencies": {
+    "wrangler": "^3.78.0"
+  }
+}

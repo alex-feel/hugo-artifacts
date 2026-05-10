@@ -1,0 +1,65 @@
+{{/*
+  Hugo PWA module -- service-worker build + emission partial.
+
+  Loads modules/pwa/assets/pwa/service-worker/index.ts, bundles it via Hugo's
+  js.Build (esbuild) with format=esm, target=es2020, minify=true. Bare imports
+  resolve through Hugo's unified file system to the vendor mounts under
+  assets/workbox-* (provided by the modules/workbox companion module). The
+  build-time params map is exposed to the SW source via the @params virtual
+  module (see service-worker/params.d.ts).
+
+  Output: /sw.js at root scope. Intentionally NOT fingerprinted so the URL
+  is stable across deploys and the browser update check can find it.
+  Cache-busting is handled by precache revisions (per-asset) and versioned
+  cache names (cluster-wide via params.pwa.version).
+
+  Invoked from: pwa/head.html, gated on params.pwa.sw.enabled.
+*/}}
+
+{{- $defaults := hugo.Data.pwa.defaults -}}
+{{- $params := site.Params.pwa | default dict -}}
+{{- $swParams := $params.sw | default dict -}}
+{{- $swCfg := merge $defaults.sw $swParams -}}
+
+{{- $pushParams := $params.push | default dict -}}
+{{- $pushCfg := merge $defaults.push $pushParams -}}
+
+{{- $version := $params.version | default $defaults.version -}}
+{{- if eq $version "auto" -}}
+  {{- $version = printf "%d" now.UnixMilli -}}
+{{- end -}}
+
+{{- $offlineUrl := $swCfg.offline.fallback_url | default "/offline/" -}}
+{{- $debug := $params.debug | default $defaults.debug -}}
+
+{{- $precacheList := partial "pwa/functions/precache-list.html" . -}}
+
+{{- $jsParams := dict
+    "precacheList"            $precacheList
+    "cacheVersion"            $version
+    "offlineUrl"              $offlineUrl
+    "debug"                   $debug
+    "clientsClaim"            $swCfg.clientsClaim
+    "notificationIcon"        $pushCfg.notification_icon
+    "notificationBadge"       $pushCfg.notification_badge
+    "defaultClickUrl"         $pushCfg.default_click_url
+    "focusExistingTabOnClick" $pushCfg.focus_existing_tab_on_click
+    "caches"                  $swCfg.caches
+-}}
+
+{{- $opts := dict
+    "targetPath" "sw.js"
+    "format"     "esm"
+    "target"     "es2020"
+    "minify"     true
+    "params"     $jsParams
+    "sourceMap"  (cond hugo.IsDevelopment "linked" "")
+-}}
+
+{{- with resources.Get "pwa/service-worker/index.ts" -}}
+  {{- $built := . | js.Build $opts -}}
+  {{/* Touch RelPermalink to force resource publication. Output is a debug-only HTML comment that Hugo's --minify strips in production builds. */}}
+  {{- printf "<!-- pwa-sw: %s -->" $built.RelPermalink | safeHTML -}}
+{{- else -}}
+  {{- errorf "modules/pwa: assets/pwa/service-worker/index.ts not found -- is modules/pwa correctly imported and is the modules/workbox companion mounted?" -}}
+{{- end -}}

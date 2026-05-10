@@ -1,0 +1,51 @@
+{{/*
+  Hugo PWA module -- push-subscribe build + emission partial.
+
+  Loads modules/pwa/assets/pwa/push.ts, bundles it via Hugo's js.Build
+  (esbuild) with format=esm, target=es2020, minify=true. The build-time
+  params bridge supplies the VAPID public key, subscribe / unsubscribe URLs,
+  and button selectors.
+
+  Emits a fingerprinted <script type="module" defer> with Subresource
+  Integrity. NO <button> markup is emitted -- the consumer supplies their
+  buttons using the configured selectors (default [data-pwa-subscribe] +
+  [data-pwa-unsubscribe]), e.g.:
+
+      <button data-pwa-subscribe>{{ T "pwa_push_subscribe_button" }}</button>
+      <button data-pwa-unsubscribe hidden>{{ T "pwa_push_unsubscribe_button" }}</button>
+
+  Invoked from: pwa/head.html, gated on params.pwa.push.enabled.
+
+  HARD FAILS at build time if push.enabled = true but vapid_public_key
+  or subscribe_url is empty (via pwa/functions/vapid-key.html).
+*/}}
+
+{{- $defaults := hugo.Data.pwa.defaults -}}
+{{- $params := site.Params.pwa | default dict -}}
+{{- $pushParams := $params.push | default dict -}}
+{{- $pushCfg := merge $defaults.push $pushParams -}}
+
+{{- $vapidKey := partial "pwa/functions/vapid-key.html" . -}}
+
+{{- $jsParams := dict
+    "vapidPublicKey"      $vapidKey
+    "subscribeUrl"        $pushCfg.subscribe_url
+    "unsubscribeUrl"      $pushCfg.unsubscribe_url
+    "subscribeSelector"   $pushCfg.subscribe_button_selector
+    "unsubscribeSelector" "[data-pwa-unsubscribe]"
+-}}
+
+{{- $opts := dict
+    "format"    "esm"
+    "target"    "es2020"
+    "minify"    true
+    "params"    $jsParams
+    "sourceMap" (cond hugo.IsDevelopment "linked" "")
+-}}
+
+{{- with resources.Get "pwa/push.ts" -}}
+  {{- $built := . | js.Build $opts | fingerprint -}}
+  <script type="module" src="{{ $built.RelPermalink }}" integrity="{{ $built.Data.Integrity }}" defer></script>
+{{- else -}}
+  {{- errorf "modules/pwa: assets/pwa/push.ts not found" -}}
+{{- end -}}

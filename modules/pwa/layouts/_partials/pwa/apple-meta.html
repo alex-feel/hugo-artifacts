@@ -1,0 +1,24 @@
+{{/*
+  Hugo PWA module -- Apple iOS PWA meta tags.
+
+  Emits <meta name="apple-mobile-web-app-*"> tags required for iOS install + standalone mode:
+    - apple-mobile-web-app-capable          -> Enables full-screen on iOS Home Screen install
+    - apple-mobile-web-app-status-bar-style -> Status bar appearance ("default" | "black" | "black-translucent")
+    - apple-mobile-web-app-title            -> Home Screen icon label
+    - mobile-web-app-capable                -> W3C-blessed equivalent honored by some Android shells
+
+  apple-mobile-web-app-capable is COMPLEMENTED (not replaced) by manifest.display = "standalone".
+  iOS Safari supports both signals; sites should provide both for robustness.
+*/}}
+
+{{- $defaults := hugo.Data.pwa.defaults -}}
+{{- $params := site.Params.pwa | default dict -}}
+{{- $manifestParams := $params.manifest | default dict -}}
+
+{{- $manifestName := (or $manifestParams.name $defaults.manifest.name) -}}
+{{- $title := $manifestName | default site.Title -}}
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="{{ $title }}">
+<meta name="mobile-web-app-capable" content="yes">

@@ -1,0 +1,25 @@
+{{/*
+  Hugo PWA module -- default offline fallback page.
+
+  Rendered when navigation fails offline. Consumers can shadow this layout
+  by providing their own layouts/_default/offline.html in their site.
+
+  The layout uses the consumer's baseof.html shell so the offline page
+  styling matches the rest of the site (same nav, footer, theme). The
+  body contains a small static message and a retry button. The button
+  uses an inline onclick attribute because the offline page may be served
+  before any other JavaScript can bind handlers (the SW is the only thing
+  serving it; no other scripts have loaded).
+*/}}
+
+{{ define "main" }}
+  <article class="pwa-offline">
+    <h1>{{ T "pwa_offline_title" | default "You are offline" }}</h1>
+    <p>{{ T "pwa_offline_message" | default "This page is not available offline. Connect to the network and try again." }}</p>
+    <p>
+      <button type="button" onclick="location.reload()">
+        {{ T "pwa_offline_retry" | default "Retry" }}
+      </button>
+    </p>
+  </article>
+{{ end }}

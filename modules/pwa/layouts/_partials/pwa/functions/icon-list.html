@@ -1,0 +1,50 @@
+{{/*
+  Hugo PWA module -- icon-list helper.
+
+  Builds the icons[] array for the Web App Manifest, in two modes:
+    1. EXPLICIT -- if params.pwa.manifest.icons.list is non-empty, return it as-is.
+    2. DERIVED  -- otherwise, build from params.pwa.favicon.icon_*_path fields.
+
+  In DERIVED mode, switches between modern + legacy filenames based on
+  params.pwa.favicon.use_legacy_filenames.
+
+  Each entry: {src, sizes, type, purpose}
+  Purpose "any" or "maskable" enables maskable icon support per the W3C spec.
+
+  Returns an array via {{ return ... }}. Caller invokes with:
+    {{- $icons := partial "pwa/functions/icon-list.html" . -}}
+*/}}
+
+{{- $defaults := hugo.Data.pwa.defaults -}}
+{{- $manifestParams := site.Params.pwa.manifest | default dict -}}
+{{- $manifestCfg := merge $defaults.manifest $manifestParams -}}
+{{- $faviconParams := site.Params.pwa.favicon | default dict -}}
+{{- $faviconCfg := merge $defaults.favicon $faviconParams -}}
+
+{{- $icons := slice -}}
+{{- $iconsCfg := $manifestCfg.icons | default dict -}}
+{{- $explicitList := $iconsCfg.list | default slice -}}
+{{- $explicit := gt (len $explicitList) 0 -}}
+
+{{- if $explicit -}}
+  {{- $icons = $explicitList -}}
+{{- else -}}
+  {{- $useLegacy := $faviconCfg.use_legacy_filenames -}}
+
+  {{- $path192 := $faviconCfg.icon_192_path -}}
+  {{- $path512 := $faviconCfg.icon_512_path -}}
+  {{- $pathMaskable := $faviconCfg.icon_maskable_path -}}
+
+  {{- if $useLegacy -}}
+    {{- $path192 = "/android-chrome-192x192.png" -}}
+    {{- $path512 = "/android-chrome-512x512.png" -}}
+  {{- end -}}
+
+  {{- $icons = slice
+      (dict "src" $path192 "sizes" "192x192" "type" "image/png" "purpose" "any")
+      (dict "src" $path512 "sizes" "512x512" "type" "image/png" "purpose" "any")
+      (dict "src" $pathMaskable "sizes" "512x512" "type" "image/png" "purpose" "maskable")
+  -}}
+{{- end -}}
+
+{{- return $icons -}}

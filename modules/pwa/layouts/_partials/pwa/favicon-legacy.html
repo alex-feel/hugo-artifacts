@@ -1,0 +1,53 @@
+{{/*
+  Hugo PWA module -- RFG legacy (pre-2024 redesign) favicon head snippet.
+
+  Emits the verbose pre-2024 RFG package set:
+    - <link rel="apple-touch-icon"> at iOS sizes
+    - <link rel="icon" type="image/png"> for /favicon-{16,32}x*.png
+    - <link rel="icon" type="image/x-icon"> for the .ico fallback
+    - <link rel="icon" type="image/svg+xml">  (when include_svg)
+    - <link rel="mask-icon"> for the Safari pinned tab SVG
+    - <meta name="msapplication-TileColor"> + <meta name="msapplication-config"> for Windows tiles
+
+  The manifest <link> and theme-color <meta> are emitted separately by their dedicated partials.
+
+  Activated when params.pwa.favicon.mode = "legacy" (opt-in).
+  Filename defaults come from data/pwa/defaults.toml; the consumer's RFG legacy package output
+  goes to static/. Setting params.pwa.favicon.use_legacy_filenames = true ALSO switches the
+  manifest icons[] to /android-chrome-{192,512}x*.png (handled by icon-list.html).
+*/}}
+
+{{- $defaults := hugo.Data.pwa.defaults.favicon -}}
+{{- $params := site.Params.pwa.favicon | default dict -}}
+{{- $cfg := merge $defaults $params -}}
+
+{{- $faviconIco := $cfg.favicon_ico_path -}}
+{{- $faviconSvg := $cfg.favicon_svg_path -}}
+{{- $appleTouchIcon := $cfg.apple_touch_icon_path -}}
+{{- $maskIcon := $cfg.mask_icon_path -}}
+{{- $maskIconColor := $cfg.mask_icon_color -}}
+{{- $msconfig := $cfg.msapplication_config_path -}}
+{{- $mstilecolor := $cfg.msapplication_tilecolor -}}
+{{- $includeSvg := $cfg.include_svg -}}
+
+{{/* Apple touch icon (legacy verbose: full multi-size set) */}}
+<link rel="apple-touch-icon" sizes="180x180" href="{{ $appleTouchIcon }}">
+
+{{/* PNG favicons (16x16 + 32x32) */}}
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+
+{{/* ICO fallback */}}
+<link rel="icon" type="image/x-icon" href="{{ $faviconIco }}">
+
+{{/* SVG (modern browsers; opt-in) */}}
+{{- if $includeSvg }}
+<link rel="icon" type="image/svg+xml" href="{{ $faviconSvg }}">
+{{- end }}
+
+{{/* Safari pinned tab */}}
+<link rel="mask-icon" href="{{ $maskIcon }}" color="{{ $maskIconColor }}">
+
+{{/* Microsoft tiles */}}
+<meta name="msapplication-TileColor" content="{{ $mstilecolor }}">
+<meta name="msapplication-config" content="{{ $msconfig }}">
