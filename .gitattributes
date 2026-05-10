@@ -1,0 +1,69 @@
+# Repository-level line-ending policy.
+# Mirrors .editorconfig (`end_of_line = lf` for [*]); makes the policy enforceable by git.
+# See https://git-scm.com/docs/gitattributes for the full specification.
+
+# Default: treat unrecognized files as text and normalize to LF on commit.
+* text=auto eol=lf
+
+# Explicit text formats that MUST be LF (covers all repo-authored content).
+*.md          text eol=lf
+*.markdown    text eol=lf
+*.html        text eol=lf
+*.css         text eol=lf
+*.scss        text eol=lf
+*.js          text eol=lf
+*.cjs         text eol=lf
+*.mjs         text eol=lf
+*.ts          text eol=lf
+*.tsx         text eol=lf
+*.json        text eol=lf
+*.jsonc       text eol=lf
+*.toml        text eol=lf
+*.yaml        text eol=lf
+*.yml         text eol=lf
+*.sh          text eol=lf
+*.cmd         text eol=lf
+*.bat         text eol=lf
+*.ps1         text eol=lf
+*.sql         text eol=lf
+*.env         text eol=lf
+*.example     text eol=lf
+*.lock        text eol=lf
+*.go          text eol=lf
+go.mod        text eol=lf
+go.sum        text eol=lf
+go.work       text eol=lf
+hugo.toml     text eol=lf
+hugo.work     text eol=lf
+.editorconfig text eol=lf
+.gitignore    text eol=lf
+.gitattributes text eol=lf
+LICENSE       text eol=lf
+README.md     text eol=lf
+CLAUDE.md     text eol=lf
+
+# SVG is XML, not binary.
+*.svg         text eol=lf
+
+# Binary formats: never normalize. The `binary` macro is shorthand for `-text -diff`.
+*.png         binary
+*.jpg         binary
+*.jpeg        binary
+*.gif         binary
+*.ico         binary
+*.webm        binary
+*.mp4         binary
+*.mp3         binary
+*.woff        binary
+*.woff2       binary
+*.ttf         binary
+*.eot         binary
+*.otf         binary
+*.zip         binary
+*.tar         binary
+*.gz          binary
+*.tgz         binary
+*.7z          binary
+*.pdf         binary
+*.ipa         binary
+*.app         binary
