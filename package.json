@@ -1,0 +1,20 @@
+{
+  "name": "hugo-artifacts-tooling",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Top-level dev-tooling for the hugo-artifacts monorepo. Pins the ESLint v9 + Prettier 3 + typescript-eslint v8 baseline so consumers can add eslint.config and .prettierrc files without re-deriving versions. Not a publishable package; the field 'private' is true.",
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "eslint": "^9.13.0",
+    "globals": "^15.11.0",
+    "prettier": "^3.3.3",
+    "typescript-eslint": "^8.10.0"
+  }
+}
