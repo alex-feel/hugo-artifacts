@@ -27,3 +27,8 @@ _vendor/
 .claude/
 .context_server/
 .code-review-graph/
+.playwright-cli/
+
+# Lint / format caches
+.eslintcache
+.prettiercache

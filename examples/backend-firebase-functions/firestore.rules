@@ -1,0 +1,18 @@
+// Firestore security rules for the Hugo PWA reference push backend.
+//
+// The `subscriptions` collection holds raw user push endpoints + identifying keys.
+// All client access is denied. Only the deployed Cloud Functions can read or write the
+// collection, because the Firebase Admin SDK (used in functions/index.js) bypasses these
+// rules entirely.
+//
+// Apply via `firebase deploy --only firestore:rules`.
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /subscriptions/{docId} {
+      allow read: if false;
+      allow write: if false;
+    }
+  }
+}

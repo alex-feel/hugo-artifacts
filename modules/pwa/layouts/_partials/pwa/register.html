@@ -1,0 +1,41 @@
+{{/*
+  Hugo PWA module -- service-worker registration entry partial.
+
+  Loads modules/pwa/assets/pwa/register.ts, bundles it via Hugo's js.Build
+  (esbuild) with format=esm, target=es2020, minify=true. The build-time
+  params bridge supplies the SW URL, scope, and update poll interval.
+
+  Emits a fingerprinted <script type="module" defer> with Subresource
+  Integrity. The register script IS fingerprinted (unlike the SW itself)
+  so the browser fetches a new bundle on each deploy.
+
+  Invoked from: pwa/head.html, gated on params.pwa.sw.enabled.
+*/}}
+
+{{- $defaults := hugo.Data.pwa.defaults -}}
+{{- $params := site.Params.pwa | default dict -}}
+
+{{- $swPath := $params.sw_path | default $defaults.sw_path -}}
+{{- $swScope := $params.sw_scope | default $defaults.sw_scope -}}
+{{- $updateCheckSeconds := $params.update_check_seconds | default $defaults.update_check_seconds -}}
+
+{{- $jsParams := dict
+    "swPath"             $swPath
+    "swScope"            $swScope
+    "updateCheckSeconds" $updateCheckSeconds
+-}}
+
+{{- $opts := dict
+    "format"    "esm"
+    "target"    "es2020"
+    "minify"    true
+    "params"    $jsParams
+    "sourceMap" (cond hugo.IsDevelopment "linked" "")
+-}}
+
+{{- with resources.Get "pwa/register.ts" -}}
+  {{- $built := . | js.Build $opts | fingerprint -}}
+  <script type="module" src="{{ $built.RelPermalink }}" integrity="{{ $built.Data.Integrity }}" defer></script>
+{{- else -}}
+  {{- errorf "modules/pwa: assets/pwa/register.ts not found" -}}
+{{- end -}}

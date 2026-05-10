@@ -1,0 +1,36 @@
+# Generated artifacts (Hugo build output, Playwright artifacts, dependency caches).
+**/node_modules/
+**/public/
+**/resources/
+**/test-results/
+**/playwright-report/
+**/.code-review-graph/
+**/.playwright-cli/
+
+# Lock files and minified bundles (Prettier should not rewrite them).
+**/package-lock.json
+**/*.min.js
+**/*.min.css
+
+# Hugo fixture's compiled service worker bundles.
+modules/pwa/test/fixture/public/
+
+# Vendor-mounted JavaScript source -- managed upstream, do not reformat.
+# (These are mounted at build time via hugo.toml; not stored in this repo.)
+
+# Hugo Go template sources. Files under layouts/ contain Go template directives
+# ({{ ... }}) interleaved with HTML; Prettier's HTML parser does not understand
+# Go template syntax and either errors out or rewrites the template into invalid
+# Hugo. Webmanifest templates likewise contain Go templates.
+**/layouts/**
+**/*.webmanifest
+
+# Phase 7 locked Playwright test artifacts. Per master plan, these files
+# achieved 9 PASS / 0 SKIPPED / 0 FAIL and MUST NOT be modified to preserve
+# regression-free status. They use indent / quoting styles that differ from
+# the repo's Prettier defaults; Prettier would unilaterally re-style them.
+modules/pwa/test/tests/**
+modules/pwa/test/scripts/**
+modules/pwa/test/playwright.config.js
+modules/pwa/test/README.md
+modules/pwa/test/IOS_MANUAL_MATRIX.md

@@ -1,0 +1,87 @@
+{{/*
+  Hugo PWA module -- precache-list helper.
+
+  Builds a [{url, revision}] array suitable for Workbox's precacheAndRoute.
+
+  Sources of entries (all opt-in via params):
+    - Homepage ("/") when params.pwa.sw.precache.include_homepage is true
+    - Offline page (params.pwa.sw.offline.fallback_url) when
+      params.pwa.sw.precache.include_offline_page is true
+    - Manifest URL when params.pwa.sw.precache.include_manifest is true
+    - Top-N regular pages by Lastmod, where N =
+      params.pwa.sw.precache.include_recent_pages (default 10)
+    - Any extra URLs in params.pwa.sw.precache.extra_urls
+
+  Pages whose URL contains an exclude_globs token (after stripping the "*")
+  are dropped.
+
+  Revisions:
+    - Pages: revision = page.Lastmod.Unix as a string
+    - Static URLs in extra_urls: revision = the URL itself (defensive)
+    - Manifest: revision = "manifest" (the manifest renders deterministically
+      from data; consumers using a templated manifest can override the helper)
+
+  Returns a slice of dicts which js.Build's params bridge serializes to JSON.
+*/}}
+
+{{- $defaults := hugo.Data.pwa.defaults -}}
+{{- $params := site.Params.pwa | default dict -}}
+{{- $swParams := $params.sw | default dict -}}
+{{- $swCfg := merge $defaults.sw $swParams -}}
+
+{{- $list := slice -}}
+
+{{/* Homepage */}}
+{{- if $swCfg.precache.include_homepage -}}
+  {{- $homeRev := "home" -}}
+  {{- with site.Home -}}
+    {{- $homeRev = printf "%d" .Lastmod.Unix -}}
+  {{- end -}}
+  {{- $list = $list | append (dict "url" "/" "revision" $homeRev) -}}
+{{- end -}}
+
+{{/* Offline page */}}
+{{- if $swCfg.precache.include_offline_page -}}
+  {{- $offlineUrl := $swCfg.offline.fallback_url -}}
+  {{- $offlineRev := "offline" -}}
+  {{- with where site.Pages "RelPermalink" $offlineUrl -}}
+    {{- with index . 0 -}}
+      {{- $offlineRev = printf "%d" .Lastmod.Unix -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $list = $list | append (dict "url" $offlineUrl "revision" $offlineRev) -}}
+{{- end -}}
+
+{{/* Manifest */}}
+{{- if $swCfg.precache.include_manifest -}}
+  {{- $manifestParams := $params.manifest | default dict -}}
+  {{- $href := $manifestParams.href | default $defaults.manifest.href -}}
+  {{- $list = $list | append (dict "url" $href "revision" "manifest") -}}
+{{- end -}}
+
+{{/* Top-N regular pages by Lastmod, descending */}}
+{{- $n := $swCfg.precache.include_recent_pages | default 0 -}}
+{{- if gt $n 0 -}}
+  {{- $excludes := $swCfg.precache.exclude_globs -}}
+  {{- $sorted := first $n (sort site.RegularPages "Lastmod" "desc") -}}
+  {{- range $sorted -}}
+    {{- $url := .RelPermalink -}}
+    {{- $skip := false -}}
+    {{- range $excludes -}}
+      {{- $token := replaceRE "\\*" "" . -}}
+      {{- if and $token (strings.Contains $url $token) -}}
+        {{- $skip = true -}}
+      {{- end -}}
+    {{- end -}}
+    {{- if not $skip -}}
+      {{- $list = $list | append (dict "url" $url "revision" (printf "%d" .Lastmod.Unix)) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Extra URLs (consumer-supplied) */}}
+{{- range $swCfg.precache.extra_urls -}}
+  {{- $list = $list | append (dict "url" . "revision" .) -}}
+{{- end -}}
+
+{{- return $list -}}

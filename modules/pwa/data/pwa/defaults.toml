@@ -1,0 +1,140 @@
+# Authoritative tactical defaults for params.pwa.* values.
+# Consumers override by declaring the corresponding key in their site's [params.pwa] block.
+# Templates read defaults via `hugo.Data.pwa.defaults` and consumer overrides via `site.Params.pwa`.
+# The static head/manifest surface uses the manifest + favicon subsets only; the SW + install + push
+# subsets are DEFINED here so additional partials can read them without modifying this file --
+# one consumer-facing config surface from v1.0 onward.
+
+debug = false
+sw_path = "/sw.js"
+sw_scope = "/"
+update_check_seconds = 3600
+version = "v1"
+
+[manifest]
+enabled = true
+mode = "templated"
+href = "/manifest.webmanifest"
+name = ""
+short_name = ""
+description = ""
+display = "standalone"
+display_override = ["window-controls-overlay", "standalone", "minimal-ui"]
+theme_color = "#ffffff"
+background_color = "#ffffff"
+scope = "/"
+start_url = "/"
+id = "/"
+lang = ""
+dir = ""
+categories = []
+
+[manifest.icons]
+mode = "list"
+list = []
+
+[favicon]
+enabled = true
+mode = "modern"
+use_legacy_filenames = false
+prefix = ""
+include_svg = true
+favicon_ico_path = "/favicon.ico"
+favicon_svg_path = "/favicon.svg"
+apple_touch_icon_path = "/apple-touch-icon.png"
+icon_192_path = "/web-app-manifest-192x192.png"
+icon_512_path = "/web-app-manifest-512x512.png"
+icon_maskable_path = "/web-app-manifest-512x512-maskable.png"
+mask_icon_path = "/safari-pinned-tab.svg"
+mask_icon_color = "#000000"
+msapplication_config_path = "/browserconfig.xml"
+msapplication_tilecolor = "#ffffff"
+
+[favicon.theme_color]
+default = "#ffffff"
+light = ""
+dark = ""
+
+[sw]
+enabled = true
+clientsClaim = true
+skipWaiting = false
+update_ux = "banner"
+
+[sw.precache]
+enabled = true
+include_homepage = true
+include_offline_page = true
+include_manifest = true
+include_recent_pages = 10
+extra_urls = []
+exclude_globs = ["/admin/*", "/preview/*"]
+
+[sw.caches.html]
+strategy = "network-first"
+network_timeout_seconds = 3
+max_entries = 50
+max_age_seconds = 86400
+
+[sw.caches.style]
+strategy = "stale-while-revalidate"
+origins = []
+max_entries = 30
+max_age_seconds = 2592000
+
+[sw.caches.script]
+strategy = "stale-while-revalidate"
+origins = []
+max_entries = 30
+max_age_seconds = 2592000
+
+[sw.caches.font]
+strategy = "cache-first"
+origins = ["https://fonts.gstatic.com", "https://cdnjs.cloudflare.com"]
+max_entries = 20
+max_age_seconds = 31536000
+include_google_fonts = true
+
+[sw.caches.image]
+strategy = "cache-first"
+origins = []
+max_entries = 60
+max_age_seconds = 2592000
+
+[sw.caches.api]
+strategy = "network-only"
+url_pattern = "^/(api|index\\.json|sitemap\\.xml)"
+
+[sw.bypass]
+urls = []
+patterns = []
+
+[sw.offline]
+enabled = true
+fallback_url = "/offline/"
+fallback_image = ""
+
+[sw.storage]
+purge_on_quota_error = true
+request_persistent = false
+
+[install]
+enabled = true
+mode = "deferred-button"
+button_selector = "[data-pwa-install]"
+hide_when_installed = true
+analytics_event = ""
+gate_on_push_intent = true
+permission_strategy = "explicit-button"
+remember_dismissed_days = 30
+
+[push]
+enabled = false
+vapid_public_key = ""
+subscribe_url = ""
+subscribe_button_selector = "[data-pwa-subscribe]"
+unsubscribe_url = ""
+notification_icon = "/web-app-manifest-192x192.png"
+notification_badge = "/badge-72x72.png"
+default_click_url = "/"
+focus_existing_tab_on_click = true

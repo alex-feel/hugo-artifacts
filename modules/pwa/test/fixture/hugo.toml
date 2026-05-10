@@ -1,0 +1,52 @@
+baseURL = "http://localhost:1313/"
+defaultContentLanguage = "en"
+title = "PWA Fixture"
+
+[languages]
+
+  [languages.en]
+    locale = "en-US"
+    weight = 1
+
+[outputs]
+home = ["html", "rss", "webappmanifest"]
+
+[params]
+description = "Hugo PWA module Playwright validation fixture site."
+
+[params.pwa]
+debug = false
+version = "v1"
+
+[params.pwa.manifest]
+name = "PWA Fixture"
+short_name = "Fixture"
+description = "Hugo PWA module fixture site"
+theme_color = "#3367d6"
+background_color = "#ffffff"
+
+[params.pwa.favicon]
+mode = "modern"
+
+[params.pwa.install]
+enabled = true
+
+[params.pwa.push]
+enabled = true
+# The following placeholder is replaced by Playwright tests via init script. The value must be
+# a valid base64url-encoded P-256 public key for the SW to subscribe; tests inject a real
+# generated key at runtime.
+vapid_public_key = "BGRH3F5W4NPSeMDDpvZ8RnyU0mGEAmKgQDoH8TS7F-EeCEvR2ULJjrLoMP_-uLZkPY6RkRf0V0DsCzMPkdbAcEs"
+subscribe_url = "/__mock_subscribe"
+unsubscribe_url = "/__mock_unsubscribe"
+
+[module]
+
+  [module.hugoVersion]
+    min = "0.160.0"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/pwa"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/workbox"

@@ -1,0 +1,14 @@
+{
+  "name": "hugo-pwa-validation-matrix",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playwright validation matrix for the Hugo PWA module (9-row coverage of SW, manifest, RFG, install, push, offline, update, Lighthouse).",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "rfg-check": "node scripts/rfg-checker.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}

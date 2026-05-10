@@ -1,0 +1,30 @@
+{{/*
+  Hugo PWA module -- RFG modern (2024 redesign) favicon head snippet.
+
+  Emits the minimal head snippet from RealFaviconGenerator's "Less is More" 2024 redesign:
+    - <link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="32x32">
+    - <link rel="icon" type="image/svg+xml" href="/favicon.svg">  (when include_svg)
+    - <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+
+  The Web App Manifest <link> is emitted separately by manifest.html.
+
+  Filenames default to the 2024 RFG redesign output (web-app-manifest-{192,512}x*.png).
+  Set params.pwa.favicon.use_legacy_filenames = true to switch to /android-chrome-* filenames
+  (covers consumers who still ship older RFG packages in static/). The icon-list helper honors
+  the same toggle when emitting the manifest icons[] array.
+*/}}
+
+{{- $defaults := hugo.Data.pwa.defaults.favicon -}}
+{{- $params := site.Params.pwa.favicon | default dict -}}
+{{- $cfg := merge $defaults $params -}}
+
+{{- $faviconIco := $cfg.favicon_ico_path -}}
+{{- $faviconSvg := $cfg.favicon_svg_path -}}
+{{- $appleTouchIcon := $cfg.apple_touch_icon_path -}}
+{{- $includeSvg := $cfg.include_svg -}}
+
+<link rel="icon" type="image/x-icon" href="{{ $faviconIco }}" sizes="32x32">
+{{- if $includeSvg }}
+<link rel="icon" type="image/svg+xml" href="{{ $faviconSvg }}">
+{{- end }}
+<link rel="apple-touch-icon" sizes="180x180" href="{{ $appleTouchIcon }}">

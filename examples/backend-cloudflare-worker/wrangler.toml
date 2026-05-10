@@ -1,0 +1,35 @@
+# Cloudflare Workers deployment configuration for the Hugo PWA reference push backend.
+#
+# Required setup steps (see README.md for full instructions):
+#
+# 1. Create the KV namespace:
+#      wrangler kv:namespace create PWA_SUBS
+#    Copy the printed `id` value into the `id =` field of the [[kv_namespaces]] block below.
+#
+# 2. Provision secrets (NEVER commit these values):
+#      wrangler secret put VAPID_PUBLIC_KEY     # base64url-encoded P-256 public key
+#      wrangler secret put VAPID_PRIVATE_KEY    # base64url-encoded P-256 private key (or JWK)
+#      wrangler secret put VAPID_SUBJECT        # mailto:admin@example.com
+#      wrangler secret put ADMIN_KEY            # strong random string for /trigger auth
+#
+# 3. Update the ALLOWED_ORIGINS array inside `worker.js` with your real consumer-site origin(s)
+#    before deploying.
+#
+# 4. Deploy:
+#      wrangler deploy
+
+name = "pwa-push-backend"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# Workers KV namespace binding. The `binding` name is referenced in worker.js as `env.PWA_SUBS`.
+# Replace `id` with the value printed by `wrangler kv:namespace create PWA_SUBS`.
+[[kv_namespaces]]
+binding = "PWA_SUBS"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# Optional: separate KV namespace for `wrangler dev` local runs.
+# preview_id = "REPLACE_WITH_PREVIEW_KV_NAMESPACE_ID"
+
+# Secrets are provisioned via `wrangler secret put` and accessed via env.<NAME> at runtime.
+# They are NOT declared here.

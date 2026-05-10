@@ -1,0 +1,33 @@
+{{/*
+  Hugo PWA module -- VAPID key validator helper.
+
+  Validates that params.pwa.push.vapid_public_key is non-empty when push
+  is enabled. Returns the raw base64url-encoded string; the page-side
+  push.ts decodes it into a Uint8Array via urlBase64ToUint8Array.
+
+  Hard-fails the Hugo build with a CLEAR error message if validation
+  fails -- catches consumer misconfiguration at build time rather than
+  at user-click time.
+
+  CRITICAL: This is the PUBLIC key only. Consumer warnings about the
+  VAPID PRIVATE key (which MUST stay server-side) are documented in the
+  module README; the private key never appears in Hugo config.
+*/}}
+
+{{- $defaults := hugo.Data.pwa.defaults -}}
+{{- $params := site.Params.pwa | default dict -}}
+{{- $pushParams := $params.push | default dict -}}
+{{- $pushCfg := merge $defaults.push $pushParams -}}
+
+{{- $vapidKey := $pushCfg.vapid_public_key -}}
+{{- $subscribeUrl := $pushCfg.subscribe_url -}}
+
+{{- if not $vapidKey -}}
+  {{- errorf "modules/pwa: params.pwa.push.enabled is true but params.pwa.push.vapid_public_key is empty. Generate a VAPID keypair (see https://web.dev/articles/push-notifications-server-codelab) and set params.pwa.push.vapid_public_key to the PUBLIC key (base64url). The PRIVATE key MUST stay server-side." -}}
+{{- end -}}
+
+{{- if not $subscribeUrl -}}
+  {{- errorf "modules/pwa: params.pwa.push.enabled is true but params.pwa.push.subscribe_url is empty. Set params.pwa.push.subscribe_url to your CSRF-validated POST endpoint." -}}
+{{- end -}}
+
+{{- return $vapidKey -}}

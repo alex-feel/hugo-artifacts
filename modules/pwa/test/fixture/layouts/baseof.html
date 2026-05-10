@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="{{ site.Language.Locale | default site.Language.Lang | default "en" }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ if .IsHome }}{{ site.Title }}{{ else }}{{ .Title }} | {{ site.Title }}{{ end }}</title>
+  <meta name="description" content="{{ with .Description }}{{ . }}{{ else }}{{ site.Params.description }}{{ end }}">
+
+  {{ partial "pwa/head.html" . }}
+</head>
+<body>
+  <header>
+    <h1><a href="/">{{ site.Title }}</a></h1>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/about/">About</a>
+      <a href="/blog/post-1/">Post 1</a>
+      <a href="/blog/post-2/">Post 2</a>
+    </nav>
+  </header>
+
+  <main>
+    {{ block "main" . }}{{ end }}
+  </main>
+
+  <footer>
+    <small>PWA Fixture site -- validation matrix only.</small>
+  </footer>
+</body>
+</html>

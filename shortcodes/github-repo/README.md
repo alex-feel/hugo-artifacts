@@ -79,13 +79,13 @@ The largest variant. Includes a breadcrumb header, a 52-week commit sparkline (f
 
 ## Parameters
 
-| Parameter     | Type   | Required | Default  | Description                                                        |
-|---------------|--------|----------|----------|--------------------------------------------------------------------|
-| `url`         | string | yes      | --       | Full GitHub repository URL (e.g., `https://github.com/owner/repo`) |
-| `variant`     | string | no       | `card`   | Display variant: `inline`, `card`, `stats`, `lang`, `hero`         |
-| `name`        | string | no       | API/repo | Display name override (defaults to the repository name)            |
-| `description` | string | no       | API      | Description override (defaults to the API description)             |
-| `class`       | string | no       | --       | Additional CSS class(es) appended to the root element              |
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `url` | string | yes | -- | Full GitHub repository URL (e.g., `https://github.com/owner/repo`) |
+| `variant` | string | no | `card` | Display variant: `inline`, `card`, `stats`, `lang`, `hero` |
+| `name` | string | no | API/repo | Display name override (defaults to the repository name) |
+| `description` | string | no | API | Description override (defaults to the API description) |
+| `class` | string | no | -- | Additional CSS class(es) appended to the root element |
 
 Validation:
 
@@ -113,19 +113,19 @@ When `HUGO_GITHUB_TOKEN` is unset, the module emits a single warn-only preflight
 ### Rate limits
 
 | Mode            | Limit               |
-|-----------------|---------------------|
+| --------------- | ------------------- |
 | Unauthenticated | 60 requests/hour    |
 | With token      | 5,000 requests/hour |
 
 Each shortcode invocation makes 1-2 API calls per unique repository depending on the variant:
 
-| Variant          | API calls                                        |
-|------------------|--------------------------------------------------|
-| `inline`         | 1 (base repo data)                               |
-| `card`           | 1 (base repo data)                               |
-| `stats`          | 1 (base repo data)                               |
-| `lang`           | 2 (base repo data + `/languages`)                |
-| `hero`           | 2 (base repo data + `/stats/participation`)      |
+| Variant  | API calls                                   |
+| -------- | ------------------------------------------- |
+| `inline` | 1 (base repo data)                          |
+| `card`   | 1 (base repo data)                          |
+| `stats`  | 1 (base repo data)                          |
+| `lang`   | 2 (base repo data + `/languages`)           |
+| `hero`   | 2 (base repo data + `/stats/participation`) |
 
 Hugo caches remote resources to disk (`caches.getresource`), so repeated builds do not re-fetch until the cache expires.
 
@@ -137,12 +137,12 @@ Each API call is wrapped in an outer retry loop with header-aware error classifi
 
 The constants are baked into `fetch.html` and are **not** exposed as shortcode parameters or site params. The intent is conservative resilience without configuration surface.
 
-| Constant            | Value | Purpose                                                      |
-|---------------------|-------|--------------------------------------------------------------|
-| `attempts`          | `5`   | Maximum outer attempts per fetched endpoint                  |
-| `perAttemptTimeout` | `30s` | Per-request timeout passed to `resources.GetRemote`          |
-| `overallBudgetSec`  | `120` | Wall-clock cap per fetched endpoint, in seconds              |
-| `waitHintCapSec`    | `30`  | Display cap for the wait hint in warning messages (the full numeric hint is still logged) |
+| Constant | Value | Purpose |
+| --- | --- | --- |
+| `attempts` | `5` | Maximum outer attempts per fetched endpoint |
+| `perAttemptTimeout` | `30s` | Per-request timeout passed to `resources.GetRemote` |
+| `overallBudgetSec` | `120` | Wall-clock cap per fetched endpoint, in seconds |
+| `waitHintCapSec` | `30` | Display cap for the wait hint in warning messages (the full numeric hint is still logged) |
 
 Each attempt uses a fresh cache key (`github-repo:OWNER/REPO:ENDPOINT:attemptN`) so that a response cached as an error by Hugo's `httpcache.Transport` on a prior attempt does not poison subsequent attempts within the same build.
 
@@ -152,15 +152,15 @@ Hugo templates have no sleep primitive, so true backoff between outer attempts i
 
 `classify-error.html` derives a structured `errorClass` from the failed response. Each class drives a different retry decision:
 
-| `errorClass`            | Trigger                                                          | Retry behavior                                                                                                              |
-|-------------------------|------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
-| `primary-rate-limit`    | HTTP 403 with `X-RateLimit-Remaining: 0`                         | Early break -- subsequent attempts cannot succeed within the same build. Wait hint computed from `X-RateLimit-Reset`.       |
-| `secondary-rate-limit`  | HTTP 429                                                         | Retry while the wait hint fits in the remaining wall-clock budget. Wait hint preference: `Retry-After`, then `X-RateLimit-Reset` delta, then `60s`. |
-| `auth`                  | HTTP 401, or HTTP 403 without rate-limit headers                 | Early break -- token / permissions issue cannot be fixed by retrying.                                                       |
-| `not-found`             | HTTP 404 (Hugo's `nil` branch from `resources.GetRemote`)        | Early break -- resource is genuinely missing.                                                                               |
-| `server`                | HTTP 5xx                                                         | Retry up to `attempts` or `overallBudgetSec`, whichever comes first.                                                        |
-| `network`               | No HTTP response (DNS failure, connection refused, host timeout) | Retry up to `attempts` or `overallBudgetSec`, whichever comes first.                                                        |
-| `other`                 | Anything else                                                    | Retry up to `attempts` or `overallBudgetSec`, whichever comes first.                                                        |
+| `errorClass` | Trigger | Retry behavior |
+| --- | --- | --- |
+| `primary-rate-limit` | HTTP 403 with `X-RateLimit-Remaining: 0` | Early break -- subsequent attempts cannot succeed within the same build. Wait hint computed from `X-RateLimit-Reset`. |
+| `secondary-rate-limit` | HTTP 429 | Retry while the wait hint fits in the remaining wall-clock budget. Wait hint preference: `Retry-After`, then `X-RateLimit-Reset` delta, then `60s`. |
+| `auth` | HTTP 401, or HTTP 403 without rate-limit headers | Early break -- token / permissions issue cannot be fixed by retrying. |
+| `not-found` | HTTP 404 (Hugo's `nil` branch from `resources.GetRemote`) | Early break -- resource is genuinely missing. |
+| `server` | HTTP 5xx | Retry up to `attempts` or `overallBudgetSec`, whichever comes first. |
+| `network` | No HTTP response (DNS failure, connection refused, host timeout) | Retry up to `attempts` or `overallBudgetSec`, whichever comes first. |
+| `other` | Anything else | Retry up to `attempts` or `overallBudgetSec`, whichever comes first. |
 
 The first attempt always runs regardless of the initial classification (the early-break check is gated on attempt > 1). On retry exhaustion -- whether by `attempts` count, `overallBudgetSec` cap, or early break -- the widget falls through to the graceful degradation path described below.
 
@@ -180,13 +180,13 @@ If the upstream response includes a JSON body with a `message` field (typical fo
 
 Under the constants above, the per-call worst case is bounded as follows:
 
-| Variant   | Endpoints fetched                              | Worst-case wall clock |
-|-----------|------------------------------------------------|----------------------:|
-| `inline`  | base repo                                      |              **120s** |
-| `card`    | base repo                                      |              **120s** |
-| `stats`   | base repo                                      |              **120s** |
-| `lang`    | base repo + `/languages`                       |              **240s** |
-| `hero`    | base repo + `/stats/participation`             |              **240s** |
+| Variant  | Endpoints fetched                  | Worst-case wall clock |
+| -------- | ---------------------------------- | --------------------: |
+| `inline` | base repo                          |              **120s** |
+| `card`   | base repo                          |              **120s** |
+| `stats`  | base repo                          |              **120s** |
+| `lang`   | base repo + `/languages`           |              **240s** |
+| `hero`   | base repo + `/stats/participation` |              **240s** |
 
 These caps apply only when every endpoint exhausts retries against `server`, `secondary-rate-limit` (with a short reset window), `network`, or `other` failures. The most common observed failure -- `primary-rate-limit` from an exhausted unauthenticated 60 req/h budget -- triggers an early break on attempt 2, so the realistic per-call cost is approximately one HTTP round-trip plus one classification.
 
@@ -248,7 +248,7 @@ The language dot color is set via the `--github-repo-lang-color` CSS custom prop
 ### Data attributes
 
 | Attribute      | Value                                     | Purpose                   |
-|----------------|-------------------------------------------|---------------------------|
+| -------------- | ----------------------------------------- | ------------------------- |
 | `data-repo`    | `owner/repo`                              | Repository identification |
 | `data-variant` | `inline`, `card`, `stats`, `lang`, `hero` | Variant identification    |
 

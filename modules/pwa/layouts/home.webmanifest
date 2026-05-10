@@ -1,0 +1,59 @@
+{{/*
+  Templated Web App Manifest output.
+
+  Renders when the consumer site adds 'webappmanifest' to outputs.home.
+  Output URL: /manifest.webmanifest
+  Content-Type: application/manifest+json (Hugo built-in default for the .webmanifest suffix)
+
+  Reads defaults from hugo.Data.pwa.defaults.manifest, with site.Params.pwa.manifest overrides.
+
+  Consumed by Lighthouse "Installable" check (manifest portion); the SW prerequisite is supplied
+  by a separate service-worker registration partial.
+*/}}
+{{- $defaults := hugo.Data.pwa.defaults.manifest -}}
+{{- $params := site.Params.pwa.manifest | default dict -}}
+{{- $cfg := merge $defaults $params -}}
+
+{{- $name := $cfg.name | default site.Title -}}
+{{- $shortName := $cfg.short_name | default $name -}}
+{{- $description := $cfg.description | default site.Params.description -}}
+{{- $themeColor := $cfg.theme_color -}}
+{{- $bgColor := $cfg.background_color -}}
+{{- $scope := $cfg.scope -}}
+{{- $startUrl := $cfg.start_url -}}
+{{- $id := $cfg.id -}}
+{{- $display := $cfg.display -}}
+{{- $displayOverride := $cfg.display_override -}}
+{{- $lang := $cfg.lang | default site.Language.Lang -}}
+{{- $dir := $cfg.dir -}}
+{{- $categories := $cfg.categories -}}
+
+{{- $icons := partial "pwa/functions/icon-list.html" . -}}
+
+{{- $manifest := dict
+    "name" $name
+    "short_name" $shortName
+    "description" $description
+    "start_url" $startUrl
+    "scope" $scope
+    "id" $id
+    "display" $display
+    "display_override" $displayOverride
+    "theme_color" $themeColor
+    "background_color" $bgColor
+    "icons" $icons
+-}}
+
+{{- with $lang -}}
+  {{- $manifest = merge $manifest (dict "lang" .) -}}
+{{- end -}}
+
+{{- with $dir -}}
+  {{- $manifest = merge $manifest (dict "dir" .) -}}
+{{- end -}}
+
+{{- if gt (len $categories) 0 -}}
+  {{- $manifest = merge $manifest (dict "categories" $categories) -}}
+{{- end -}}
+
+{{- $manifest | jsonify (dict "indent" "  ") | safeJS -}}

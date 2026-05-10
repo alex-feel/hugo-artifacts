@@ -1,0 +1,82 @@
+{{/*
+  Hugo PWA module -- HEAD partial (entry point).
+
+  Emits the complete PWA-related <head> content for a consumer site:
+    - Web App Manifest link (templated or rfg-static mode)
+    - theme-color meta tag(s)
+    - apple-mobile-web-app-* meta tags
+    - RFG icon set (modern 2024 default OR legacy verbose, via mode switch)
+
+  Usage (in consumer's baseof.html or head partial):
+    {{ partial "pwa/head.html" . }}
+
+  Configuration: site.Params.pwa.* overrides hugo.Data.pwa.defaults.*
+    params.pwa.manifest.mode -- "templated" (default) | "rfg-static"
+    params.pwa.favicon.mode  -- "modern" (default) | "legacy"
+
+  Emits manifest + favicon + theme-color + apple-meta only at this layer; service-worker,
+  install-prompt, and push-subscribe partials are wired into this entry point separately.
+*/}}
+
+{{- $defaults := hugo.Data.pwa.defaults -}}
+{{- $params := site.Params.pwa | default dict -}}
+
+{{- $manifestParams := $params.manifest | default dict -}}
+{{- $faviconParams := $params.favicon | default dict -}}
+
+{{- $manifestEnabled := $defaults.manifest.enabled -}}
+{{- if isset $manifestParams "enabled" -}}
+  {{- $manifestEnabled = $manifestParams.enabled -}}
+{{- end -}}
+
+{{- $faviconEnabled := $defaults.favicon.enabled -}}
+{{- if isset $faviconParams "enabled" -}}
+  {{- $faviconEnabled = $faviconParams.enabled -}}
+{{- end -}}
+
+{{- if $manifestEnabled -}}
+  {{ partial "pwa/manifest.html" . }}
+{{- end }}
+
+{{- if $faviconEnabled -}}
+  {{ partial "pwa/theme-color.html" . }}
+  {{ partial "pwa/apple-meta.html" . }}
+
+  {{- $faviconMode := $faviconParams.mode | default $defaults.favicon.mode -}}
+  {{- if eq $faviconMode "legacy" -}}
+    {{ partial "pwa/favicon-legacy.html" . }}
+  {{- else -}}
+    {{ partial "pwa/favicon.html" . }}
+  {{- end }}
+{{- end }}
+
+{{- $swParams := $params.sw | default dict -}}
+{{- $swEnabled := $defaults.sw.enabled -}}
+{{- if isset $swParams "enabled" -}}
+  {{- $swEnabled = $swParams.enabled -}}
+{{- end -}}
+
+{{- if $swEnabled -}}
+  {{ partial "pwa/service-worker.html" . }}
+  {{ partial "pwa/register.html" . }}
+{{- end }}
+
+{{- $installParams := $params.install | default dict -}}
+{{- $installEnabled := $defaults.install.enabled -}}
+{{- if isset $installParams "enabled" -}}
+  {{- $installEnabled = $installParams.enabled -}}
+{{- end -}}
+
+{{- if $installEnabled -}}
+  {{ partial "pwa/install-prompt.html" . }}
+{{- end }}
+
+{{- $pushParams := $params.push | default dict -}}
+{{- $pushEnabled := $defaults.push.enabled -}}
+{{- if isset $pushParams "enabled" -}}
+  {{- $pushEnabled = $pushParams.enabled -}}
+{{- end -}}
+
+{{- if $pushEnabled -}}
+  {{ partial "pwa/push-subscribe.html" . }}
+{{- end }}

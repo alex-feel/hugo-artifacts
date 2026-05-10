@@ -1,0 +1,45 @@
+{{/*
+  Hugo PWA module -- install-prompt build + emission partial.
+
+  Loads modules/pwa/assets/pwa/install.ts, bundles it via Hugo's js.Build
+  (esbuild) with format=esm, target=es2020, minify=true. The build-time
+  params bridge supplies the install button selector, gating mode, and
+  dismissal-memory window.
+
+  Emits a fingerprinted <script type="module" defer> with Subresource
+  Integrity. NO <button> markup is emitted -- the consumer supplies the
+  install button using the configured selector (default
+  [data-pwa-install]) with the [hidden] attribute set, e.g.:
+
+      <button data-pwa-install hidden>{{ T "pwa_install_button" }}</button>
+
+  The script removes the [hidden] attribute when gating conditions clear.
+
+  Invoked from: pwa/head.html, gated on params.pwa.install.enabled.
+*/}}
+
+{{- $defaults := hugo.Data.pwa.defaults -}}
+{{- $params := site.Params.pwa | default dict -}}
+{{- $installParams := $params.install | default dict -}}
+{{- $installCfg := merge $defaults.install $installParams -}}
+
+{{- $jsParams := dict
+    "buttonSelector"        $installCfg.button_selector
+    "gateOnPushIntent"      $installCfg.gate_on_push_intent
+    "rememberDismissedDays" $installCfg.remember_dismissed_days
+-}}
+
+{{- $opts := dict
+    "format"    "esm"
+    "target"    "es2020"
+    "minify"    true
+    "params"    $jsParams
+    "sourceMap" (cond hugo.IsDevelopment "linked" "")
+-}}
+
+{{- with resources.Get "pwa/install.ts" -}}
+  {{- $built := . | js.Build $opts | fingerprint -}}
+  <script type="module" src="{{ $built.RelPermalink }}" integrity="{{ $built.Data.Integrity }}" defer></script>
+{{- else -}}
+  {{- errorf "modules/pwa: assets/pwa/install.ts not found" -}}
+{{- end -}}
