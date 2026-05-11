@@ -1,0 +1,36 @@
+// Repo-root markdownlint-cli2 configuration.
+//
+// The repository follows a "one paragraph = one physical line" Markdown
+// authoring convention documented in CLAUDE.md. This produces long single-line
+// paragraphs by design. MD013 (line-length) MUST be disabled to avoid false
+// positives on every paragraph.
+//
+// Other disabled rules cover legitimate documentation patterns:
+//   - MD024 (no-duplicate-heading): multiple "## Configuration" / "## License"
+//     sections appear across module READMEs; siblings_only is too lax in
+//     markdownlint-cli2's default-config aliasing.
+//   - MD033 (no-inline-html): shortcodes legitimately use inline HTML
+//     (<details>, <br>, <img alt> in shields.io badges).
+//   - MD041 (first-line-heading): files like CLAUDE.md and example fixtures
+//     start with non-H1 content (front matter, code fences).
+{
+  "config": {
+    "default": true,
+    "MD013": false,
+    "MD024": false,
+    "MD033": false,
+    "MD041": false
+  },
+  "globs": [
+    "**/*.md"
+  ],
+  "ignores": [
+    "node_modules/**",
+    "**/node_modules/**",
+    "**/public/**",
+    "**/resources/**",
+    ".code-review-graph/**",
+    "modules/pwa/test/test-results/**",
+    "modules/pwa/test/playwright-report/**"
+  ]
+}

@@ -1,0 +1,21 @@
+# Repo-root yamllint configuration.
+#
+# Extends the yamllint default ruleset, then DISABLES rules that produce false
+# positives on legitimate GitHub Actions / GitHub Issue Forms syntax:
+#
+#   - line-length: GitHub Issue Forms descriptions and workflow run steps
+#     contain long lines by design. The repo's "one paragraph = one physical
+#     line" Markdown convention also bleeds into YAML descriptions.
+#   - truthy: GitHub Actions uses `on:` as a top-level workflow key (a YAML 1.1
+#     truthy value); Issue Forms use `required: true` etc. These are correct.
+#   - document-start: GitHub Actions and Issue Forms files do not require a
+#     leading `---` document marker.
+#
+# All other default rules (indentation, key-duplicates, trailing-spaces,
+# new-line-at-end-of-file) remain enabled to catch real defects.
+extends: default
+
+rules:
+  line-length: disable
+  truthy: disable
+  document-start: disable
