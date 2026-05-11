@@ -8,11 +8,11 @@ For a "from zero to working push notification in 5 minutes" walkthrough, see [`Q
 
 ## Reference push backends
 
-| Platform                | Storage      | Push send pipeline                                               | Path                                                         | README                                                       |
-|-------------------------|--------------|------------------------------------------------------------------|--------------------------------------------------------------|--------------------------------------------------------------|
-| Cloudflare Workers      | Workers KV   | Native `crypto.subtle` (VAPID JWT + AES-128-GCM)                 | [`backend-cloudflare-worker/`](backend-cloudflare-worker/)   | [README](backend-cloudflare-worker/README.md)                |
-| Node Express + Postgres | Postgres     | [`web-push`](https://www.npmjs.com/package/web-push) npm package | [`backend-express/`](backend-express/)                       | [README](backend-express/README.md)                          |
-| Firebase Functions v2   | Firestore    | [`web-push`](https://www.npmjs.com/package/web-push) npm package | [`backend-firebase-functions/`](backend-firebase-functions/) | [README](backend-firebase-functions/README.md)               |
+| Platform | Storage | Push send pipeline | Path | README |
+| --- | --- | --- | --- | --- |
+| Cloudflare Workers | Workers KV | Native `crypto.subtle` (VAPID JWT + AES-128-GCM) | [`backend-cloudflare-worker/`](backend-cloudflare-worker/) | [README](backend-cloudflare-worker/README.md) |
+| Node Express + Postgres | Postgres | [`web-push`](https://www.npmjs.com/package/web-push) npm package | [`backend-express/`](backend-express/) | [README](backend-express/README.md) |
+| Firebase Functions v2 | Firestore | [`web-push`](https://www.npmjs.com/package/web-push) npm package | [`backend-firebase-functions/`](backend-firebase-functions/) | [README](backend-firebase-functions/README.md) |
 
 Each reference exposes the canonical `/subscribe`, `/unsubscribe`, and admin-gated `/trigger` endpoints, validates request origin against an allowlist, and reads the VAPID private key from a platform-appropriate secret store (`wrangler secret put`, environment variable, or Firebase secret manager).
 

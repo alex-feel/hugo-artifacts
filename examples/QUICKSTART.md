@@ -124,12 +124,12 @@ You should see the notification appear in your browser within a few seconds. The
 
 ## What just happened?
 
-| Step                       | What ran                                                                                                                          |
-|----------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
-| Subscribe button click     | Browser prompted for permission, called `pushManager.subscribe()`, POSTed `{endpoint, keys}` to your Worker's `/subscribe`.       |
-| Worker `/subscribe`        | Validated origin, stored the subscription in the `PWA_SUBS` KV namespace keyed by a hash of the endpoint URL.                     |
-| `/trigger` curl            | Worker validated origin, validated `X-Admin-Key`, listed all subscriptions from KV, signed a VAPID JWT per push-service endpoint, AES-128-GCM-encrypted the payload, POSTed to each push service (FCM/APNS/Mozilla). |
-| Browser receipt            | Service worker received the encrypted push, decrypted it, called `self.registration.showNotification()` with title/body/url.      |
+| Step | What ran |
+| --- | --- |
+| Subscribe button click | Browser prompted for permission, called `pushManager.subscribe()`, POSTed `{endpoint, keys}` to your Worker's `/subscribe`. |
+| Worker `/subscribe` | Validated origin, stored the subscription in the `PWA_SUBS` KV namespace keyed by a hash of the endpoint URL. |
+| `/trigger` curl | Worker validated origin, validated `X-Admin-Key`, listed all subscriptions from KV, signed a VAPID JWT per push-service endpoint, AES-128-GCM-encrypted the payload, POSTed to each push service (FCM/APNS/Mozilla). |
+| Browser receipt | Service worker received the encrypted push, decrypted it, called `self.registration.showNotification()` with title/body/url. |
 
 ## Troubleshooting
 

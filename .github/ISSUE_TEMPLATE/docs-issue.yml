@@ -20,7 +20,7 @@ body:
         - examples/backend-cloudflare-worker/README.md
         - examples/backend-express/README.md
         - examples/backend-firebase-functions/README.md
-        - "Other/not sure"
+        - 'Other/not sure'
     validations:
       required: true
 

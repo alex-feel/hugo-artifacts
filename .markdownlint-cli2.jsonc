@@ -13,24 +13,30 @@
 //     (<details>, <br>, <img alt> in shields.io badges).
 //   - MD041 (first-line-heading): files like CLAUDE.md and example fixtures
 //     start with non-H1 content (front matter, code fences).
+//   - modules/pwa/test/README.md and modules/pwa/test/IOS_MANUAL_MATRIX.md
+//     are Phase 7 locked Playwright validation-matrix artifacts (paralleling
+//     the .prettierignore exclusion). They use aligned Markdown tables where
+//     long file-path links overflow header column widths; MD060 would flag
+//     these legitimately but the test fixture documentation MUST NOT be
+//     restyled to preserve the regression-free Phase 7 status.
 {
   "config": {
     "default": true,
     "MD013": false,
     "MD024": false,
     "MD033": false,
-    "MD041": false
+    "MD041": false,
   },
-  "globs": [
-    "**/*.md"
-  ],
+  "globs": ["**/*.md"],
   "ignores": [
     "node_modules/**",
     "**/node_modules/**",
     "**/public/**",
     "**/resources/**",
     ".code-review-graph/**",
+    "modules/pwa/test/README.md",
+    "modules/pwa/test/IOS_MANUAL_MATRIX.md",
     "modules/pwa/test/test-results/**",
-    "modules/pwa/test/playwright-report/**"
-  ]
+    "modules/pwa/test/playwright-report/**",
+  ],
 }

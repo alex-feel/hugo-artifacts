@@ -72,7 +72,7 @@ body:
       description: How are you consuming the module?
       options:
         - hugo.work (local development)
-        - "[module.replacements] (local checkout)"
+        - '[module.replacements] (local checkout)'
         - hugo mod get (tagged release)
         - hugo mod get (pseudo-version)
         - Vendored (hugo mod vendor)
@@ -84,8 +84,8 @@ body:
     id: hugo-version
     attributes:
       label: Hugo Version
-      description: "Run `hugo version` and paste the output."
-      placeholder: "e.g., hugo v0.160.1+extended linux/amd64"
+      description: 'Run `hugo version` and paste the output.'
+      placeholder: 'e.g., hugo v0.160.1+extended linux/amd64'
     validations:
       required: true
 
@@ -93,8 +93,8 @@ body:
     id: go-version
     attributes:
       label: Go Version
-      description: "Run `go version` and paste the output."
-      placeholder: "e.g., go1.22.0 linux/amd64"
+      description: 'Run `go version` and paste the output.'
+      placeholder: 'e.g., go1.22.0 linux/amd64'
     validations:
       required: true
 
@@ -103,7 +103,7 @@ body:
     attributes:
       label: Operating System
       description: Your OS and version.
-      placeholder: "e.g., Windows 11 23H2, macOS 15.2, Ubuntu 24.04"
+      placeholder: 'e.g., Windows 11 23H2, macOS 15.2, Ubuntu 24.04'
     validations:
       required: true
 
