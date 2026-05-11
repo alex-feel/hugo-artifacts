@@ -1,0 +1,139 @@
+name: Bug Report
+description: Report a bug or unexpected behavior in a hugo-artifacts module
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please fill out the form below to help us investigate.
+
+        **Before submitting, please note:** A clear description and reproduction steps are the most helpful things you can provide. If you have done genuine investigation and have a non-obvious insight into the root cause, include it. But please do not speculate or include LLM-generated diagnoses -- an incorrect analysis is harder to work with than none at all.
+
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Pre-submission Checks
+      options:
+        - label: I am using the latest version of the affected module
+          required: true
+        - label: I searched existing issues and found no duplicates
+          required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: >-
+        Describe the bug clearly. Include what happened and what you expected to happen instead.
+      placeholder: |
+        What happened:
+        ...
+
+        What I expected:
+        ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: >-
+        Provide the minimal steps needed to reproduce this bug. Include the consuming-site Hugo config snippet and any relevant module-config keys.
+      placeholder: |
+        1. Add module to consuming site config...
+        2. Configure params.pwa.* (or relevant module params)...
+        3. Run `hugo` (or `hugo server`)...
+        4. Observe error...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: Affected Module
+      description: Which module(s) does the issue affect?
+      multiple: true
+      options:
+        - modules/pwa
+        - modules/workbox
+        - modules/idb
+        - shortcodes/github-repo
+        - Multiple modules
+        - Repository-wide (build, conventions, docs)
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: resolution
+    attributes:
+      label: Resolution Path
+      description: How are you consuming the module?
+      options:
+        - hugo.work (local development)
+        - "[module.replacements] (local checkout)"
+        - hugo mod get (tagged release)
+        - hugo mod get (pseudo-version)
+        - Vendored (hugo mod vendor)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: hugo-version
+    attributes:
+      label: Hugo Version
+      description: "Run `hugo version` and paste the output."
+      placeholder: "e.g., hugo v0.160.1+extended linux/amd64"
+    validations:
+      required: true
+
+  - type: input
+    id: go-version
+    attributes:
+      label: Go Version
+      description: "Run `go version` and paste the output."
+      placeholder: "e.g., go1.22.0 linux/amd64"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      description: Your OS and version.
+      placeholder: "e.g., Windows 11 23H2, macOS 15.2, Ubuntu 24.04"
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-output
+    attributes:
+      label: Error Output
+      description: >-
+        Paste any error messages, tracebacks, or relevant `hugo` log output. This will be automatically formatted as a code block.
+      render: text
+
+  - type: textarea
+    id: hugo-config
+    attributes:
+      label: Hugo Configuration
+      description: >-
+        Paste the relevant `hugo.toml` / `[module]` / `[params.pwa]` (or other relevant params) section. Redact any tokens or secrets.
+      render: toml
+
+  - type: textarea
+    id: hugo-mod-graph
+    attributes:
+      label: hugo mod graph (optional)
+      description: >-
+        Run `hugo mod graph` from the consuming-site root and paste the output. This helps diagnose module-resolution issues.
+      render: text
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: >-
+        Add any other context about the problem here. Screenshots, browser DevTools output, or environment details may be helpful.
