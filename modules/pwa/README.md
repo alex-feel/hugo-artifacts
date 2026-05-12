@@ -37,7 +37,7 @@ That is the minimum config. The defaults shipped in `data/pwa/defaults.toml` tur
 
 ## Installation
 
-The repository is a private multi-module monorepo, so external consumers have three valid resolution paths. Pick whichever matches your workflow.
+The repository is a public multi-module monorepo. External consumers have three resolution paths; pick whichever matches your workflow.
 
 ### A. `hugo.work` (recommended for local development)
 
@@ -558,7 +558,3 @@ A 9-row Playwright validation matrix lives in [`test/`](test/). Coverage:
 | 9   | Lighthouse PWA audit  |
 
 See [`test/README.md`](test/README.md) for matrix usage instructions.
-
-## License
-
-All Rights Reserved. See the repository root [`LICENSE`](../../LICENSE).

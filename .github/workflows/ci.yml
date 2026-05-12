@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate (Hugo + Go + lints)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.22'
+          cache: false
+
+      - name: Set up Hugo (extended)
+        uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: '0.161.1'
+          extended: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Verify Hugo and Go versions
+        run: |
+          hugo version
+          go version
+          node --version
+          npm --version
+
+      - name: Install Node dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify leaf go.mod files parse
+        shell: bash
+        run: |
+          set -euo pipefail
+          # All 5 leaf go.mod files MUST parse via `go mod edit -fmt -print`.
+          # This is a read-only operation that does NOT require network access
+          # and works for modules whose dependencies include non-Go-aware
+          # upstreams (workbox, idb) that cannot be resolved by the Go module
+          # proxy. Each leaf go.mod is verified independently from its own
+          # directory.
+          leaves=(
+            modules/pwa
+            modules/workbox
+            modules/idb
+            shortcodes/github-repo
+            modules/pwa/test/fixture
+          )
+          for leaf in "${leaves[@]}"; do
+            echo "::group::go mod edit -fmt -print -- ${leaf}/go.mod"
+            ( cd "${leaf}" && go mod edit -fmt -print )
+            echo "::endgroup::"
+          done
+
+      - name: Hugo mod graph (shortcodes/github-repo standalone)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # shortcodes/github-repo is the only leaf module with no module
+          # imports beyond [module.hugoVersion]. It can be graphed standalone
+          # without any [module.replacements] configuration. The other 4 leaf
+          # modules transitively depend on github.com/GoogleChrome/workbox or
+          # github.com/jakearchibald/idb (both non-Go-aware), which cannot be
+          # resolved by Hugo's module fetcher without consumer-side replacements
+          # documented in modules/pwa/README.md Installation.
+          echo "::group::hugo mod graph -- shortcodes/github-repo"
+          ( cd shortcodes/github-repo && hugo mod graph )
+          echo "::endgroup::"
+
+      - name: ESLint (eslint v9 flat config)
+        run: npm run lint
+
+      - name: Prettier (format:check)
+        run: npm run format:check
+
+      - name: Markdown lint (markdownlint-cli2)
+        uses: DavidAnson/markdownlint-cli2-action@v23
+        with:
+          globs: |
+            **/*.md
+
+      - name: YAML lint (yamllint)
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: .github
+          config_file: .yamllint.yml
+          strict: true
+
+      - name: EditorConfig conformance
+        uses: editorconfig-checker/action-editorconfig-checker@v2.2.0
+        with:
+          version: 'v3.0.3'

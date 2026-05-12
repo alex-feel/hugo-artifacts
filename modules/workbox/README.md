@@ -8,6 +8,8 @@ This module is the sibling of [`modules/pwa`](../pwa/README.md), the consumer-fa
 
 v1.0 -- production-ready. Hugo 0.160.0+ (extended), Go 1.22+. Pinned to upstream Workbox v7.4.1 (commit [`62b9d8ba8eb3c1a2ab8aac9d84c90cda7865d6a3`](https://github.com/GoogleChrome/workbox/tree/v7.4.1)).
 
+Companion module to `modules/pwa`. Consumers depend on `modules/pwa`, which transitively imports `modules/workbox`. The vendored upstream Workbox sources are Apache-2.0 licensed; see [Workbox's LICENSE](https://github.com/GoogleChrome/workbox/blob/main/LICENSE).
+
 ## How it works
 
 `modules/workbox/hugo.toml` declares `[[module.imports]]` of `github.com/GoogleChrome/workbox` and 16 `[[module.imports.mounts]]` entries that map upstream source paths into the Hugo unified file system under `assets/`:
@@ -169,11 +171,3 @@ replacements = 'github.com/alex-feel/hugo-artifacts/modules/workbox -> ../hugo-a
 For this to work, the consumer must have a local checkout of `hugo-artifacts` accessible at the configured path. There is currently no way to fetch the Workbox upstream sources transitively via `hugo mod get` alone without local replacement.
 
 Document this in your consumer site's onboarding instructions; it is the same constraint that any vendor-mount module that wraps a non-Go-aware upstream incurs.
-
-## Status
-
-Companion module to `modules/pwa`. Consumers depend on `modules/pwa`, which transitively imports `modules/workbox`.
-
-## License
-
-Workbox upstream is Apache 2.0 (see Workbox's [LICENSE](https://github.com/GoogleChrome/workbox/blob/main/LICENSE)). The mount-only configuration in this module is "All Rights Reserved" per the repository root [`LICENSE`](../../LICENSE), which does not affect the upstream Workbox files themselves.

@@ -1,0 +1,52 @@
+name: Question
+description: Ask a question about hugo-artifacts modules
+labels: [question]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before asking, you may find your answer in the existing documentation:
+
+        - [Repository README](https://github.com/alex-feel/hugo-artifacts#readme) -- Overview, modules index, and consumer setup
+        - [modules/pwa README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/pwa/README.md) -- Full PWA module reference
+        - [shortcodes/github-repo README](https://github.com/alex-feel/hugo-artifacts/blob/main/shortcodes/github-repo/README.md) -- GitHub-repo shortcode reference
+        - [CONTRIBUTING.md](https://github.com/alex-feel/hugo-artifacts/blob/main/CONTRIBUTING.md) -- Development setup and conventions
+        - [CLAUDE.md](https://github.com/alex-feel/hugo-artifacts/blob/main/CLAUDE.md) -- Repository architectural rules
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: Describe your question in detail. Include what you are trying to achieve and any relevant context.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: topic
+    attributes:
+      label: Topic Area
+      description: What area does your question relate to?
+      options:
+        - Module installation / hugo mod get
+        - hugo.work / [module.replacements] / vendor-mount
+        - PWA module configuration (params.pwa.*)
+        - Push notifications / VAPID / reference backends
+        - Service worker / Workbox / idb
+        - GitHub-repo shortcode
+        - Multi-module monorepo / tagging / versioning
+        - Hugo template lookup / overrides
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What I've Tried
+      description: Describe what you have already tried or investigated. This helps avoid suggesting things you already know.
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context, code snippets, or configuration details that may help answer your question.

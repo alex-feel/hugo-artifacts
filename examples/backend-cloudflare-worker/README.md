@@ -104,7 +104,7 @@ wrangler kv:namespace create PWA_SUBS
 
 The command prints something like:
 
-```
+```text
 { binding = "PWA_SUBS", id = "abc123def456..." }
 ```
 

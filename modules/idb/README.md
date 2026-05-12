@@ -49,8 +49,4 @@ External consumers using `hugo mod get` for `modules/workbox` (which transitivel
 
 ## Status
 
-v1.0.0 -- companion of `modules/workbox` v1.0.0. Ships as a Hugo module under `github.com/alex-feel/hugo-artifacts/modules/idb`.
-
-## License
-
-The `idb` library is MIT-licensed; see the upstream [LICENSE](https://github.com/jakearchibald/idb/blob/main/LICENSE). This Hugo wrapper inherits the repository-root `LICENSE` of `github.com/alex-feel/hugo-artifacts`.
+v1.0.0 -- companion of `modules/workbox` v1.0.0. Ships as a Hugo module under `github.com/alex-feel/hugo-artifacts/modules/idb`. The vendored upstream `idb` library is MIT-licensed; see its [upstream LICENSE](https://github.com/jakearchibald/idb/blob/main/LICENSE).

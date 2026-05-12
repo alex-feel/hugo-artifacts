@@ -4,16 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-Private Go **multi-module** monorepo for reusable Hugo artifacts (themes, shortcode libraries, asset libraries, utility modules). Each leaf directory is an independently importable, independently versionable Hugo module.
+Public Go **multi-module** monorepo for reusable Hugo artifacts (themes, shortcode libraries, asset libraries, utility modules). Each leaf directory is an independently importable, independently versionable Hugo module.
 
 Consumers are external Hugo sites that import individual modules via their full module path.
 
 ## Architectural rules (these are load-bearing — violating them breaks consumers)
 
-1. **Every leaf module has its own `go.mod`.** The root `go.mod` (`module github.com/alex-feel/hugo-artifacts`) is convention-only and is **not imported by any consumer**.
+1. **Every importable artifact is a leaf directory with its own `go.mod`.** There is intentionally NO root `go.mod` in this repository -- the repo as a whole is not a Go module. Only leaf directories that represent an actual importable unit (e.g., `modules/pwa/go.mod`, `shortcodes/github-repo/go.mod`) are real modules; consumers MUST use the leaf module path, never a bare-root path.
 2. **Module path must equal directory path** under the repo root, prefixed with `github.com/alex-feel/hugo-artifacts/`. Example: `shortcodes/accordion/go.mod` → `module github.com/alex-feel/hugo-artifacts/shortcodes/accordion`. Mismatches silently break `hugo mod get`.
 3. **Grouping directories have no `go.mod`.** `themes/`, `modules/`, `shortcodes/`, and any other category folder are organizational containers only. `go.mod` lives exclusively in leaf directories that represent an actual importable unit. The `examples/` directory is also a grouping container, but its children are standalone reference implementations rather than importable Hugo modules.
-4. **Version tags are subdirectory-prefixed**, never bare semver. `sharing/v1.0.0`, `themes/starter/v1.0.0`, `shortcodes/accordion/v1.0.0`. A bare `v1.0.0` tag is meaningless in a multi-module repo and will confuse Go's module resolver. Pseudo-versions (commit-based) are also acceptable for private use.
+4. **Version tags are subdirectory-prefixed**, never bare semver. `sharing/v1.0.0`, `themes/starter/v1.0.0`, `shortcodes/accordion/v1.0.0`. A bare `v1.0.0` tag is meaningless in a multi-module repo and will confuse Go's module resolver. Pseudo-versions (commit-based) are also acceptable when a module has not yet been formally tagged.
 5. **`hugo.toml` is per-module and optional.** Only add one when the module actually needs config (imports, custom mounts, params, `hugoVersion` minimum). Themes typically need one; utility/shortcode modules usually don't.
 
 ## Hugo module component layout
@@ -128,7 +128,3 @@ If you are an agent reading this file: before writing any Markdown content, RE-R
 ## Requirements for any Hugo config authored here
 
 Hugo v0.160.0+ (extended edition), Go 1.22+. When declaring `[module.hugoVersion]` in a module's `hugo.toml`, set `min = "0.160.0"` unless the module genuinely requires a newer feature.
-
-## License
-
-All Rights Reserved (see `LICENSE`). Repository is private; do not add public-repo conveniences (CI for public PRs, public issue templates, etc.) without an explicit request.
