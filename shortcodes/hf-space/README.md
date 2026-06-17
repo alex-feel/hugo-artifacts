@@ -81,15 +81,15 @@ The largest variant. A gradient banner carrying the big emoji, faux app-window c
 
 ## Parameters
 
-| Parameter     | Type   | Required | Default   | Description |
-| ------------- | ------ | -------- | --------- | ----------- |
-| `id`          | string | yes\*    | --        | Space identifier as `owner/name` (e.g., `gradio/hello_world`) |
-| `url`         | string | yes\*    | --        | Full Space URL (e.g., `https://huggingface.co/spaces/owner/name`) |
-| `variant`     | string | no       | `card`    | Display variant: `inline`, `card`, `wide`, `stats`, `hero` |
-| `title`       | string | no       | API/name  | Display title override (used for the link's `aria-label`; defaults to the Space's card title, then its name) |
-| `description` | string | no       | API       | Description override (defaults to the Space's `short_description`) |
-| `emoji`       | string | no       | API       | Tile emoji override (defaults to the Space's card emoji) |
-| `class`       | string | no       | --        | Additional CSS class(es) appended to the root element |
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `id` | string | yes\* | -- | Space identifier as `owner/name` (e.g., `gradio/hello_world`) |
+| `url` | string | yes\* | -- | Full Space URL (e.g., `https://huggingface.co/spaces/owner/name`) |
+| `variant` | string | no | `card` | Display variant: `inline`, `card`, `wide`, `stats`, `hero` |
+| `title` | string | no | API/name | Display title override (used for the link's `aria-label`; defaults to the Space's card title, then its name) |
+| `description` | string | no | API | Description override (defaults to the Space's `short_description`) |
+| `emoji` | string | no | API | Tile emoji override (defaults to the Space's card emoji) |
+| `class` | string | no | -- | Additional CSS class(es) appended to the root element |
 
 \* Provide either `id` or `url`. When both are given, `id` wins.
 
@@ -125,12 +125,12 @@ The Hub applies an IETF-style rate limit per IP for anonymous API requests (obse
 
 Each API call is wrapped in an outer retry loop with header-aware error classification, sitting in front of the graceful-degradation behavior described below. The constants are baked into `fetch.html` and are **not** exposed as shortcode parameters or site params; the intent is conservative resilience without configuration surface.
 
-| Constant            | Value | Purpose |
-| ------------------- | ----- | ------- |
-| `attempts`          | `5`   | Maximum outer attempts |
+| Constant | Value | Purpose |
+| --- | --- | --- |
+| `attempts` | `5` | Maximum outer attempts |
 | `perAttemptTimeout` | `30s` | Per-request timeout passed to `resources.GetRemote` |
-| `overallBudgetSec`  | `120` | Wall-clock cap, in seconds |
-| `waitHintCapSec`    | `30`  | Display cap for the rate-limit wait hint in warnings (the full numeric hint is still logged) |
+| `overallBudgetSec` | `120` | Wall-clock cap, in seconds |
+| `waitHintCapSec` | `30` | Display cap for the rate-limit wait hint in warnings (the full numeric hint is still logged) |
 
 Each attempt uses a fresh cache key (`hf-space:OWNER/NAME:space:attemptN`) so that a response cached as an error by Hugo's `httpcache.Transport` on a prior attempt does not poison subsequent attempts within the same build.
 
@@ -141,13 +141,13 @@ Hugo templates have no sleep primitive, so true backoff between outer attempts i
 `classify-error.html` derives a structured `errorClass` from the failed response. Each class drives a different retry decision:
 
 | `errorClass` | Trigger | Retry behavior |
-| ------------ | ------- | -------------- |
-| `auth`       | HTTP 401 or 403 | Early break -- a missing/private Space or token/permission issue cannot be fixed by retrying. The Hub returns **401** (not 404) to anonymous clients for both missing and private Spaces, so the message names all three causes. |
-| `not-found`  | HTTP 404 (typically only when authenticated) | Early break -- resource genuinely missing. |
+| --- | --- | --- |
+| `auth` | HTTP 401 or 403 | Early break -- a missing/private Space or token/permission issue cannot be fixed by retrying. The Hub returns **401** (not 404) to anonymous clients for both missing and private Spaces, so the message names all three causes. |
+| `not-found` | HTTP 404 (typically only when authenticated) | Early break -- resource genuinely missing. |
 | `rate-limit` | HTTP 429 | Early break -- a rate-limit window cannot reset between immediate attempts. The wait hint is taken from `Retry-After`, else the `t` reset delta in the IETF `RateLimit` header, else a 60-second default, and surfaced for a later CI-level rebuild. |
-| `server`     | HTTP 5xx | Retry up to `attempts` or `overallBudgetSec`, whichever comes first. |
-| `network`    | No HTTP response (DNS failure, connection refused, host timeout) | Retry up to `attempts` or `overallBudgetSec`. |
-| `other`      | Anything else | Retry up to `attempts` or `overallBudgetSec`. |
+| `server` | HTTP 5xx | Retry up to `attempts` or `overallBudgetSec`, whichever comes first. |
+| `network` | No HTTP response (DNS failure, connection refused, host timeout) | Retry up to `attempts` or `overallBudgetSec`. |
+| `other` | Anything else | Retry up to `attempts` or `overallBudgetSec`. |
 
 On retry exhaustion the module emits a single structured `warnf` per failed Space (with `errorClass`, `statusCode`, the Hub's error `message` when present, and a wait hint for rate limits) and falls through to graceful degradation. The build is never broken by an API failure.
 
@@ -178,22 +178,22 @@ Maps the Hub's hardware flavor identifiers (as returned in `runtime.hardware.cur
 
 The Hub's `runtime.stage` field is collapsed into a small, stable token (exposed as `data-status` and a `hf-space__status--<token>` modifier) plus a human label (`statusLabel`):
 
-| `runtime.stage` | `data-status` | Label |
-| --------------- | ------------- | ----- |
-| `RUNNING` | `running` | Running |
-| `RUNNING_BUILDING` | `running` | Running (rebuilding) |
-| `RUNNING_APP_STARTING` | `running` | Running (app starting) |
-| `BUILDING` | `building` | Building |
-| `APP_STARTING` | `building` | App starting |
-| `SLEEPING` | `sleeping` | Sleeping |
-| `PAUSED` | `paused` | Paused |
-| `STOPPED` | `stopped` | Stopped |
-| `DELETING` | `stopped` | Deleting |
-| `RUNTIME_ERROR` | `error` | Runtime error |
-| `BUILD_ERROR` | `error` | Build error |
-| `CONFIG_ERROR` | `error` | Configuration error |
-| `NO_APP_FILE` | `error` | No app file |
-| *(any other)* | `unknown` | Unknown |
+| `runtime.stage`        | `data-status` | Label                  |
+| ---------------------- | ------------- | ---------------------- |
+| `RUNNING`              | `running`     | Running                |
+| `RUNNING_BUILDING`     | `running`     | Running (rebuilding)   |
+| `RUNNING_APP_STARTING` | `running`     | Running (app starting) |
+| `BUILDING`             | `building`    | Building               |
+| `APP_STARTING`         | `building`    | App starting           |
+| `SLEEPING`             | `sleeping`    | Sleeping               |
+| `PAUSED`               | `paused`      | Paused                 |
+| `STOPPED`              | `stopped`     | Stopped                |
+| `DELETING`             | `stopped`     | Deleting               |
+| `RUNTIME_ERROR`        | `error`       | Runtime error          |
+| `BUILD_ERROR`          | `error`       | Build error            |
+| `CONFIG_ERROR`         | `error`       | Configuration error    |
+| `NO_APP_FILE`          | `error`       | No app file            |
+| _(any other)_          | `unknown`     | Unknown                |
 
 The module never hardcodes color or animation against these states; it only emits the token. The consuming CSS decides which state pulses, which is green, and so on.
 
@@ -233,29 +233,37 @@ The gradient tile colors are set via the `--hf-space-color-from` and `--hf-space
 
 The module ships **no** SDK or status colors -- those are design decisions. It exposes the objective values as data attributes so the consuming site can color-code freely:
 
-| Attribute         | Value                                          | Purpose |
-| ----------------- | ---------------------------------------------- | ------- |
-| `data-space`      | `owner/name`                                   | Space identification |
-| `data-variant`    | `inline`, `card`, `wide`, `stats`, `hero`      | Variant identification (reflects the requested variant even when degraded) |
-| `data-sdk`        | `gradio`, `streamlit`, `docker`, `static`, ... | SDK color-coding hook |
-| `data-status`     | `running`, `building`, `sleeping`, `paused`, `stopped`, `error`, `unknown` | Status color/animation hook |
-| `data-hardware`   | Hardware flavor id (e.g. `zero-a10g`, `cpu-basic`) | Hardware color-coding hook |
-| `data-color-from` | Hub color name (e.g. `indigo`)                 | Gradient remap hook (map to your own palette) |
-| `data-color-to`   | Hub color name                                 | Gradient remap hook |
-| `data-api-ok`     | `true`, `false`                                | Degraded-state hook |
+| Attribute | Value | Purpose |
+| --- | --- | --- |
+| `data-space` | `owner/name` | Space identification |
+| `data-variant` | `inline`, `card`, `wide`, `stats`, `hero` | Variant identification (reflects the requested variant even when degraded) |
+| `data-sdk` | `gradio`, `streamlit`, `docker`, `static`, ... | SDK color-coding hook |
+| `data-status` | `running`, `building`, `sleeping`, `paused`, `stopped`, `error`, `unknown` | Status color/animation hook |
+| `data-hardware` | Hardware flavor id (e.g. `zero-a10g`, `cpu-basic`) | Hardware color-coding hook |
+| `data-color-from` | Hub color name (e.g. `indigo`) | Gradient remap hook (map to your own palette) |
+| `data-color-to` | Hub color name | Gradient remap hook |
+| `data-api-ok` | `true`, `false` | Degraded-state hook |
 
 For example, to color-code the SDK badge and pulse the running LED in your own design system:
 
 ```css
-.hf-space__sdk[data-sdk="gradio"]   { --sdk-color: var(--cat-contact); }
-.hf-space__sdk[data-sdk="streamlit"]{ --sdk-color: var(--status-error); }
-.hf-space[data-status="running"] .hf-space__status-led { animation: pulse 2.4s infinite; }
+.hf-space__sdk[data-sdk='gradio'] {
+  --sdk-color: var(--cat-contact);
+}
+.hf-space__sdk[data-sdk='streamlit'] {
+  --sdk-color: var(--status-error);
+}
+.hf-space[data-status='running'] .hf-space__status-led {
+  animation: pulse 2.4s infinite;
+}
 ```
 
 To remap the gradient to your own category hues instead of the Hub palette:
 
 ```css
-.hf-space[data-color-from="indigo"] { --hf-space-color-from: var(--cat-experience); }
+.hf-space[data-color-from='indigo'] {
+  --hf-space-color-from: var(--cat-experience);
+}
 ```
 
 ### Icons
