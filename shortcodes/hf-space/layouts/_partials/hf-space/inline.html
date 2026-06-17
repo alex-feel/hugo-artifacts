@@ -1,0 +1,42 @@
+{{/*
+  Renders V1 inline chip variant of the hf-space shortcode.
+  Also serves as the degraded fallback for other variants when the API fails.
+
+  Context expectations:
+  - . (dict) - Normalized Space data from fetch.html partial
+  - .url, .owner, .name, .id, .title, .emoji, .likesFormatted, .apiOk, .extraClass
+  - .colorFromHex, .colorToHex, .colorFrom, .colorTo, .sdk, .status
+  - .variant (string, optional) - Originating variant name for data-variant (default: "inline")
+
+  Output: An <a> element with BEM class hf-space hf-space--inline
+*/}}
+
+{{- $variant := .variant | default "inline" -}}
+<a href="{{ .url }}"
+   class="hf-space hf-space--inline{{ with .extraClass }} {{ . }}{{ end }}"
+   target="_blank"
+   rel="noopener noreferrer"
+   aria-label="{{ or .title .name }}, a Hugging Face Space by {{ .owner }}"
+   data-space="{{ .id }}"
+   data-variant="{{ $variant }}"
+   data-api-ok="{{ .apiOk }}"
+   {{- with .sdk }} data-sdk="{{ . }}"{{ end }}
+   {{- with .status }} data-status="{{ . }}"{{ end }}
+   {{- with .hardware }} data-hardware="{{ . }}"{{ end }}
+   {{- with .colorFrom }} data-color-from="{{ . }}"{{ end }}
+   {{- with .colorTo }} data-color-to="{{ . }}"{{ end }}
+   {{- if or .colorFromHex .colorToHex }} style="{{ with .colorFromHex }}--hf-space-color-from: {{ . }};{{ end }}{{ with .colorToHex }} --hf-space-color-to: {{ . }};{{ end }}"{{ end }}>
+  <span class="hf-space__tile">
+    {{- with .emoji }}<span class="hf-space__emoji">{{ . }}</span>{{ end -}}
+  </span>
+  <span class="hf-space__name-wrap">
+    <span class="hf-space__owner">{{ .owner }}</span><span class="hf-space__slash">/</span>{{ .name -}}
+  </span>
+  {{- if .apiOk }}
+  <span class="hf-space__sep"></span>
+  <span class="hf-space__likes">
+    {{- partial "hf-space/icon.html" (dict "name" "heart" "class" "hf-space__icon hf-space__icon--heart") }}
+    {{ .likesFormatted }}
+  </span>
+  {{- end }}
+</a>

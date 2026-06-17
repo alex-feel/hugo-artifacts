@@ -1,0 +1,165 @@
+{{/*
+  Performs a single attempt against the Hugging Face Hub REST API and
+  normalizes the outcome into a stable result dict. This partial is the
+  per-attempt unit driven by the outer retry loop in `hf-space/fetch.html`.
+
+  Why this partial exists:
+  - Encapsulates the "build options + call resources.GetRemote inside try +
+    classify the failure" sequence behind a narrow output contract, mirroring
+    the github-repo sibling module so the two read as a family.
+  - Hides Hugo's `.Err.Cause.Data.{StatusCode,Body,Headers}` surface behind a
+    stable result shape -- callers see only `ok`, `value`, `statusCode`,
+    `headers`, `errorClass`, `errorMessage`, `waitHintSeconds`.
+
+  Inputs (context dict):
+  - .url (string)       Full URL to fetch
+                        (e.g., https://huggingface.co/api/spaces/{owner}/{name}?expand[]=...).
+  - .cacheKey (string)  Explicit Hugo cache key for resources.GetRemote. The
+                        caller (retry loop) supplies a per-attempt key so a
+                        subsequent attempt bypasses any error response cached
+                        by Hugo's httpcache.Transport on a prior try.
+  - .token (string)     Pre-resolved HUGO_HF_TOKEN value, or empty. Resolved
+                        once by the caller so os.Getenv is not invoked
+                        repeatedly across retries.
+  - .timeout (string)   Per-request timeout in Go duration format
+                        (e.g., "30s"). Defaults to "30s" when empty.
+
+  Output (returned dict):
+  - .ok (bool)             true when the response was 2xx; false otherwise.
+  - .value (any)           Unmarshaled JSON when .ok; nil otherwise.
+  - .statusCode (int)      HTTP status code. 200 for success; 0 for network
+                           failure (no response received); 404 for the nil
+                           branch of resources.GetRemote.
+  - .headers (map)         Selected response headers when responseHeaders was
+                           honored by Hugo. Empty dict on the nil-branch 404
+                           path (no .Data is exposed there).
+  - .errorClass (string)   Empty when .ok; otherwise as set by
+                           hf-space/classify-error.html.
+  - .errorMessage (string) Short diagnostic when not .ok; empty on success.
+  - .waitHintSeconds (int) Wait-until-reset hint for rate-limit classes; 0
+                           elsewhere. See classify-error.html.
+
+  Side effects: none. The partial does not warnf -- diagnostic logging is the
+  responsibility of the outer retry loop, which has visibility into attempt
+  count, position, and remaining budget.
+*/}}
+
+{{- $url := .url -}}
+{{- $cacheKey := .cacheKey -}}
+{{- $token := .token -}}
+{{- $timeout := .timeout | default "30s" -}}
+
+{{/* Build request headers. The Hub returns JSON; a token (when present) lifts
+     the anonymous rate limit and unlocks private/gated Spaces the token can
+     read. */}}
+{{- $headers := dict
+  "Accept" "application/json"
+-}}
+{{- if $token -}}
+  {{- $headers = merge $headers (dict "Authorization" (printf "Bearer %s" $token)) -}}
+{{- end -}}
+
+{{/* Request the response headers we care about. responseHeaders (v0.143.0+) is
+     honored on both success and error paths. The Hub signals rate limiting via
+     the IETF draft RateLimit headers (e.g. `RateLimit: "api";r=490;t=18`,
+     `RateLimit-Policy: "fixed window";"api";q=500;w=300`) plus Retry-After on
+     429 -- NOT GitHub's X-RateLimit-* family. classify-error.html parses these
+     case-insensitively, so the exact casing Hugo returns them under does not
+     matter. */}}
+{{- $opts := dict
+  "method" "GET"
+  "headers" $headers
+  "key" $cacheKey
+  "timeout" $timeout
+  "responseHeaders" (slice
+    "RateLimit"
+    "RateLimit-Policy"
+    "Retry-After"
+  )
+-}}
+
+{{/* Default result represents a failed attempt with no observable response
+     (e.g., DNS failure, build-host network drop). Specific branches below
+     overwrite this when more information is available. */}}
+{{- $result := dict
+  "ok" false
+  "value" nil
+  "statusCode" 0
+  "headers" (dict)
+  "errorClass" "network"
+  "errorMessage" "no response (network or timeout)"
+  "waitHintSeconds" 0
+-}}
+
+{{- with try (resources.GetRemote $url $opts) -}}
+  {{- with .Err -}}
+    {{/* Error path: extract HTTP status, headers, and body from
+         .Cause.Data. This surface mirrors the github-repo sibling module. */}}
+    {{- $sc := 0 -}}
+    {{- $hdrs := dict -}}
+    {{- $body := "" -}}
+    {{- with .Cause -}}
+      {{- with .Data -}}
+        {{- with .StatusCode -}}
+          {{- $sc = . -}}
+        {{- end -}}
+        {{- with .Headers -}}
+          {{- $hdrs = . -}}
+        {{- end -}}
+        {{- with .Body -}}
+          {{- $body = . -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+    {{- $cls := partial "hf-space/classify-error.html" (dict
+      "statusCode" $sc
+      "headers" $hdrs
+      "body" $body
+    ) -}}
+    {{- $result = dict
+      "ok" false
+      "value" nil
+      "statusCode" $sc
+      "headers" $hdrs
+      "errorClass" $cls.errorClass
+      "errorMessage" $cls.errorMessage
+      "waitHintSeconds" $cls.waitHintSeconds
+    -}}
+  {{- else with .Value -}}
+    {{/* Success path. A 2xx response that returns invalid JSON is treated as a
+         hard error -- such a condition indicates a server/Hugo bug, not a
+         transient failure worth retrying. */}}
+    {{- $json := . | transform.Unmarshal -}}
+    {{- $sucHdrs := dict -}}
+    {{- with .Data -}}
+      {{- with .Headers -}}
+        {{- $sucHdrs = . -}}
+      {{- end -}}
+    {{- end -}}
+    {{- $result = dict
+      "ok" true
+      "value" $json
+      "statusCode" 200
+      "headers" $sucHdrs
+      "errorClass" ""
+      "errorMessage" ""
+      "waitHintSeconds" 0
+    -}}
+  {{- else -}}
+    {{/* Nil branch: HTTP 404 (resources.GetRemote returns nil). For an
+         authenticated request this is a genuinely-missing Space; for an
+         anonymous request the Hub usually returns 401 instead (handled on the
+         error path above). */}}
+    {{- $result = dict
+      "ok" false
+      "value" nil
+      "statusCode" 404
+      "headers" (dict)
+      "errorClass" "not-found"
+      "errorMessage" "HTTP 404"
+      "waitHintSeconds" 0
+    -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $result -}}

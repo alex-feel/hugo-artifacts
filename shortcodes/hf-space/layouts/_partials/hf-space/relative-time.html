@@ -1,0 +1,48 @@
+{{/*
+  Converts an ISO 8601 timestamp to a human-readable relative time string.
+
+  Fed from the Space's lastModified field on the Hugging Face Hub. Identical
+  formatting contract to the github-repo sibling module.
+
+  Context: an ISO 8601 date string (e.g., "2026-04-21T10:30:00Z")
+
+  Returns a string like "3 days ago", "2 months ago", "just now".
+*/}}
+
+{{- $parsed := time.AsTime . -}}
+{{- $now := now -}}
+{{- $diff := $now.Sub $parsed -}}
+{{- $hours := $diff.Hours -}}
+
+{{- $result := "" -}}
+{{- if lt $hours 1.0 -}}
+  {{- $result = "just now" -}}
+{{- else if lt $hours 24.0 -}}
+  {{- $h := math.Floor $hours -}}
+  {{- if eq $h 1.0 -}}
+    {{- $result = "1 hour ago" -}}
+  {{- else -}}
+    {{- $result = printf "%.0f hours ago" $h -}}
+  {{- end -}}
+{{- else if lt $hours 48.0 -}}
+  {{- $result = "yesterday" -}}
+{{- else if lt $hours 720.0 -}}
+  {{- $days := math.Floor (math.Div $hours 24.0) -}}
+  {{- $result = printf "%.0f days ago" $days -}}
+{{- else if lt $hours 8760.0 -}}
+  {{- $months := math.Floor (math.Div $hours 720.0) -}}
+  {{- if eq $months 1.0 -}}
+    {{- $result = "1 month ago" -}}
+  {{- else -}}
+    {{- $result = printf "%.0f months ago" $months -}}
+  {{- end -}}
+{{- else -}}
+  {{- $years := math.Floor (math.Div $hours 8760.0) -}}
+  {{- if eq $years 1.0 -}}
+    {{- $result = "1 year ago" -}}
+  {{- else -}}
+    {{- $result = printf "%.0f years ago" $years -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $result -}}

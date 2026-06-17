@@ -1,0 +1,19 @@
+{
+  "cpu-basic": "CPU basic",
+  "cpu-upgrade": "CPU upgrade",
+  "zero-a10g": "ZeroGPU",
+  "t4-small": "T4 small",
+  "t4-medium": "T4 medium",
+  "l4x1": "L4",
+  "l4x4": "L4 x4",
+  "l40sx1": "L40S",
+  "l40sx4": "L40S x4",
+  "l40sx8": "L40S x8",
+  "a10g-small": "A10G small",
+  "a10g-large": "A10G large",
+  "a10g-largex2": "A10G large x2",
+  "a10g-largex4": "A10G large x4",
+  "a100-large": "A100 large",
+  "a100x4": "A100 x4",
+  "a100x8": "A100 x8"
+}

@@ -1,0 +1,149 @@
+{{/*
+  Classifies a failed Hugging Face Hub API response into a structured error
+  category and computes a wait-hint in seconds derived from rate-limit headers.
+
+  The Hub's failure surface differs from GitHub's in three ways that this
+  classifier encodes:
+  - A missing OR private Space returns HTTP 401 to an anonymous client (the Hub
+    deliberately does not distinguish the two, to avoid leaking existence). So
+    401 is terminal within a build: no immediate retry can fix "wrong/absent
+    token" or "Space is private", and the message names all three causes.
+  - Rate limiting is signaled with the IETF draft RateLimit headers
+    (`RateLimit: "api";r=<remaining>;t=<seconds-to-reset>`,
+    `RateLimit-Policy: "fixed window";"api";q=<quota>;w=<window>`) plus
+    Retry-After on 429 -- not GitHub's X-RateLimit-* family.
+  - Because Hugo templates cannot sleep, an immediate outer retry can never
+    clear a rate-limit window; rate-limit is therefore terminal within a build
+    and the wait hint is surfaced for a CI-level rebuild.
+
+  Inputs (context dict):
+  - .statusCode (int)  HTTP status code observed for the failed attempt.
+                       0 means no response was received (network/timeout).
+                       404 is used as a sentinel for the resources.GetRemote
+                       nil branch.
+  - .headers (map)     Response headers as exposed by Hugo's responseHeaders
+                       option. Each header value is a []string. Lookups are
+                       case-insensitive so the exact key casing Hugo returns
+                       does not matter.
+  - .body (string)     Raw response body, used for best-effort diagnostic
+                       enrichment (the Hub returns a JSON `error` field).
+
+  Output (returned dict):
+  - .errorClass (string)   One of:
+                             "rate-limit"  Hub rate limit reached (HTTP 429).
+                                           Terminal within a build; wait hint
+                                           computed from Retry-After or the
+                                           RateLimit `t` field.
+                             "auth"        401 (missing/private/token required)
+                                           or 403 (gated/forbidden). Terminal.
+                             "not-found"   404 (resource genuinely missing).
+                             "server"      5xx server error.
+                             "network"     No HTTP response (status 0).
+                             "other"       Anything else.
+  - .waitHintSeconds (int) Suggested wait until the rate-limit window resets:
+                             - rate-limit: Retry-After (numeric) OR RateLimit
+                                           `t` delta OR 60 default.
+                             - all other classes: 0.
+                           The hint is informational; Hugo cannot sleep, so the
+                           caller early-breaks and surfaces the hint in a build
+                           warning for a later rebuild.
+  - .errorMessage (string) Short human-readable message derived from the status
+                           code and, when available, the response body.
+*/}}
+
+{{- $statusCode := .statusCode | default 0 -}}
+{{- $headers := .headers | default (dict) -}}
+{{- $body := .body | default "" -}}
+
+{{/* Case-insensitive header lookup. Hugo's responseHeaders map may key the
+     entries under canonicalized casing that differs from the requested casing,
+     so we match on the lower-cased key and read the first value. */}}
+{{- $retryAfter := 0 -}}
+{{- $retryAfterPresent := false -}}
+{{- $rateLimitRaw := "" -}}
+{{- range $k, $v := $headers -}}
+  {{- $lk := lower $k -}}
+  {{- if eq $lk "retry-after" -}}
+    {{- with index $v 0 -}}
+      {{- $retryAfter = int . -}}
+      {{- $retryAfterPresent = true -}}
+    {{- end -}}
+  {{- else if eq $lk "ratelimit" -}}
+    {{- with index $v 0 -}}
+      {{- $rateLimitRaw = . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Extract the `t=<seconds>` reset delta from the RateLimit header value,
+     e.g. `"api";r=0;t=42` -> 42. Absent or unparseable -> 0. */}}
+{{- $rateLimitReset := 0 -}}
+{{- with $rateLimitRaw -}}
+  {{- $m := findRE `t=(\d+)` . 1 -}}
+  {{- with $m -}}
+    {{- $token := index . 0 -}}
+    {{/* Strip leading zeros before the int cast: Hugo's `int` parses a
+         leading-zero string as octal (int "011" -> 9, int "08" -> 0), which
+         would corrupt a `t=08`-style reset hint. TrimLeft "0" "0" yields "" and
+         int "" yields 0, correctly falling through to the 60-second default. */}}
+    {{- $rateLimitReset = int (strings.TrimLeft "0" (replaceRE `\D` "" $token)) -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Default classification: catch-all for unrecognized failures. */}}
+{{- $errorClass := "other" -}}
+{{- $waitHintSeconds := 0 -}}
+{{- $errorMessage := "" -}}
+
+{{- if eq $statusCode 0 -}}
+  {{- $errorClass = "network" -}}
+  {{- $errorMessage = "no response (network or timeout)" -}}
+{{- else if eq $statusCode 404 -}}
+  {{- $errorClass = "not-found" -}}
+  {{- $errorMessage = "HTTP 404 (Space not found)" -}}
+{{- else if eq $statusCode 401 -}}
+  {{- $errorClass = "auth" -}}
+  {{- $errorMessage = "HTTP 401 (Space not found, private, or HUGO_HF_TOKEN required)" -}}
+{{- else if eq $statusCode 403 -}}
+  {{- $errorClass = "auth" -}}
+  {{- $errorMessage = "HTTP 403 (access forbidden -- gated or private Space)" -}}
+{{- else if eq $statusCode 429 -}}
+  {{- $errorClass = "rate-limit" -}}
+  {{- $errorMessage = "HTTP 429 (Hub rate limit reached)" -}}
+  {{/* Wait-hint preference order: explicit Retry-After header, then the
+       RateLimit `t` reset delta, then a 60-second default. */}}
+  {{- if and $retryAfterPresent (gt $retryAfter 0) -}}
+    {{- $waitHintSeconds = $retryAfter -}}
+  {{- else if gt $rateLimitReset 0 -}}
+    {{- $waitHintSeconds = $rateLimitReset -}}
+  {{- else -}}
+    {{- $waitHintSeconds = 60 -}}
+  {{- end -}}
+{{- else if ge $statusCode 500 -}}
+  {{- $errorClass = "server" -}}
+  {{- $errorMessage = printf "HTTP %d (server error)" $statusCode -}}
+{{- else -}}
+  {{- $errorMessage = printf "HTTP %d" $statusCode -}}
+{{- end -}}
+
+{{/* Best-effort enrichment: the Hub returns a JSON body with an `error` field
+     on most failures. Unmarshal failures are swallowed via try so a malformed
+     body cannot break the build. */}}
+{{- with $body -}}
+  {{- $trimmed := . -}}
+  {{- if hasPrefix $trimmed "{" -}}
+    {{- with try (transform.Unmarshal $trimmed) -}}
+      {{- with .Value -}}
+        {{- with .error -}}
+          {{- $errorMessage = printf "%s: %s" $errorMessage . -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return (dict
+  "errorClass" $errorClass
+  "waitHintSeconds" $waitHintSeconds
+  "errorMessage" $errorMessage
+) -}}

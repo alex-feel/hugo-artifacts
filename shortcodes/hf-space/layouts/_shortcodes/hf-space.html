@@ -1,0 +1,55 @@
+{{/*
+  Renders a Hugging Face Space link in one of five display variants.
+
+  Parameters:
+  - id (string): Space identifier as "owner/name" (e.g., "alexfeel/lineage-explorer").
+  - url (string): Full Space URL (e.g., "https://huggingface.co/spaces/owner/name").
+                  Provide either `id` or `url`; `id` wins when both are given.
+  - variant (string, optional): Display variant. One of: inline, card, wide, stats, hero. Default: "card".
+  - title (string, optional): Display title override (defaults to the Space's card title / name).
+  - description (string, optional): Description override (defaults to the Space's short_description).
+  - emoji (string, optional): Tile emoji override (defaults to the Space's card emoji).
+  - class (string, optional): Additional CSS class(es) appended to the root element.
+
+  Usage:
+    hf-space id="owner/name"
+    hf-space id="owner/name" variant="hero"
+    hf-space url="https://huggingface.co/spaces/owner/name" variant="inline" class="featured"
+*/}}
+
+{{- $id := .Get "id" | default "" -}}
+{{- $url := .Get "url" | default "" -}}
+{{- $variant := .Get "variant" | default "card" -}}
+{{- $title := .Get "title" | default "" -}}
+{{- $description := .Get "description" | default "" -}}
+{{- $emoji := .Get "emoji" | default "" -}}
+{{- $class := .Get "class" | default "" -}}
+
+{{/* Validate that at least one locator was supplied. */}}
+{{- if and (not $id) (not $url) -}}
+  {{- errorf "The %q shortcode requires an 'id' (\"owner/name\") or a 'url' parameter. See %s" .Name .Position -}}
+{{- end -}}
+
+{{/* Validate variant against allowed values. */}}
+{{- $validVariants := slice "inline" "card" "wide" "stats" "hero" -}}
+{{- if not (in $validVariants $variant) -}}
+  {{- errorf "The %q shortcode received invalid variant %q. Must be one of: inline, card, wide, stats, hero. See %s" .Name $variant .Position -}}
+{{- end -}}
+
+{{/* Fetch and normalize Space data. */}}
+{{- $ctx := dict
+  "id" $id
+  "url" $url
+  "variant" $variant
+  "title" $title
+  "description" $description
+  "emoji" $emoji
+  "position" .Position
+-}}
+{{- $data := partial "hf-space/fetch.html" $ctx -}}
+
+{{/* Merge extra class into data. */}}
+{{- $data = merge $data (dict "extraClass" $class) -}}
+
+{{/* Dispatch to variant partial. */}}
+{{- partial (printf "hf-space/%s.html" $variant) $data -}}

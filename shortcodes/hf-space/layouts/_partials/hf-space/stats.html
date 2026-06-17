@@ -1,0 +1,80 @@
+{{/*
+  Renders V4 stats card variant of the hf-space shortcode.
+
+  Context expectations:
+  - . (dict) - Normalized Space data from fetch.html partial
+  - .url, .owner, .name, .id, .title, .emoji, .description
+  - .sdk, .sdkLabel, .hardwareLabel, .status, .statusLabel, .likesFormatted
+  - .colorFrom, .colorTo, .colorFromHex, .colorToHex, .apiOk, .extraClass
+
+  Output: An <a> element with BEM class hf-space hf-space--stats
+*/}}
+
+{{- if .apiOk -}}
+<a href="{{ .url }}"
+   class="hf-space hf-space--stats{{ with .extraClass }} {{ . }}{{ end }}"
+   target="_blank"
+   rel="noopener noreferrer"
+   aria-label="{{ or .title .name }}, a Hugging Face Space by {{ .owner }}"
+   data-space="{{ .id }}"
+   data-variant="stats"
+   data-api-ok="{{ .apiOk }}"
+   {{- with .sdk }} data-sdk="{{ . }}"{{ end }}
+   {{- with .status }} data-status="{{ . }}"{{ end }}
+   {{- with .hardware }} data-hardware="{{ . }}"{{ end }}
+   {{- with .colorFrom }} data-color-from="{{ . }}"{{ end }}
+   {{- with .colorTo }} data-color-to="{{ . }}"{{ end }}
+   {{- if or .colorFromHex .colorToHex }} style="{{ with .colorFromHex }}--hf-space-color-from: {{ . }};{{ end }}{{ with .colorToHex }} --hf-space-color-to: {{ . }};{{ end }}"{{ end }}>
+  <div class="hf-space__head">
+    <span class="hf-space__tile">
+      {{- with .emoji }}<span class="hf-space__emoji">{{ . }}</span>{{ end -}}
+    </span>
+    <div class="hf-space__titles">
+      <div class="hf-space__eyebrow">
+        <span class="hf-space__brand">🤗 Hugging&nbsp;Face</span> / {{ upper .owner }}
+      </div>
+      <h3 class="hf-space__title">
+        <span class="hf-space__owner">{{ .owner }} /</span> {{ .name }}
+      </h3>
+    </div>
+    <span class="hf-space__open">
+      {{- partial "hf-space/icon.html" (dict "name" "external") -}}
+    </span>
+  </div>
+  {{- with .description }}
+  <p class="hf-space__description">{{ . }}</p>
+  {{- end }}
+  <div class="hf-space__stat-row">
+    <div class="hf-space__stat">
+      <span class="hf-space__stat-label">SDK</span>
+      <span class="hf-space__stat-value hf-space__sdk" data-sdk="{{ .sdk }}">
+        {{- with .sdkLabel -}}
+        <span class="hf-space__sdk-dot"></span>{{ . }}
+        {{- else -}}--{{- end -}}
+      </span>
+    </div>
+    <div class="hf-space__stat">
+      <span class="hf-space__stat-label">Hardware</span>
+      <span class="hf-space__stat-value">{{ or .hardwareLabel "--" }}</span>
+    </div>
+    <div class="hf-space__stat">
+      <span class="hf-space__stat-label">Likes</span>
+      <span class="hf-space__stat-value hf-space__likes">
+        {{- partial "hf-space/icon.html" (dict "name" "heart" "class" "hf-space__icon hf-space__icon--heart") }}
+        {{ .likesFormatted }}
+      </span>
+    </div>
+    <div class="hf-space__stat">
+      <span class="hf-space__stat-label">Status</span>
+      <span class="hf-space__stat-value hf-space__status hf-space__status--{{ .status }}" data-status="{{ .status }}">
+        {{- with .statusLabel -}}
+        <span class="hf-space__status-led"></span>{{ . }}
+        {{- else -}}--{{- end -}}
+      </span>
+    </div>
+  </div>
+</a>
+{{- else -}}
+{{/* Degraded output: delegate to inline chip partial on API failure. */}}
+{{- partial "hf-space/inline.html" (merge . (dict "variant" "stats")) -}}
+{{- end -}}
