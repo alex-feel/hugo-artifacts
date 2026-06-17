@@ -13,6 +13,10 @@
   {{- $d := math.Div (float $n) 1000000.0 -}}
   {{- $whole := math.Floor $d -}}
   {{- $frac := math.Round (math.Mul (math.Sub $d $whole) 10) -}}
+  {{- if eq $frac 10.0 -}}
+    {{- $whole = math.Add $whole 1 -}}
+    {{- $frac = 0.0 -}}
+  {{- end -}}
   {{- if eq $frac 0.0 -}}
     {{- $result = printf "%.0fM" $whole -}}
   {{- else -}}
@@ -22,6 +26,10 @@
   {{- $d := math.Div (float $n) 1000.0 -}}
   {{- $whole := math.Floor $d -}}
   {{- $frac := math.Round (math.Mul (math.Sub $d $whole) 10) -}}
+  {{- if eq $frac 10.0 -}}
+    {{- $whole = math.Add $whole 1 -}}
+    {{- $frac = 0.0 -}}
+  {{- end -}}
   {{- if eq $frac 0.0 -}}
     {{- $result = printf "%.0fk" $whole -}}
   {{- else -}}
