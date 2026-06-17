@@ -1,0 +1,71 @@
+{{/*
+  Normalizes a Hugging Face Space runtime stage into a small, stable status
+  token plus a human-readable label.
+
+  The Hub's runtime.stage field uses the SpaceStage enum. This partial collapses
+  its members into seven presentational tokens:
+
+    running | building | sleeping | paused | stopped | error | unknown
+
+  Compound stages report that the Space is still serving traffic while a new
+  build or start runs, so the user-facing reality is "running":
+    RUNNING_BUILDING / RUNNING_APP_STARTING -> running.
+  A bare APP_STARTING (first boot, nothing served yet) and BUILDING -> building.
+  DELETING is terminal -> stopped. SLEEPING is kept defensively even though
+  modern sleeping Spaces tend to report STOPPED/PAUSED.
+
+  The token is exposed on the root element as `data-status` so the consumer's
+  CSS can color-code and animate (e.g., a pulsing LED for running/building)
+  without the module shipping any colors. The label is the display text.
+
+  Context: the raw stage string (may be empty or unknown casing).
+
+  Returns: a dict { "status": <token>, "statusLabel": <string> }.
+*/}}
+
+{{- $stage := upper (. | default "") -}}
+{{- $status := "unknown" -}}
+{{- $label := "Unknown" -}}
+
+{{- if eq $stage "RUNNING" -}}
+  {{- $status = "running" -}}
+  {{- $label = "Running" -}}
+{{- else if eq $stage "RUNNING_BUILDING" -}}
+  {{- $status = "running" -}}
+  {{- $label = "Running (rebuilding)" -}}
+{{- else if eq $stage "RUNNING_APP_STARTING" -}}
+  {{- $status = "running" -}}
+  {{- $label = "Running (app starting)" -}}
+{{- else if eq $stage "BUILDING" -}}
+  {{- $status = "building" -}}
+  {{- $label = "Building" -}}
+{{- else if eq $stage "APP_STARTING" -}}
+  {{- $status = "building" -}}
+  {{- $label = "App starting" -}}
+{{- else if eq $stage "SLEEPING" -}}
+  {{- $status = "sleeping" -}}
+  {{- $label = "Sleeping" -}}
+{{- else if eq $stage "PAUSED" -}}
+  {{- $status = "paused" -}}
+  {{- $label = "Paused" -}}
+{{- else if eq $stage "STOPPED" -}}
+  {{- $status = "stopped" -}}
+  {{- $label = "Stopped" -}}
+{{- else if eq $stage "DELETING" -}}
+  {{- $status = "stopped" -}}
+  {{- $label = "Deleting" -}}
+{{- else if eq $stage "RUNTIME_ERROR" -}}
+  {{- $status = "error" -}}
+  {{- $label = "Runtime error" -}}
+{{- else if eq $stage "BUILD_ERROR" -}}
+  {{- $status = "error" -}}
+  {{- $label = "Build error" -}}
+{{- else if eq $stage "CONFIG_ERROR" -}}
+  {{- $status = "error" -}}
+  {{- $label = "Configuration error" -}}
+{{- else if eq $stage "NO_APP_FILE" -}}
+  {{- $status = "error" -}}
+  {{- $label = "No app file" -}}
+{{- end -}}
+
+{{- return (dict "status" $status "statusLabel" $label) -}}

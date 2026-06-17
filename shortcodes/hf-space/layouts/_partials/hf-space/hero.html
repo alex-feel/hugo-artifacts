@@ -1,0 +1,93 @@
+{{/*
+  Renders V5 featured hero variant of the hf-space shortcode.
+
+  Context expectations:
+  - . (dict) - Normalized Space data from fetch.html partial
+  - .url, .owner, .name, .id, .title, .emoji, .description
+  - .sdk, .sdkLabel, .sdkVersion, .status, .statusLabel
+  - .hardware, .hardwareLabel, .likesFormatted, .updated, .tags
+  - .colorFrom, .colorTo, .colorFromHex, .colorToHex, .apiOk, .extraClass
+
+  Output: An <a> element with BEM class hf-space hf-space--hero
+*/}}
+
+{{- if .apiOk -}}
+<a href="{{ .url }}"
+   class="hf-space hf-space--hero{{ with .extraClass }} {{ . }}{{ end }}"
+   target="_blank"
+   rel="noopener noreferrer"
+   aria-label="{{ or .title .name }}, a Hugging Face Space by {{ .owner }}"
+   data-space="{{ .id }}"
+   data-variant="hero"
+   data-api-ok="{{ .apiOk }}"
+   {{- with .sdk }} data-sdk="{{ . }}"{{ end }}
+   {{- with .status }} data-status="{{ . }}"{{ end }}
+   {{- with .hardware }} data-hardware="{{ . }}"{{ end }}
+   {{- with .colorFrom }} data-color-from="{{ . }}"{{ end }}
+   {{- with .colorTo }} data-color-to="{{ . }}"{{ end }}
+   {{- if or .colorFromHex .colorToHex }} style="{{ with .colorFromHex }}--hf-space-color-from: {{ . }};{{ end }}{{ with .colorToHex }} --hf-space-color-to: {{ . }};{{ end }}"{{ end }}>
+  <div class="hf-space__banner">
+    <span class="hf-space__chrome" aria-hidden="true"><span></span><span></span><span></span></span>
+    {{- with .statusLabel }}
+    <span class="hf-space__run-chip hf-space__status hf-space__status--{{ $.status }}" data-status="{{ $.status }}">
+      <span class="hf-space__status-led"></span>{{ . }}
+    </span>
+    {{- end }}
+    {{- with .emoji }}<span class="hf-space__big-emoji">{{ . }}</span>{{ end }}
+  </div>
+  <div class="hf-space__hero-body">
+    <div class="hf-space__hero-top">
+      <span class="hf-space__brand">🤗 Hugging&nbsp;Face</span>
+      <span class="hf-space__hero-sep">/</span>
+      <span class="hf-space__hero-type">SPACE</span>
+    </div>
+    <h3 class="hf-space__title hf-space__title--hero">
+      <span class="hf-space__owner">{{ .owner }} /</span> {{ .name }}
+    </h3>
+    {{- with .description }}
+    <p class="hf-space__description">{{ . }}</p>
+    {{- end }}
+    {{- with .tags }}
+    <div class="hf-space__tags">
+      {{- range . }}
+      <span class="hf-space__tag">{{ . }}</span>
+      {{- end }}
+    </div>
+    {{- end }}
+    <div class="hf-space__footer hf-space__hero-foot">
+      {{- with .sdkLabel }}
+      <span class="hf-space__meta-item">
+        <span class="hf-space__sdk" data-sdk="{{ $.sdk }}">
+          <span class="hf-space__sdk-dot"></span>{{ . }}{{ with $.sdkVersion }} {{ . }}{{ end }}
+        </span>
+      </span>
+      {{- end }}
+      {{- with .hardwareLabel }}
+      <span class="hf-space__meta-item">
+        {{- partial "hf-space/icon.html" (dict "name" "chip" "class" "hf-space__icon") }}
+        <strong>{{ . }}</strong>
+      </span>
+      {{- end }}
+      <span class="hf-space__meta-item hf-space__likes">
+        {{- partial "hf-space/icon.html" (dict "name" "heart" "class" "hf-space__icon hf-space__icon--heart") }}
+        <strong>{{ .likesFormatted }}</strong> likes
+      </span>
+      {{- with .updated }}
+      <span class="hf-space__meta-item">
+        {{- partial "hf-space/icon.html" (dict "name" "clock" "class" "hf-space__icon") }}
+        <time datetime="{{ $.updatedISO }}">{{ . }}</time>
+      </span>
+      {{- end }}
+      <span class="hf-space__cta">
+        Open in Spaces
+        <span class="hf-space__cta-arrow">
+          {{- partial "hf-space/icon.html" (dict "name" "external") -}}
+        </span>
+      </span>
+    </div>
+  </div>
+</a>
+{{- else -}}
+{{/* Degraded output: delegate to inline chip partial on API failure. */}}
+{{- partial "hf-space/inline.html" (merge . (dict "variant" "hero")) -}}
+{{- end -}}

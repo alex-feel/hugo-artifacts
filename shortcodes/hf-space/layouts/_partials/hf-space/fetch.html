@@ -1,0 +1,307 @@
+{{/*
+  Fetches and normalizes Hugging Face Space data via the Hub REST API with
+  retry-and-classify resilience in front of graceful degradation. When all
+  attempts fail, the partial returns a fallback dict with `apiOk: false` and the
+  variant partials degrade to the inline chip -- the same contract as the
+  github-repo sibling module.
+
+  Unlike github-repo (which fans out across base/languages/participation
+  endpoints), a single Hub call returns everything all five variants need:
+
+    GET https://huggingface.co/api/spaces/{owner}/{name}
+        ?expand[]=cardData&expand[]=runtime&expand[]=likes
+        &expand[]=sdk&expand[]=lastModified&expand[]=tags&expand[]=author
+
+  Retry constants (intentionally NOT shortcode parameters and NOT site params --
+  the module exposes no resilience-tuning surface, matching github-repo):
+  - $attempts          5    Outer attempts.
+  - $perAttemptTimeout 30s  Per-request timeout for resources.GetRemote.
+  - $overallBudgetSec  120  Wall-clock cap.
+  - $waitHintCapSec    30   Display cap for waitHintSeconds in warnings; the
+                            full numeric hint is logged so operators can act.
+
+  Early-break classes -- subsequent immediate attempts are provably useless
+  within a single build (Hugo cannot sleep), so the loop short-circuits when the
+  prior attempt's errorClass is one of:
+  - "auth"        401/403; token/permission/private cannot be fixed by retrying.
+  - "not-found"   404; resource genuinely missing.
+  - "rate-limit"  429; the window cannot reset between immediate attempts.
+
+  Context expectations:
+  - .id (string)          Space id "owner/name" (wins over .url when both set).
+  - .url (string)         Full Space URL.
+  - .variant (string)     Display variant.
+  - .title (string)       Title override (empty for default).
+  - .description (string) Description override (empty for default).
+  - .emoji (string)       Emoji override (empty for default).
+  - .position (text.Position) Shortcode call position (used in warnings).
+
+  Returns: a normalized dict consumed by the variant partials. The `apiOk` flag
+  is the contract the variant partials branch on.
+*/}}
+
+{{- $id := .id -}}
+{{- $url := .url -}}
+{{- $variant := .variant -}}
+{{- $titleOverride := .title -}}
+{{- $descOverride := .description -}}
+{{- $emojiOverride := .emoji -}}
+{{- $position := .position -}}
+
+{{/* Resolve owner/name from `id` ("owner/name") or `url`
+     (https://huggingface.co/spaces/owner/name). `id` wins. A URL accidentally
+     passed as `id` is handled by the URL branch. */}}
+{{- $owner := "" -}}
+{{- $name := "" -}}
+{{- $locator := or $id $url -}}
+{{- if hasPrefix (lower $locator) "http" -}}
+  {{- $path := replaceRE `^https?://huggingface\.co/spaces/([^/]+)/([^/?#]+).*$` "$1/$2" $locator -}}
+  {{- $parts := split $path "/" -}}
+  {{- if ge (len $parts) 2 -}}
+    {{- $owner = index $parts 0 -}}
+    {{- $name = index $parts 1 -}}
+  {{- end -}}
+{{- else -}}
+  {{- $parts := split (strings.TrimSuffix "/" $locator) "/" -}}
+  {{- if ge (len $parts) 2 -}}
+    {{- $owner = index $parts 0 -}}
+    {{- $name = index $parts 1 -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if or (not $owner) (not $name) -}}
+  {{- errorf "[hf-space] Could not parse a Space owner/name from %q. Provide id=\"owner/name\" or url=\"https://huggingface.co/spaces/owner/name\". See %s" $locator $position -}}
+{{- end -}}
+
+{{- $fullName := printf "%s/%s" $owner $name -}}
+{{- $canonicalUrl := printf "https://huggingface.co/spaces/%s/%s" $owner $name -}}
+
+{{/* Build fallback dict for API failure. The variant partials branch on
+     `apiOk` and degrade to inline.html when it is false. */}}
+{{- $fallback := dict
+  "owner" $owner
+  "name" $name
+  "id" $fullName
+  "title" (or $titleOverride $name)
+  "emoji" $emojiOverride
+  "description" $descOverride
+  "sdk" ""
+  "sdkLabel" ""
+  "sdkVersion" ""
+  "hardware" ""
+  "hardwareLabel" ""
+  "likes" 0
+  "likesFormatted" "0"
+  "statusStage" ""
+  "status" "unknown"
+  "statusLabel" ""
+  "updated" ""
+  "updatedISO" ""
+  "tags" (slice)
+  "colorFrom" ""
+  "colorTo" ""
+  "colorFromHex" ""
+  "colorToHex" ""
+  "url" $canonicalUrl
+  "apiOk" false
+  "extraClass" ""
+-}}
+
+{{/* Resolve the token once. Hugo's default security policy only exposes env
+     vars matching ^HUGO_ or ^CI$, so the prefix is mandatory. */}}
+{{- $token := os.Getenv "HUGO_HF_TOKEN" -}}
+
+{{/* Token preflight: emit one informational warning per build when the token
+     is missing. Deduplication uses hugo.Store (build-scoped) -- the first call
+     observes nil for the sentinel and warns; subsequent calls stay silent. The
+     build always continues; a token is only needed for private/gated Spaces or
+     to lift the anonymous rate limit. */}}
+{{- if not $token -}}
+  {{- $warnedKey := "hf-space:warned-no-token" -}}
+  {{- if not (hugo.Store.Get $warnedKey) -}}
+    {{- hugo.Store.Set $warnedKey true -}}
+    {{- warnf "[hf-space] HUGO_HF_TOKEN is not set. Public Spaces still resolve, but anonymous Hub API requests share a lower rate limit and private/gated Spaces cannot be read. Set HUGO_HF_TOKEN to a Hugging Face access token to raise the limit and read private Spaces. See %s" $position -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Retry constants. */}}
+{{- $attempts := 5 -}}
+{{- $perAttemptTimeout := "30s" -}}
+{{- $overallBudgetSec := 120 -}}
+{{- $waitHintCapSec := 30 -}}
+{{- $earlyBreakClasses := slice "auth" "not-found" "rate-limit" -}}
+
+{{/* API URL. The expand[] keys pull cardData (title/emoji/colors/sdk_version/
+     short_description/tags), runtime (stage/hardware/sdkVersion), likes, sdk,
+     lastModified, tags and author in one request. */}}
+{{- $apiUrl := printf "https://huggingface.co/api/spaces/%s/%s?expand[]=cardData&expand[]=runtime&expand[]=likes&expand[]=sdk&expand[]=lastModified&expand[]=tags&expand[]=author" $owner $name -}}
+
+{{- $startSec := int now.Unix -}}
+{{- $result := dict
+  "ok" false
+  "value" nil
+  "statusCode" 0
+  "headers" (dict)
+  "errorClass" "network"
+  "errorMessage" ""
+  "waitHintSeconds" 0
+-}}
+{{- $attemptsUsed := 0 -}}
+{{- range $attempt := seq 1 $attempts -}}
+  {{- if $result.ok -}}
+    {{/* Already succeeded; skip remaining attempts. */}}
+  {{- else -}}
+    {{- $elapsed := sub (int now.Unix) $startSec -}}
+    {{- $remaining := sub $overallBudgetSec $elapsed -}}
+    {{- if le $remaining 0 -}}
+      {{/* Wall-clock budget exhausted; stop attempting. */}}
+    {{- else if and (gt $attempt 1) (in $earlyBreakClasses $result.errorClass) -}}
+      {{/* Provably-useless class within this build. */}}
+    {{- else -}}
+      {{- $cacheKey := printf "hf-space:%s/%s:space:attempt%d" $owner $name $attempt -}}
+      {{- $result = partial "hf-space/fetch-once.html" (dict
+        "url" $apiUrl
+        "cacheKey" $cacheKey
+        "token" $token
+        "timeout" $perAttemptTimeout
+      ) -}}
+      {{- $attemptsUsed = $attempt -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Build the normalized data dict. On success, populate from the JSON
+     response; on failure, keep the fallback and emit one structured warning. */}}
+{{- $data := $fallback -}}
+{{- if $result.ok -}}
+  {{- $json := $result.value -}}
+  {{- $card := or $json.cardData (dict) -}}
+  {{- $runtime := or $json.runtime (dict) -}}
+
+  {{/* Title / emoji / description, each honoring the author override first. */}}
+  {{- $title := or $titleOverride $card.title $name -}}
+  {{- $emoji := or $emojiOverride $card.emoji "" -}}
+  {{- $description := $descOverride -}}
+  {{- if not $description -}}
+    {{- $description = trim (or $card.short_description "") " \t\n\r" -}}
+  {{- end -}}
+
+  {{/* SDK and version. The Hub reports sdk at the top level; the version lives
+       only in cardData.sdk_version (there is no runtime.sdkVersion) and is
+       meaningful for gradio Spaces -- docker/static Spaces carry none. */}}
+  {{- $sdk := lower (or $json.sdk $card.sdk "") -}}
+  {{- $sdkLabel := "" -}}
+  {{- if $sdk -}}
+    {{- $sdkLabels := dict "gradio" "Gradio" "streamlit" "Streamlit" "docker" "Docker" "static" "Static" -}}
+    {{- $sdkLabel = or (index $sdkLabels $sdk) (title $sdk) -}}
+  {{- end -}}
+  {{- $sdkVersion := or $card.sdk_version "" -}}
+
+  {{/* Hardware: prefer the currently-attached flavor, fall back to requested
+       (a non-running Space reports current=null but keeps requested). Map the
+       flavor id to a display name via the shipped data file. */}}
+  {{- $hardware := "" -}}
+  {{- with $runtime.hardware -}}
+    {{- $hardware = or .current .requested "" -}}
+  {{- end -}}
+  {{- $hardwareLabel := "" -}}
+  {{- with $hardware -}}
+    {{- $hardwareLabel = or (index hugo.Data.hf_space_hardware .) . -}}
+  {{- end -}}
+
+  {{/* Likes. */}}
+  {{- $likesRaw := or $json.likes 0 -}}
+  {{- $likesF := partial "hf-space/compact-number.html" $likesRaw -}}
+
+  {{/* Runtime status -> stable token + label. */}}
+  {{- $stage := or $runtime.stage "" -}}
+  {{- $st := partial "hf-space/normalize-status.html" $stage -}}
+
+  {{/* Last-modified -> relative time. */}}
+  {{- $updatedStr := "" -}}
+  {{- $updatedISO := or $json.lastModified "" -}}
+  {{- with $updatedISO -}}
+    {{- $updatedStr = partial "hf-space/relative-time.html" . -}}
+  {{- end -}}
+
+  {{/* Tags. Use the author-curated cardData.tags when present, else the
+       top-level machine tags. Either way clean the list: drop namespaced
+       infrastructure entries (region:*, arxiv:*, license:*, base_model:*,
+       dataset:*, ...), drop a bare tag equal to the sdk name, trim whitespace,
+       and de-duplicate case-insensitively while preserving first-seen order. */}}
+  {{- $tagBase := slice -}}
+  {{- with $card.tags -}}
+    {{- $tagBase = . -}}
+  {{- else -}}
+    {{- with $json.tags -}}
+      {{- $tagBase = . -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $tags := slice -}}
+  {{- $seen := slice -}}
+  {{- range $tagBase -}}
+    {{- $t := trim . " \t\n\r" -}}
+    {{- if and $t (not (in $t ":")) (ne (lower $t) $sdk) (not (in $seen (lower $t))) -}}
+      {{- $tags = $tags | append $t -}}
+      {{- $seen = $seen | append (lower $t) -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* Gradient colors. colorFrom/colorTo are one of the Hub's 8 named colors;
+       the shipped data file resolves each to a hex value so the consumer can
+       paint the tile directly OR remap by the data-color-* attributes. */}}
+  {{- $colorFrom := lower (or $card.colorFrom "") -}}
+  {{- $colorTo := lower (or $card.colorTo "") -}}
+  {{- $colorFromHex := "" -}}
+  {{- $colorToHex := "" -}}
+  {{- with $colorFrom -}}
+    {{- $colorFromHex = or (index hugo.Data.hf_space_colors .) "" -}}
+  {{- end -}}
+  {{- with $colorTo -}}
+    {{- $colorToHex = or (index hugo.Data.hf_space_colors .) "" -}}
+  {{- end -}}
+
+  {{- $data = dict
+    "owner" $owner
+    "name" $name
+    "id" $fullName
+    "title" $title
+    "emoji" $emoji
+    "description" $description
+    "sdk" $sdk
+    "sdkLabel" $sdkLabel
+    "sdkVersion" $sdkVersion
+    "hardware" $hardware
+    "hardwareLabel" $hardwareLabel
+    "likes" $likesRaw
+    "likesFormatted" $likesF
+    "statusStage" $stage
+    "status" $st.status
+    "statusLabel" $st.statusLabel
+    "updated" $updatedStr
+    "updatedISO" $updatedISO
+    "tags" $tags
+    "colorFrom" $colorFrom
+    "colorTo" $colorTo
+    "colorFromHex" $colorFromHex
+    "colorToHex" $colorToHex
+    "url" $canonicalUrl
+    "apiOk" true
+    "extraClass" ""
+  -}}
+{{- else -}}
+  {{- $hint := $result.waitHintSeconds -}}
+  {{- $guidanceHint := "" -}}
+  {{- if gt $hint 0 -}}
+    {{- if gt $hint $waitHintCapSec -}}
+      {{- $guidanceHint = printf "wait %d seconds and rebuild (display capped at %ds)" $hint $waitHintCapSec -}}
+    {{- else -}}
+      {{- $guidanceHint = printf "wait %d seconds and rebuild" $hint -}}
+    {{- end -}}
+  {{- else -}}
+    {{- $guidanceHint = "see warning context for guidance" -}}
+  {{- end -}}
+  {{- warnf "[hf-space] Failed to fetch %s after %d attempt(s) (errorClass=%s, statusCode=%d, message=%q). Hint: %s. See %s" $fullName $attemptsUsed $result.errorClass $result.statusCode $result.errorMessage $guidanceHint $position -}}
+{{- end -}}
+
+{{- return $data -}}
