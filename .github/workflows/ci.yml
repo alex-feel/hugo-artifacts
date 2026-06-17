@@ -67,6 +67,7 @@ jobs:
             modules/workbox
             modules/idb
             shortcodes/github-repo
+            shortcodes/hf-space
             modules/pwa/test/fixture
           )
           for leaf in "${leaves[@]}"; do
@@ -75,20 +76,23 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: Hugo mod graph (shortcodes/github-repo standalone)
+      - name: Hugo mod graph (standalone shortcode modules)
         shell: bash
         run: |
           set -euo pipefail
-          # shortcodes/github-repo is the only leaf module with no module
-          # imports beyond [module.hugoVersion]. It can be graphed standalone
-          # without any [module.replacements] configuration. The other 4 leaf
-          # modules transitively depend on github.com/GoogleChrome/workbox or
-          # github.com/jakearchibald/idb (both non-Go-aware), which cannot be
-          # resolved by Hugo's module fetcher without consumer-side replacements
-          # documented in modules/pwa/README.md Installation.
-          echo "::group::hugo mod graph -- shortcodes/github-repo"
-          ( cd shortcodes/github-repo && hugo mod graph )
-          echo "::endgroup::"
+          # shortcodes/github-repo and shortcodes/hf-space are the leaf modules
+          # with no module imports beyond [module.hugoVersion]. They can be
+          # graphed standalone without any [module.replacements] configuration.
+          # The other 4 leaf modules transitively depend on
+          # github.com/GoogleChrome/workbox or github.com/jakearchibald/idb
+          # (both non-Go-aware), which cannot be resolved by Hugo's module
+          # fetcher without consumer-side replacements documented in
+          # modules/pwa/README.md Installation.
+          for m in shortcodes/github-repo shortcodes/hf-space; do
+            echo "::group::hugo mod graph -- ${m}"
+            ( cd "${m}" && hugo mod graph )
+            echo "::endgroup::"
+          done
 
       - name: ESLint (eslint v9 flat config)
         run: npm run lint
