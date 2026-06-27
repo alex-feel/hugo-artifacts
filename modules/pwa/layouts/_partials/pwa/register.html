@@ -14,6 +14,7 @@
 
 {{- $defaults := hugo.Data.pwa.defaults -}}
 {{- $params := site.Params.pwa | default dict -}}
+{{- $swCfg := merge $defaults.sw ($params.sw | default dict) -}}
 
 {{- $swPath := $params.sw_path | default $defaults.sw_path -}}
 {{- $swScope := $params.sw_scope | default $defaults.sw_scope -}}
@@ -23,6 +24,8 @@
     "swPath"             $swPath
     "swScope"            $swScope
     "updateCheckSeconds" $updateCheckSeconds
+    "updateUx"           $swCfg.update_ux
+    "requestPersistent"  $swCfg.storage.request_persistent
 -}}
 
 {{- $opts := dict

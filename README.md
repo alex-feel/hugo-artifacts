@@ -6,7 +6,7 @@ Each artifact lives in its own subdirectory with an independent `go.mod`, making
 
 ## Modules
 
-Importable Hugo modules live under [`modules/`](modules/). Each module ships its own `README.md` with installation, configuration, and consumer-side replacement instructions.
+Importable Hugo modules live under [`modules/`](modules/). Each module ships its own `README.md` with installation, configuration, and consumption instructions.
 
 ### `modules/pwa`
 
@@ -14,11 +14,11 @@ Consumer-facing Progressive Web App module: web app manifest, RealFaviconGenerat
 
 ### `modules/workbox`
 
-Vendor-mount companion that exposes [`github.com/GoogleChrome/workbox`](https://github.com/GoogleChrome/workbox) v7.4.1 source files as Hugo assets for `js.Build`. Imported transitively by `modules/pwa`; consumers do not import it directly, but DO need to set up an upstream replacement -- see [`modules/workbox/README.md`](modules/workbox/README.md).
+Vendor-mount companion that exposes [`github.com/GoogleChrome/workbox`](https://github.com/GoogleChrome/workbox) v7.4.1 source files as Hugo assets for `js.Build`. Imported transitively by `modules/pwa`; consumers do not import it directly but add it as a direct `go.mod` `require` to resolve the chain (no upstream replacement or vendoring needed) -- see [`modules/workbox/README.md`](modules/workbox/README.md).
 
 ### `modules/idb`
 
-Vendor-mount companion that exposes [`github.com/jakearchibald/idb`](https://github.com/jakearchibald/idb) v8.0.3 source files as Hugo assets. Imported transitively by `modules/workbox` (and therefore by `modules/pwa`); consumers do not import it directly, but DO need to set up an upstream replacement -- see [`modules/idb/README.md`](modules/idb/README.md).
+Vendor-mount companion that exposes [`github.com/jakearchibald/idb`](https://github.com/jakearchibald/idb) v8.0.3 source files as Hugo assets. Imported transitively by `modules/workbox` (and therefore by `modules/pwa`); consumers do not import it directly but add it as a direct `go.mod` `require` to resolve the chain (no upstream replacement or vendoring needed) -- see [`modules/idb/README.md`](modules/idb/README.md).
 
 ## Shortcodes
 

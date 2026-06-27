@@ -69,32 +69,33 @@ Either way, confirm resolution with `hugo mod graph` from the consuming site bef
 
 For an end-to-end worked example of a module in this repo (shortcode with `data/`, partials, API fetching, graceful degradation), see `shortcodes/github-repo/` and its `README.md`. For a complex multi-file module that spans `data/`, `i18n/`, `assets/` (TypeScript service worker compiled via `js.Build`), `layouts/_partials/`, `content/`, and a full consumer parameter surface, see `modules/pwa/` and its `README.md`. The companion `modules/workbox/` module demonstrates the vendor-mount pattern for non-Go-aware upstream JavaScript dependencies.
 
-## Non-Go-module upstream replacement convention
+## Consuming modules that wrap non-Go upstreams
 
-When a Hugo module in this repo imports a non-Go-aware repository (one without `go.mod` at its root, declared as `vX.Y.Z+incompatible` in `go.mod`), external consumers attempting `hugo mod get <our-module>` will encounter a download error because Go cannot fetch the upstream repository's metadata over the standard module-fetch path.
+Some modules in this repo wrap a non-Go-aware upstream (a JavaScript repo with no `go.mod` at its root, declared in the wrapper's `go.mod` as `vX.Y.Z+incompatible`) and split into sibling wrapper modules that reference EACH OTHER with PLACEHOLDER pseudo-versions (`v0.0.0-00010101000000-000000000000`). The `pwa` chain is the first such case: `modules/pwa` requires `modules/workbox`, which requires `modules/idb`; `modules/workbox` wraps `github.com/GoogleChrome/workbox` v7.4.1+incompatible and `modules/idb` wraps `github.com/jakearchibald/idb` v8.0.3+incompatible (the latter is needed by `workbox-expiration` and `workbox-background-sync`).
 
-The repo's MODULE itself works fine -- the consumer pulls it via `hugo mod get`, but the upstream non-Go dependency cannot be resolved transitively.
+The `+incompatible` upstreams ARE fetchable by `hugo mod get` over the standard Go module proxy -- `+incompatible` is exactly Go's convention for a tagged repository that lacks a root `go.mod`, and a plain `go mod download github.com/GoogleChrome/workbox@v7.4.1+incompatible` succeeds against proxy.golang.org with no local checkout, replacement, or vendoring (verified). The only real consumption blocker is the PLACEHOLDER inter-module pseudo-version: it is a sentinel that resolves only via `replace`/workspace and can never be fetched, so importing the top module alone fails with `invalid version: unknown revision 000000000000` for the unresolved sibling.
 
-Resolution: the consumer adds a `[module.replacements]` line in their `hugo.toml`, OR uses `hugo.work` to point at a local checkout of the non-Go repo (or our wrapper module).
+The supported recipe -- no `replace`, no `_vendor/`, no workspace, no tags, verified on Cloudflare Pages CI -- is:
 
-```toml
-[module]
-replacements = 'github.com/<upstream-org>/<upstream-repo> -> ../<local-or-replacement-path>'
+1. Import ONLY the top-level module (here `modules/pwa`) in the consumer config, by GitHub path, in every environment.
+2. Add EVERY module in the chain -- the top module AND each sibling wrapper it pulls -- as a direct `require` in the consumer `go.mod`, pinned to a real commit pseudo-version. Run `hugo mod get <module-path>` per module; if a combined `get` of the top module alone reports the `000000000000` placeholder, add the unresolved sibling directly too.
+3. Build. Go's minimal-version selection ranks each real commit pseudo-version ABOVE the modules' internal placeholders, so the placeholders are never fetched and the `+incompatible` upstreams fetch normally. `hugo mod tidy` preserves the override; `hugo mod get -u ./... && hugo mod tidy` keeps the chain at latest.
+
+Example consumer `go.mod` requires (commit pseudo-versions illustrative):
+
+```text
+require (
+  github.com/alex-feel/hugo-artifacts/modules/pwa v0.0.0-20260627165546-eea53954449c
+  github.com/alex-feel/hugo-artifacts/modules/workbox v0.0.0-20260627165546-eea53954449c
+  github.com/alex-feel/hugo-artifacts/modules/idb v0.0.0-20260627165546-eea53954449c
+)
 ```
 
-This convention currently applies to TWO sibling vendor-mount modules: `modules/workbox` (depending on `github.com/GoogleChrome/workbox` v7.4.1+incompatible) and `modules/idb` (depending on `github.com/jakearchibald/idb` v8.0.3+incompatible). Both wrapper modules exist specifically to vendor-mount their upstream source files for `js.Build` consumption; external consumers using `modules/pwa` (which transitively imports `modules/workbox`, which itself transitively imports `modules/idb` for `workbox-expiration` and `workbox-background-sync`) MUST follow this replacement convention for BOTH upstream repositories. See `modules/pwa/README.md` -> Installation for the consumer-facing instructions, `modules/workbox/README.md` for the workbox vendor-mount mechanics, and `modules/idb/README.md` for the idb vendor-mount mechanics.
+`[module.replacements]` and `hugo.work` remain useful for LOCAL development against a local checkout, and `hugo mod vendor` (committed `_vendor/`) is a valid choice when a consumer wants a fully hermetic, network-free CI build -- but none of the three is REQUIRED to consume the chain.
 
-Example consumer config showing both replacements:
+Maintainer root-cause follow-up (ideal): tagging the chain lets a consumer `hugo mod get <top-module>@<tag>` and resolve the whole chain transitively, dropping the direct-`require` step above. It is deferred for now; until the chain is tagged, the direct-`require` recipe is the supported path. See "Tagging a release" -> "Tagging the wrapped-upstream chains (deferred)" for the plan and automation options.
 
-```toml
-[module]
-replacements = '''
-github.com/alex-feel/hugo-artifacts/modules/workbox -> ../hugo-artifacts/modules/workbox
-github.com/alex-feel/hugo-artifacts/modules/idb -> ../hugo-artifacts/modules/idb
-'''
-```
-
-When authoring a new module that wraps a non-Go upstream, document the replacement requirement prominently in the module README (Installation section) and surface it in the root `README.md` Modules section AND in this convention section to avoid silent build failures for downstream consumers.
+When authoring a new module that wraps a non-Go upstream, document this consumption recipe in the module README (Installation section) and surface it in the root `README.md` Modules section AND in this section.
 
 ## Tagging a release
 
@@ -102,6 +103,15 @@ When authoring a new module that wraps a non-Go upstream, document the replaceme
 git tag <module-path>/vX.Y.Z     # e.g. themes/starter/v1.0.0
 git push origin <module-path>/vX.Y.Z
 ```
+
+### Tagging the wrapped-upstream chains (deferred)
+
+The `pwa` chain (`modules/pwa` -> `modules/workbox` -> `modules/idb`) is intentionally left UNTAGGED for now; consumers resolve it via the direct-`require` recipe in "Consuming modules that wrap non-Go upstreams" above. Tagging it is the ideal end state -- once the chain is tagged with real inter-module `go.mod` requires, a consumer needs only `hugo mod get github.com/alex-feel/hugo-artifacts/modules/pwa@modules/pwa/v1.0.0` and the chain resolves transitively, with no placeholder workaround. Adopt this once the release process can do it transparently and reliably; until then the direct-`require` recipe is the supported path.
+
+When adopting it:
+
+1. Release in DEPENDENCY ORDER, bumping each wrapper's sibling `require` to the sibling's new tag as you go: tag `modules/idb/vX`, then point `modules/workbox/go.mod`'s idb `require` at it and tag `modules/workbox/vX`, then point `modules/pwa/go.mod`'s workbox `require` at it and tag `modules/pwa/vX`.
+2. Automate it rather than tagging by hand. Release Please fits: manifest mode with one component per module, the `go` release type, per-module subdirectory tags via `include-component-in-tag` plus `tag-separator = "/"` (a known sharp edge for Go -- verify against current Release Please docs), and the generic `extra-files` updater (annotate the inter-module `require` lines with `x-release-please-version`) to bump the cross-references, since there is no built-in go-workspace plugin; `linked-versions` keeps the modules in lockstep. A lighter alternative is a tag-on-merge CI step that computes the next per-module version and changelog, bumps the sibling `require`s, and pushes `modules/<module>/vX.Y.Z`. GoReleaser's monorepo mode emits the right tag shape too but is heavier than needed for these build-free template modules.
 
 ## Formatting
 

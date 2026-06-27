@@ -18,9 +18,10 @@
 {{- $params := site.Params.pwa.favicon | default dict -}}
 {{- $cfg := merge $defaults $params -}}
 
-{{- $faviconIco := $cfg.favicon_ico_path -}}
-{{- $faviconSvg := $cfg.favicon_svg_path -}}
-{{- $appleTouchIcon := $cfg.apple_touch_icon_path -}}
+{{- $prefix := strings.TrimSuffix "/" ($cfg.prefix | default "") -}}
+{{- $faviconIco := printf "%s%s" $prefix $cfg.favicon_ico_path -}}
+{{- $faviconSvg := printf "%s%s" $prefix $cfg.favicon_svg_path -}}
+{{- $appleTouchIcon := printf "%s%s" $prefix $cfg.apple_touch_icon_path -}}
 {{- $includeSvg := $cfg.include_svg -}}
 
 <link rel="icon" type="image/x-icon" href="{{ $faviconIco }}" sizes="32x32">

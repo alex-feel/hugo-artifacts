@@ -1,0 +1,46 @@
+{{/*
+  Hugo PWA module -- offline page content adapter.
+
+  Programmatically creates the offline fallback page ONLY when the service
+  worker AND offline fallback are enabled (params.pwa.sw.enabled AND
+  params.pwa.sw.offline.enabled, both default true). A static content file
+  (content/offline/index.md) cannot be gated on configuration because Hugo
+  renders content unconditionally; a content adapter can, because it runs as
+  a Go template with access to site config (but NOT site.Pages -- the page
+  graph is not built yet when adapters run).
+
+  The created page:
+    - lives at params.pwa.sw.offline.fallback_url (default "/offline/"), so
+      the rendered page, the precache entry, and the SW catch handler always
+      agree on one URL;
+    - uses type "offline" so Hugo selects layouts/offline/single.html;
+    - sets build.list = "never" (kept out of page collections, menus, and
+      RSS) and sitemap.disable = true (kept out of sitemap.xml) -- the static
+      `sitemap = false` / `robotsdisallow = true` front matter used previously
+      was ineffective (Hugo's sitemap front matter is a map, not a bool, and
+      robotsdisallow is not a Hugo field);
+    - carries params.robots = "noindex, nofollow" for consumer themes that
+      emit a robots meta from .Params.robots (the module cannot inject a
+      <head> tag itself because the page renders inside the consumer baseof).
+
+  Consumers that ship their own root content/_content.gotmpl shadow this one
+  (Hugo allows a single content adapter per directory); see README -> Offline.
+*/}}
+
+{{- $defaults := hugo.Data.pwa.defaults -}}
+{{- $params := site.Params.pwa | default dict -}}
+{{- $swCfg := merge $defaults.sw ($params.sw | default dict) -}}
+
+{{- if and $swCfg.enabled $swCfg.offline.enabled -}}
+  {{- $fallbackUrl := $swCfg.offline.fallback_url | default "/offline/" -}}
+  {{- with strings.Trim $fallbackUrl "/" -}}
+    {{- $.AddPage (dict
+        "path" .
+        "title" (i18n "pwa_offline_title" | default "You are offline")
+        "type" "offline"
+        "build" (dict "list" "never" "render" "always" "publishResources" false)
+        "sitemap" (dict "disable" true)
+        "params" (dict "robots" "noindex, nofollow" "pwa_offline" true)
+    ) -}}
+  {{- end -}}
+{{- end -}}

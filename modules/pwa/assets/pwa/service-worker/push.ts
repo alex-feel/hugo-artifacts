@@ -58,13 +58,18 @@ async function handlePush(event: PushEvent, p: PushHandlerParams): Promise<void>
   const options: NotificationOptions & {badge?: string} = {
     body: payload.body ?? '',
     icon: payload.icon ?? p.notificationIcon,
-    badge: payload.badge ?? p.notificationBadge,
     tag: payload.tag,
     data: {
       url: payload.url ?? p.defaultClickUrl,
       ...(typeof payload.data === 'object' && payload.data !== null ? payload.data : {}),
     },
   };
+  // Only set a badge when one is actually configured. An empty string is not a
+  // valid badge URL, so omit the key entirely rather than passing "".
+  const badge = payload.badge ?? p.notificationBadge;
+  if (badge) {
+    options.badge = badge;
+  }
   await self.registration.showNotification(title, options);
 }
 

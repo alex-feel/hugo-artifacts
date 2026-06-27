@@ -30,7 +30,9 @@ dir = ""
 categories = []
 
 [manifest.icons]
-mode = "list"
+# Provide an explicit icons[] list to control the manifest icons verbatim.
+# When empty, icons are derived from the params.pwa.favicon.icon_*_path values
+# (see layouts/_partials/pwa/functions/icon-list.html).
 list = []
 
 [favicon]
@@ -51,14 +53,17 @@ msapplication_config_path = "/browserconfig.xml"
 msapplication_tilecolor = "#ffffff"
 
 [favicon.theme_color]
-default = "#ffffff"
+# Optional override for the single <meta name="theme-color"> value. When empty
+# (the default), the manifest theme_color is used. Set light AND dark together
+# to emit paired prefers-color-scheme tags instead.
+default = ""
 light = ""
 dark = ""
 
 [sw]
 enabled = true
-clientsClaim = true
-skipWaiting = false
+clients_claim = true
+skip_waiting = false
 update_ux = "banner"
 
 [sw.precache]
@@ -90,7 +95,9 @@ max_age_seconds = 2592000
 
 [sw.caches.font]
 strategy = "cache-first"
-origins = ["https://fonts.gstatic.com", "https://cdnjs.cloudflare.com"]
+# Explicit cross-origin allowlist. The pre-allowlisted Google Fonts + CDNJS
+# origins are added on top of this list when include_google_fonts = true.
+origins = []
 max_entries = 20
 max_age_seconds = 31536000
 include_google_fonts = true
@@ -135,6 +142,9 @@ subscribe_url = ""
 subscribe_button_selector = "[data-pwa-subscribe]"
 unsubscribe_url = ""
 notification_icon = "/web-app-manifest-192x192.png"
-notification_badge = "/badge-72x72.png"
+# Empty by default: a badge is optional, and shipping a non-empty default that
+# points at an asset the module does not provide would 404. Set this to a
+# monochrome 72x72 PNG you add to static/ to show an Android status-bar badge.
+notification_badge = ""
 default_click_url = "/"
 focus_existing_tab_on_click = true

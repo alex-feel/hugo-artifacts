@@ -17,27 +17,40 @@ import * as params from '@params';
 import {wirePrecache} from './precache.js';
 import {wireRuntimeRoutes} from './routes.js';
 import {wireOfflineFallback} from './offline.js';
-import {wireUpdateHandler} from './update.js';
+import {wireUpdateHandler, wireRuntimeCacheCleanup} from './update.js';
 import {wirePushHandler} from './push.js';
 
 // Precache + revision tracking provides per-deploy cache-bust for changed assets.
 wirePrecache(params.precacheList);
 
-// Drop caches created by older Workbox versions or older deploys whose
-// cache-name prefix matches but whose version string differs.
+// Prune the Workbox PRECACHE cache of entries from older deploys. This covers
+// the precache only; the per-version runtime buckets are pruned separately by
+// wireRuntimeCacheCleanup below.
 cleanupOutdatedCaches();
 
-// Runtime caching strategies per resource kind.
+// Drop stale per-version runtime caches when params.pwa.version changes.
+wireRuntimeCacheCleanup(params.cacheVersion);
+
+// Runtime caching strategies per resource kind, plus SW-bypass routes.
 wireRuntimeRoutes({
   cacheVersion: params.cacheVersion,
   caches: params.caches,
+  bypass: params.bypass,
+  purgeOnQuotaError: params.purgeOnQuotaError,
 });
 
-// Navigation fallback to the precached offline page.
-wireOfflineFallback({offlineUrl: params.offlineUrl});
+// Navigation fallback to the precached offline page. Gated on the documented
+// params.pwa.sw.offline.enabled master switch -- when offline fallback is
+// disabled the offline page is neither generated nor precached, so wiring the
+// catch handler would only ever serve a 404; leaving it unwired lets failed
+// navigations resolve to the browser's default offline behavior.
+if (params.offlineEnabled) {
+  wireOfflineFallback({offlineUrl: params.offlineUrl, fallbackImage: params.fallbackImage});
+}
 
-// Allow the page to message SKIP_WAITING during the update flow.
-wireUpdateHandler();
+// Allow the page to message SKIP_WAITING during the update flow, and honor
+// params.pwa.sw.skip_waiting (auto-activate a new SW on install).
+wireUpdateHandler({skipWaiting: params.skipWaiting});
 
 // Wire push handlers (push, notificationclick, pushsubscriptionchange).
 // The SW listens passively; if the page never subscribes, no push event ever
