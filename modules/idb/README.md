@@ -43,9 +43,9 @@ The `+incompatible` modifier is exclusively a Go module mechanism for declaring 
 
 The upstream `src/` layout (the single `index.ts` plus its sibling helpers) has been stable across all v8.x releases. If a future v9 release reorganizes `src/`, this module's `hugo.toml` may need a new mount table. Recommend a monthly smoke-test (rebuild the consumer fixture site against this module; verify `hugo --logLevel info | grep -E "module.*not found|JSBUILD.*Could not resolve"` returns zero matches).
 
-## Local development
+## External consumers
 
-External consumers using `hugo mod get` for `modules/workbox` (which transitively imports this module) must add a `[module.replacements]` entry for `github.com/jakearchibald/idb` if they cannot reach upstream from their build environment. See the root `CLAUDE.md` "Non-Go-module upstream replacement convention" subsection for the consumer-facing pattern.
+External consumers reach `modules/idb` transitively through `modules/pwa` -> `modules/workbox` and never import it directly. The `+incompatible` upstream `github.com/jakearchibald/idb` fetches normally over the standard Go module proxy (a plain `go mod download github.com/jakearchibald/idb@v8.0.3+incompatible` succeeds with no local checkout, replacement, or vendoring). To resolve the chain's placeholder pseudo-versions, add `modules/idb` -- alongside `modules/pwa` and `modules/workbox` -- as a direct `require` in the consumer `go.mod` pinned to a real commit pseudo-version; Go's minimal-version selection outranks the placeholder, so no `replace`, `_vendor/`, or workspace is required. See [`modules/pwa` README -> Installation](../pwa/README.md#installation) and the [Consuming modules that wrap non-Go upstreams](../../CLAUDE.md#consuming-modules-that-wrap-non-go-upstreams) convention in root `CLAUDE.md`.
 
 ## Status
 

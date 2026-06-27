@@ -2,7 +2,7 @@
 
 Vendor-mount companion Hugo module that exposes [`github.com/GoogleChrome/workbox`](https://github.com/GoogleChrome/workbox) v7.4.1 source files to consuming sites as Hugo assets, so a consumer's service worker can be compiled at Hugo build time via `js.Build` (esbuild) without any npm toolchain.
 
-This module is the sibling of [`modules/pwa`](../pwa/README.md), the consumer-facing PWA module. Consumers do **not** import `modules/workbox` directly -- it is a transitive dependency of `modules/pwa`. However, external consumers DO need to handle the upstream replacement explicitly (see "Local development" and "External consumer setup" below) because upstream `github.com/GoogleChrome/workbox` is not a Go module.
+This module is the sibling of [`modules/pwa`](../pwa/README.md), the consumer-facing PWA module. Consumers do **not** import `modules/workbox` directly -- it is a transitive dependency of `modules/pwa`. External consumers add it (and `modules/idb`) as a direct `go.mod` `require` so the chain's placeholder pseudo-versions are outranked; see [`modules/pwa` README -> Installation](../pwa/README.md#installation). The upstream `github.com/GoogleChrome/workbox` is fetched normally as a `+incompatible` Go module -- no local replacement or vendoring is required.
 
 ## Status
 
@@ -84,7 +84,7 @@ This module depends on the upstream `packages/workbox-*/src/` layout staying int
 
 `modules/workbox` is a sibling of [`modules/idb`](../idb/README.md), another vendor-mount module that exposes [`github.com/jakearchibald/idb`](https://github.com/jakearchibald/idb) v8.0.3 source files as Hugo assets. The `idb` mount is REQUIRED whenever `modules/workbox` is imported, because two Workbox v7 packages -- `workbox-expiration` and `workbox-background-sync` -- begin their source files with `import {openDB} from 'idb'`. Without the idb mount, esbuild fails the service-worker build with a bare-import resolution error.
 
-`modules/workbox/hugo.toml` declares `[[module.imports]] path = "github.com/alex-feel/hugo-artifacts/modules/idb"` BEFORE the workbox upstream import to ensure idb's mount is established when esbuild walks the workbox source tree. External consumers using `modules/pwa` (which transitively imports `modules/workbox`) MUST follow the [Non-Go-module upstream replacement convention](../../CLAUDE.md#non-go-module-upstream-replacement-convention) for BOTH `github.com/GoogleChrome/workbox` AND `github.com/jakearchibald/idb`. See [`modules/idb/README.md`](../idb/README.md) for idb's vendor-mount mechanics, version-pin rationale, and consumer setup instructions.
+`modules/workbox/hugo.toml` declares `[[module.imports]] path = "github.com/alex-feel/hugo-artifacts/modules/idb"` BEFORE the workbox upstream import to ensure idb's mount is established when esbuild walks the workbox source tree. External consumers using `modules/pwa` (which transitively imports `modules/workbox` and `modules/idb`) follow the [Consuming modules that wrap non-Go upstreams](../../CLAUDE.md#consuming-modules-that-wrap-non-go-upstreams) recipe -- add `modules/workbox` and `modules/idb` as direct `go.mod` requires; no upstream replacement is needed. See [`modules/idb/README.md`](../idb/README.md) for idb's vendor-mount mechanics and version-pin rationale.
 
 ## Smoke-test recommendation
 
@@ -158,16 +158,6 @@ Either way, confirm resolution with `hugo mod graph` before you tag a release.
 
 ## External consumer setup
 
-External consumers (sites that pull the modules from a tagged release rather than a local checkout) face one extra constraint: upstream `github.com/GoogleChrome/workbox` is not a Go module. Without a `go.mod` at the upstream root, `hugo mod get` cannot fetch the dependency over the standard module-fetch path.
+External consumers reach `modules/workbox` transitively through `modules/pwa` and never import it directly. The `+incompatible` upstream `github.com/GoogleChrome/workbox` fetches normally over the standard Go module proxy -- a plain `go mod download github.com/GoogleChrome/workbox@v7.4.1+incompatible` succeeds with no local checkout, replacement, or vendoring. The only resolution wrinkle is the placeholder pseudo-version that `modules/pwa` records for `modules/workbox` (and `modules/workbox` for `modules/idb`): import `modules/pwa`, then add `modules/workbox` and `modules/idb` as direct `require`s in the consumer `go.mod` pinned to real commit pseudo-versions, and Go's minimal-version selection outranks the placeholders so the whole chain resolves with no `replace`, no `_vendor/`, and no workspace.
 
-The fix is to use one of the two local-development mechanisms above OR to add a `[module.replacements]` line that points the upstream module at this repo's vendored mounts:
-
-```toml
-[module]
-# This module needs to be locally checked out alongside the consumer site.
-replacements = 'github.com/alex-feel/hugo-artifacts/modules/workbox -> ../hugo-artifacts/modules/workbox'
-```
-
-For this to work, the consumer must have a local checkout of `hugo-artifacts` accessible at the configured path. There is currently no way to fetch the Workbox upstream sources transitively via `hugo mod get` alone without local replacement.
-
-Document this in your consumer site's onboarding instructions; it is the same constraint that any vendor-mount module that wraps a non-Go-aware upstream incurs.
+See [`modules/pwa` README -> Installation](../pwa/README.md#installation) for the step-by-step recipe and the [Consuming modules that wrap non-Go upstreams](../../CLAUDE.md#consuming-modules-that-wrap-non-go-upstreams) convention in root `CLAUDE.md`. `[module.replacements]` / `hugo.work` (see "Local development" above) remain options for live-editing the module locally, and `hugo mod vendor` is available for a hermetic, network-free CI build -- none of them is required.

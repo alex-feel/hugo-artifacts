@@ -37,11 +37,36 @@ That is the minimum config. The defaults shipped in `data/pwa/defaults.toml` tur
 
 ## Installation
 
-The repository is a public multi-module monorepo. External consumers have three resolution paths; pick whichever matches your workflow.
+The repository is a public multi-module monorepo. The `pwa` chain is `modules/pwa` plus the sibling wrapper modules `modules/workbox` and `modules/idb`, which vendor-mount the `+incompatible` upstreams `github.com/GoogleChrome/workbox` v7.4.1 and `github.com/jakearchibald/idb` v8.0.3 for `js.Build`. Those upstreams ARE fetchable over the standard Go module proxy (`+incompatible` is exactly Go's convention for a tagged repository that has no root `go.mod`; a plain `go mod download github.com/GoogleChrome/workbox@v7.4.1+incompatible` succeeds with no local checkout). The only resolution wrinkle is that the wrapper modules reference each other with placeholder pseudo-versions (`v0.0.0-00010101000000-000000000000`) that resolve only if you outrank them -- which the recipe in option A does. Pick the option that matches your workflow.
 
-### A. `hugo.work` (recommended for local development)
+### A. Production / CI -- direct `require`s (recommended; no vendoring)
 
-Create a `hugo.work` file in your consuming site root:
+Import only `modules/pwa` (by GitHub path) in your site config, then add all three chain modules as direct `require`s in your site `go.mod`, each pinned to a real commit pseudo-version:
+
+```bash
+hugo mod get github.com/alex-feel/hugo-artifacts/modules/pwa
+hugo mod get github.com/alex-feel/hugo-artifacts/modules/workbox
+hugo mod get github.com/alex-feel/hugo-artifacts/modules/idb
+hugo mod tidy
+```
+
+Go's minimal-version selection ranks each real commit pseudo-version ABOVE the wrapper modules' internal placeholders, so the placeholders are never fetched and the `+incompatible` upstreams resolve normally. This needs NO `replace`, NO `_vendor/`, NO workspace, and NO release tags, and resolves identically on a developer machine and a clean Cloudflare Pages CI runner. `hugo mod get -u ./... && hugo mod tidy` keeps the chain at the latest commit. (Once a tag like `modules/pwa/v1.0.0` is published, `hugo mod get github.com/alex-feel/hugo-artifacts/modules/pwa@modules/pwa/v1.0.0` works too.)
+
+Your site `go.mod` then contains (commit pseudo-versions illustrative):
+
+```text
+require (
+	github.com/alex-feel/hugo-artifacts/modules/pwa v0.0.0-20260627165546-eea53954449c
+	github.com/alex-feel/hugo-artifacts/modules/workbox v0.0.0-20260627165546-eea53954449c
+	github.com/alex-feel/hugo-artifacts/modules/idb v0.0.0-20260627165546-eea53954449c
+)
+```
+
+If a combined `get` of `modules/pwa` alone reports `invalid version: unknown revision 000000000000`, that is the placeholder sibling -- run `hugo mod get` for the unresolved module directly, as shown above.
+
+### B. Local development -- `hugo.work` (live-edit the modules)
+
+To edit the modules alongside your site, add a `hugo.work` in your site root and set `module.workspace` (or `HUGO_MODULE_WORKSPACE=hugo.work`) in your development config:
 
 ```text
 go 1.22
@@ -52,46 +77,13 @@ use ../hugo-artifacts/modules/workbox
 use ../hugo-artifacts/modules/idb
 ```
 
-All three modules MUST appear in the workspace because Workbox upstream (`github.com/GoogleChrome/workbox`) and idb upstream (`github.com/jakearchibald/idb`) are not Go modules -- see "Vendor-mount replacements" below.
+All three modules appear in the workspace because the chain references them transitively. Add `hugo.work` to your site's `.gitignore`; the `use` paths are machine-specific. A `[module.replacements]` block pointing at the same local paths achieves the same effect; keep replacements out of production config.
 
-Add `hugo.work` to your site's `.gitignore`; the `use` paths are machine-specific.
+### C. Hermetic CI -- `hugo mod vendor` (optional)
 
-### B. `[module.replacements]` (when `hugo.work` is not an option)
+If you want a fully network-free CI build, run `hugo mod vendor` (after option A resolves the chain) and commit the `_vendor/` tree; subsequent builds read from `_vendor/` with no network or Go tooling. This is optional -- option A already works on CI without it.
 
-In your consuming site's Hugo config:
-
-```toml
-[module]
-replacements = '''
-github.com/alex-feel/hugo-artifacts/modules/pwa -> ../hugo-artifacts/modules/pwa
-github.com/alex-feel/hugo-artifacts/modules/workbox -> ../hugo-artifacts/modules/workbox
-github.com/alex-feel/hugo-artifacts/modules/idb -> ../hugo-artifacts/modules/idb
-'''
-```
-
-### C. `hugo mod get` (after a release tag is published)
-
-```bash
-hugo mod get github.com/alex-feel/hugo-artifacts/modules/pwa@modules/pwa/v1.0.0
-```
-
-This works once a tag like `modules/pwa/v1.0.0` exists. **Important:** even with a release tag, your consuming site still needs vendor-mount replacements for BOTH `github.com/GoogleChrome/workbox` AND `github.com/jakearchibald/idb` (option A or B above) because neither upstream has a `go.mod` at its root.
-
-### Vendor-mount replacements (required)
-
-`modules/workbox/go.mod` declares `require github.com/GoogleChrome/workbox v7.4.1+incompatible`, and `modules/idb/go.mod` declares `require github.com/jakearchibald/idb v8.0.3+incompatible`. The `+incompatible` suffix is Go's convention for tagged-but-not-Go-aware repositories. External consumers running `hugo mod get` cannot fetch either upstream because Go requires a `go.mod` at the upstream root, and neither Workbox nor idb ships one (both are JavaScript monorepos). `modules/workbox` transitively imports `modules/idb` because two Workbox v7 packages (`workbox-expiration` and `workbox-background-sync`) begin their source files with `import {openDB} from 'idb'`.
-
-The fix is to use `hugo.work` (option A) which sidesteps `go.mod` resolution for these dependencies, OR add a `[module.replacements]` block that points BOTH upstream modules at this repo's vendored mounts:
-
-```toml
-[module]
-replacements = '''
-github.com/alex-feel/hugo-artifacts/modules/workbox -> ../hugo-artifacts/modules/workbox
-github.com/alex-feel/hugo-artifacts/modules/idb -> ../hugo-artifacts/modules/idb
-'''
-```
-
-See [`modules/workbox/README.md`](../workbox/README.md) for the workbox vendor-mount mechanics, [`modules/idb/README.md`](../idb/README.md) for the idb vendor-mount mechanics, and the [Non-Go-module upstream replacement convention](../../CLAUDE.md#non-go-module-upstream-replacement-convention) section of root `CLAUDE.md` for the broader pattern.
+See [`modules/workbox/README.md`](../workbox/README.md) and [`modules/idb/README.md`](../idb/README.md) for the vendor-mount mechanics, and the [Consuming modules that wrap non-Go upstreams](../../CLAUDE.md#consuming-modules-that-wrap-non-go-upstreams) section of root `CLAUDE.md` for the full convention.
 
 ## Configuration surface
 
@@ -541,7 +533,7 @@ Push endpoints are user-identifying data per GDPR. Your backend should:
 
 ### "Workbox `module not found` during Hugo build"
 
-- The consumer site needs `hugo.work` OR `[module.replacements]` for `github.com/GoogleChrome/workbox` AND `github.com/jakearchibald/idb` -- see Installation -> Vendor-mount replacements above.
+- The `pwa` chain did not fully resolve, so the `modules/workbox` / `modules/idb` mounts are missing. Add `modules/workbox` and `modules/idb` as direct `require`s in your site `go.mod` (Installation -> option A: `hugo mod get` each, then `hugo mod tidy`). A `module.*not found` or `invalid version: unknown revision 000000000000` error names the unresolved chain module.
 
 ### "Cache is not busted on redeploy"
 
