@@ -5,7 +5,7 @@
   Context expectations:
   - . (dict) - Normalized Space data from fetch.html partial
   - .url, .owner, .name, .id, .title, .emoji, .likesFormatted, .apiOk, .extraClass
-  - .colorFromHex, .colorToHex, .colorFrom, .colorTo, .sdk, .status
+  - .colorFromHex, .colorToHex, .colorFrom, .colorTo, .sdk
   - .variant (string, optional) - Originating variant name for data-variant (default: "inline")
 
   Output: An <a> element with BEM class hf-space hf-space--inline
@@ -21,7 +21,6 @@
    data-variant="{{ $variant }}"
    data-api-ok="{{ .apiOk }}"
    {{- with .sdk }} data-sdk="{{ . }}"{{ end }}
-   {{- with .status }} data-status="{{ . }}"{{ end }}
    {{- with .hardware }} data-hardware="{{ . }}"{{ end }}
    {{- with .colorFrom }} data-color-from="{{ . }}"{{ end }}
    {{- with .colorTo }} data-color-to="{{ . }}"{{ end }}

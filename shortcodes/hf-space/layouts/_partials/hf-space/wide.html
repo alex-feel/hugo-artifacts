@@ -4,7 +4,7 @@
   Context expectations:
   - . (dict) - Normalized Space data from fetch.html partial
   - .url, .owner, .name, .id, .title, .emoji, .description
-  - .sdk, .sdkLabel, .sdkVersion, .status, .statusLabel
+  - .sdk, .sdkLabel, .sdkVersion
   - .hardware, .hardwareLabel, .likesFormatted
   - .colorFrom, .colorTo, .colorFromHex, .colorToHex, .apiOk, .extraClass
 
@@ -21,7 +21,6 @@
    data-variant="wide"
    data-api-ok="{{ .apiOk }}"
    {{- with .sdk }} data-sdk="{{ . }}"{{ end }}
-   {{- with .status }} data-status="{{ . }}"{{ end }}
    {{- with .hardware }} data-hardware="{{ . }}"{{ end }}
    {{- with .colorFrom }} data-color-from="{{ . }}"{{ end }}
    {{- with .colorTo }} data-color-to="{{ . }}"{{ end }}
@@ -32,11 +31,6 @@
   <div class="hf-space__body">
     <div class="hf-space__wide-top">
       <span><span class="hf-space__brand">🤗 Hugging&nbsp;Face</span> · SPACE</span>
-      {{- with .statusLabel }}
-      <span class="hf-space__status hf-space__status--{{ $.status }}" data-status="{{ $.status }}">
-        <span class="hf-space__status-led"></span>{{ . }}
-      </span>
-      {{- end }}
     </div>
     <h3 class="hf-space__title">
       <span class="hf-space__owner">{{ .owner }} /</span> {{ .name }}

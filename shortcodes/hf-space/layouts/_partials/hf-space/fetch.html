@@ -92,9 +92,6 @@
   "hardwareLabel" ""
   "likes" 0
   "likesFormatted" "0"
-  "statusStage" ""
-  "status" "unknown"
-  "statusLabel" ""
   "updated" ""
   "updatedISO" ""
   "tags" (slice)
@@ -132,8 +129,9 @@
 {{- $earlyBreakClasses := slice "auth" "not-found" "rate-limit" -}}
 
 {{/* API URL. The expand[] keys pull cardData (title/emoji/colors/sdk_version/
-     short_description/tags), runtime (stage/hardware/sdkVersion), likes, sdk,
-     lastModified, tags and author in one request. */}}
+     short_description/tags), runtime (hardware), likes, sdk, lastModified, tags
+     and author in one request. Runtime is fetched for the hardware flavor only;
+     the volatile runtime.stage is intentionally NOT surfaced (see below). */}}
 {{- $apiUrl := printf "https://huggingface.co/api/spaces/%s/%s?expand[]=cardData&expand[]=runtime&expand[]=likes&expand[]=sdk&expand[]=lastModified&expand[]=tags&expand[]=author" $owner $name -}}
 
 {{- $startSec := int now.Unix -}}
@@ -213,9 +211,10 @@
   {{- $likesRaw := or $json.likes 0 -}}
   {{- $likesF := partial "hf-space/compact-number.html" $likesRaw -}}
 
-  {{/* Runtime status -> stable token + label. */}}
-  {{- $stage := or $runtime.stage "" -}}
-  {{- $st := partial "hf-space/normalize-status.html" $stage -}}
+  {{/* The Space's runtime stage (Running/Sleeping/Building/...) is deliberately
+       NOT collected. It changes minute to minute, while a static site rebuilds
+       days or weeks apart, so any stage baked in at build time would be stale
+       almost immediately. The card only surfaces facts that age gracefully. */}}
 
   {{/* Last-modified -> relative time. */}}
   {{- $updatedStr := "" -}}
@@ -275,9 +274,6 @@
     "hardwareLabel" $hardwareLabel
     "likes" $likesRaw
     "likesFormatted" $likesF
-    "statusStage" $stage
-    "status" $st.status
-    "statusLabel" $st.statusLabel
     "updated" $updatedStr
     "updatedISO" $updatedISO
     "tags" $tags
