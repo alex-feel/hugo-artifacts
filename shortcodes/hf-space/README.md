@@ -53,7 +53,7 @@ A minimal `<a>` element showing the Space's emoji tile, owner/name, and the like
 {{</* hf-space id="owner/name" variant="card" */>}}
 ```
 
-A vertical card with the emoji tile, a "Hugging Face / SPACE" eyebrow, owner/name title, description, and a footer with the SDK badge, a live status indicator, and the like count.
+A vertical card with the emoji tile, a "Hugging Face / SPACE" eyebrow, owner/name title, description, and a footer with the SDK badge and the like count.
 
 #### wide -- Thumbnail-led horizontal card
 
@@ -61,7 +61,7 @@ A vertical card with the emoji tile, a "Hugging Face / SPACE" eyebrow, owner/nam
 {{</* hf-space id="owner/name" variant="wide" */>}}
 ```
 
-A two-column card with a large emoji tile on the left and, on the right, the eyebrow, status, owner/name, description, and a footer with SDK, hardware tier, and likes. Ideal for Space round-ups.
+A two-column card with a large emoji tile on the left and, on the right, the eyebrow, owner/name, description, and a footer with SDK, hardware tier, and likes. Ideal for Space round-ups.
 
 #### stats -- Stats card with metrics strip
 
@@ -69,7 +69,7 @@ A two-column card with a large emoji tile on the left and, on the right, the eye
 {{</* hf-space id="owner/name" variant="stats" */>}}
 ```
 
-A card with the emoji tile, an owner eyebrow, description, and a 4-column metrics strip: SDK, Hardware, Likes, and Status.
+A card with the emoji tile, an owner eyebrow, description, and a 3-column metrics strip: SDK, Hardware, and Likes.
 
 #### hero -- Featured hero with gradient banner
 
@@ -77,7 +77,7 @@ A card with the emoji tile, an owner eyebrow, description, and a 4-column metric
 {{</* hf-space id="owner/name" variant="hero" */>}}
 ```
 
-The largest variant. A gradient banner carrying the big emoji, faux app-window chrome, and a live status chip, followed by the full metadata (tags, SDK, hardware, likes, last-updated) and an "Open in Spaces" call-to-action.
+The largest variant. A gradient banner carrying the big emoji and faux app-window chrome, followed by the full metadata (tags, SDK, hardware, likes, last-updated) and an "Open in Spaces" call-to-action.
 
 ## Parameters
 
@@ -174,28 +174,9 @@ Maps the Hub's hardware flavor identifiers (as returned in `runtime.hardware.cur
 
 **Data merging caveat:** Hugo merges data files from all modules. If the consuming site has its own `data/hf_space_colors.json` or `data/hf_space_hardware.json`, the site's file takes precedence, which may silently override the module's mappings.
 
-## Status Normalization
+## Runtime status is intentionally omitted
 
-The Hub's `runtime.stage` field is collapsed into a small, stable token (exposed as `data-status` and a `hf-space__status--<token>` modifier) plus a human label (`statusLabel`):
-
-| `runtime.stage`        | `data-status` | Label                  |
-| ---------------------- | ------------- | ---------------------- |
-| `RUNNING`              | `running`     | Running                |
-| `RUNNING_BUILDING`     | `running`     | Running (rebuilding)   |
-| `RUNNING_APP_STARTING` | `running`     | Running (app starting) |
-| `BUILDING`             | `building`    | Building               |
-| `APP_STARTING`         | `building`    | App starting           |
-| `SLEEPING`             | `sleeping`    | Sleeping               |
-| `PAUSED`               | `paused`      | Paused                 |
-| `STOPPED`              | `stopped`     | Stopped                |
-| `DELETING`             | `stopped`     | Deleting               |
-| `RUNTIME_ERROR`        | `error`       | Runtime error          |
-| `BUILD_ERROR`          | `error`       | Build error            |
-| `CONFIG_ERROR`         | `error`       | Configuration error    |
-| `NO_APP_FILE`          | `error`       | No app file            |
-| _(any other)_          | `unknown`     | Unknown                |
-
-The module never hardcodes color or animation against these states; it only emits the token. The consuming CSS decides which state pulses, which is green, and so on.
+The module does **not** surface a Space's runtime stage (Running / Sleeping / Building / Error). That state lives for minutes, while a static site is rebuilt days or weeks apart, so any stage captured at build time would be stale almost immediately -- and a "Running" indicator that is actually hours old would actively mislead. The card therefore shows only facts that age gracefully: emoji, title, description, SDK, hardware, likes, tags, and the last-modified date. The Hub `runtime` object is still fetched, but only for the hardware flavor.
 
 ## SDK Labels
 
@@ -211,8 +192,7 @@ Every element uses BEM naming under the `hf-space` block:
 
 - **Block:** `hf-space` (root `<a>` element)
 - **Variant modifiers:** `hf-space--inline`, `hf-space--card`, `hf-space--wide`, `hf-space--stats`, `hf-space--hero`
-- **Status modifier:** `hf-space__status--<status>` (e.g., `hf-space__status--running`)
-- **Elements:** `hf-space__tile`, `hf-space__emoji`, `hf-space__brand`, `hf-space__title`, `hf-space__owner`, `hf-space__description`, `hf-space__footer`, `hf-space__sdk`, `hf-space__sdk-dot`, `hf-space__status`, `hf-space__status-led`, `hf-space__likes`, `hf-space__meta-item`, `hf-space__stat`, `hf-space__stat-label`, `hf-space__stat-value`, `hf-space__tags`, `hf-space__tag`, `hf-space__banner`, `hf-space__chrome`, `hf-space__run-chip`, `hf-space__big-emoji`, `hf-space__cta`, `hf-space__open`, and others
+- **Elements:** `hf-space__tile`, `hf-space__emoji`, `hf-space__brand`, `hf-space__title`, `hf-space__owner`, `hf-space__description`, `hf-space__footer`, `hf-space__sdk`, `hf-space__sdk-dot`, `hf-space__likes`, `hf-space__meta-item`, `hf-space__stat`, `hf-space__stat-label`, `hf-space__stat-value`, `hf-space__tags`, `hf-space__tag`, `hf-space__banner`, `hf-space__chrome`, `hf-space__big-emoji`, `hf-space__cta`, `hf-space__open`, and others
 
 ### CSS custom properties
 
@@ -231,20 +211,19 @@ The gradient tile colors are set via the `--hf-space-color-from` and `--hf-space
 
 ### Data attributes
 
-The module ships **no** SDK or status colors -- those are design decisions. It exposes the objective values as data attributes so the consuming site can color-code freely:
+The module ships **no** SDK colors -- those are design decisions. It exposes the objective values as data attributes so the consuming site can color-code freely:
 
 | Attribute | Value | Purpose |
 | --- | --- | --- |
 | `data-space` | `owner/name` | Space identification |
 | `data-variant` | `inline`, `card`, `wide`, `stats`, `hero` | Variant identification (reflects the requested variant even when degraded) |
 | `data-sdk` | `gradio`, `streamlit`, `docker`, `static`, ... | SDK color-coding hook |
-| `data-status` | `running`, `building`, `sleeping`, `paused`, `stopped`, `error`, `unknown` | Status color/animation hook |
 | `data-hardware` | Hardware flavor id (e.g. `zero-a10g`, `cpu-basic`) | Hardware color-coding hook |
 | `data-color-from` | Hub color name (e.g. `indigo`) | Gradient remap hook (map to your own palette) |
 | `data-color-to` | Hub color name | Gradient remap hook |
 | `data-api-ok` | `true`, `false` | Degraded-state hook |
 
-For example, to color-code the SDK badge and pulse the running LED in your own design system:
+For example, to color-code the SDK badge in your own design system:
 
 ```css
 .hf-space__sdk[data-sdk='gradio'] {
@@ -252,9 +231,6 @@ For example, to color-code the SDK badge and pulse the running LED in your own d
 }
 .hf-space__sdk[data-sdk='streamlit'] {
   --sdk-color: var(--status-error);
-}
-.hf-space[data-status='running'] .hf-space__status-led {
-  animation: pulse 2.4s infinite;
 }
 ```
 
@@ -287,7 +263,6 @@ shortcodes/hf-space/
         fetch.html                # API fetch, retry loop, data normalization
         fetch-once.html           # Single-attempt fetch (normalized result dict)
         classify-error.html       # HTTP error -> (errorClass, waitHintSeconds, errorMessage)
-        normalize-status.html     # runtime.stage -> (status token, statusLabel)
         compact-number.html       # Number formatting (e.g., 1500 -> "1.5k")
         relative-time.html        # Timestamp formatting (e.g., "3 days ago")
         icon.html                 # Centralized inline SVG icon rendering

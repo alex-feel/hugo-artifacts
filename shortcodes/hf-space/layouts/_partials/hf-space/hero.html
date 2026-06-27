@@ -4,7 +4,7 @@
   Context expectations:
   - . (dict) - Normalized Space data from fetch.html partial
   - .url, .owner, .name, .id, .title, .emoji, .description
-  - .sdk, .sdkLabel, .sdkVersion, .status, .statusLabel
+  - .sdk, .sdkLabel, .sdkVersion
   - .hardware, .hardwareLabel, .likesFormatted, .updated, .tags
   - .colorFrom, .colorTo, .colorFromHex, .colorToHex, .apiOk, .extraClass
 
@@ -21,18 +21,12 @@
    data-variant="hero"
    data-api-ok="{{ .apiOk }}"
    {{- with .sdk }} data-sdk="{{ . }}"{{ end }}
-   {{- with .status }} data-status="{{ . }}"{{ end }}
    {{- with .hardware }} data-hardware="{{ . }}"{{ end }}
    {{- with .colorFrom }} data-color-from="{{ . }}"{{ end }}
    {{- with .colorTo }} data-color-to="{{ . }}"{{ end }}
    {{- if or .colorFromHex .colorToHex }} style="{{ with .colorFromHex }}--hf-space-color-from: {{ . }};{{ end }}{{ with .colorToHex }} --hf-space-color-to: {{ . }};{{ end }}"{{ end }}>
   <div class="hf-space__banner">
     <span class="hf-space__chrome" aria-hidden="true"><span></span><span></span><span></span></span>
-    {{- with .statusLabel }}
-    <span class="hf-space__run-chip hf-space__status hf-space__status--{{ $.status }}" data-status="{{ $.status }}">
-      <span class="hf-space__status-led"></span>{{ . }}
-    </span>
-    {{- end }}
     {{- with .emoji }}<span class="hf-space__big-emoji">{{ . }}</span>{{ end }}
   </div>
   <div class="hf-space__hero-body">

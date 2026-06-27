@@ -4,7 +4,7 @@
   Context expectations:
   - . (dict) - Normalized Space data from fetch.html partial
   - .url, .owner, .name, .id, .title, .emoji, .description
-  - .sdk, .sdkLabel, .sdkVersion, .status, .statusLabel, .likesFormatted
+  - .sdk, .sdkLabel, .sdkVersion, .likesFormatted
   - .colorFrom, .colorTo, .colorFromHex, .colorToHex, .apiOk, .extraClass
 
   Output: An <a> element with BEM class hf-space hf-space--card
@@ -20,7 +20,6 @@
    data-variant="card"
    data-api-ok="{{ .apiOk }}"
    {{- with .sdk }} data-sdk="{{ . }}"{{ end }}
-   {{- with .status }} data-status="{{ . }}"{{ end }}
    {{- with .hardware }} data-hardware="{{ . }}"{{ end }}
    {{- with .colorFrom }} data-color-from="{{ . }}"{{ end }}
    {{- with .colorTo }} data-color-to="{{ . }}"{{ end }}
@@ -48,11 +47,6 @@
     {{- with .sdkLabel }}
     <span class="hf-space__sdk" data-sdk="{{ $.sdk }}">
       <span class="hf-space__sdk-dot"></span>{{ . }}{{ with $.sdkVersion }} {{ . }}{{ end }}
-    </span>
-    {{- end }}
-    {{- with .statusLabel }}
-    <span class="hf-space__status hf-space__status--{{ $.status }}" data-status="{{ $.status }}">
-      <span class="hf-space__status-led"></span>{{ . }}
     </span>
     {{- end }}
     <span class="hf-space__spacer"></span>
