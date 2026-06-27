@@ -85,9 +85,9 @@ Example consumer `go.mod` requires (commit pseudo-versions illustrative):
 
 ```text
 require (
-	github.com/alex-feel/hugo-artifacts/modules/pwa v0.0.0-20260627165546-eea53954449c
-	github.com/alex-feel/hugo-artifacts/modules/workbox v0.0.0-20260627165546-eea53954449c
-	github.com/alex-feel/hugo-artifacts/modules/idb v0.0.0-20260627165546-eea53954449c
+  github.com/alex-feel/hugo-artifacts/modules/pwa v0.0.0-20260627165546-eea53954449c
+  github.com/alex-feel/hugo-artifacts/modules/workbox v0.0.0-20260627165546-eea53954449c
+  github.com/alex-feel/hugo-artifacts/modules/idb v0.0.0-20260627165546-eea53954449c
 )
 ```
 
