@@ -51,8 +51,17 @@ function bootstrap(): void {
 
   window.addEventListener('appinstalled', () => {
     deferredPrompt = null;
-    hideInstallButton();
+    // params.pwa.install.hide_when_installed (default true): hide the button
+    // once the app is installed. When false, the consumer keeps controlling it.
+    if (params.hideWhenInstalled) {
+      hideInstallButton();
+    }
     dispatch('pwa:installed');
+    // params.pwa.install.analytics_event: when set, also fire a window
+    // CustomEvent with that name so analytics integrations can log the install.
+    if (params.analyticsEvent) {
+      window.dispatchEvent(new CustomEvent(params.analyticsEvent));
+    }
   });
 
   if (params.gateOnPushIntent) {

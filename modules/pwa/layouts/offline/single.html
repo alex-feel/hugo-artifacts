@@ -1,8 +1,12 @@
 {{/*
-  Hugo PWA module -- default offline fallback page.
+  Hugo PWA module -- default offline fallback page (type "offline").
 
-  Rendered when navigation fails offline. Consumers can shadow this layout
-  by providing their own layouts/_default/offline.html in their site.
+  Rendered when navigation fails offline. This template lives at
+  layouts/offline/single.html so Hugo's v0.146+ lookup selects it for the
+  module-generated page whose front matter sets type = "offline" (created by
+  the content adapter content/_content.gotmpl, gated on
+  params.pwa.sw.offline.enabled). Consumers can shadow this layout by
+  providing their own layouts/offline/single.html in their site.
 
   The layout uses the consumer's baseof.html shell so the offline page
   styling matches the rest of the site (same nav, footer, theme). The

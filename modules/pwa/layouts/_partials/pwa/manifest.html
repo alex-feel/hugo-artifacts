@@ -4,20 +4,28 @@
   Emits <link rel="manifest" href="...">.
 
   Branches on params.pwa.manifest.mode:
-    - "templated" (default): href = "/manifest.webmanifest" (matches Hugo's WebAppManifest output format default)
-    - "rfg-static":  href = params.pwa.manifest.href (consumer's static file path; falls back to "/site.webmanifest")
+    - "templated" (default): links the home page's WebAppManifest output
+      (Hugo emits it at /manifest.webmanifest). The link is emitted ONLY when
+      that output actually exists -- i.e. the consumer added "webappmanifest"
+      to outputs.home. Otherwise a build-time warnf points at the missing
+      config and NO link is emitted, so the site never ships a 404 manifest
+      link (which would also brick the SW precache install). .RelPermalink is
+      used so subpath deploys are correct.
+    - "rfg-static": href = params.pwa.manifest.href (consumer's static file
+      path; falls back to "/site.webmanifest").
 */}}
 
 {{- $defaults := hugo.Data.pwa.defaults.manifest -}}
 {{- $params := site.Params.pwa.manifest | default dict -}}
 {{- $mode := $params.mode | default $defaults.mode -}}
-{{- $href := "" -}}
 
 {{- if eq $mode "rfg-static" -}}
-  {{- $href = $params.href | default "/site.webmanifest" -}}
+  {{- $href := $params.href | default "/site.webmanifest" -}}
+  {{ printf "<link rel=\"manifest\" href=\"%s\">" $href | safeHTML }}
 {{- else -}}
-  {{- /* "templated" default: Hugo's WebAppManifest output format emits /manifest.webmanifest */ -}}
-  {{- $href = $params.href | default $defaults.href -}}
+  {{- with site.Home.OutputFormats.Get "webappmanifest" -}}
+    {{ printf "<link rel=\"manifest\" href=\"%s\">" .RelPermalink | safeHTML }}
+  {{- else -}}
+    {{- warnf "modules/pwa: params.pwa.manifest.mode is \"templated\" but the home page has no WebAppManifest output, so no manifest is generated. Add \"webappmanifest\" to [outputs].home (e.g. home = [\"html\", \"rss\", \"webappmanifest\"]) or set params.pwa.manifest.mode = \"rfg-static\". No <link rel=\"manifest\"> emitted." -}}
+  {{- end -}}
 {{- end -}}
-
-{{ printf "<link rel=\"manifest\" href=\"%s\">" $href | safeHTML }}

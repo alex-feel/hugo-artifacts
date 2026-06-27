@@ -101,7 +101,7 @@ Every key below lives in `data/pwa/defaults.toml`. Override any default by decla
 
 | Key | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `version` | string | `"v1"` | Cache version stamp. Bump to force cache rotation on redeploy when content changes. |
+| `version` | string | `"v1"` | Cache version stamp (part of every runtime cache name). Bump to force cache rotation on redeploy. Set to `"auto"` to stamp each build with a millisecond timestamp (rotates caches on every deploy). |
 | `debug` | bool | `false` | Enables verbose `console.log` traces in the page-side bundles. Off in production. |
 | `update_check_seconds` | int | `3600` | Polling interval for `wb.update()` to mitigate Workbox issue #3285. `0` disables polling. |
 | `sw_path` | string | `"/sw.js"` | Service-worker script URL. Must be a same-origin path to win the `scope` argument default. |
@@ -132,8 +132,7 @@ Every key below lives in `data/pwa/defaults.toml`. Override any default by decla
 
 | Key | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `mode` | string | `"list"` | `"list"` (use `list` array) or `"rfg-paths"` (derive from `params.pwa.favicon.*`). |
-| `list` | array | `[]` | Explicit `[{src, sizes, type, purpose}]` entries when `mode = "list"`. |
+| `list` | array | `[]` | Explicit `[{src, sizes, type, purpose}]` entries, used verbatim. When empty (the default), icons are derived from the `params.pwa.favicon.icon_*_path` values (prefixed by `params.pwa.favicon.prefix`); legacy filenames omit the maskable icon. |
 
 ### Favicon (`params.pwa.favicon.*`)
 
@@ -159,7 +158,7 @@ Every key below lives in `data/pwa/defaults.toml`. Override any default by decla
 
 | Key | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `default` | string | `"#ffffff"` | Single `<meta name="theme-color">` value when `light`/`dark` are empty. |
+| `default` | string | `""` | Optional override for the single `<meta name="theme-color">` value. When empty (the default), the manifest `theme_color` is used. Ignored when `light` and `dark` are both set. |
 | `light` | string | `""` | If set with `dark`, emits paired `<meta name="theme-color" media="(prefers-color-scheme: light)">`. |
 | `dark` | string | `""` | If set with `light`, emits paired `<meta name="theme-color" media="(prefers-color-scheme: dark)">`. |
 
@@ -168,9 +167,9 @@ Every key below lives in `data/pwa/defaults.toml`. Override any default by decla
 | Key | Type | Default | Purpose |
 | --- | --- | --- | --- |
 | `enabled` | bool | `true` | Set false to skip SW registration entirely. |
-| `clientsClaim` | bool | `true` | Enables `self.clients.claim()` so a fresh SW takes control on first install without a reload. |
-| `skipWaiting` | bool | `false` | If true, skips the waiting state automatically (default off so the update banner shows). |
-| `update_ux` | string | `"banner"` | `"banner"` shows a `pwa:waiting` event for consumer UI; `"silent"` reloads on the next navigation. |
+| `clients_claim` | bool | `true` | Enables `self.clients.claim()` so a fresh SW takes control on first install without a reload. |
+| `skip_waiting` | bool | `false` | If true, the SW calls `self.skipWaiting()` on install so a new version activates immediately (default off so the update banner shows). |
+| `update_ux` | string | `"banner"` | `"banner"` emits a `pwa:waiting` event for consumer UI; `"silent"` reloads the page once a new SW takes control. |
 
 ### Precache (`params.pwa.sw.precache.*`)
 
@@ -180,24 +179,24 @@ Every key below lives in `data/pwa/defaults.toml`. Override any default by decla
 | `include_homepage` | bool | `true` | Include `/` in the precache manifest. |
 | `include_offline_page` | bool | `true` | Include the offline fallback page (`params.pwa.sw.offline.fallback_url`). |
 | `include_manifest` | bool | `true` | Include `/manifest.webmanifest`. |
-| `include_recent_pages` | int | `10` | Top-N most-recently-published pages by `Date`. `0` disables. |
+| `include_recent_pages` | int | `10` | Top-N most-recently-modified pages by `Lastmod`. `0` disables. |
 | `extra_urls` | array | `[]` | Additional URLs (e.g., `["/about/", "/contact/"]`). |
 | `exclude_globs` | array | `["/admin/*", "/preview/*"]` | Glob patterns to remove from the auto-discovered precache list. |
 
 ### Runtime caches (`params.pwa.sw.caches.*`)
 
-Six cache buckets, each with its own strategy. Edit per bucket, not all at once.
+Six cache buckets, each with its own `strategy`. Edit per bucket, not all at once. Valid `strategy` values: `"network-first"`, `"network-only"`, `"cache-first"`, `"cache-only"`, `"stale-while-revalidate"` (an unknown value degrades to `network-first`).
 
 | Bucket | Default strategy | Default `max_entries` / `max_age_seconds` | Notes |
-| --- | --- | --- | --- | --- | --- |
+| --- | --- | --- | --- |
 | `html` | `"network-first"` | 50 / 86400 (1 day) | `network_timeout_seconds = 3` for slow networks. |
-| `style` | `"stale-while-revalidate"` | 30 / 2592000 (30 days) | `origins = []` matches same-origin only by default. |
-| `script` | `"stale-while-revalidate"` | 30 / 2592000 (30 days) | `origins = []`. |
-| `font` | `"cache-first"` | 20 / 31536000 (1 year) | Pre-allowlisted Google Fonts + CDNJS; toggle via `include_google_fonts`. |
-| `image` | `"cache-first"` | 60 / 2592000 (30 days) | `origins = []`. |
-| `api` | `"network-only"` | n/a | Pattern-matched on `url_pattern = "^/(api | index\\.json | sitemap\\.xml)"`. |
+| `style` | `"stale-while-revalidate"` | 30 / 2592000 (30 days) | Same-origin by default; add cross-origin CSS CDNs via `origins`. |
+| `script` | `"stale-while-revalidate"` | 30 / 2592000 (30 days) | Same-origin by default; add cross-origin JS CDNs via `origins`. |
+| `font` | `"cache-first"` | 20 / 31536000 (1 year) | `include_google_fonts = true` adds the Google Fonts + CDNJS origins on top of `origins`. |
+| `image` | `"cache-first"` | 60 / 2592000 (30 days) | Same-origin by default; add cross-origin image CDNs via `origins`. |
+| `api` | `"network-only"` | n/a | Pattern-matched on `url_pattern` (default `^/(api\|index\.json\|sitemap\.xml)`); clearing it disables the route. |
 
-Each cache bucket also supports an `origins` array for explicit cross-origin allowlists (e.g., your CDN origin); the `font` bucket additionally honors `include_google_fonts: true` to pre-add `fonts.gstatic.com` and the CDNJS origin.
+Every cache bucket honors an `origins` array for explicit cross-origin allowlists (e.g., your CDN origin), matched against the request URL's origin; the `font` bucket additionally honors `include_google_fonts: true` to add `fonts.gstatic.com` and the CDNJS origin on top of `origins`.
 
 ### SW bypass (`params.pwa.sw.bypass.*`)
 
@@ -210,9 +209,17 @@ Each cache bucket also supports an `origins` array for explicit cross-origin all
 
 | Key | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `enabled` | bool | `true` | Master switch for offline fallback. |
-| `fallback_url` | string | `"/offline/"` | Page served when network fails AND the requested page is not in any cache. |
-| `fallback_image` | string | `""` | Optional fallback image for failed image requests (empty = no fallback image). |
+| `enabled` | bool | `true` | Master switch for offline fallback. When false (or when `sw.enabled` is false) the offline page is not generated, not precached, and the catch handler is not wired. |
+| `fallback_url` | string | `"/offline/"` | URL of the offline page; also the rendered page's path. |
+| `fallback_image` | string | `""` | Optional fallback image for failed image requests (empty = no fallback image). When set it is precached and served by the catch handler for failed image requests. |
+
+### Offline page
+
+The offline fallback page is generated by a content adapter (`content/_content.gotmpl`) ONLY when both `params.pwa.sw.enabled` and `params.pwa.sw.offline.enabled` are true. A static content file cannot be gated on configuration (Hugo renders content unconditionally), so disabling the service worker or the offline fallback removes the page entirely -- it is never shipped as a dead public page, never precached (which would 404 the SW install), and never appears in `sitemap.xml`. The page is built with `build.list = "never"` and `sitemap.disable = true`, and carries `params.robots = "noindex, nofollow"` for consumer themes that emit a robots meta from `.Params.robots`.
+
+It renders through your `baseof.html` shell (so it matches site styling) using the module layout `layouts/offline/single.html`, whose visible text comes from the `pwa_offline_title` / `pwa_offline_message` / `pwa_offline_retry` i18n keys. Override the look by shadowing `layouts/offline/single.html` in your own site. The page lives at `params.pwa.sw.offline.fallback_url`; the rendered page, the precache entry, and the SW catch handler all resolve to the page's actual `RelPermalink`, so subpath (baseURL with a path) deploys stay consistent.
+
+If your site uses its own root `content/_content.gotmpl` content adapter, it shadows the module's (Hugo allows one adapter per directory); in that case add the offline page yourself or call the module's logic from your adapter.
 
 ### SW storage (`params.pwa.sw.storage.*`)
 
@@ -229,7 +236,7 @@ Each cache bucket also supports an `origins` array for explicit cross-origin all
 | `mode` | string | `"deferred-button"` | Currently the only supported mode: capture `beforeinstallprompt`, defer to a consumer-supplied button. |
 | `button_selector` | string | `"[data-pwa-install]"` | CSS selector for the install button. The button must start `[hidden]`. |
 | `hide_when_installed` | bool | `true` | Hide the button when `appinstalled` fires. |
-| `analytics_event` | string | `""` | Optional event name to log on install for analytics integrations (consumer-side). |
+| `analytics_event` | string | `""` | When set, the install script dispatches a `window` `CustomEvent` with this name on `appinstalled`, so analytics integrations can log the install (in addition to the standard `pwa:installed` event). |
 | `gate_on_push_intent` | bool | `true` | If true, install button stays hidden until the user clicks subscribe (push intent expressed). |
 | `permission_strategy` | string | `"explicit-button"` | Reserved for future modes. The current implementation is always button-driven. |
 | `remember_dismissed_days` | int | `30` | Days to suppress the install button after the user dismisses it. `0` disables suppression. |
@@ -244,7 +251,7 @@ Each cache bucket also supports an `origins` array for explicit cross-origin all
 | `unsubscribe_url` | string | `""` | POST URL for `{endpoint}` deletion. Optional; if empty the unsubscribe button only revokes locally. |
 | `subscribe_button_selector` | string | `"[data-pwa-subscribe]"` | CSS selector for the subscribe button. |
 | `notification_icon` | string | `"/web-app-manifest-192x192.png"` | Default notification icon. |
-| `notification_badge` | string | `"/badge-72x72.png"` | Default notification badge (small monochrome icon for Android status bar). |
+| `notification_badge` | string | `""` | Default notification badge (small monochrome icon for the Android status bar). Empty by default (no badge); set to a 72x72 monochrome PNG you add to `static/`. |
 | `default_click_url` | string | `"/"` | Page to focus when the user clicks a notification with no payload `url`. |
 | `focus_existing_tab_on_click` | bool | `true` | If a tab on the same origin is open, focus it instead of opening a new one. |
 
@@ -556,5 +563,7 @@ A 9-row Playwright validation matrix lives in [`test/`](test/). Coverage:
 | 7   | Offline rendering     |
 | 8   | Update flow banner    |
 | 9   | Lighthouse PWA audit  |
+
+Row 7 (offline rendering) asserts that `/offline/` renders the module layout (heading + retry button) and is excluded from `sitemap.xml`. A separate build-level check, `npm run test:offline-gating` (in `test/`), builds the fixture with the offline fallback enabled and disabled and asserts that the offline page, its precache entry, and the SW catch handler appear only when enabled.
 
 See [`test/README.md`](test/README.md) for matrix usage instructions.

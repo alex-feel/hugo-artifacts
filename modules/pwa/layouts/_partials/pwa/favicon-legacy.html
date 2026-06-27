@@ -21,12 +21,15 @@
 {{- $params := site.Params.pwa.favicon | default dict -}}
 {{- $cfg := merge $defaults $params -}}
 
-{{- $faviconIco := $cfg.favicon_ico_path -}}
-{{- $faviconSvg := $cfg.favicon_svg_path -}}
-{{- $appleTouchIcon := $cfg.apple_touch_icon_path -}}
-{{- $maskIcon := $cfg.mask_icon_path -}}
+{{- $prefix := strings.TrimSuffix "/" ($cfg.prefix | default "") -}}
+{{- $faviconIco := printf "%s%s" $prefix $cfg.favicon_ico_path -}}
+{{- $faviconSvg := printf "%s%s" $prefix $cfg.favicon_svg_path -}}
+{{- $appleTouchIcon := printf "%s%s" $prefix $cfg.apple_touch_icon_path -}}
+{{- $favicon16 := printf "%s%s" $prefix "/favicon-16x16.png" -}}
+{{- $favicon32 := printf "%s%s" $prefix "/favicon-32x32.png" -}}
+{{- $maskIcon := printf "%s%s" $prefix $cfg.mask_icon_path -}}
 {{- $maskIconColor := $cfg.mask_icon_color -}}
-{{- $msconfig := $cfg.msapplication_config_path -}}
+{{- $msconfig := printf "%s%s" $prefix $cfg.msapplication_config_path -}}
 {{- $mstilecolor := $cfg.msapplication_tilecolor -}}
 {{- $includeSvg := $cfg.include_svg -}}
 
@@ -34,8 +37,8 @@
 <link rel="apple-touch-icon" sizes="180x180" href="{{ $appleTouchIcon }}">
 
 {{/* PNG favicons (16x16 + 32x32) */}}
-<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="{{ $favicon32 }}">
+<link rel="icon" type="image/png" sizes="16x16" href="{{ $favicon16 }}">
 
 {{/* ICO fallback */}}
 <link rel="icon" type="image/x-icon" href="{{ $faviconIco }}">

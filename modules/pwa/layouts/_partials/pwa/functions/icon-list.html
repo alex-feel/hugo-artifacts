@@ -1,15 +1,23 @@
 {{/*
   Hugo PWA module -- icon-list helper.
 
-  Builds the icons[] array for the Web App Manifest, in two modes:
-    1. EXPLICIT -- if params.pwa.manifest.icons.list is non-empty, return it as-is.
-    2. DERIVED  -- otherwise, build from params.pwa.favicon.icon_*_path fields.
+  Builds the icons[] array for the Web App Manifest, in two modes (auto-detected
+  from whether an explicit list is provided):
+    1. EXPLICIT -- if params.pwa.manifest.icons.list is non-empty, it is returned
+       verbatim (the consumer fully controls src/sizes/type/purpose; the favicon
+       prefix is NOT applied, because src values are already complete).
+    2. DERIVED  -- otherwise, built from params.pwa.favicon.icon_*_path fields,
+       switching between modern and legacy filenames based on
+       params.pwa.favicon.use_legacy_filenames, and prefixed with
+       params.pwa.favicon.prefix.
 
-  In DERIVED mode, switches between modern + legacy filenames based on
-  params.pwa.favicon.use_legacy_filenames.
+  Legacy RFG packages ship no dedicated maskable icon, so DERIVED legacy mode
+  emits only the "any" icons (emitting a maskable entry that points at a
+  non-existent file would 404). Use modern mode for maskable (Android adaptive
+  icon) support.
 
-  Each entry: {src, sizes, type, purpose}
-  Purpose "any" or "maskable" enables maskable icon support per the W3C spec.
+  Each entry: {src, sizes, type, purpose}. Purpose "any" or "maskable" enables
+  maskable icon support per the W3C spec.
 
   Returns an array via {{ return ... }}. Caller invokes with:
     {{- $icons := partial "pwa/functions/icon-list.html" . -}}
@@ -21,12 +29,13 @@
 {{- $faviconParams := site.Params.pwa.favicon | default dict -}}
 {{- $faviconCfg := merge $defaults.favicon $faviconParams -}}
 
+{{- $prefix := strings.TrimSuffix "/" ($faviconCfg.prefix | default "") -}}
+
 {{- $icons := slice -}}
 {{- $iconsCfg := $manifestCfg.icons | default dict -}}
 {{- $explicitList := $iconsCfg.list | default slice -}}
-{{- $explicit := gt (len $explicitList) 0 -}}
 
-{{- if $explicit -}}
+{{- if gt (len $explicitList) 0 -}}
   {{- $icons = $explicitList -}}
 {{- else -}}
   {{- $useLegacy := $faviconCfg.use_legacy_filenames -}}
@@ -38,13 +47,17 @@
   {{- if $useLegacy -}}
     {{- $path192 = "/android-chrome-192x192.png" -}}
     {{- $path512 = "/android-chrome-512x512.png" -}}
+    {{- $icons = slice
+        (dict "src" (printf "%s%s" $prefix $path192) "sizes" "192x192" "type" "image/png" "purpose" "any")
+        (dict "src" (printf "%s%s" $prefix $path512) "sizes" "512x512" "type" "image/png" "purpose" "any")
+    -}}
+  {{- else -}}
+    {{- $icons = slice
+        (dict "src" (printf "%s%s" $prefix $path192) "sizes" "192x192" "type" "image/png" "purpose" "any")
+        (dict "src" (printf "%s%s" $prefix $path512) "sizes" "512x512" "type" "image/png" "purpose" "any")
+        (dict "src" (printf "%s%s" $prefix $pathMaskable) "sizes" "512x512" "type" "image/png" "purpose" "maskable")
+    -}}
   {{- end -}}
-
-  {{- $icons = slice
-      (dict "src" $path192 "sizes" "192x192" "type" "image/png" "purpose" "any")
-      (dict "src" $path512 "sizes" "512x512" "type" "image/png" "purpose" "any")
-      (dict "src" $pathMaskable "sizes" "512x512" "type" "image/png" "purpose" "maskable")
-  -}}
 {{- end -}}
 
 {{- return $icons -}}

@@ -29,7 +29,13 @@
   {{- $version = printf "%d" now.UnixMilli -}}
 {{- end -}}
 
+{{- $offlineEnabled := $swCfg.offline.enabled -}}
 {{- $offlineUrl := $swCfg.offline.fallback_url | default "/offline/" -}}
+{{- /* Resolve to the actually-rendered page URL so the SW catch handler,
+       the precache entry, and subpath (baseURL path) deploys all agree. */ -}}
+{{- with site.GetPage (printf "/%s" (strings.Trim $offlineUrl "/")) -}}
+  {{- $offlineUrl = .RelPermalink -}}
+{{- end -}}
 {{- $debug := $params.debug | default $defaults.debug -}}
 
 {{- $precacheList := partial "pwa/functions/precache-list.html" . -}}
@@ -38,8 +44,13 @@
     "precacheList"            $precacheList
     "cacheVersion"            $version
     "offlineUrl"              $offlineUrl
+    "offlineEnabled"          $offlineEnabled
+    "fallbackImage"           $swCfg.offline.fallback_image
     "debug"                   $debug
-    "clientsClaim"            $swCfg.clientsClaim
+    "clientsClaim"            $swCfg.clients_claim
+    "skipWaiting"             $swCfg.skip_waiting
+    "bypass"                  $swCfg.bypass
+    "purgeOnQuotaError"       $swCfg.storage.purge_on_quota_error
     "notificationIcon"        $pushCfg.notification_icon
     "notificationBadge"       $pushCfg.notification_badge
     "defaultClickUrl"         $pushCfg.default_click_url

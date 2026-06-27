@@ -21,6 +21,7 @@ import {Workbox} from 'workbox-window';
 import * as params from '@params';
 
 import {dispatch} from './events.js';
+import {requestPersistent} from './storage.js';
 
 if ('serviceWorker' in navigator) {
   bootstrap();
@@ -39,11 +40,26 @@ function bootstrap(): void {
     dispatch('pwa:waiting');
   });
 
+  let reloadingForUpdate = false;
   wb.addEventListener('controlling', () => {
     dispatch('pwa:controlling');
+    // params.pwa.sw.update_ux = "silent": when a new SW takes control, reload
+    // once so the page shows the new version without a banner. "banner" (the
+    // default) leaves the reload decision to the consumer's pwa:waiting UI.
+    if (params.updateUx === 'silent' && !reloadingForUpdate) {
+      reloadingForUpdate = true;
+      window.location.reload();
+    }
   });
 
   void wb.register();
+
+  // params.pwa.sw.storage.request_persistent: ask the browser to mark storage
+  // as persistent (best-effort; browsers may prompt or silently decide) once
+  // the SW is ready, so precaches survive eviction under storage pressure.
+  if (params.requestPersistent) {
+    void navigator.serviceWorker.ready.then(() => requestPersistent());
+  }
 
   // Per-page-load pwa:firstinstall dispatch. The Workbox `installed` event only
   // fires during the lifecycle transition from `installing` to `installed`;

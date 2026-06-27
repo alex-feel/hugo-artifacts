@@ -20,11 +20,21 @@ declare module '@params' {
     include_google_fonts?: boolean;
   }
 
+  export interface BypassConfig {
+    urls?: string[];
+    patterns?: string[];
+  }
+
   export const precacheList: PrecacheEntry[];
   export const cacheVersion: string;
   export const offlineUrl: string;
+  export const offlineEnabled: boolean;
+  export const fallbackImage: string;
   export const debug: boolean;
   export const clientsClaim: boolean;
+  export const skipWaiting: boolean;
+  export const bypass: BypassConfig;
+  export const purgeOnQuotaError: boolean;
   export const notificationIcon: string;
   export const notificationBadge: string;
   export const defaultClickUrl: string;

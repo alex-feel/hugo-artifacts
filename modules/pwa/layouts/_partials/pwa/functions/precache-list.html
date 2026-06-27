@@ -3,23 +3,32 @@
 
   Builds a [{url, revision}] array suitable for Workbox's precacheAndRoute.
 
-  Sources of entries (all opt-in via params):
-    - Homepage ("/") when params.pwa.sw.precache.include_homepage is true
-    - Offline page (params.pwa.sw.offline.fallback_url) when
-      params.pwa.sw.precache.include_offline_page is true
-    - Manifest URL when params.pwa.sw.precache.include_manifest is true
-    - Top-N regular pages by Lastmod, where N =
-      params.pwa.sw.precache.include_recent_pages (default 10)
+  The whole list is gated on params.pwa.sw.precache.enabled (master switch);
+  when false the SW precaches nothing.
+
+  CRITICAL invariant: every entry MUST correspond to a resource Hugo actually
+  emits. Workbox's precacheAndRoute install is atomic -- a single 404 fails the
+  whole SW install, so the SW silently never activates. Each entry below is
+  therefore derived from a real rendered resource (site.Home, the offline page
+  via site.GetPage, the WebAppManifest output format) rather than from a raw
+  config path, and uses .RelPermalink so subpath (baseURL with a path) deploys
+  are correct.
+
+  Sources of entries (each opt-in via params):
+    - Homepage when params.pwa.sw.precache.include_homepage is true
+    - Offline page when BOTH params.pwa.sw.precache.include_offline_page AND
+      params.pwa.sw.offline.enabled are true (the page exists only then -- it is
+      created by content/_content.gotmpl under the same condition)
+    - Offline fallback image when offline is enabled and
+      params.pwa.sw.offline.fallback_image is set
+    - Manifest when params.pwa.sw.precache.include_manifest is true AND the
+      manifest actually renders (templated mode requires webappmanifest in
+      outputs.home; rfg-static mode points at the consumer's static file)
+    - Top-N regular pages by Lastmod (params.pwa.sw.precache.include_recent_pages)
     - Any extra URLs in params.pwa.sw.precache.extra_urls
 
-  Pages whose URL contains an exclude_globs token (after stripping the "*")
-  are dropped.
-
-  Revisions:
-    - Pages: revision = page.Lastmod.Unix as a string
-    - Static URLs in extra_urls: revision = the URL itself (defensive)
-    - Manifest: revision = "manifest" (the manifest renders deterministically
-      from data; consumers using a templated manifest can override the helper)
+  Pages whose URL contains an exclude_globs token (after stripping the "*") are
+  dropped.
 
   Returns a slice of dicts which js.Build's params bridge serializes to JSON.
 */}}
@@ -31,57 +40,68 @@
 
 {{- $list := slice -}}
 
-{{/* Homepage */}}
-{{- if $swCfg.precache.include_homepage -}}
-  {{- $homeRev := "home" -}}
-  {{- with site.Home -}}
-    {{- $homeRev = printf "%d" .Lastmod.Unix -}}
-  {{- end -}}
-  {{- $list = $list | append (dict "url" "/" "revision" $homeRev) -}}
-{{- end -}}
+{{- if $swCfg.precache.enabled -}}
 
-{{/* Offline page */}}
-{{- if $swCfg.precache.include_offline_page -}}
-  {{- $offlineUrl := $swCfg.offline.fallback_url -}}
-  {{- $offlineRev := "offline" -}}
-  {{- with where site.Pages "RelPermalink" $offlineUrl -}}
-    {{- with index . 0 -}}
-      {{- $offlineRev = printf "%d" .Lastmod.Unix -}}
+  {{/* Homepage (.RelPermalink is subpath-aware) */}}
+  {{- if $swCfg.precache.include_homepage -}}
+    {{- with site.Home -}}
+      {{- $list = $list | append (dict "url" .RelPermalink "revision" (printf "%d" .Lastmod.Unix)) -}}
     {{- end -}}
   {{- end -}}
-  {{- $list = $list | append (dict "url" $offlineUrl "revision" $offlineRev) -}}
-{{- end -}}
 
-{{/* Manifest */}}
-{{- if $swCfg.precache.include_manifest -}}
-  {{- $manifestParams := $params.manifest | default dict -}}
-  {{- $href := $manifestParams.href | default $defaults.manifest.href -}}
-  {{- $list = $list | append (dict "url" $href "revision" "manifest") -}}
-{{- end -}}
+  {{/* Offline page -- only when offline fallback is enabled (the page exists only then) */}}
+  {{- if and $swCfg.precache.include_offline_page $swCfg.offline.enabled -}}
+    {{- $offlineRef := printf "/%s" (strings.Trim ($swCfg.offline.fallback_url | default "/offline/") "/") -}}
+    {{- with site.GetPage $offlineRef -}}
+      {{- $list = $list | append (dict "url" .RelPermalink "revision" (printf "%d" .Lastmod.Unix)) -}}
+    {{- end -}}
+  {{- end -}}
 
-{{/* Top-N regular pages by Lastmod, descending */}}
-{{- $n := $swCfg.precache.include_recent_pages | default 0 -}}
-{{- if gt $n 0 -}}
-  {{- $excludes := $swCfg.precache.exclude_globs -}}
-  {{- $sorted := first $n (sort site.RegularPages "Lastmod" "desc") -}}
-  {{- range $sorted -}}
-    {{- $url := .RelPermalink -}}
-    {{- $skip := false -}}
-    {{- range $excludes -}}
-      {{- $token := replaceRE "\\*" "" . -}}
-      {{- if and $token (strings.Contains $url $token) -}}
-        {{- $skip = true -}}
+  {{/* Offline fallback image (precached so the SW catch handler can serve it) */}}
+  {{- if and $swCfg.offline.enabled $swCfg.offline.fallback_image -}}
+    {{- $img := $swCfg.offline.fallback_image -}}
+    {{- $list = $list | append (dict "url" $img "revision" $img) -}}
+  {{- end -}}
+
+  {{/* Manifest -- only when it actually renders, to avoid an atomic-install 404 */}}
+  {{- if $swCfg.precache.include_manifest -}}
+    {{- $manifestParams := $params.manifest | default dict -}}
+    {{- $mode := $manifestParams.mode | default $defaults.manifest.mode -}}
+    {{- if eq $mode "rfg-static" -}}
+      {{- $href := $manifestParams.href | default "/site.webmanifest" -}}
+      {{- $list = $list | append (dict "url" $href "revision" "manifest") -}}
+    {{- else -}}
+      {{- with site.Home.OutputFormats.Get "webappmanifest" -}}
+        {{- $list = $list | append (dict "url" .RelPermalink "revision" (printf "%d" site.Home.Lastmod.Unix)) -}}
       {{- end -}}
     {{- end -}}
-    {{- if not $skip -}}
-      {{- $list = $list | append (dict "url" $url "revision" (printf "%d" .Lastmod.Unix)) -}}
+  {{- end -}}
+
+  {{/* Top-N regular pages by Lastmod, descending */}}
+  {{- $n := $swCfg.precache.include_recent_pages | default 0 -}}
+  {{- if gt $n 0 -}}
+    {{- $excludes := $swCfg.precache.exclude_globs -}}
+    {{- $sorted := first $n (sort site.RegularPages "Lastmod" "desc") -}}
+    {{- range $sorted -}}
+      {{- $url := .RelPermalink -}}
+      {{- $skip := false -}}
+      {{- range $excludes -}}
+        {{- $token := replaceRE "\\*" "" . -}}
+        {{- if and $token (strings.Contains $url $token) -}}
+          {{- $skip = true -}}
+        {{- end -}}
+      {{- end -}}
+      {{- if not $skip -}}
+        {{- $list = $list | append (dict "url" $url "revision" (printf "%d" .Lastmod.Unix)) -}}
+      {{- end -}}
     {{- end -}}
   {{- end -}}
-{{- end -}}
 
-{{/* Extra URLs (consumer-supplied) */}}
-{{- range $swCfg.precache.extra_urls -}}
-  {{- $list = $list | append (dict "url" . "revision" .) -}}
+  {{/* Extra URLs (consumer-supplied) */}}
+  {{- range $swCfg.precache.extra_urls -}}
+    {{- $list = $list | append (dict "url" . "revision" .) -}}
+  {{- end -}}
+
 {{- end -}}
 
 {{- return $list -}}

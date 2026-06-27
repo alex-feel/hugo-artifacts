@@ -17,13 +17,15 @@
 {{- $faviconThemeParams := $faviconParams.theme_color | default dict -}}
 
 {{- $manifestColor := (or $manifestParams.theme_color $defaults.manifest.theme_color) -}}
+{{- $faviconDefault := $faviconThemeParams.default | default "" -}}
 {{- $faviconLight := (or $faviconThemeParams.light $defaults.favicon.theme_color.light) -}}
 {{- $faviconDark := (or $faviconThemeParams.dark $defaults.favicon.theme_color.dark) -}}
 
-{{- /* If light + dark are BOTH set, emit paired tags. Otherwise emit a single tag using the manifest color. */ -}}
+{{- /* If light + dark are BOTH set, emit paired color-scheme tags. Otherwise emit a single tag:
+       params.pwa.favicon.theme_color.default when set, else the manifest theme color. */ -}}
 {{- if and $faviconLight $faviconDark }}
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="{{ $faviconLight }}">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="{{ $faviconDark }}">
 {{- else }}
-<meta name="theme-color" content="{{ $manifestColor }}">
+<meta name="theme-color" content="{{ $faviconDefault | default $manifestColor }}">
 {{- end }}
