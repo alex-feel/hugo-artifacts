@@ -1,0 +1,129 @@
+{{/*
+  Renders a privacy-first YouTube facade: a same-origin poster + a real play
+  button that injects a youtube-nocookie player iframe ONLY on click. Nothing
+  contacts Google before the click -- the poster is fetched at build time and
+  republished under the site's own origin, and no preconnect/iframe-src exists
+  at render time.
+
+  Provide EITHER `id` (raw 11-char video id) OR `url` (any common YouTube URL
+  shape). A playlist embed is also supported via `list` (or a `list=` in `url`).
+
+  Parameters:
+  - id        (string)  Raw 11-char video id. Wins over `url` when both are set.
+  - url       (string)  Full YouTube URL: youtu.be/, watch?v=, embed/, v/,
+                        shorts/, youtube-nocookie.com/embed/, m.youtube.com, with
+                        optional &list= and an optional ?t= / ?start= offset. The
+                        11-char id is extracted and validated.
+  - title     (string)  Accessible button label, iframe title, and -- when
+                        `show-title` is true -- a visible title element.
+  - start     (int)     Start offset in seconds (emits start=N). Falls back to a
+                        ?t= / ?start= in `url` when this parameter is unset.
+  - end       (int)     End offset in seconds (emits end=N).
+  - list      (string)  Playlist id. With no id/video, embeds the playlist
+                        (/embed/videoseries?list=...); with a video, appends list=.
+  - poster    (string)  Tier-1 local poster override (page-resource name or
+                        assets path). Processed through the image pipeline.
+  - params    (string)  Arbitrary extra player query string appended to the embed
+                        URL, e.g. "cc_load_policy=1&hl=fr".
+  - loading   (string)  Poster <img> loading attribute. Default "lazy".
+  - sizes     (string)  Poster responsive `sizes` attribute. Default "100vw";
+                        set it to match your layout slot to avoid over-fetching.
+  - class     (string)  Extra class(es) appended to the root element.
+  - id-anchor (string)  Optional root element id (alias: `anchor`).
+  - show-title(bool)    Render a visible youtube-embed__title element. Default false.
+
+  Usage:
+    youtube-embed id="dQw4w9WgXcQ"
+    youtube-embed url="https://youtu.be/dQw4w9WgXcQ?t=42" title="Never Gonna Give You Up"
+    youtube-embed id="dQw4w9WgXcQ" start="42" end="90" params="cc_load_policy=1&hl=fr"
+    youtube-embed list="PLFsQleAWXsj_4yDeebiIADdH5FMayBiJo"
+    youtube-embed id="dQw4w9WgXcQ" poster="custom-poster.jpg" class="featured"
+*/}}
+
+{{- $idParam := .Get "id" | default "" -}}
+{{- $url := .Get "url" | default "" -}}
+{{- $title := .Get "title" | default "" -}}
+{{- $startRaw := .Get "start" | default "" -}}
+{{- $endRaw := .Get "end" | default "" -}}
+{{- $listParam := .Get "list" | default "" -}}
+{{- $poster := .Get "poster" | default "" -}}
+{{- $params := .Get "params" | default "" -}}
+{{- $loading := .Get "loading" | default "lazy" -}}
+{{- $sizes := .Get "sizes" | default "100vw" -}}
+{{- $class := .Get "class" | default "" -}}
+{{- $anchor := or (.Get "id-anchor") (.Get "anchor") | default "" -}}
+{{/* `.Get` returns named params as strings, so "false"/"0"/"no" would all be
+     truthy as bare non-empty strings. Coerce explicitly against accepted truthy
+     tokens so show-title="false" actually suppresses the visible title. */}}
+{{- $showTitle := in (slice "true" "1" "yes" "on") (lower (.Get "show-title" | default "")) -}}
+
+{{/* Parse and validate the locator. A raw id wins; otherwise the URL is parsed.
+     A `list` parameter is honored even when `url` carries its own list. */}}
+{{- $parsed := partial "youtube-embed/parse-id.html" (dict "id" $idParam "url" $url) -}}
+{{- $id := $parsed.id -}}
+{{- $list := or $listParam $parsed.list -}}
+
+{{/* The embed is valid when parse-id resolved a usable id/list from id=/url=,
+     OR a standalone list= parameter was supplied (a playlist-only embed). */}}
+{{- $valid := or $parsed.valid (ne $listParam "") -}}
+
+{{- if not $valid -}}
+  {{- if and (not $idParam) (not $url) (not $listParam) -}}
+    {{- errorf "The %q shortcode requires an 'id' (raw 11-char video id), a 'url' (any YouTube URL), or a 'list' (playlist id). See %s" .Name .Position -}}
+  {{- else -}}
+    {{- errorf "The %q shortcode could not extract a valid 11-character YouTube video id from id=%q url=%q. YouTube ids are exactly 11 characters of [A-Za-z0-9_-]. See %s" .Name $idParam $url .Position -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Normalize start/end to non-negative integer seconds HERE, so the facade
+     receives clean ints and never risks an `int "abc"` build break. A
+     non-numeric or negative value is ignored (treated as unset) with a single
+     warning -- an optional timing hint must not fail the build. */}}
+{{- $start := 0 -}}
+{{- with $startRaw -}}
+  {{- if findRE `^[0-9]+$` . 1 -}}
+    {{- $start = int . -}}
+  {{- else -}}
+    {{- warnf "The %q shortcode ignored a non-numeric start=%q (expected whole seconds). See %s" $.Name . $.Position -}}
+  {{- end -}}
+{{- end -}}
+{{- $end := 0 -}}
+{{- with $endRaw -}}
+  {{- if findRE `^[0-9]+$` . 1 -}}
+    {{- $end = int . -}}
+  {{- else -}}
+    {{- warnf "The %q shortcode ignored a non-numeric end=%q (expected whole seconds). See %s" $.Name . $.Position -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* A start offset carried in the URL (?t= / ?start=, e.g. youtu.be/ID?t=42)
+     is honored only when no explicit `start` parameter was supplied; the
+     explicit parameter always wins. */}}
+{{- if and (not $startRaw) (gt $parsed.start 0) -}}
+  {{- $start = $parsed.start -}}
+{{- end -}}
+
+{{/* Assemble the shared context. `page` and `position` are carried for the
+     poster resolution (page-resource lookup, warn-dedup) and diagnostics. */}}
+{{- $ctx := dict
+  "id" $id
+  "list" $list
+  "title" $title
+  "start" $start
+  "end" $end
+  "params" $params
+  "loading" $loading
+  "sizes" $sizes
+  "showTitle" $showTitle
+  "anchor" $anchor
+  "poster" $poster
+  "page" .Page
+  "position" .Position
+-}}
+
+{{/* Resolve the poster (T1 local -> T2 maxres -> T3 hq -> T4 default -> none). */}}
+{{- $posterData := partial "youtube-embed/poster.html" $ctx -}}
+
+{{/* Merge poster result + extra class, then render the facade. */}}
+{{- $data := merge $ctx (dict "poster" $posterData "extraClass" $class) -}}
+{{- partial "youtube-embed/facade.html" $data -}}

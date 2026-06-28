@@ -1,0 +1,183 @@
+{{/*
+  Resolves the facade poster image and returns same-origin, fingerprinted
+  <picture> source URLs plus intrinsic dimensions, following a four-tier
+  priority chain. EVERY tier that yields an image is processed through Hugo's
+  image pipeline and published same-origin, so the rendered facade makes ZERO
+  third-party network requests before the visitor clicks Play.
+
+  Why same-origin matters: a poster loaded directly from i.ytimg.com would leak
+  the visitor's IP and a request to Google on page load, defeating the whole
+  point of a privacy-first facade. Fetching at BUILD time and republishing the
+  bytes under the site's own origin removes that contact.
+
+  Priority chain:
+  - T1  Explicit `poster` override. Resolved against the page bundle first
+        (.Page.Resources.GetMatch), then global assets (resources.Get). If the
+        author supplied a poster but it cannot be found, this is errorf -- an
+        explicit, misspelled asset is a build-time authoring mistake, not a
+        degradation case.
+  - T2  Remote maxresdefault.jpg (1280x720). Primary missing-poster detection is
+        HTTP 404 -> nil via `try (resources.GetRemote ...)`. A belt-and-suspenders
+        dimension guard additionally rejects the ~120x90 gray placeholder that
+        some edge nodes serve, accepting only a true ~1280x720 maxres frame.
+  - T3  hqdefault.jpg (480x360). De-facto always present for public videos.
+  - T4  default.jpg (0.jpg) (120x90). Last-resort thumbnail.
+  - Else  No poster. Returns posterOk=false; the facade renders a neutral 16:9
+          box. A missing remote poster NEVER fails the build (warnf, deduped).
+
+  Inputs (context dict):
+  - .id       (string)        11-char video id ("" for a playlist-only embed).
+  - .list     (string)        Playlist id, or "".
+  - .poster   (string)        Explicit local poster path/name, or "".
+  - .page     (Page)          The calling page (for .Resources and .Store).
+  - .position (text.Position) Call position, surfaced in warnings/errors.
+
+  Returns: a dict with
+  - .posterOk  (bool)   true when a usable poster was published.
+  - .jpeg      (string) RelPermalink of the JPEG fallback (1280-wide), or "".
+  - .webpSrcset(string) Responsive WebP srcset (1280/640/480 where available), or "".
+  - .jpegSrcset(string) Responsive JPEG srcset (1280/640/480 where available), or "".
+  - .width     (int)    Intrinsic width of the primary variant (for no-CLS).
+  - .height    (int)    Intrinsic height of the primary variant (for no-CLS).
+  - .tier      (string) Which tier produced the poster: "local"|"maxres"|"hq"|"default"|"none".
+*/}}
+
+{{- $id := .id -}}
+{{- $list := .list -}}
+{{- $posterParam := .poster | default "" -}}
+{{- $page := .page -}}
+{{- $position := .position -}}
+
+{{- $src := "" -}}
+{{- $tier := "none" -}}
+
+{{/* ---- Tier 1: explicit local poster override ---- */}}
+{{- if $posterParam -}}
+  {{- with $page.Resources.GetMatch $posterParam -}}
+    {{- $src = . -}}
+  {{- else -}}
+    {{- with resources.Get $posterParam -}}
+      {{- $src = . -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if $src -}}
+    {{/* Guard the explicit local poster the same way Tiers 2-4 are guarded: an
+         SVG/ICO (or any non-raster) resource resolves fine but cannot go through
+         the image pipeline, so .Width/.Process below would fail the build. A
+         wrong-format explicit poster is an authoring mistake, reported clearly. */}}
+    {{- if reflect.IsImageResourceProcessable $src -}}
+      {{- $tier = "local" -}}
+    {{- else -}}
+      {{- errorf "[youtube-embed] poster %q is not a processable raster image. Use a jpeg, png, webp, gif, bmp, or tiff (an svg or ico cannot be resized). See %s" $posterParam $position -}}
+    {{- end -}}
+  {{- else -}}
+    {{- errorf "[youtube-embed] poster %q was supplied but could not be found as a page resource or under assets/. Remove the poster parameter to fall back to the automatic YouTube thumbnail, or fix the path. See %s" $posterParam $position -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---- Tiers 2-4: remote thumbnails (only when no local poster and a video
+        id exists; a playlist-only embed has no per-video thumbnail) ---- */}}
+{{- if and (not $src) $id -}}
+  {{/* Tier 2: maxresdefault. The 404->nil branch is primary detection; the
+       dimension guard rejects the placeholder that masquerades as a real
+       thumbnail on some edges. Accept a small tolerance band around 1280x720 so
+       a future minor encoding change does not spuriously reject a real frame. */}}
+  {{- $maxUrl := printf "https://i.ytimg.com/vi/%s/maxresdefault.jpg" $id -}}
+  {{- with try (resources.GetRemote $maxUrl) -}}
+    {{- with .Err -}}
+      {{/* Network/timeout/etc. -- not fatal; fall through to hqdefault. */}}
+    {{- else with .Value -}}
+      {{- if and (reflect.IsImageResourceProcessable .) (ge .Width 1000) (ge .Height 560) -}}
+        {{- $src = . -}}
+        {{- $tier = "maxres" -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* Tier 3: hqdefault (480x360). */}}
+  {{- if not $src -}}
+    {{- $hqUrl := printf "https://i.ytimg.com/vi/%s/hqdefault.jpg" $id -}}
+    {{- with try (resources.GetRemote $hqUrl) -}}
+      {{- with .Err -}}
+      {{- else with .Value -}}
+        {{- if reflect.IsImageResourceProcessable . -}}
+          {{- $src = . -}}
+          {{- $tier = "hq" -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* Tier 4: default.jpg (0.jpg, 120x90) last resort. */}}
+  {{- if not $src -}}
+    {{- $defUrl := printf "https://i.ytimg.com/vi/%s/default.jpg" $id -}}
+    {{- with try (resources.GetRemote $defUrl) -}}
+      {{- with .Err -}}
+      {{- else with .Value -}}
+        {{- if reflect.IsImageResourceProcessable . -}}
+          {{- $src = . -}}
+          {{- $tier = "default" -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---- Build the result with a SINGLE terminal return ----
+
+     Hugo supports exactly one `return` per partial, so the no-poster and
+     processed-poster cases both flow into one `$result` returned at the end
+     (mirroring the sibling github-repo/fetch.html pattern). A missing poster
+     yields posterOk=false and a neutral box -- never errorf, since a missing
+     remote thumbnail must not break the build. */}}
+{{- $result := dict
+  "posterOk" false
+  "jpeg" ""
+  "webpSrcset" ""
+  "jpegSrcset" ""
+  "width" 0
+  "height" 0
+  "tier" "none"
+-}}
+
+{{- if not $src -}}
+  {{/* No poster: warn once per build (deduped) and keep the neutral result. */}}
+  {{- if $id -}}
+    {{- $warnedKey := printf "youtube-embed:warned-no-poster:%s" $id -}}
+    {{- if not ($page.Store.Get $warnedKey) -}}
+      {{- $page.Store.Set $warnedKey true -}}
+      {{- warnf "[youtube-embed] No poster could be resolved for video %q (no local poster, and the remote thumbnails were unavailable). Rendering a neutral box; the Play button still works. See %s" $id $position -}}
+    {{- end -}}
+  {{- end -}}
+{{- else -}}
+  {{/* Process the chosen poster into responsive WebP + JPEG variants. The
+       primary variant fixes the published width at 1280 (or the source width
+       when smaller -- an hqdefault is 480 wide, so upscaling would only blur
+       it). A bare `WIDTHx` resize keeps aspect ratio; explicit width/height on
+       the <img> prevent layout shift; the consumer pins the 16:9 box. */}}
+  {{- $srcW := $src.Width -}}
+  {{- $w1 := cond (lt $srcW 1280) $srcW 1280 -}}
+  {{- $webp1 := $src.Process (printf "resize %dx webp q80" $w1) -}}
+  {{- $jpeg1 := $src.Process (printf "resize %dx jpeg q80" $w1) -}}
+  {{- $webpParts := slice (printf "%s %dw" $webp1.RelPermalink $webp1.Width) -}}
+  {{- $jpegParts := slice (printf "%s %dw" $jpeg1.RelPermalink $jpeg1.Width) -}}
+  {{- range $width := slice 640 480 -}}
+    {{- if gt $srcW $width -}}
+      {{- $webpN := $src.Process (printf "resize %dx webp q80" $width) -}}
+      {{- $jpegN := $src.Process (printf "resize %dx jpeg q80" $width) -}}
+      {{- $webpParts = $webpParts | append (printf "%s %dw" $webpN.RelPermalink $webpN.Width) -}}
+      {{- $jpegParts = $jpegParts | append (printf "%s %dw" $jpegN.RelPermalink $jpegN.Width) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $result = dict
+    "posterOk" true
+    "jpeg" $jpeg1.RelPermalink
+    "webpSrcset" (delimit $webpParts ", ")
+    "jpegSrcset" (delimit $jpegParts ", ")
+    "width" $webp1.Width
+    "height" $webp1.Height
+    "tier" $tier
+  -}}
+{{- end -}}
+
+{{- return $result -}}

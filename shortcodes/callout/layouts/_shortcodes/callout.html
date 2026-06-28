@@ -1,0 +1,218 @@
+{{/*
+  Renders a paired admonition / callout block:
+
+    {{< callout "warning" "Heads up" >}}
+    Body **markdown** here -- nested shortcodes and render hooks all work.
+    {{< /callout >}}
+
+  This is a UNIVERSAL, UNSTYLED admonition: it emits semantic BEM markup, data
+  attributes, and CSS-custom-property tone NAMES, and ships ZERO CSS. The
+  consuming site owns all visual styling. It supersedes the older `notice`
+  module: more types, true aliases, arbitrary custom-type passthrough, proper
+  ARIA, native collapsibility, verbatim user titles, and a block-level body
+  (never a bare <p> wrapper).
+
+  Parameters:
+  - type (positional 0, or type=): callout type. Default "note". May be a
+    first-class type, an alias, or ANY custom slug (passed through literally --
+    designers define unlimited custom callout styles). See resolve-type.html
+    and the README Types table.
+  - title (positional 1, or title=): head title.
+      * Omitted  -> the canonical type label (i18n-able), passed through `title`
+        casing, e.g. "warning" -> "Warning".
+      * Supplied -> emitted VERBATIM (never re-cased), so "iOS quirks" stays
+        "iOS quirks".
+      * title="" -> suppresses the head entirely (icon + title row omitted).
+  - collapsible (bool): render as a native <details>/<summary> disclosure.
+  - open (bool): when collapsible, start expanded (adds the `open` attribute).
+  - role (string): opt-in ARIA override. One of "note", "alert", "status",
+    "none". Default is the passive role from resolve-type.html ("note"). Use
+    "alert"/"status" ONLY for genuinely dynamic, client-updated notices --
+    they are live regions and would make assistive tech announce static prose.
+    "none" emits no role attribute.
+  - icon: icon override. A first-class icon NAME (rendered via icon.html), a
+    single emoji (emitted as text), or a path/URL to an image resource
+    (page resource first, then global resource -> <img>). icon=false suppresses
+    the icon. When omitted, first-class types use their default glyph and
+    custom/unknown types render no icon.
+  - id (string): id attribute on the root element (for anchoring/linking).
+  - class (string): extra class(es) appended to the root element.
+
+  Usage (a single call uses EITHER all-positional OR all-named arguments --
+  Hugo forbids mixing the two conventions in one call):
+    callout "tip"
+    callout "danger" "Do not do this"
+    callout type="success" title="" icon="🎉"
+    callout type="my-brand-type" title="Brand note" icon="/images/brand.svg"
+    callout type="warning" collapsible="true" open="true" role="alert"
+
+  Never errorf: an unknown type is valid (passthrough), an empty body is valid,
+  and a bad role/icon degrades gracefully. warnf is used sparingly.
+*/}}
+
+{{- $rawType := .Get 0 -}}
+{{- if not $rawType -}}{{ $rawType = .Get "type" }}{{- end -}}
+{{- $type := or $rawType "note" -}}
+
+{{/* Title resolution distinguishes three states: a user-supplied value (any
+     index 1 OR title=, including an explicit empty string => suppress head),
+     versus omitted (=> default label). `.Get` returns nil when absent, so the
+     "is the param present at all?" test must check both positional 1 and named
+     title before falling back to the default. */}}
+{{- $titlePresent := false -}}
+{{- $title := "" -}}
+{{- if ne (.Get 1) nil -}}
+  {{- $titlePresent = true -}}
+  {{- $title = .Get 1 -}}
+{{- else if ne (.Get "title") nil -}}
+  {{- $titlePresent = true -}}
+  {{- $title = .Get "title" -}}
+{{- end -}}
+
+{{- $collapsible := in (slice true "true" "1" "yes" "on") (.Get "collapsible" | default false) -}}
+{{- $open := in (slice true "true" "1" "yes" "on") (.Get "open" | default false) -}}
+{{- $roleParam := lower (.Get "role" | default "") -}}
+{{- $iconParam := .Get "icon" -}}
+{{- $id := .Get "id" | default "" -}}
+{{- $class := .Get "class" | default "" -}}
+
+{{/* Resolve the type to its canonical form + defaults (alias mapping, default
+     icon, default label, passive role, known/unknown). Shared with the
+     blockquote render hook so [!NOTE] syntax renders identically. */}}
+{{- $r := partial "callout/resolve-type.html" $type -}}
+{{- $canonical := $r.canonical -}}
+
+{{/* Default-deduplicated warning for unknown types, so a typo surfaces once
+     per build without breaking it. hugo.Store is build-scoped: the first call
+     for a given unknown type warns, the rest stay silent. Known types and
+     aliases never warn. */}}
+{{- if not $r.known -}}
+  {{- $warnKey := printf "callout:warned-unknown:%s" $canonical -}}
+  {{- if not (hugo.Store.Get $warnKey) -}}
+    {{- hugo.Store.Set $warnKey true -}}
+    {{- warnf "[callout] Unknown callout type %q is rendered as a custom type (class callout--%s, data-callout-type=%q, no default icon). If this was a typo, use a first-class type or an alias; if intentional, define styles for this type in your site CSS. See %s" $canonical $canonical $canonical .Position -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Head title: a verbatim user value, or the resolver's display-ready default
+     label (already Title-cased or localized; do NOT re-case it). The
+     empty-string user value falls through to head suppression below. */}}
+{{- $headTitle := "" -}}
+{{- if $titlePresent -}}
+  {{- $headTitle = $title -}}
+{{- else -}}
+  {{- $headTitle = $r.label -}}
+{{- end -}}
+{{- $showHead := or (not $titlePresent) (ne (trim $title " \t\n\r") "") -}}
+
+{{/* A collapsible callout MUST expose a <summary>, and a <summary> needs a real,
+     author-controlled accessible name (otherwise the browser falls back to a
+     non-localizable "Details" label). So in the collapsible form the head is
+     always rendered, and a suppressed title (title="") falls back to the type's
+     label for the summary. A consumer that wants the title visually hidden does
+     so with CSS, not by dropping the summary. */}}
+{{- if $collapsible -}}
+  {{- $showHead = true -}}
+  {{- if eq (trim $headTitle " \t\n\r") "" -}}
+    {{- $headTitle = $r.label -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ARIA role resolution. Default is passive. The role= param can override to
+     a live region (alert/status) for dynamic notices, or "none" to omit. An
+     unrecognized role value is ignored (falls back to the passive default)
+     with a one-shot warning. */}}
+{{- $role := $r.role -}}
+{{- $emitRole := true -}}
+{{- if $roleParam -}}
+  {{- if eq $roleParam "none" -}}
+    {{- $emitRole = false -}}
+  {{- else if in (slice "note" "alert" "status") $roleParam -}}
+    {{- $role = $roleParam -}}
+  {{- else -}}
+    {{- $warnKey := printf "callout:warned-role:%s" $roleParam -}}
+    {{- if not (hugo.Store.Get $warnKey) -}}
+      {{- hugo.Store.Set $warnKey true -}}
+      {{- warnf "[callout] Ignoring unknown role %q (use note, alert, status, or none). Falling back to the passive default. See %s" $roleParam .Position -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Icon strategy:
+     - icon=false / "false" / "none" -> suppress.
+     - icon is a single emoji (one grapheme, non-ASCII) -> emit as text.
+     - icon looks like a path/URL (has "/" or "." or "http") -> resolve to an
+       <img> via page resources then global resources; fall back silently.
+     - icon is a bare name -> render via icon.html (works for first-class
+       names and lets a custom type borrow a built-in glyph).
+     - icon omitted -> default glyph for first-class types, nothing otherwise. */}}
+{{- $iconMode := "default" -}}
+{{- $iconName := $r.iconName -}}
+{{- $iconEmoji := "" -}}
+{{- $iconResource := "" -}}
+{{- if ne $iconParam nil -}}
+  {{- $iconStr := trim (printf "%v" $iconParam) " \t\n\r" -}}
+  {{- if or (in (slice "false" "none" "no" "off") (lower $iconStr)) (eq $iconParam false) -}}
+    {{- $iconMode = "none" -}}
+  {{- else if or (in $iconStr "/") (in $iconStr ".") (hasPrefix (lower $iconStr) "http") -}}
+    {{- $iconMode = "resource" -}}
+    {{- $res := "" -}}
+    {{- with .Page.Resources.Get $iconStr -}}{{ $res = . }}{{ end -}}
+    {{- if not $res -}}
+      {{- with resources.Get $iconStr -}}{{ $res = . }}{{ end -}}
+    {{- end -}}
+    {{- if $res -}}
+      {{- $iconResource = $res.RelPermalink -}}
+    {{- else -}}
+      {{- $iconMode = "none" -}}
+      {{- $warnKey := printf "callout:warned-icon:%s" $iconStr -}}
+      {{- if not (hugo.Store.Get $warnKey) -}}
+        {{- hugo.Store.Set $warnKey true -}}
+        {{- warnf "[callout] Icon resource %q not found (looked in page resources then assets/). Rendering without an icon. See %s" $iconStr .Position -}}
+      {{- end -}}
+    {{- end -}}
+  {{- else if and $iconStr (not (findRE `^[\x00-\x7F]+$` $iconStr)) -}}
+    {{/* Contains a non-ASCII rune and is not path-like -> treat the literal as
+         an emoji / symbol (handles multi-codepoint emoji such as ZWJ
+         sequences, which a length test would misclassify). */}}
+    {{- $iconMode = "emoji" -}}
+    {{- $iconEmoji = $iconStr -}}
+  {{- else -}}
+    {{/* A bare ASCII name -> render the named built-in glyph. */}}
+    {{- $iconMode = "name" -}}
+    {{- $iconName = $iconStr -}}
+  {{- end -}}
+{{- end -}}
+{{- $showIcon := and (ne $iconMode "none") (or (ne $iconName "") (eq $iconMode "emoji") (eq $iconMode "resource")) -}}
+
+{{/* Render the inner body as block-level markdown. RenderString takes the
+     markup string LAST; display=block keeps full paragraph structure (so the
+     body is never collapsed into a bare inline <p>). The full content pipeline
+     runs, so nested shortcodes, render hooks, and markdown all work. An empty
+     body is allowed and simply yields an empty body element. */}}
+{{- $inner := .Inner | strings.TrimSpace -}}
+{{- $bodyHTML := "" -}}
+{{- with $inner -}}
+  {{- $bodyHTML = $.Page.RenderString (dict "display" "block") . -}}
+{{- end -}}
+
+{{/* Assemble the shared rendering context and dispatch to the markup partial,
+     which both this shortcode and the render hook reuse for identical output. */}}
+{{- $ctx := dict
+  "canonical" $canonical
+  "extraClass" $class
+  "id" $id
+  "emitRole" $emitRole
+  "role" $role
+  "collapsible" $collapsible
+  "open" $open
+  "showHead" $showHead
+  "headTitle" $headTitle
+  "showIcon" $showIcon
+  "iconMode" $iconMode
+  "iconName" $iconName
+  "iconEmoji" $iconEmoji
+  "iconResource" $iconResource
+  "bodyHTML" $bodyHTML
+-}}
+{{- partial "callout/render.html" $ctx -}}

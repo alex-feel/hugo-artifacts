@@ -1,0 +1,74 @@
+{{/*
+  Blockquote render hook that upgrades GitHub-style alerts (the
+  > [!NOTE] / [!TIP] / [!IMPORTANT] / [!WARNING] / [!CAUTION] syntax, plus the
+  Obsidian-compatible foldable extension > [!WARNING]+ Title) into the SAME
+  callout BEM markup the `callout` shortcode emits. It reuses
+  callout/resolve-type.html and callout/render.html, so an alert and the
+  equivalent shortcode render identically.
+
+  Ordinary (non-alert) blockquotes pass through UNCHANGED as a plain
+  <blockquote>, so importing this module does not alter normal quotations.
+
+  IMPORTANT (consumer note, also documented in the README): importing this
+  module activates this hook SITE-WIDE for every Markdown blockquote. A
+  consumer that wants different behavior overrides it by placing its own
+  layouts/_markup/render-blockquote.html in the project root -- a project-level
+  template wins over a module-provided one in Hugo's lookup order.
+
+  Context (Hugo blockquote hook):
+  - .Type       "alert" | "regular".
+  - .AlertType  Lowercase alert type ("note","tip","important","warning",
+                "caution") when .Type is "alert".
+  - .AlertTitle Custom alert title (template.HTML), when supplied after the
+                foldable sign in the extended syntax.
+  - .AlertSign  "+", "-", or "" -- the foldable sign. "+" => collapsible+open,
+                "-" => collapsible+collapsed, "" => static (not foldable).
+  - .Text       Already-rendered blockquote body HTML (template.HTML). For
+                alerts the designator line is excluded. Used verbatim -- it is
+                NOT re-rendered through RenderString.
+*/}}
+
+{{- if eq .Type "alert" -}}
+  {{/* Map the GitHub alert type onto a canonical callout type. The five
+       GitHub designators already match first-class callout type names, so the
+       resolver maps them straight through (and would map any alias too). */}}
+  {{- $r := partial "callout/resolve-type.html" .AlertType -}}
+
+  {{/* Foldable sign: "+" => collapsible, start open; "-" => collapsible, start
+       collapsed; "" => static. */}}
+  {{- $collapsible := or (eq .AlertSign "+") (eq .AlertSign "-") -}}
+  {{- $open := eq .AlertSign "+" -}}
+
+  {{/* Title: honor a custom .AlertTitle verbatim; otherwise the resolver's
+       display-ready default label (already Title-cased or localized; do NOT
+       re-case it). .AlertTitle is template.HTML, so an empty value still tests
+       correctly via trimming its string form. */}}
+  {{- $hasCustomTitle := ne (trim (printf "%v" .AlertTitle) " \t\n\r") "" -}}
+  {{- $headTitle := "" -}}
+  {{- if $hasCustomTitle -}}
+    {{- $headTitle = .AlertTitle -}}
+  {{- else -}}
+    {{- $headTitle = $r.label -}}
+  {{- end -}}
+
+  {{- $ctx := dict
+    "canonical" $r.canonical
+    "extraClass" ""
+    "id" ""
+    "emitRole" true
+    "role" $r.role
+    "collapsible" $collapsible
+    "open" $open
+    "showHead" true
+    "headTitle" $headTitle
+    "showIcon" (ne $r.iconName "")
+    "iconMode" "default"
+    "iconName" $r.iconName
+    "iconEmoji" ""
+    "iconResource" ""
+    "bodyHTML" .Text
+  -}}
+  {{- partial "callout/render.html" $ctx -}}
+{{- else -}}
+<blockquote>{{ .Text }}</blockquote>
+{{- end -}}

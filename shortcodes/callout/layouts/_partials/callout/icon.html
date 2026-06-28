@@ -1,0 +1,61 @@
+{{/*
+  Renders an inline SVG icon by name for the callout module.
+
+  Context expectations:
+  - .name (string) - Icon identifier. One of the first-class callout type icon
+    names produced by resolve-type.html: note, info, tip, success, question,
+    important, warning, caution, danger, failure, bug, example, quote,
+    abstract, todo. An unrecognized name renders nothing (no fallback glyph),
+    which is the correct behavior for custom/unknown callout types.
+  - .class (string, optional) - Additional CSS class(es).
+
+  Contract (identical to the github-repo / hf-space sibling modules so the
+  three read as a family): every icon uses width="1em" height="1em" so it
+  scales with font size, aria-hidden="true" because the type is already
+  conveyed by the visible title and the data-callout-type attribute, and a
+  24x24 viewBox. Stroke-based glyphs use stroke="currentColor" with no fill;
+  fill-based glyphs use fill="currentColor". The consuming site colors and
+  sizes them through the BEM class hooks and CSS custom properties -- the
+  module ships NO color and depends on NO external icon font.
+
+  The geometry is original line-art in the Lucide / Tabler / Octicons visual
+  idiom (24x24 grid, 2px stroke, round caps/joins). No third-party SVG assets
+  are bundled.
+*/}}
+
+{{- $name := .name -}}
+{{- $class := .class | default "" -}}
+{{- $stroke := `width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"` -}}
+{{- $fill := `width="1em" height="1em" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"` -}}
+
+{{- if eq $name "note" -}}
+<svg class="{{ $class }}" {{ $stroke | safeHTMLAttr }}><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+{{- else if eq $name "info" -}}
+<svg class="{{ $class }}" {{ $stroke | safeHTMLAttr }}><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+{{- else if eq $name "tip" -}}
+<svg class="{{ $class }}" {{ $stroke | safeHTMLAttr }}><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V18h6v-1.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2Z"/></svg>
+{{- else if eq $name "success" -}}
+<svg class="{{ $class }}" {{ $stroke | safeHTMLAttr }}><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg>
+{{- else if eq $name "question" -}}
+<svg class="{{ $class }}" {{ $stroke | safeHTMLAttr }}><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7"/><path d="M12 17h.01"/></svg>
+{{- else if eq $name "important" -}}
+<svg class="{{ $class }}" {{ $stroke | safeHTMLAttr }}><circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+{{- else if eq $name "warning" -}}
+<svg class="{{ $class }}" {{ $stroke | safeHTMLAttr }}><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+{{- else if eq $name "caution" -}}
+<svg class="{{ $class }}" {{ $stroke | safeHTMLAttr }}><path d="M12 2 2 7v6c0 5 3.6 8.4 10 9 6.4-.6 10-4 10-9V7Z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+{{- else if eq $name "danger" -}}
+<svg class="{{ $class }}" {{ $stroke | safeHTMLAttr }}><path d="M7.9 2h8.2L22 7.9v8.2L16.1 22H7.9L2 16.1V7.9Z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+{{- else if eq $name "failure" -}}
+<svg class="{{ $class }}" {{ $stroke | safeHTMLAttr }}><circle cx="12" cy="12" r="9"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
+{{- else if eq $name "bug" -}}
+<svg class="{{ $class }}" {{ $stroke | safeHTMLAttr }}><path d="M8 9V6a4 4 0 0 1 8 0v3"/><rect x="6" y="9" width="12" height="9" rx="6"/><path d="M3 12h3"/><path d="M18 12h3"/><path d="M4 7l2.5 2"/><path d="M20 7l-2.5 2"/><path d="M4 18l2.5-1.5"/><path d="M20 18l-2.5-1.5"/><path d="M12 13v5"/></svg>
+{{- else if eq $name "example" -}}
+<svg class="{{ $class }}" {{ $stroke | safeHTMLAttr }}><path d="M9 3h6"/><path d="M10 3v6.6a2 2 0 0 1-.3 1.1l-4.8 7.5A2 2 0 0 0 6.6 21h10.8a2 2 0 0 0 1.7-2.8l-4.8-7.5a2 2 0 0 1-.3-1.1V3"/><path d="M7.5 15h9"/></svg>
+{{- else if eq $name "quote" -}}
+<svg class="{{ $class }}" {{ $fill | safeHTMLAttr }}><path d="M7.5 6A4.5 4.5 0 0 0 3 10.5V18h7.5v-7.5H6A1.5 1.5 0 0 1 7.5 9Zm9 0A4.5 4.5 0 0 0 12 10.5V18h7.5v-7.5H15A1.5 1.5 0 0 1 16.5 9Z"/></svg>
+{{- else if eq $name "abstract" -}}
+<svg class="{{ $class }}" {{ $stroke | safeHTMLAttr }}><path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1Z"/><path d="M16 5h2a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h2"/><path d="M9 12h6"/><path d="M9 16h6"/></svg>
+{{- else if eq $name "todo" -}}
+<svg class="{{ $class }}" {{ $stroke | safeHTMLAttr }}><rect x="3" y="3" width="18" height="18" rx="3"/><path d="m8 12.5 2.5 2.5 5-5.5"/></svg>
+{{- end -}}

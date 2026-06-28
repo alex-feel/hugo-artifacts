@@ -1,0 +1,26 @@
+{{/*
+  Renders the inner content of a callout head: the optional icon followed by
+  the title span. Used by render.html inside both the static <div> head and the
+  collapsible <summary> head, so the two forms share one icon/title surface.
+
+  Context expectations (a subset of render.html's context):
+  - .showIcon     (bool)   Whether to render an icon.
+  - .iconMode     (string) "default" | "name" | "emoji" | "resource" | "none".
+  - .iconName     (string) Built-in glyph name (default/name modes).
+  - .iconEmoji    (string) Emoji/symbol literal (emoji mode).
+  - .iconResource (string) RelPermalink (resource mode).
+  - .headTitle    (string) Title text, already verbatim-or-defaulted.
+
+  Output: an inline run (icon? + title span). No wrapper element -- the caller
+  supplies the <div class="callout__head"> or <summary class="callout__head">.
+*/}}
+{{- if .showIcon -}}
+  {{- if eq .iconMode "emoji" -}}
+<span class="callout__icon callout__icon--emoji" aria-hidden="true">{{ .iconEmoji }}</span>
+  {{- else if eq .iconMode "resource" -}}
+<img class="callout__icon callout__icon--image" src="{{ .iconResource }}" alt="" aria-hidden="true">
+  {{- else -}}
+    {{- partial "callout/icon.html" (dict "name" .iconName "class" "callout__icon") -}}
+  {{- end -}}
+{{- end -}}
+<span class="callout__title">{{ .headTitle }}</span>

@@ -1,0 +1,127 @@
+{{/*
+  Resolves a raw callout type string into a canonical type plus its semantic
+  defaults. This is the single source of truth shared by the `callout`
+  shortcode (layouts/_shortcodes/callout.html) and the blockquote render hook
+  (layouts/_markup/render-blockquote.html), so the GitHub-alert syntax
+  (> [!NOTE]) and the explicit shortcode render identically.
+
+  The resolver does three things, in order:
+  1. Sanitize the raw type to a safe slug (lowercased, urlized) usable in a
+     class name and a data attribute. Empty input becomes "note".
+  2. Map true synonyms (aliases) onto their canonical type.
+  3. Look up the canonical type's defaults. KNOWN (first-class) types carry a
+     passive ARIA role, a default icon name, and an i18n-able label key.
+     UNKNOWN types PASS THROUGH literally: the sanitized slug becomes both the
+     canonical type and the label, the role is passive ("note"), and there is
+     NO default icon (the designer supplies one via icon= if wanted). Unknown
+     types are NEVER coerced back to "note" -- designers define custom types.
+
+  Context expectations:
+  - . (string) - The raw type token, e.g. "tip", "hint", "my-custom-type", "".
+
+  Returns: a dict with these keys, always present:
+  - "canonical" (string) - The resolved, sanitized canonical type slug.
+  - "role"      (string) - Default passive ARIA role: "note" for first-class
+                           types, "note" for unknown (a passive, non-live role
+                           is safe on static prose). The shortcode/hook layer
+                           decides whether to emit it (see below).
+  - "iconName"  (string) - Default icon name understood by icon.html, or "" for
+                           unknown types (no default glyph).
+  - "label"     (string) - Display-ready default title for the head. An i18n
+                           value (keyed "callout.<type>" then "<type>") is
+                           returned VERBATIM so a translator's exact casing is
+                           honored; otherwise the Title-cased slug is returned.
+                           Consumers emit it directly and must NOT re-apply the
+                           `title` filter, or they would re-case localized text.
+  - "known"     (bool)   - Whether the canonical type is a first-class type.
+
+  Note on ARIA: the default role here is intentionally PASSIVE. Neither this
+  resolver nor the default markup emits role="alert" or role="status" -- those
+  are live regions that would make assistive tech announce static prose
+  spuriously. A consumer opts into a live region per call via the shortcode
+  role= parameter. See the shortcode and README for details.
+*/}}
+
+{{- $raw := . -}}
+{{- $slug := "" -}}
+{{- with $raw -}}
+  {{- $slug = urlize (lower (trim (printf "%v" .) " \t\n\r")) -}}
+{{- end -}}
+{{- if not $slug -}}
+  {{- $slug = "note" -}}
+{{- end -}}
+
+{{/* Alias table: every key is a true synonym that resolves to a canonical,
+     first-class type. Editing this table is the supported way to add synonyms. */}}
+{{- $aliases := dict
+  "hint" "tip"
+  "check" "success"
+  "done" "success"
+  "help" "question"
+  "faq" "question"
+  "summary" "abstract"
+  "tldr" "abstract"
+  "error" "danger"
+  "fail" "failure"
+  "missing" "failure"
+  "cite" "quote"
+  "attention" "warning"
+  "seealso" "note"
+-}}
+{{- $canonical := or (index $aliases $slug) $slug -}}
+
+{{/* First-class types: canonical -> default icon name. The presence of a key
+     here is also what marks a type as "known". The labels are derived from the
+     canonical name (i18n-able) rather than stored here, to keep one source. */}}
+{{- $icons := dict
+  "note" "note"
+  "info" "info"
+  "tip" "tip"
+  "success" "success"
+  "question" "question"
+  "important" "important"
+  "warning" "warning"
+  "caution" "caution"
+  "danger" "danger"
+  "failure" "failure"
+  "bug" "bug"
+  "example" "example"
+  "quote" "quote"
+  "abstract" "abstract"
+  "todo" "todo"
+-}}
+
+{{- $known := isset $icons $canonical -}}
+{{- $iconName := index $icons $canonical -}}
+
+{{/* Default passive role. role="note" (an ancillary aside) fits every type
+     except `quote`, which is a quotation: emit no role there so its block /
+     quotation semantics speak for themselves rather than being relabeled. A
+     consumer can still opt into any role via the shortcode role= parameter. */}}
+{{- $role := "note" -}}
+{{- if eq $canonical "quote" -}}
+  {{- $role = "" -}}
+{{- end -}}
+
+{{/* Label: prefer an i18n string keyed "callout.<type>" then "<type>" so a
+     consumer can localize; fall back to the Title-cased slug. The lookups are
+     wrapped so a missing key never errors. */}}
+{{- $label := "" -}}
+{{- with (i18n (printf "callout.%s" $canonical)) -}}
+  {{- $label = . -}}
+{{- else -}}
+  {{- with (i18n $canonical) -}}
+    {{- $label = . -}}
+  {{- end -}}
+{{- end -}}
+{{- if not $label -}}
+  {{- $label = title (replace $canonical "-" " ") -}}
+{{- end -}}
+
+{{- return (dict
+  "canonical" $canonical
+  "role" $role
+  "iconName" (or $iconName "")
+  "label" $label
+  "known" $known
+) -}}
