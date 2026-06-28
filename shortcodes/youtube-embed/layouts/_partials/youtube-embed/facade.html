@@ -1,0 +1,164 @@
+{{/*
+  Emits the privacy-first YouTube facade: a same-origin poster plus a real
+  <button>, inside a 16:9 box, carrying everything the progressive-enhancement
+  script needs to inject the player iframe on click. NO iframe src exists at
+  render time, and nothing here preconnects or warm-connects to any Google
+  domain, so the page makes ZERO third-party contact before the visitor clicks.
+
+  The on-click embed URL is fully built here (data-embed-url) so the client
+  script stays trivial -- it only reads the attribute and constructs the
+  <iframe>. autoplay=1 is emitted WITHOUT mute: the click is the user gesture
+  that satisfies the autoplay policy, so muting would be a needless degradation.
+
+  This partial also injects the client script ONCE PER PAGE, gated by a
+  .Page.Store sentinel, so a page with many embeds ships a single processed,
+  fingerprinted <script> rather than one per instance.
+
+  Inputs (context dict):
+  - .id         (string)        11-char video id ("" for a playlist-only embed).
+  - .list       (string)        Playlist id, or "".
+  - .title      (string)        Accessible label + iframe title + optional visible head.
+  - .start      (int)           Start offset in seconds, normalized by the entry
+                                shortcode (0 = unset; >0 emits start=N).
+  - .end        (int)           End offset in seconds, normalized (0 = unset; >0 emits end=N).
+  - .params     (string)        Arbitrary extra player query string passthrough.
+  - .loading    (string)        Poster <img> loading attribute (default "lazy").
+  - .sizes      (string)        Poster responsive `sizes` attribute (default "100vw").
+  - .showTitle  (bool)          Render a visible __title element.
+  - .anchor     (string)        Optional root element id.
+  - .poster     (dict)          Resolved poster data from poster.html.
+  - .extraClass (string)        Extra root class(es).
+  - .page       (Page)          Calling page (for the once-per-page script).
+  - .position   (text.Position) Call position.
+
+  Output: a <div class="youtube-embed ..."> facade. Unstyled BEM:
+    block      youtube-embed
+    modifiers  youtube-embed--has-poster | youtube-embed--no-poster
+               youtube-embed--playlist (when a playlist embed)
+               youtube-embed--activated (added client-side after Play)
+    elements   __body __poster __picture __image __button __icon __title __link __iframe
+*/}}
+
+{{- $id := .id -}}
+{{- $list := .list -}}
+{{- $title := .title -}}
+{{- $start := .start -}}
+{{- $end := .end -}}
+{{- $params := .params -}}
+{{- $loading := .loading | default "lazy" -}}
+{{- $sizes := .sizes | default "100vw" -}}
+{{- $showTitle := .showTitle -}}
+{{- $anchor := .anchor -}}
+{{- $poster := .poster -}}
+{{- $extraClass := .extraClass | default "" -}}
+{{- $page := .page -}}
+
+{{- $isPlaylist := and (not $id) (ne $list "") -}}
+
+{{/* ---- Build the embed URL injected on click. youtube-nocookie defers
+        cookies until load; the facade is what guarantees no contact before the
+        click. autoplay=1 (no mute) because the click is the gesture; rel=0
+        restricts related videos to the same channel (post-2018 semantics). ---- */}}
+{{- $base := "" -}}
+{{- $query := slice "autoplay=1" "rel=0" -}}
+{{- if $isPlaylist -}}
+  {{- $base = "https://www.youtube-nocookie.com/embed/videoseries" -}}
+  {{- $query = $query | append (printf "list=%s" $list) -}}
+{{- else -}}
+  {{- $base = printf "https://www.youtube-nocookie.com/embed/%s" $id -}}
+  {{- if and $list (ne $list "") -}}
+    {{- $query = $query | append (printf "list=%s" $list) -}}
+  {{- end -}}
+  {{- if gt $start 0 -}}
+    {{- $query = $query | append (printf "start=%d" $start) -}}
+  {{- end -}}
+  {{- if gt $end 0 -}}
+    {{- $query = $query | append (printf "end=%d" $end) -}}
+  {{- end -}}
+{{- end -}}
+{{/* Arbitrary passthrough player params appended verbatim (already a query
+     fragment like "cc_load_policy=1&hl=fr"). */}}
+{{- with $params -}}
+  {{- $query = $query | append (trim . "&?") -}}
+{{- end -}}
+{{- $embedUrl := printf "%s?%s" $base (delimit $query "&") -}}
+
+{{/* JS-off / pre-enhancement fallback link preserves the zero-contact guarantee:
+     it navigates AWAY to YouTube rather than embedding it. Playlist embeds link
+     to the playlist; single videos to the watch page (with t= when a start is set). */}}
+{{- $watchUrl := "" -}}
+{{- if $isPlaylist -}}
+  {{- $watchUrl = printf "https://www.youtube.com/playlist?list=%s" $list -}}
+{{- else -}}
+  {{- $watchUrl = printf "https://www.youtube.com/watch?v=%s" $id -}}
+  {{- if and $list (ne $list "") -}}
+    {{- $watchUrl = printf "%s&list=%s" $watchUrl $list -}}
+  {{- end -}}
+  {{- if gt $start 0 -}}
+    {{- $watchUrl = printf "%s&t=%ds" $watchUrl $start -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Accessible label. Falls back to a generic phrase when no title is given. */}}
+{{- $label := cond (ne $title "") (printf "Play video: %s" $title) "Play video" -}}
+
+{{- $rootClass := "youtube-embed" -}}
+{{- $rootClass = printf "%s %s" $rootClass (cond $poster.posterOk "youtube-embed--has-poster" "youtube-embed--no-poster") -}}
+{{- if $isPlaylist -}}
+  {{- $rootClass = printf "%s youtube-embed--playlist" $rootClass -}}
+{{- end -}}
+{{- with $extraClass -}}
+  {{- $rootClass = printf "%s %s" $rootClass . -}}
+{{- end -}}
+
+<div class="{{ $rootClass }}"
+  {{- with $anchor }} id="{{ . }}"{{ end }}
+  {{- with $id }} data-video-id="{{ . }}"{{ end }}
+  {{- with $list }} data-playlist-id="{{ . }}"{{ end }}
+  data-embed-url="{{ $embedUrl }}"
+  data-poster-tier="{{ $poster.tier }}">
+  <div class="youtube-embed__body">
+    {{- if $poster.posterOk }}
+    <picture class="youtube-embed__picture">
+      <source class="youtube-embed__source" type="image/webp"
+        srcset="{{ $poster.webpSrcset }}"
+        sizes="{{ $sizes }}">
+      <img class="youtube-embed__image"
+        src="{{ $poster.jpeg }}"
+        srcset="{{ $poster.jpegSrcset }}"
+        sizes="{{ $sizes }}"
+        width="{{ $poster.width }}"
+        height="{{ $poster.height }}"
+        loading="{{ $loading }}"
+        decoding="async"
+        alt="">
+    </picture>
+    {{- end }}
+    <button type="button" class="youtube-embed__button" aria-label="{{ $label }}">
+      {{- partial "youtube-embed/icon.html" (dict "name" "play" "class" "youtube-embed__icon") -}}
+    </button>
+    {{- if and $showTitle (ne $title "") }}
+    <span class="youtube-embed__title">{{ $title }}</span>
+    {{- end }}
+    <a class="youtube-embed__link" href="{{ $watchUrl }}" rel="noopener noreferrer nofollow">
+      {{- with $title }}{{ . }}{{ else }}Watch on YouTube{{ end -}}
+    </a>
+  </div>
+</div>
+
+{{/* ---- Inject the progressive-enhancement script ONCE PER PAGE ----
+
+     Gated by a .Page.Store sentinel so a page with N embeds emits exactly one
+     processed, minified, fingerprinted <script> with Subresource Integrity. The
+     script is light-DOM and dependency-free; it wires every .youtube-embed on
+     the page. `defer` lets parsing finish before it runs. */}}
+{{- $scriptKey := "youtube-embed:script-emitted" -}}
+{{- if not ($page.Store.Get $scriptKey) -}}
+  {{- $page.Store.Set $scriptKey true -}}
+  {{- with resources.Get "js/youtube-embed.js" -}}
+    {{- $built := . | js.Build (dict "minify" true) -}}
+    {{- with $built | fingerprint -}}
+<script defer src="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" crossorigin="anonymous"></script>
+    {{- end -}}
+  {{- end -}}
+{{- end -}}

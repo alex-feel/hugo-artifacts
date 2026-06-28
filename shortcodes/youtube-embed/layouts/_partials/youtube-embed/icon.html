@@ -1,0 +1,20 @@
+{{/*
+  Renders an inline SVG icon by name for the youtube-embed shortcode.
+
+  Context expectations:
+  - .name  (string)           Icon identifier. Currently: "play".
+  - .class (string, optional) Additional CSS class(es).
+
+  All icons use fill="currentColor", aria-hidden="true", viewBox="0 0 24 24",
+  and width/height of 1em for text-relative sizing. They carry no baked color,
+  size, or stroke beyond the current text color, keeping the module unstyled.
+  The icon is decorative: the play control is a real <button> whose aria-label
+  carries the accessible name, so the icon is hidden from assistive technology.
+*/}}
+
+{{- $name := .name -}}
+{{- $class := .class | default "" -}}
+
+{{- if eq $name "play" -}}
+<svg class="{{ $class }}" width="1em" height="1em" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M8 5.14v13.72a.5.5 0 0 0 .77.42l10.29-6.86a.5.5 0 0 0 0-.84L8.77 4.72A.5.5 0 0 0 8 5.14Z"/></svg>
+{{- end -}}

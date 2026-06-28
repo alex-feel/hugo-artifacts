@@ -1,0 +1,122 @@
+{{/*
+  Parses a YouTube video id (and optional playlist id) from a raw `id` or a
+  `url` in any of the common YouTube URL shapes, then validates the captured id
+  against YouTube's exact 11-character alphabet.
+
+  YouTube video ids are exactly 11 characters from the URL-safe Base64 alphabet
+  [A-Za-z0-9_-]. The watch/share/embed/shorts URL families all carry the same
+  11-character id; only its position in the URL differs. This partial collapses
+  all of those positions to a single id, plus a playlist id when one is present.
+
+  Inputs (context dict):
+  - .id  (string) Raw id candidate (preferred when non-empty). May itself be an
+                  11-char id, or -- defensively -- a pasted URL, which is then
+                  routed through the URL branch.
+  - .url (string) Full YouTube URL in any recognized shape.
+
+  Recognized URL shapes (host-insensitive; http/https; optional www/m subdomain;
+  youtube.com and youtube-nocookie.com):
+  - youtu.be/{ID}
+  - youtube.com/watch?v={ID}            (also &v={ID} when not the first param)
+  - youtube.com/embed/{ID}
+  - youtube-nocookie.com/embed/{ID}
+  - youtube.com/v/{ID}
+  - youtube.com/shorts/{ID}
+  - youtube.com/watch?list={LIST}        (playlist; no video id)
+  - any of the above with &list={LIST}   (playlist captured alongside the id)
+  - youtube.com/playlist?list={LIST}     (playlist; no video id)
+  - youtube.com/embed/videoseries?list={LIST}
+
+  Returns: a dict with
+  - .id    (string) The 11-char video id, or "" when only a playlist was found.
+  - .list  (string) The playlist id, or "" when none was supplied.
+  - .start (int)    Start offset in seconds parsed from a `t=`/`start=` in `url`
+                    (0 when none). The caller uses it only when the explicit
+                    `start` parameter is unset.
+  - .valid (bool)   true when EITHER a syntactically valid 11-char id OR a
+                    non-empty playlist id was resolved. The entry shortcode
+                    errorf's on .valid=false.
+
+  Side effects: none. Validation/diagnostics belong to the caller, which holds
+  .Name and .Position for a useful error message.
+*/}}
+
+{{- $rawId := .id | default "" -}}
+{{- $url := .url | default "" -}}
+
+{{- $id := "" -}}
+{{- $list := "" -}}
+{{- $start := 0 -}}
+
+{{/* A raw id that is itself a URL (defensive: callers sometimes paste a URL
+     into id=) is demoted to the url branch so the same extraction logic runs. */}}
+{{- if and $rawId (hasPrefix (lower $rawId) "http") -}}
+  {{- $url = $rawId -}}
+  {{- $rawId = "" -}}
+{{- end -}}
+
+{{- if $rawId -}}
+  {{/* Explicit raw id wins. It is validated below alongside the URL-derived
+       case, so an out-of-alphabet raw id is reported rather than silently used. */}}
+  {{- $id = $rawId -}}
+{{- else if $url -}}
+  {{/* Normalize the URL: drop the scheme and any leading www./m. so a single
+       set of host-relative patterns matches every subdomain variant. */}}
+  {{- $u := $url -}}
+  {{- $u = replaceRE `^https?://` "" $u -}}
+  {{- $u = replaceRE `^(www\.|m\.)` "" $u -}}
+
+  {{/* Playlist id (when present) is captured first; a URL may carry BOTH a
+       video id and a list (e.g. watch?v={ID}&list={LIST}). The list lives in a
+       `list=` query parameter for every recognized playlist shape. */}}
+  {{- with findRESubmatch `[?&]list=([A-Za-z0-9_-]+)` $u 1 -}}
+    {{- $list = index (index . 0) 1 -}}
+  {{- end -}}
+
+  {{/* Start offset from a `t=` or `start=` query parameter. Supports plain
+       seconds ("90", "90s") and the colon-less h/m/s forms YouTube accepts
+       ("1m30s", "1h2m3s"). Surfaced as `start`; the caller uses it only when no
+       explicit `start` parameter was set (the explicit parameter wins). */}}
+  {{- with findRESubmatch `[?&](?:t|start)=([0-9hms]+)` $u 1 -}}
+    {{- $tval := index (index . 0) 1 -}}
+    {{- if findRE `^[0-9]+s?$` $tval 1 -}}
+      {{- $start = int (replaceRE `s$` "" $tval) -}}
+    {{- else -}}
+      {{- $h := 0 -}}
+      {{- $m := 0 -}}
+      {{- $s := 0 -}}
+      {{- with findRESubmatch `([0-9]+)h` $tval 1 -}}{{- $h = int (index (index . 0) 1) -}}{{- end -}}
+      {{- with findRESubmatch `([0-9]+)m` $tval 1 -}}{{- $m = int (index (index . 0) 1) -}}{{- end -}}
+      {{- with findRESubmatch `([0-9]+)s` $tval 1 -}}{{- $s = int (index (index . 0) 1) -}}{{- end -}}
+      {{- $start = add (add (mul $h 3600) (mul $m 60)) $s -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* Video id extraction, tried in order of specificity. Each branch pins the
+       11-character alphabet so trailing query strings or path segments cannot
+       leak into the captured id. The first matching shape wins. */}}
+  {{- range $pattern := slice
+    `youtu\.be/([A-Za-z0-9_-]{11})`
+    `[?&]v=([A-Za-z0-9_-]{11})`
+    `/embed/([A-Za-z0-9_-]{11})`
+    `/shorts/([A-Za-z0-9_-]{11})`
+    `/v/([A-Za-z0-9_-]{11})`
+  -}}
+    {{- if not $id -}}
+      {{- with findRESubmatch $pattern $u 1 -}}
+        {{- $id = index (index . 0) 1 -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Final validity: a syntactically valid 11-char id, OR a playlist-only embed.
+     findRE returns an empty (falsy) slice when the anchored pattern fails, so a
+     raw id outside the alphabet is rejected here rather than emitted. */}}
+{{- $idValid := and (ne $id "") (gt (len (findRE `^[A-Za-z0-9_-]{11}$` $id 1)) 0) -}}
+{{- if not $idValid -}}
+  {{- $id = "" -}}
+{{- end -}}
+{{- $valid := or $idValid (ne $list "") -}}
+
+{{- return (dict "id" $id "list" $list "start" $start "valid" $valid) -}}
