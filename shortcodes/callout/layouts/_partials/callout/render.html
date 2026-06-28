@@ -1,0 +1,73 @@
+{{/*
+  Emits the callout BEM markup. This is the single rendering surface shared by
+  the `callout` shortcode (layouts/_shortcodes/callout.html) and the blockquote
+  render hook (layouts/_markup/render-blockquote.html), so the explicit
+  shortcode and the GitHub-alert syntax (> [!NOTE]) produce IDENTICAL output.
+
+  Two structural forms are produced from the same context:
+
+    Static (div):
+      <div class="callout callout--TYPE [EXTRA]" data-callout-type="TYPE"
+           [id="..."] [role="..."] style="--callout-tone: var(--callout-tone-TYPE);">
+        <div class="callout__head">[ICON]<span class="callout__title">TITLE</span></div>
+        <div class="callout__body">BODY</div>
+      </div>
+
+    Collapsible (details/summary):
+      <details class="callout callout--TYPE [EXTRA]" data-callout-type="TYPE"
+               [id="..."] [open]
+               style="--callout-tone: var(--callout-tone-TYPE);">
+        <summary class="callout__head">[ICON]<span class="callout__title">TITLE</span></summary>
+        <div class="callout__body">BODY</div>
+      </details>
+
+  Styling hooks shipped (NO color, NO hex, NO CSS): the BEM block/element/
+  modifier classes, the data-callout-type attribute, and a --callout-tone
+  custom property pointing at a per-type tone NAME (--callout-tone-TYPE). The
+  consuming site defines --callout-tone-note, --callout-tone-danger, etc.
+
+  ARIA note: a collapsible callout never carries an explicit role attribute --
+  <details>/<summary> already expose native disclosure semantics, and adding
+  role="note"/"alert" there is redundant or conflicting. The role is emitted
+  only on the static <div> form, and only when emitRole is true.
+
+  Context expectations (assembled by the caller):
+  - .canonical    (string) Sanitized canonical/custom type slug.
+  - .extraClass   (string) Extra root class(es), may be empty.
+  - .id           (string) Root id, may be empty.
+  - .emitRole     (bool)   Whether to emit a role attribute (div form only).
+  - .role         (string) Role value when emitted (e.g. "note", "alert").
+  - .collapsible  (bool)   Render the <details>/<summary> form.
+  - .open         (bool)   Start expanded (collapsible form only).
+  - .showHead     (bool)   Whether to render the head row at all.
+  - .headTitle    (string) Head title text (already verbatim or defaulted).
+  - .showIcon     (bool)   Whether to render an icon in the head.
+  - .iconMode     (string) "default" | "name" | "emoji" | "resource" | "none".
+  - .iconName     (string) Built-in glyph name for default/name modes.
+  - .iconEmoji    (string) Emoji/symbol literal for emoji mode.
+  - .iconResource (string) RelPermalink for resource mode.
+  - .bodyHTML     (template.HTML) Pre-rendered block-level body HTML.
+*/}}
+
+{{- $type := .canonical -}}
+{{- $rootClass := printf "callout callout--%s" $type -}}
+{{- with .extraClass -}}{{ $rootClass = printf "%s %s" $rootClass . }}{{- end -}}
+{{- $tone := printf "--callout-tone: var(--callout-tone-%s);" $type -}}
+
+{{- if .collapsible -}}
+<details class="{{ $rootClass }}" data-callout-type="{{ $type }}"{{ with .id }} id="{{ . }}"{{ end }}{{ if .open }} open{{ end }} style="{{ $tone | safeCSS }}">
+  {{/* A <details> is invalid/inaccessible without a <summary>, so the collapsible
+       form ALWAYS renders one (head.html supplies the disclosure trigger's
+       accessible name from the title/label). The caller guarantees a non-empty
+       headTitle in this form. */}}
+  <summary class="callout__head">{{ partial "callout/head.html" . }}</summary>
+  <div class="callout__body">{{ .bodyHTML }}</div>
+</details>
+{{- else -}}
+<div class="{{ $rootClass }}" data-callout-type="{{ $type }}"{{ with .id }} id="{{ . }}"{{ end }}{{ if and .emitRole .role }} role="{{ .role }}"{{ end }} style="{{ $tone | safeCSS }}">
+  {{- if .showHead }}
+  <div class="callout__head">{{ partial "callout/head.html" . }}</div>
+  {{- end }}
+  <div class="callout__body">{{ .bodyHTML }}</div>
+</div>
+{{- end -}}
