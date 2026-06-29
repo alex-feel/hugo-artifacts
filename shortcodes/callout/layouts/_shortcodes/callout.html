@@ -54,25 +54,36 @@
 {{- if not $rawType -}}{{ $rawType = .Get "type" }}{{- end -}}
 {{- $type := or $rawType "note" -}}
 
-{{/* Title resolution distinguishes three states: a user-supplied value (any
-     index 1 OR title=, including an explicit empty string => suppress head),
-     versus omitted (=> default label). `.Get` returns nil when absent, so the
-     "is the param present at all?" test must check both positional 1 and named
-     title before falling back to the default. */}}
+{{/* Title resolution distinguishes three states: a user-supplied value
+     (positional index 1 OR title=, including an explicit empty string =>
+     suppress head) versus omitted (=> default label). A missing NAMED argument
+     does not reliably come back as nil from `.Get` when other named arguments
+     are present, so presence is detected with the dedicated argument API:
+     `.IsNamedParams` plus `isset .Params "title"` for the named form (Hugo
+     lowercases named keys), and the positional argument count for the
+     positional form. */}}
 {{- $titlePresent := false -}}
 {{- $title := "" -}}
-{{- if ne (.Get 1) nil -}}
+{{- if .IsNamedParams -}}
+  {{- if isset .Params "title" -}}
+    {{- $titlePresent = true -}}
+    {{- $title = .Get "title" -}}
+  {{- end -}}
+{{- else if ge (len .Params) 2 -}}
   {{- $titlePresent = true -}}
   {{- $title = .Get 1 -}}
-{{- else if ne (.Get "title") nil -}}
-  {{- $titlePresent = true -}}
-  {{- $title = .Get "title" -}}
 {{- end -}}
 
 {{- $collapsible := in (slice true "true" "1" "yes" "on") (.Get "collapsible" | default false) -}}
 {{- $open := in (slice true "true" "1" "yes" "on") (.Get "open" | default false) -}}
 {{- $roleParam := lower (.Get "role" | default "") -}}
-{{- $iconParam := .Get "icon" -}}
+{{/* Icon is a named-only parameter. Detect its presence with isset on the named
+     params map (a missing named arg is not reliably nil from `.Get`), so an
+     omitted icon falls back to the type default while icon="" / icon=false are
+     still honored. */}}
+{{- $iconPresent := and .IsNamedParams (isset .Params "icon") -}}
+{{- $iconParam := "" -}}
+{{- if $iconPresent -}}{{- $iconParam = .Get "icon" -}}{{- end -}}
 {{- $id := .Get "id" | default "" -}}
 {{- $class := .Get "class" | default "" -}}
 
@@ -150,7 +161,7 @@
 {{- $iconName := $r.iconName -}}
 {{- $iconEmoji := "" -}}
 {{- $iconResource := "" -}}
-{{- if ne $iconParam nil -}}
+{{- if $iconPresent -}}
   {{- $iconStr := trim (printf "%v" $iconParam) " \t\n\r" -}}
   {{- if or (in (slice "false" "none" "no" "off") (lower $iconStr)) (eq $iconParam false) -}}
     {{- $iconMode = "none" -}}
