@@ -64,6 +64,10 @@ Inside `layouts/`, use the Hugo v0.146+ underscore-prefixed subdirectories: `lay
 
 Hugo reads environment variables only when they match `^HUGO_` or `^CI$` (default security policy). Any module that needs an API token MUST document a `HUGO_`-prefixed name (for example, `HUGO_GITHUB_TOKEN`). A bare token name such as `GITHUB_TOKEN` silently returns the empty string and degrades at runtime with no build error.
 
+### Style-Agnostic Output (Shortcode and Component Modules)
+
+These artifacts are built for reuse across any number of unrelated sites, so shortcode and component modules ship **data and semantic markup, never opinionated styles**. Emit semantic [BEM](https://getbem.com/) markup (block = module name, modifiers `<name>--<modifier>`, elements `<name>__<part>`); expose objective values as `data-*` attributes; and, where a value must reach CSS, emit a CSS custom-property _name_ the site defines (for example `style="--callout-tone: var(--callout-tone-danger)"`), never a literal color. Ship **zero CSS** -- no `assets/*.scss`, no `.css`, no inline `<style>`, no hardcoded colors, and no dark-mode rules. Icons are the one shipped visual: render them as inline SVGs using `currentColor` and `1em` sizing so they inherit the consumer's text color and font size. The consuming site owns all presentation. The reference modules under [`shortcodes/`](shortcodes/) follow this contract -- mirror them. For the full rationale and the entry-template idiom, see the shortcode module conventions in [`CLAUDE.md`](CLAUDE.md#shortcode-module-conventions).
+
 ## Markdown Style: One Paragraph = One Line
 
 **PROTOCOL VIOLATION if breached.** Markdown files in this repository (`*.md`, `*.markdown`) MUST NOT use hard line wraps INSIDE a paragraph. One paragraph = one physical line. Soft-wrap is the consumer renderer's job. This rule binds every contributor -- human or agent -- when authoring or editing any Markdown file in this repo. Re-introducing artificial wraps in a previously-correct paragraph is also a PROTOCOL VIOLATION.
