@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: 'If you use this software, please cite it using the metadata from this file.'
+type: software
+title: 'Hugo Artifacts'
+abstract: 'A multi-module monorepo of reusable, style-agnostic Hugo modules (shortcodes, asset libraries, and utility modules) that ship semantic markup and zero CSS so they drop into any site and are styled to fit.'
+authors:
+  - family-names: Filippov
+    given-names: Aleksandr
+    email: alexfeel@protonmail.com
+    orcid: 'https://orcid.org/0009-0001-1120-6114'
+license: MIT
+url: 'https://github.com/alex-feel/hugo-artifacts'
+repository-code: 'https://github.com/alex-feel/hugo-artifacts'
+keywords:
+  - hugo
+  - gohugo
+  - hugo-modules
+  - hugo-shortcodes
+  - static-site-generator
+  - go-modules
+  - monorepo
+  - bem
+  - style-agnostic
+  - pwa
+  - service-worker
+  - workbox

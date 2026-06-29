@@ -1,4 +1,10 @@
-# hugo-artifacts
+# Hugo Artifacts
+
+<p align="center">
+  <img src=".github/images/banner.png" alt="Hugo Artifacts - reusable, style-agnostic Hugo modules (shortcodes, asset and utility modules) that ship semantic BEM markup and zero CSS and drop into any number of unrelated sites" width="100%">
+</p>
+
+[![CI](https://github.com/alex-feel/hugo-artifacts/actions/workflows/ci.yml/badge.svg)](https://github.com/alex-feel/hugo-artifacts/actions/workflows/ci.yml) [![Hugo](https://img.shields.io/badge/Hugo-0.160.0%2B_extended-ff4088?logo=hugo&logoColor=white)](https://gohugo.io/) [![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/) [![GitHub License](https://img.shields.io/github/license/alex-feel/hugo-artifacts)](https://github.com/alex-feel/hugo-artifacts/blob/main/LICENSE) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/alex-feel/hugo-artifacts)
 
 Public multi-module Hugo monorepo for reusable artifacts -- themes, shortcode libraries, asset libraries, utility modules, and other components shared across any number of unrelated Hugo sites.
 
@@ -65,3 +71,15 @@ The [`examples/`](examples/) directory contains standalone reference implementat
 ## Contributing
 
 Contributions are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for development setup, coding conventions, the Markdown one-line-per-paragraph rule, tagging and release conventions, and pull request guidelines.
+
+## Getting Help
+
+Have a question, found a bug, or want to request a feature? Open an issue using one of the [issue templates](https://github.com/alex-feel/hugo-artifacts/issues/new/choose) -- they prompt you for the details needed to help quickly.
+
+## Security
+
+Report security vulnerabilities privately via [GitHub Security Advisories](https://github.com/alex-feel/hugo-artifacts/security/advisories/new) rather than opening a public issue. See [`SECURITY.md`](SECURITY.md) for the full policy.
+
+## License
+
+Released under the [MIT License](LICENSE).

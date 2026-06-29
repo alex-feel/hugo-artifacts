@@ -31,6 +31,9 @@ body:
         - modules/workbox
         - modules/idb
         - shortcodes/github-repo
+        - shortcodes/hf-space
+        - shortcodes/callout
+        - shortcodes/youtube-embed
         - New module (proposing)
         - Repository-wide (build, conventions, docs)
         - Other
@@ -49,7 +52,7 @@ body:
         - Asset pipeline (js.Build, Sass, image processing)
         - TypeScript service worker (modules/pwa)
         - Push notification flow (modules/pwa)
-        - GitHub API integration (shortcodes/github-repo)
+        - Remote API integration (github-repo, hf-space)
         - Documentation
         - Build / CI / tooling
         - Other

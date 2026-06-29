@@ -59,6 +59,9 @@ body:
         - modules/workbox
         - modules/idb
         - shortcodes/github-repo
+        - shortcodes/hf-space
+        - shortcodes/callout
+        - shortcodes/youtube-embed
         - Multiple modules
         - Repository-wide (build, conventions, docs)
         - Other

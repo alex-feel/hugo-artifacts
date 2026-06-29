@@ -33,6 +33,9 @@ body:
         - Push notifications / VAPID / reference backends
         - Service worker / Workbox / idb
         - GitHub-repo shortcode
+        - HF Space shortcode
+        - Callout shortcode
+        - YouTube-embed shortcode
         - Multi-module monorepo / tagging / versioning
         - Hugo template lookup / overrides
         - Other
