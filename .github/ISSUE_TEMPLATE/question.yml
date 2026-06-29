@@ -21,6 +21,7 @@ body:
     validations:
       required: true
 
+  # NOTE: Update this dropdown when adding or removing a module (keep it in sync with the leaf */go.mod set and the root README Modules/Shortcodes sections).
   - type: dropdown
     id: topic
     attributes:

@@ -61,7 +61,11 @@ mkdir -p <path>/<module-name>
 # 3. Add only the component directories the module uses
 
 # 4. Add hugo.toml only if config is needed
+
+# 5. Keep the module-enumerating surfaces in sync (see note below)
 ```
+
+When the module set changes -- you add, rename, or remove a module -- update every surface that enumerates modules so it does not silently go stale: the root `README.md` Modules and Shortcodes sections, and the `.github/ISSUE_TEMPLATE/` dropdowns (`bug-report.yml` Affected Module, `feature-request.yml` Target Module, `question.yml` Topic Area, and `docs-issue.yml` Affected Documentation for the new module's README). Each of those issue forms carries an inline `# NOTE` at the relevant dropdown as a reminder. Do this in the SAME change that adds or removes the module -- a stale dropdown ships a module a user cannot select, or lists one that no longer exists.
 
 ## Verifying a module locally
 

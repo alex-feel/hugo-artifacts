@@ -107,7 +107,9 @@ Examples: `shortcodes/github-repo/v1.0.0`, `modules/pwa/v1.0.0`, `themes/starter
 
 4. Add a per-module `hugo.toml` ONLY when the module actually needs config (imports, custom mounts, params, `hugoVersion` minimum). Themes typically need one; utility and shortcode modules usually do not.
 
-5. Commit and (when ready) tag with the subdirectory-prefixed pattern from the Tagging and Releases section above.
+5. When the module set changes, keep the surfaces that enumerate modules in sync so they do not silently go stale: the root [`README.md`](README.md) Modules and Shortcodes sections, and the `.github/ISSUE_TEMPLATE/` dropdowns (`bug-report.yml` Affected Module, `feature-request.yml` Target Module, `question.yml` Topic Area, and `docs-issue.yml` Affected Documentation for the new module's README). Each issue form carries an inline `# NOTE` at the relevant dropdown as a reminder. Do this in the same change as adding or removing the module -- a stale dropdown ships a module a user cannot select, or lists one that no longer exists.
+
+6. Commit and (when ready) tag with the subdirectory-prefixed pattern from the Tagging and Releases section above.
 
 For worked examples, mirror these existing modules: [`shortcodes/github-repo/`](shortcodes/github-repo/) is a small shortcode-only module (`data/`, partials, API fetching, graceful degradation); [`modules/pwa/`](modules/pwa/) is a complex multi-file module spanning `data/`, `i18n/`, `assets/` (TypeScript service worker compiled via `js.Build`), `layouts/_partials/`, `content/`, and a full consumer parameter surface.
 
