@@ -20,6 +20,7 @@ body:
     validations:
       required: true
 
+  # NOTE: Update this dropdown when adding or removing a module (keep it in sync with the leaf */go.mod set and the root README Modules/Shortcodes sections).
   - type: dropdown
     id: target-module
     attributes:
@@ -31,6 +32,9 @@ body:
         - modules/workbox
         - modules/idb
         - shortcodes/github-repo
+        - shortcodes/hf-space
+        - shortcodes/callout
+        - shortcodes/youtube-embed
         - New module (proposing)
         - Repository-wide (build, conventions, docs)
         - Other
@@ -49,7 +53,7 @@ body:
         - Asset pipeline (js.Build, Sass, image processing)
         - TypeScript service worker (modules/pwa)
         - Push notification flow (modules/pwa)
-        - GitHub API integration (shortcodes/github-repo)
+        - Remote API integration (github-repo, hf-space)
         - Documentation
         - Build / CI / tooling
         - Other

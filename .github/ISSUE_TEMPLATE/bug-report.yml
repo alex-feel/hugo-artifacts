@@ -48,6 +48,7 @@ body:
     validations:
       required: true
 
+  # NOTE: Update this dropdown when adding or removing a module (keep it in sync with the leaf */go.mod set and the root README Modules/Shortcodes sections).
   - type: dropdown
     id: module
     attributes:
@@ -59,6 +60,9 @@ body:
         - modules/workbox
         - modules/idb
         - shortcodes/github-repo
+        - shortcodes/hf-space
+        - shortcodes/callout
+        - shortcodes/youtube-embed
         - Multiple modules
         - Repository-wide (build, conventions, docs)
         - Other

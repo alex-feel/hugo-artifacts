@@ -1,8 +1,27 @@
-# hugo-artifacts
+# Hugo Artifacts
 
-Public multi-module Hugo monorepo for reusable artifacts: themes, shortcode libraries, utility modules, and other components shared across multiple Hugo sites.
+<p align="center">
+  <img src=".github/images/banner.png" alt="Hugo Artifacts - reusable, style-agnostic Hugo modules (shortcodes, asset and utility modules) that ship semantic BEM markup and zero CSS and drop into any number of unrelated sites" width="100%">
+</p>
+
+[![CI](https://github.com/alex-feel/hugo-artifacts/actions/workflows/ci.yml/badge.svg)](https://github.com/alex-feel/hugo-artifacts/actions/workflows/ci.yml) [![Hugo](https://img.shields.io/badge/Hugo-0.160.0%2B_extended-ff4088?logo=hugo&logoColor=white)](https://gohugo.io/) [![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/) [![GitHub License](https://img.shields.io/github/license/alex-feel/hugo-artifacts)](https://github.com/alex-feel/hugo-artifacts/blob/main/LICENSE) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/alex-feel/hugo-artifacts)
+
+Public multi-module Hugo monorepo for reusable artifacts -- themes, shortcode libraries, asset libraries, utility modules, and other components shared across any number of unrelated Hugo sites.
+
+The guiding principle is universality: every artifact is built to drop into any site and be styled to fit it, never to impose a look. Components ship DATA and semantic markup -- not design decisions -- so each consuming site owns its own presentation. See [Design Principles](#design-principles) for what that means and why.
 
 Each artifact lives in its own subdirectory with an independent `go.mod`, making it independently importable and versionable.
+
+## Design Principles
+
+These artifacts are meant to be reused across many unrelated sites, so they avoid baking in any single site's look. The contract differs slightly by artifact kind, but the spirit is shared: ship what is stable and reusable (structure, data, behavior, accessibility) and leave what legitimately varies per site (visual presentation) to the consumer.
+
+- **Style-agnostic by default.** The shortcode and component libraries (everything under [`shortcodes/`](shortcodes/)) emit semantic [BEM](https://getbem.com/) markup and ship **zero CSS** -- no `.scss`, no `.css`, no inline `<style>`, no hardcoded colors, and no dark-mode rules. The consuming site owns all visual styling (typically a site-side `assets/scss/_<name>.scss`).
+- **Cross the styling boundary with data, not styles.** Components expose objective values as `data-*` attributes (for example `data-callout-type`, `data-video-id`) and, where a value must reach CSS, as a CSS custom-property _name_ the site defines (for example `style="--callout-tone: var(--callout-tone-danger)"` -- a pointer to a token, never a literal color). Class hooks follow BEM: the block is the component name, modifiers are `<name>--<modifier>`, and elements are `<name>__<part>`.
+- **Icons are the one shipped visual, and they stay restyleable.** They render as inline SVGs using `currentColor` and `1em` sizing, so they inherit the consumer's text color and font size and can be restyled entirely from the site.
+- **Universal, not opinionated.** Because no design decisions are shipped, one component drops into any number of sites and each styles it however it needs -- no specificity wars, no styles to override, and the site's own theme and dark-mode tokens flow straight through.
+
+The payoff: you can build a design of any complexity on top of these artifacts without fighting styles they impose, because they impose none. For the authoring rules behind this contract, see the [shortcode module conventions](CLAUDE.md#shortcode-module-conventions) and [`CONTRIBUTING.md`](CONTRIBUTING.md#style-agnostic-output-shortcode-and-component-modules).
 
 ## Modules
 
@@ -22,7 +41,7 @@ Vendor-mount companion that exposes [`github.com/jakearchibald/idb`](https://git
 
 ## Shortcodes
 
-Reusable Hugo shortcode modules live under [`shortcodes/`](shortcodes/). Each shortcode ships its own `README.md` with installation, usage, parameters, and theming guidance.
+Reusable Hugo shortcode modules live under [`shortcodes/`](shortcodes/). Every one is style-agnostic -- semantic BEM markup, `data-*` attributes, and zero CSS (see [Design Principles](#design-principles)) -- so you style it to fit your site. Each ships its own `README.md` with installation, usage, parameters, and styling guidance.
 
 ### `shortcodes/github-repo`
 
@@ -52,3 +71,15 @@ The [`examples/`](examples/) directory contains standalone reference implementat
 ## Contributing
 
 Contributions are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for development setup, coding conventions, the Markdown one-line-per-paragraph rule, tagging and release conventions, and pull request guidelines.
+
+## Getting Help
+
+Have a question, found a bug, or want to request a feature? Open an issue using one of the [issue templates](https://github.com/alex-feel/hugo-artifacts/issues/new/choose) -- they prompt you for the details needed to help quickly.
+
+## Security
+
+Report security vulnerabilities privately via [GitHub Security Advisories](https://github.com/alex-feel/hugo-artifacts/security/advisories/new) rather than opening a public issue. See [`SECURITY.md`](SECURITY.md) for the full policy.
+
+## License
+
+Released under the [MIT License](LICENSE).

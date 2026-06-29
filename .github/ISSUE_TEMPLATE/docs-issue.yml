@@ -12,11 +12,16 @@ body:
       options:
         - README.md (root)
         - CONTRIBUTING.md
+        - SECURITY.md
+        - CLAUDE.md
         - LICENSE
         - modules/pwa/README.md
         - modules/workbox/README.md
         - modules/idb/README.md
         - shortcodes/github-repo/README.md
+        - shortcodes/hf-space/README.md
+        - shortcodes/callout/README.md
+        - shortcodes/youtube-embed/README.md
         - examples/backend-cloudflare-worker/README.md
         - examples/backend-express/README.md
         - examples/backend-firebase-functions/README.md
