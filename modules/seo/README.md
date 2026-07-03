@@ -227,13 +227,13 @@ The full annotated surface:
 
 Read only when the `params.seo.*` equivalent is absent; `params.seo.*` always wins; all deprecated, all silent (no warn). Migrating removes the deprecation.
 
-| Deprecated alias | Maps to |
-| --- | --- |
-| `params.metadata.title_suffix` | `seo.title_suffix` |
-| `params.metadata.description` | `seo.description` |
-| `params.metadata.image` | `seo.default_image` |
-| `params.metadata.keywords` | `seo.keywords` |
-| `params.twitter` | `seo.twitter_site` |
+| Deprecated alias                                                 | Maps to              |
+| ---------------------------------------------------------------- | -------------------- |
+| `params.metadata.title_suffix`                                   | `seo.title_suffix`   |
+| `params.metadata.description`                                    | `seo.description`    |
+| `params.metadata.image`                                          | `seo.default_image`  |
+| `params.metadata.keywords`                                       | `seo.keywords`       |
+| `params.twitter`                                                 | `seo.twitter_site`   |
 | `params.site_verification.{google,bing,baidu,facebook,mastodon}` | `seo.verification.*` |
 
 ## Front Matter Contract
@@ -267,13 +267,13 @@ Note: `seo.disable` is type-dependent. As a boolean, `seo.disable: true` on a pa
 
 ```yaml
 ---
-title: "Contact Us"
-description: "Reach the Acme team by email or phone."
+title: 'Contact Us'
+description: 'Reach the Acme team by email or phone.'
 # No seo.type, no type table => NO Article/Product node.
 # The module still emits the full classic head + WebPage + BreadcrumbList.
 seo:
-  robots: "max-snippet:-1"            # optional; token-unioned with the site baseline
-  image: "images/contact-hero.jpg"    # optional explicit page image (resource path or absolute URL)
+  robots: 'max-snippet:-1' # optional; token-unioned with the site baseline
+  image: 'images/contact-hero.jpg' # optional explicit page image (resource path or absolute URL)
 ---
 ```
 
@@ -281,17 +281,17 @@ seo:
 
 ```yaml
 ---
-title: "Shipping Faster with Hugo Modules"
-description: "How we cut build time 40% by splitting our theme into modules."
-date: 2026-06-27T09:00:00+03:00        # -> datePublished (native)
-lastmod: 2026-07-01T12:30:00+03:00     # -> dateModified (native; emitted because it differs from date)
-images: ["images/hero.png"]            # -> og:image + Article.image (native; bundle *feature* auto-detected too)
-tags: ["hugo", "modules", "performance"]   # -> article:tag + keywords (native)
-categories: ["Engineering"]            # -> article:section (native)
-authors: ["jane-doe"]                  # -> resolved via /authors/jane-doe (native)
+title: 'Shipping Faster with Hugo Modules'
+description: 'How we cut build time 40% by splitting our theme into modules.'
+date: 2026-06-27T09:00:00+03:00 # -> datePublished (native)
+lastmod: 2026-07-01T12:30:00+03:00 # -> dateModified (native; emitted because it differs from date)
+images: ['images/hero.png'] # -> og:image + Article.image (native; bundle *feature* auto-detected too)
+tags: ['hugo', 'modules', 'performance'] # -> article:tag + keywords (native)
+categories: ['Engineering'] # -> article:section (native)
+authors: ['jane-doe'] # -> resolved via /authors/jane-doe (native)
 seo:
-  type: "BlogPosting"                  # NEW: overrides section mapping and site default. One of Article/BlogPosting/NewsArticle. Omit when the section map already covers it.
-  same_as: ["https://medium.com/@acme/shipping-faster"]  # NEW: Article.sameAs[] (syndication links; read by AI crawlers)
+  type: 'BlogPosting' # NEW: overrides section mapping and site default. One of Article/BlogPosting/NewsArticle. Omit when the section map already covers it.
+  same_as: ['https://medium.com/@acme/shipping-faster'] # NEW: Article.sameAs[] (syndication links; read by AI crawlers)
 ---
 ```
 
@@ -299,29 +299,29 @@ seo:
 
 ```yaml
 ---
-title: "Acme Widget Pro"
-description: "The professional-grade widget with lifetime warranty."
-images: ["images/widget-16x9.png", "images/widget-1x1.png"]   # -> Product.image[] (native; multi-ratio recommended)
+title: 'Acme Widget Pro'
+description: 'The professional-grade widget with lifetime warranty.'
+images: ['images/widget-16x9.png', 'images/widget-1x1.png'] # -> Product.image[] (native; multi-ratio recommended)
 seo:
   # Writing seo.product IS declaring the Product type. seo.type: "Product" is optional and only needed to disambiguate.
-  product:                             # NEW: all Product-specific data.
-    sku: "WGT-PRO-001"
-    mpn: "AC-9910"
-    gtin13: "0012345678905"
-    brand: "Acme"
-    color: "Graphite"
-    material: "Aluminum"
-    condition: "NewCondition"          # -> Offer.itemCondition (enum-validated)
-    aggregate_rating:                  # optional; enables the Product Snippet track even without offers
+  product: # NEW: all Product-specific data.
+    sku: 'WGT-PRO-001'
+    mpn: 'AC-9910'
+    gtin13: '0012345678905'
+    brand: 'Acme'
+    color: 'Graphite'
+    material: 'Aluminum'
+    condition: 'NewCondition' # -> Offer.itemCondition (enum-validated)
+    aggregate_rating: # optional; enables the Product Snippet track even without offers
       rating_value: 4.6
       review_count: 128
-  offer:                               # NEW: the Offer (Merchant Listing track requires price > 0 + currency)
-    price: 149.00                      # NUMBER, never a quoted string
-    price_currency: "USD"              # ISO 4217
-    availability: "InStock"            # enum-validated ItemAvailability
-    condition: "NewCondition"          # alias location; seo.product.condition wins
+  offer: # NEW: the Offer (Merchant Listing track requires price > 0 + currency)
+    price: 149.00 # NUMBER, never a quoted string
+    price_currency: 'USD' # ISO 4217
+    availability: 'InStock' # enum-validated ItemAvailability
+    condition: 'NewCondition' # alias location; seo.product.condition wins
     price_valid_until: 2026-12-31
-    url: "https://acme.example/buy/widget-pro/"
+    url: 'https://acme.example/buy/widget-pro/'
 ---
 ```
 
@@ -329,28 +329,28 @@ seo:
 
 ```yaml
 ---
-title: "Jane Doe"
-description: "Staff engineer, Hugo core contributor."   # -> mainEntity.description
-date: 2020-01-15                       # -> ProfilePage.dateCreated (native fallback)
-lastmod: 2026-05-01                    # -> ProfilePage.dateModified (native; genuine human edits only)
-images: ["images/jane.jpg"]            # -> mainEntity.image (native)
+title: 'Jane Doe'
+description: 'Staff engineer, Hugo core contributor.' # -> mainEntity.description
+date: 2020-01-15 # -> ProfilePage.dateCreated (native fallback)
+lastmod: 2026-05-01 # -> ProfilePage.dateModified (native; genuine human edits only)
+images: ['images/jane.jpg'] # -> mainEntity.image (native)
 seo:
-  profile:                             # NEW; presence auto-detects ProfilePage (seo.type optional)
-    entity_type: "Person"              # Person (default) or Organization
-    given_name: "Jane"                 # -> profile:first_name (OG)
-    family_name: "Doe"                 # -> profile:last_name (OG)
-    username: "janedoe"                # -> profile:username (OG) + mainEntity.alternateName
-    gender: "female"                   # -> profile:gender (OG, optional; enum-validated for suggestedGender uses)
-    identifier: "user-4821"            # internal id -> mainEntity.identifier
-    same_as: ["https://github.com/janedoe", "https://fosstodon.org/@janedoe"]  # mainEntity.sameAs
-    is_site_owner: true                # -> union seo.social.* absolute URLs into mainEntity.sameAs (deduped)
-    job_title: "Staff Engineer"        # -> nested Person.jobTitle (NOT on ProfilePage per Google)
-    twitter: "@janedoe"                # -> twitter:creator on pages this person authors
-    interaction_statistic:             # THIS platform only -> mainEntity.interactionStatistic
-      - type: "FollowAction"
+  profile: # NEW; presence auto-detects ProfilePage (seo.type optional)
+    entity_type: 'Person' # Person (default) or Organization
+    given_name: 'Jane' # -> profile:first_name (OG)
+    family_name: 'Doe' # -> profile:last_name (OG)
+    username: 'janedoe' # -> profile:username (OG) + mainEntity.alternateName
+    gender: 'female' # -> profile:gender (OG, optional; enum-validated for suggestedGender uses)
+    identifier: 'user-4821' # internal id -> mainEntity.identifier
+    same_as: ['https://github.com/janedoe', 'https://fosstodon.org/@janedoe'] # mainEntity.sameAs
+    is_site_owner: true # -> union seo.social.* absolute URLs into mainEntity.sameAs (deduped)
+    job_title: 'Staff Engineer' # -> nested Person.jobTitle (NOT on ProfilePage per Google)
+    twitter: '@janedoe' # -> twitter:creator on pages this person authors
+    interaction_statistic: # THIS platform only -> mainEntity.interactionStatistic
+      - type: 'FollowAction'
         count: 5400
-    agent_interaction_statistic:       # owner's own actions -> mainEntity.agentInteractionStatistic
-      - type: "WriteAction"
+    agent_interaction_statistic: # owner's own actions -> mainEntity.agentInteractionStatistic
+      - type: 'WriteAction'
         count: 213
 ---
 ```
@@ -359,24 +359,24 @@ seo:
 
 ```yaml
 ---
-title: "Acme CLI"
-description: "Command-line companion for Acme Widget."
-images: ["images/cli-screenshot.png"]  # -> screenshot + og:image
+title: 'Acme CLI'
+description: 'Command-line companion for Acme Widget.'
+images: ['images/cli-screenshot.png'] # -> screenshot + og:image
 seo:
-  software:                            # NEW; presence auto-detects SoftwareApplication
-    app_type: ["SoftwareApplication"]  # co-typing allowed, e.g. ["VideoGame", "MobileApplication"]. VideoGame alone warns and is co-typed.
-    application_category: "DeveloperApplication"   # enum-validated (Google's 22 values)
-    operating_system: ["macOS", "Linux", "Windows"]  # string or array
-    software_version: "2.4.0"
-    download_url: "https://acme.example/download/cli"
-    file_size: "18MB"
-    feature_list: ["Auto-sync", "Offline mode"]
-    aggregate_rating:                  # one of aggregate_rating / review REQUIRED for the rich result
+  software: # NEW; presence auto-detects SoftwareApplication
+    app_type: ['SoftwareApplication'] # co-typing allowed, e.g. ["VideoGame", "MobileApplication"]. VideoGame alone warns and is co-typed.
+    application_category: 'DeveloperApplication' # enum-validated (Google's 22 values)
+    operating_system: ['macOS', 'Linux', 'Windows'] # string or array
+    software_version: '2.4.0'
+    download_url: 'https://acme.example/download/cli'
+    file_size: '18MB'
+    feature_list: ['Auto-sync', 'Offline mode']
+    aggregate_rating: # one of aggregate_rating / review REQUIRED for the rich result
       rating_value: 4.8
       rating_count: 342
-  offer:                               # REQUIRED for the rich result: price (0 for free) + currency when price > 0
+  offer: # REQUIRED for the rich result: price (0 for free) + currency when price > 0
     price: 0
-    price_currency: "USD"
+    price_currency: 'USD'
 ---
 ```
 
@@ -384,24 +384,25 @@ seo:
 
 ```yaml
 ---
-title: "Building a Hugo Module in 10 Minutes"
-description: "A screencast walking through modules/seo from scratch."
-date: 2026-06-20T18:00:00+03:00        # -> uploadDate (native)
-images: ["images/video-thumb-16x9.jpg"]  # thumbnailUrl fallback when seo.video.thumbnail_url is absent
+title: 'Building a Hugo Module in 10 Minutes'
+description: 'A screencast walking through modules/seo from scratch.'
+date: 2026-06-20T18:00:00+03:00 # -> uploadDate (native)
+images: ['images/video-thumb-16x9.jpg'] # thumbnailUrl fallback when seo.video.thumbnail_url is absent
 seo:
-  video:                               # NEW; presence auto-detects VideoObject (Hugo has no native video metadata)
-    thumbnail_url: ["https://cdn.acme.example/thumb-16x9.jpg", "https://cdn.acme.example/thumb-1x1.jpg"]
-    content_url: "https://cdn.acme.example/build-module.mp4"   # direct media file, NOT the watch page
-    embed_url: "https://cdn.acme.example/player/build-module"  # player src, NOT the watch page
-    duration: "PT10M14S"               # ISO 8601 duration
+  video: # NEW; presence auto-detects VideoObject (Hugo has no native video metadata)
+    thumbnail_url:
+      ['https://cdn.acme.example/thumb-16x9.jpg', 'https://cdn.acme.example/thumb-1x1.jpg']
+    content_url: 'https://cdn.acme.example/build-module.mp4' # direct media file, NOT the watch page
+    embed_url: 'https://cdn.acme.example/player/build-module' # player src, NOT the watch page
+    duration: 'PT10M14S' # ISO 8601 duration
     expires: 2027-06-20T18:00:00+03:00
-    watch_count: 15200                 # -> interactionStatistic WatchAction
-    clips:                             # -> hasPart[] Key Moments (unique start_offsets; mutually exclusive with seek_url_template)
-      - name: "Scaffolding go.mod"
+    watch_count: 15200 # -> interactionStatistic WatchAction
+    clips: # -> hasPart[] Key Moments (unique start_offsets; mutually exclusive with seek_url_template)
+      - name: 'Scaffolding go.mod'
         start_offset: 30
         end_offset: 95
-        url: "https://acme.example/watch/build-module/?t=30"
-    regions_allowed: ["US", "GB", "DE"]  # XOR ineligible_region (both set warns; regions_allowed wins)
+        url: 'https://acme.example/watch/build-module/?t=30'
+    regions_allowed: ['US', 'GB', 'DE'] # XOR ineligible_region (both set warns; regions_allowed wins)
 ---
 ```
 
