@@ -28,6 +28,7 @@ body:
       description: Which module(s) would this feature affect?
       multiple: true
       options:
+        - modules/seo
         - modules/pwa
         - modules/workbox
         - modules/idb

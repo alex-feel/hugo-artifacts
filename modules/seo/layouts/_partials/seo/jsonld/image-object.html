@@ -1,0 +1,53 @@
+{{/*
+  seo/jsonld/image-object.html -- ImageObject node builder (shared).
+
+  Purpose: turn one normalized image dict (as produced by
+  seo/resolve/image.html) into a JSON-LD image value. Reused by every
+  image-carrying node (WebPage.primaryImageOfPage, Organization.logo,
+  Article.image[], Product.image[], mainEntity.image, screenshot, etc.).
+
+  Expected context (dict): the normalized image dict
+    { url, width, height, type, alt }
+  where `url` is an absolute URL string and width/height/type/alt are
+  optional (SVG and remote URLs carry no width/height).
+
+  Return value:
+  - A full ImageObject dict {"@type": "ImageObject", "url", "width", "height"}
+    when width and height are both known (numbers, not strings).
+  - A bare URL string when only the URL is known (SVG / remote / root-path).
+  - An empty dict (dict) when no usable url resolves (caller guards with `with`).
+
+  No @context (the dispatcher injects it); one terminal return.
+*/}}
+
+{{- $img := . -}}
+{{- $result := dict -}}
+
+{{- with $img -}}
+  {{- $url := .url | default "" -}}
+  {{- with $url -}}
+    {{- $w := 0 -}}
+    {{- $h := 0 -}}
+    {{- with $img.width -}}
+      {{- $w = int . -}}
+    {{- end -}}
+    {{- with $img.height -}}
+      {{- $h = int . -}}
+    {{- end -}}
+    {{- if and (gt $w 0) (gt $h 0) -}}
+      {{/* Full ImageObject: real dimensions from local raster .Fill. */}}
+      {{- $result = dict
+        "@type" "ImageObject"
+        "url" $url
+        "width" $w
+        "height" $h
+      -}}
+    {{- else -}}
+      {{/* Bare URL string: SVG, remote, or root-path image with no
+           measurable dimensions. Never fabricate width/height. */}}
+      {{- $result = $url -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $result -}}

@@ -1,0 +1,154 @@
+{{/*
+  Computes the ordered content-type slice (typeSet) and the resolved og:type for
+  the page via the dispatch ladder. Pure value chooser: no HTML, no side
+  effects. Foundational nodes (WebSite/Organization/WebPage/
+  BreadcrumbList) are NOT in typeSet -- they are decided by page-kind rules
+  elsewhere. typeSet governs only the single content node; it holds at most one
+  element in this version but stays a slice for forward compatibility.
+
+  Context: the current Page, passed as the dot.
+
+  Content-type ladder (first match wins):
+  1. Explicit seo.type (or the mapped meta_type alias: article -> Article,
+     profile -> ProfilePage). An unsupported non-empty value warns (deduped) and
+     FALLS THROUGH to rule 2. An explicit "" suppresses the content node and
+     stops the ladder.
+  2. Contract-key auto-detect: seo.product -> Product; seo.software ->
+     SoftwareApplication; seo.video -> VideoObject; seo.profile -> ProfilePage.
+     seo.offer alone does NOT auto-detect. Multiple tables without seo.type warn
+     (deduped) and pick the first present in the fixed priority Product,
+     SoftwareApplication, VideoObject, ProfilePage.
+  3. Section map: params.seo.types.sections.<.Section>.
+  4. Site default params.seo.types.default, only for non-home page-kind pages
+     (SHIPPED UNSET, so arbitrary pages get no content node).
+  5. Nothing: typeSet empty.
+
+  ogType derives from the resolved type (Article/BlogPosting/NewsArticle ->
+  article; ProfilePage -> profile; Product -> product; VideoObject ->
+  video.other; else website), overridable by seo.og_type.
+
+  Returns: {typeSet, ogType}. ONE terminal return.
+*/}}
+
+{{- $page := . -}}
+{{- $supported := slice
+  "Article" "BlogPosting" "NewsArticle" "Product" "ProfilePage"
+  "SoftwareApplication" "VideoObject" -}}
+
+{{- $type := "" -}}
+{{- $stop := false -}}
+
+{{/* Read page-level seo.type / meta_type straight from front matter so the
+     .Param cascade does not conflate page and site intent. */}}
+{{- $pageSeo := $page.Params.seo | default dict -}}
+{{- $explicit := index $pageSeo "type" -}}
+{{- $metaType := $page.Params.meta_type -}}
+{{- $ogOverride := index $pageSeo "og_type" -}}
+
+{{/* meta_type-derived og:type default (article/profile -> those; else
+     website). This never re-imposes a whitelist on an explicit seo.og_type. */}}
+{{- $metaOg := "" -}}
+
+{{/* Rule 1: explicit seo.type, or the mapped meta_type alias. */}}
+{{- if ne $explicit nil -}}
+  {{/* seo.type is present (may be the empty-string suppression sentinel). */}}
+  {{- if eq $explicit "" -}}
+    {{- $stop = true -}}
+  {{- else if in $supported $explicit -}}
+    {{- $type = $explicit -}}
+  {{- else -}}
+    {{/* Unsupported value: warn once (keyed by the bad value) and fall through
+         to auto-detect. */}}
+    {{- partial "seo/lib/warn.html" (dict
+      "key" (printf "seo:warn:unknown-type:%s" $explicit)
+      "message" (printf "[seo] page %q sets seo.type %q, which this module does not support (supported: Article, BlogPosting, NewsArticle, Product, ProfilePage, SoftwareApplication, VideoObject); falling through to auto-detect. %s" $page.RelPermalink $explicit "")
+    ) -}}
+  {{- end -}}
+{{- else if $metaType -}}
+  {{/* meta_type alias: map to a content type and an og:type default. */}}
+  {{- if eq $metaType "article" -}}
+    {{- $type = "Article" -}}
+    {{- $metaOg = "article" -}}
+  {{- else if eq $metaType "profile" -}}
+    {{- $type = "ProfilePage" -}}
+    {{- $metaOg = "profile" -}}
+  {{- else -}}
+    {{- $metaOg = "website" -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Rule 2: contract-key auto-detect, when no type was chosen and not stopped. */}}
+{{- if and (not $type) (not $stop) -}}
+  {{- $present := slice -}}
+  {{- if index $pageSeo "product" -}}
+    {{- $present = $present | append "Product" -}}
+  {{- end -}}
+  {{- if index $pageSeo "software" -}}
+    {{- $present = $present | append "SoftwareApplication" -}}
+  {{- end -}}
+  {{- if index $pageSeo "video" -}}
+    {{- $present = $present | append "VideoObject" -}}
+  {{- end -}}
+  {{- if index $pageSeo "profile" -}}
+    {{- $present = $present | append "ProfilePage" -}}
+  {{- end -}}
+  {{- if $present -}}
+    {{- $type = index $present 0 -}}
+    {{- if gt (len $present) 1 -}}
+      {{/* Collision: warn once and keep the first in the fixed priority order
+           (the append order above already IS that priority). */}}
+      {{- partial "seo/lib/warn.html" (dict
+        "key" (printf "seo:warn:type-collision:%s" $page.RelPermalink)
+        "message" (printf "[seo] page %q declares multiple structured-data type tables (%s); set seo.type to disambiguate; using %s. %s" $page.RelPermalink (delimit $present ", ") $type "")
+      ) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Rule 3: section mapping. */}}
+{{- if and (not $type) (not $stop) -}}
+  {{- with $page.Section -}}
+    {{- with $page.Param (printf "seo.types.sections.%s" .) -}}
+      {{- $type = . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Rule 4: site default, only for non-home page-kind pages. */}}
+{{- if and (not $type) (not $stop) -}}
+  {{- if and (eq $page.Kind "page") (not $page.IsHome) -}}
+    {{- with $page.Param "seo.types.default" -}}
+      {{- $type = . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Assemble typeSet (at most one element). */}}
+{{- $typeSet := slice -}}
+{{- with $type -}}
+  {{- $typeSet = slice . -}}
+{{- end -}}
+
+{{/* ogType derivation from the resolved content type, then overrides. */}}
+{{- $ogType := "website" -}}
+{{- if or (eq $type "Article") (eq $type "BlogPosting") (eq $type "NewsArticle") -}}
+  {{- $ogType = "article" -}}
+{{- else if eq $type "ProfilePage" -}}
+  {{- $ogType = "profile" -}}
+{{- else if eq $type "Product" -}}
+  {{- $ogType = "product" -}}
+{{- else if eq $type "VideoObject" -}}
+  {{- $ogType = "video.other" -}}
+{{- end -}}
+
+{{/* meta_type provides an og:type default only when no content type set one. */}}
+{{- if and (eq $ogType "website") $metaOg -}}
+  {{- $ogType = $metaOg -}}
+{{- end -}}
+
+{{/* Explicit seo.og_type wins over everything (no whitelist re-imposed). */}}
+{{- with $ogOverride -}}
+  {{- $ogType = . -}}
+{{- end -}}
+
+{{- return dict "typeSet" $typeSet "ogType" $ogType -}}

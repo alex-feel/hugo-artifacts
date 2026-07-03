@@ -1,0 +1,107 @@
+{{/*
+  seo/jsonld/website.html -- WebSite node builder (home only, partialCached).
+
+  Purpose: build the WebSite JSON-LD node. Emitted once per language home page
+  and referenced by every other page via the #website @id. Enables Google's
+  site-name feature and the Sitelinks Search Box.
+
+  Expected context: `site` (NOT a Page). Invoked as
+    {{ partialCached "seo/jsonld/website.html" site site.Language.Name }}
+  from head-jsonld.html.
+
+  Cache-safety invariant: because this builder is invoked via partialCached
+  keyed on language alone, it reads ONLY site.Params.seo.*, site.Title,
+  site.Home.Permalink, and site.Language -- never anything page-derived -- so
+  caching on language alone is provably safe. Do not introduce any page-scoped
+  read here.
+
+  Return value: the WebSite node dict WITHOUT @context (the dispatcher
+  injects it), or an EMPTY dict (dict) when neither an organization name nor
+  site.Title resolves (site-name features disabled; warn emitted by the
+  Organization builder / head path, not duplicated here). One terminal return.
+*/}}
+
+{{- $site := . -}}
+{{- $result := dict -}}
+
+{{- $url := $site.Home.Permalink -}}
+{{- $name := "" -}}
+{{- with $site.Params.seo.website.name -}}
+  {{- $name = . -}}
+{{- end -}}
+{{- if not $name -}}
+  {{- with $site.Params.seo.organization.name -}}
+    {{- $name = . -}}
+  {{- end -}}
+{{- end -}}
+{{- if not $name -}}
+  {{- with $site.Title -}}
+    {{- $name = . -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Self-gate: with no url or no name the site-name feature is impossible;
+     return an empty dict so head-jsonld.html emits nothing. */}}
+{{- if and $url $name -}}
+  {{- $node := dict
+    "@type" "WebSite"
+    "@id" (printf "%s#website" $url)
+    "url" $url
+    "name" $name
+  -}}
+
+  {{- with $site.Params.seo.website.alternate_name -}}
+    {{- $node = merge $node (dict "alternateName" .) -}}
+  {{- end -}}
+
+  {{/* inLanguage uses .Language.Name (RFC 5646 tag), never .Language.Lang. */}}
+  {{- with $site.Language.Name -}}
+    {{- $node = merge $node (dict "inLanguage" .) -}}
+  {{- end -}}
+
+  {{/* publisher reference to the Organization/Person node by @id. The
+       Organization is defined on home and merged by @id; we reference it
+       whenever an organization/site name exists (the anchor is shared). */}}
+  {{- $orgName := "" -}}
+  {{- with $site.Params.seo.organization.name -}}
+    {{- $orgName = . -}}
+  {{- end -}}
+  {{- if not $orgName -}}
+    {{- with $site.Title -}}
+      {{- $orgName = . -}}
+    {{- end -}}
+  {{- end -}}
+  {{- with $orgName -}}
+    {{- $node = merge $node (dict "publisher" (dict "@id" (printf "%s#organization" $url))) -}}
+  {{- end -}}
+
+  {{/* potentialAction SearchAction (Sitelinks Search Box). The template
+       MUST contain the literal {search_term_string}; relative values are
+       absolutized via absURL. Missing placeholder warns once site-wide. */}}
+  {{- with $site.Params.seo.website.search_url_template -}}
+    {{- $tmpl := . -}}
+    {{- if in $tmpl "{search_term_string}" -}}
+      {{- $target := $tmpl -}}
+      {{- if not (or (hasPrefix $tmpl "http://") (hasPrefix $tmpl "https://")) -}}
+        {{- $target = absURL $tmpl -}}
+      {{- end -}}
+      {{- $node = merge $node (dict "potentialAction" (dict
+        "@type" "SearchAction"
+        "target" (dict
+          "@type" "EntryPoint"
+          "urlTemplate" $target
+        )
+        "query-input" "required name=search_term_string"
+      )) -}}
+    {{- else -}}
+      {{- partial "seo/lib/warn.html" (dict
+        "key" "seo:warn:search-template"
+        "message" "[seo] params.seo.website.search_url_template lacks the {search_term_string} placeholder; SearchAction not emitted."
+      ) -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- $result = $node -}}
+{{- end -}}
+
+{{- return $result -}}

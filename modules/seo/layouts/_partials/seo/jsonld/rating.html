@@ -1,0 +1,119 @@
+{{/*
+  seo/jsonld/rating.html -- AggregateRating / Review fragment builder (shared).
+
+  Purpose: build an AggregateRating or a Review node fragment, shared by
+  Product and SoftwareApplication.
+
+  Expected context (dict):
+  - .kind (string)  "aggregate" -> AggregateRating; "review" -> Review.
+  - .data (dict)    the source sub-table:
+        aggregate: { rating_value, review_count | rating_count,
+                     best_rating, worst_rating }
+        review:    { author, rating_value, best_rating, worst_rating,
+                     date_published, body, positive_notes[], negative_notes[] }
+  - .page (Page)    the current page (for numeric coercion context only).
+
+  Rules: numbers emit as numbers (float/int coercion). A review author name is
+  truncated to fewer than 100 characters (Google limit). positiveNotes /
+  negativeNotes become ItemList of ListItem.
+
+  Return value: the fragment dict WITHOUT @context, or an EMPTY dict (dict)
+  when the required data is missing. One terminal return.
+*/}}
+
+{{- $ctx := . -}}
+{{- $kind := $ctx.kind -}}
+{{- $data := $ctx.data | default dict -}}
+{{- $result := dict -}}
+
+{{- if eq $kind "aggregate" -}}
+  {{/* AggregateRating: ratingValue plus a count (reviewCount preferred, else
+       ratingCount). */}}
+  {{- $ratingValue := $data.rating_value | default $data.value -}}
+  {{- $reviewCount := $data.review_count -}}
+  {{- $ratingCount := $data.rating_count -}}
+  {{- if $ratingValue -}}
+    {{- $node := dict
+      "@type" "AggregateRating"
+      "ratingValue" (float $ratingValue)
+    -}}
+    {{- with $reviewCount -}}
+      {{- $node = merge $node (dict "reviewCount" (int .)) -}}
+    {{- end -}}
+    {{- if not $reviewCount -}}
+      {{- with $ratingCount -}}
+        {{- $node = merge $node (dict "ratingCount" (int .)) -}}
+      {{- end -}}
+    {{- end -}}
+    {{- with $data.best_rating -}}
+      {{- $node = merge $node (dict "bestRating" (float .)) -}}
+    {{- end -}}
+    {{- with $data.worst_rating -}}
+      {{- $node = merge $node (dict "worstRating" (float .)) -}}
+    {{- end -}}
+    {{- $result = $node -}}
+  {{- end -}}
+{{- else if eq $kind "review" -}}
+  {{/* Review: reviewRating.ratingValue required; author name < 100 chars. */}}
+  {{- $ratingValue := $data.rating_value -}}
+  {{- if $ratingValue -}}
+    {{- $node := dict "@type" "Review" -}}
+
+    {{/* reviewRating (Rating) with numeric ratingValue. */}}
+    {{- $rr := dict
+      "@type" "Rating"
+      "ratingValue" (float $ratingValue)
+    -}}
+    {{- with $data.best_rating -}}
+      {{- $rr = merge $rr (dict "bestRating" (float .)) -}}
+    {{- end -}}
+    {{- with $data.worst_rating -}}
+      {{- $rr = merge $rr (dict "worstRating" (float .)) -}}
+    {{- end -}}
+    {{- $node = merge $node (dict "reviewRating" $rr) -}}
+
+    {{/* author (Person) with name truncated to fewer than 100 characters. */}}
+    {{- with $data.author -}}
+      {{- $authorName := . -}}
+      {{- if gt (len $authorName) 99 -}}
+        {{- $authorName = substr $authorName 0 99 -}}
+      {{- end -}}
+      {{- $node = merge $node (dict "author" (dict "@type" "Person" "name" $authorName)) -}}
+    {{- end -}}
+
+    {{- with $data.date_published -}}
+      {{- $node = merge $node (dict "datePublished" .) -}}
+    {{- end -}}
+    {{- with $data.body -}}
+      {{- $node = merge $node (dict "reviewBody" .) -}}
+    {{- end -}}
+
+    {{/* positiveNotes / negativeNotes as ItemList of ListItem. */}}
+    {{- with $data.positive_notes -}}
+      {{- $items := slice -}}
+      {{- $pos := 0 -}}
+      {{- range . -}}
+        {{- $pos = add $pos 1 -}}
+        {{- $items = $items | append (dict "@type" "ListItem" "position" $pos "name" .) -}}
+      {{- end -}}
+      {{- with $items -}}
+        {{- $node = merge $node (dict "positiveNotes" (dict "@type" "ItemList" "itemListElement" .)) -}}
+      {{- end -}}
+    {{- end -}}
+    {{- with $data.negative_notes -}}
+      {{- $items := slice -}}
+      {{- $pos := 0 -}}
+      {{- range . -}}
+        {{- $pos = add $pos 1 -}}
+        {{- $items = $items | append (dict "@type" "ListItem" "position" $pos "name" .) -}}
+      {{- end -}}
+      {{- with $items -}}
+        {{- $node = merge $node (dict "negativeNotes" (dict "@type" "ItemList" "itemListElement" .)) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{- $result = $node -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $result -}}

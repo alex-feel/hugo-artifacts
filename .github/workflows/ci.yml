@@ -56,18 +56,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # All 5 leaf go.mod files MUST parse via `go mod edit -fmt -print`.
+          # Every leaf go.mod file MUST parse via `go mod edit -fmt -print`.
           # This is a read-only operation that does NOT require network access
           # and works for modules whose dependencies include non-Go-aware
           # upstreams (workbox, idb) that cannot be resolved by the Go module
           # proxy. Each leaf go.mod is verified independently from its own
-          # directory.
+          # directory. Keep this list in sync with the leaf */go.mod set.
           leaves=(
             modules/pwa
             modules/workbox
             modules/idb
+            modules/seo
             shortcodes/github-repo
             shortcodes/hf-space
+            shortcodes/callout
+            shortcodes/youtube-embed
             modules/pwa/test/fixture
           )
           for leaf in "${leaves[@]}"; do
@@ -76,19 +79,19 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: Hugo mod graph (standalone shortcode modules)
+      - name: Hugo mod graph (standalone modules)
         shell: bash
         run: |
           set -euo pipefail
-          # shortcodes/github-repo and shortcodes/hf-space are the leaf modules
-          # with no module imports beyond [module.hugoVersion]. They can be
-          # graphed standalone without any [module.replacements] configuration.
-          # The other 4 leaf modules transitively depend on
-          # github.com/GoogleChrome/workbox or github.com/jakearchibald/idb
-          # (both non-Go-aware), which cannot be resolved by Hugo's module
-          # fetcher without consumer-side replacements documented in
-          # modules/pwa/README.md Installation.
-          for m in shortcodes/github-repo shortcodes/hf-space; do
+          # These leaf modules have no module imports beyond
+          # [module.hugoVersion], so they can be graphed standalone without
+          # any [module.replacements] configuration. Keep this list in sync
+          # with the leaf module set. The pwa/workbox/idb chain is excluded:
+          # it transitively depends on github.com/GoogleChrome/workbox or
+          # github.com/jakearchibald/idb (both non-Go-aware), which cannot be
+          # resolved by Hugo's module fetcher without consumer-side
+          # replacements documented in modules/pwa/README.md Installation.
+          for m in modules/seo shortcodes/github-repo shortcodes/hf-space shortcodes/callout shortcodes/youtube-embed; do
             echo "::group::hugo mod graph -- ${m}"
             ( cd "${m}" && hugo mod graph )
             echo "::endgroup::"

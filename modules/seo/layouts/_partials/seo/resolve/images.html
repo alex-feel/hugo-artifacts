@@ -1,0 +1,93 @@
+{{/*
+  Builds the ordered, de-duplicated slice of normalized image dicts for the
+  page. images[0] is the primary OG/Twitter image; the full slice feeds
+  JSON-LD image[]/thumbnailUrl[]. Pure value chooser: no HTML, no side effects.
+
+  Context: the current Page, passed as the dot.
+
+  Candidate order (explicit declarations outrank filename-convention detection):
+  1. seo.images (list) or seo.image (single) or meta_image (alias) -- explicit.
+  2. .Params.images ([]string), in order -- each resolved as a bundle resource
+     via .Resources.GetMatch first, else treated as a path/URL.
+  3. Page-bundle convention match, DETERMINISTIC priority: GetMatch "*feature*",
+     then "*cover*", then "*thumbnail*" (feature beats cover beats thumbnail).
+  4. params.seo.default_image (alias params.metadata.image) as the site
+     fallback -- appended ONLY when steps 1-3 produced no candidate.
+
+  Each candidate is normalized through resolve/image.html and deduped by url.
+
+  Returns: an ordered slice of {url,width,height,type,alt} dicts (possibly
+  empty). ONE terminal return.
+*/}}
+
+{{- $page := . -}}
+{{- $candidates := slice -}}
+
+{{/* 1. Explicit SEO override: seo.images / seo.image / meta_image. */}}
+{{- with $page.Param "seo.images" -}}
+  {{- $candidates = $candidates | append . -}}
+{{- else with $page.Param "seo.image" -}}
+  {{- $candidates = $candidates | append . -}}
+{{- else with $page.Params.meta_image -}}
+  {{- $candidates = $candidates | append . -}}
+{{- end -}}
+
+{{/* 2. Native .Params.images, each resolved as a bundle resource or a path. */}}
+{{- with $page.Params.images -}}
+  {{- range . -}}
+    {{- $entry := . -}}
+    {{- $matched := "" -}}
+    {{- with $page.Resources.GetMatch $entry -}}
+      {{- $matched = . -}}
+    {{- end -}}
+    {{- if $matched -}}
+      {{- $candidates = $candidates | append $matched -}}
+    {{- else -}}
+      {{- $candidates = $candidates | append $entry -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* 3. Deterministic page-bundle convention: feature -> cover -> thumbnail. */}}
+{{- with $page.Resources -}}
+  {{- with $page.Resources.GetMatch "*feature*" -}}
+    {{- $candidates = $candidates | append . -}}
+  {{- end -}}
+  {{- with $page.Resources.GetMatch "*cover*" -}}
+    {{- $candidates = $candidates | append . -}}
+  {{- end -}}
+  {{- with $page.Resources.GetMatch "*thumbnail*" -}}
+    {{- $candidates = $candidates | append . -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* 4. Site-wide default image (alias params.metadata.image) -- a TRUE
+     fallback: appended only when steps 1-3 produced no candidate, so pages
+     with their own representative images never carry the site default in
+     JSON-LD image[]. */}}
+{{- if not $candidates -}}
+  {{- $default := "" -}}
+  {{- with $page.Param "seo.default_image" -}}
+    {{- $default = . -}}
+  {{- else with $page.Param "metadata.image" -}}
+    {{- $default = . -}}
+  {{- end -}}
+  {{- with $default -}}
+    {{- $candidates = $candidates | append . -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Normalize each candidate and dedup by url, preserving order. */}}
+{{- $images := slice -}}
+{{- $seen := slice -}}
+{{- range $candidates -}}
+  {{- $img := partial "seo/resolve/image.html" (dict "candidate" . "page" $page) -}}
+  {{- with $img.url -}}
+    {{- if not (in $seen .) -}}
+      {{- $seen = $seen | append . -}}
+      {{- $images = $images | append $img -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $images -}}

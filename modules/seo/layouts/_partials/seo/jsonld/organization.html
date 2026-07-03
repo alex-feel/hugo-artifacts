@@ -1,0 +1,325 @@
+{{/*
+  seo/jsonld/organization.html -- Organization/OnlineStore/LocalBusiness/Person
+  publisher node builder (home + flagged About page, partialCached).
+
+  Purpose: build the publisher node. One publisher anchor per language site
+  (@id #organization), referenced by WebSite.publisher,
+  Article.publisher, SoftwareApplication.publisher, and (when OnlineStore) by
+  Offer.hasMerchantReturnPolicy / hasShippingService via @id.
+
+  Expected context: `site` (NOT a Page). Invoked as
+    {{ partialCached "seo/jsonld/organization.html" site site.Language.Name }}
+
+  Cache-safety invariant: because this builder is invoked via partialCached
+  keyed on language alone, it reads ONLY site.Params.seo.*, site.Title,
+  site.Home.Permalink, and site.Language. Never page-derived.
+
+  Return value: the publisher node dict WITHOUT @context, or an EMPTY dict
+  (dict) when no name resolves (site-wide warn emitted here, once). When
+  seo.organization.type = "Person" the node is a Person publisher (org-only
+  and merchant-only properties dropped) keeping the #organization @id.
+  One terminal return.
+*/}}
+
+{{- $site := . -}}
+{{- $result := dict -}}
+
+{{- $org := $site.Params.seo.organization | default dict -}}
+{{- $home := $site.Home.Permalink -}}
+
+{{- $type := $org.type | default "Organization" -}}
+{{- $isPerson := eq $type "Person" -}}
+{{- $isStore := eq $type "OnlineStore" -}}
+
+{{- $name := "" -}}
+{{- with $org.name -}}
+  {{- $name = . -}}
+{{- end -}}
+{{- if not $name -}}
+  {{- with $site.Title -}}
+    {{- $name = . -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Self-gate: no name means the publisher cannot be identified. Warn once
+     site-wide and return an empty dict. */}}
+{{- if not $name -}}
+  {{- partial "seo/lib/warn.html" (dict
+    "key" "seo:warn:org-name"
+    "message" "[seo] params.seo.organization.name and site.Title are both empty; Organization and WebSite site-name features are disabled. Set params.seo.organization.name."
+  ) -}}
+{{- else -}}
+  {{- $node := dict
+    "@type" $type
+    "@id" (printf "%s#organization" $home)
+    "name" $name
+  -}}
+
+  {{/* url: explicit override, else the language home permalink. */}}
+  {{- $url := $home -}}
+  {{- with $org.url -}}
+    {{- $url = . -}}
+  {{- end -}}
+  {{- with $url -}}
+    {{- $node = merge $node (dict "url" .) -}}
+  {{- end -}}
+
+  {{/* logo -> image on a Person publisher; logo (ImageObject) otherwise.
+       Normalized through resolve/image.html then image-object.html. */}}
+  {{- with $org.logo -}}
+    {{- $imgDict := partial "seo/resolve/image.html" (dict "candidate" . "site" $site "page" $site.Home) -}}
+    {{- with $imgDict -}}
+      {{- with .url -}}
+        {{- $imgNode := partial "seo/jsonld/image-object.html" $imgDict -}}
+        {{- with $imgNode -}}
+          {{- if $isPerson -}}
+            {{- $node = merge $node (dict "image" $imgNode) -}}
+          {{- else -}}
+            {{- $node = merge $node (dict "logo" $imgNode) -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* Common carry-over properties (Person and Organization alike). */}}
+  {{- with $org.alternate_name -}}
+    {{- $node = merge $node (dict "alternateName" .) -}}
+  {{- end -}}
+  {{- with $org.description -}}
+    {{- $node = merge $node (dict "description" .) -}}
+  {{- end -}}
+  {{- with $org.email -}}
+    {{- $node = merge $node (dict "email" .) -}}
+  {{- end -}}
+  {{- with $org.telephone -}}
+    {{- $node = merge $node (dict "telephone" .) -}}
+  {{- end -}}
+
+  {{/* sameAs[]: seo.organization.same_as unioned with absolute-URL values
+       from seo.social.*, deduped. */}}
+  {{- $sameAs := slice -}}
+  {{- with $org.same_as -}}
+    {{- range . -}}
+      {{- $sameAs = $sameAs | append . -}}
+    {{- end -}}
+  {{- end -}}
+  {{- with $site.Params.seo.social -}}
+    {{- range $k, $v := . -}}
+      {{- with $v -}}
+        {{- $s := string . -}}
+        {{- if or (hasPrefix $s "http://") (hasPrefix $s "https://") -}}
+          {{- $sameAs = $sameAs | append $s -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $sameAs = $sameAs | uniq -}}
+  {{- with $sameAs -}}
+    {{- $node = merge $node (dict "sameAs" .) -}}
+  {{- end -}}
+
+  {{/* Organization-only properties: dropped entirely on a Person publisher. */}}
+  {{- if not $isPerson -}}
+    {{- with $org.legal_name -}}
+      {{- $node = merge $node (dict "legalName" .) -}}
+    {{- end -}}
+    {{/* foundingDate via lib/time.html in "date" mode, the single date-format
+         authority: schema.org types foundingDate as Date (YYYY-MM-DD), not
+         DateTime. */}}
+    {{- with $org.founding_date -}}
+      {{- $fd := partial "seo/lib/time.html" (dict "value" . "mode" "date") -}}
+      {{- with $fd -}}
+        {{- $node = merge $node (dict "foundingDate" .) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{/* address (PostalAddress) -- emitted only when at least one sub-field
+         is present. */}}
+    {{- with $org.address -}}
+      {{- $addr := dict "@type" "PostalAddress" -}}
+      {{- $hasAddr := false -}}
+      {{- with .street_address -}}
+        {{- $addr = merge $addr (dict "streetAddress" .) -}}
+        {{- $hasAddr = true -}}
+      {{- end -}}
+      {{- with .address_locality -}}
+        {{- $addr = merge $addr (dict "addressLocality" .) -}}
+        {{- $hasAddr = true -}}
+      {{- end -}}
+      {{- with .address_region -}}
+        {{- $addr = merge $addr (dict "addressRegion" .) -}}
+        {{- $hasAddr = true -}}
+      {{- end -}}
+      {{- with .postal_code -}}
+        {{- $addr = merge $addr (dict "postalCode" .) -}}
+        {{- $hasAddr = true -}}
+      {{- end -}}
+      {{- with .address_country -}}
+        {{- $addr = merge $addr (dict "addressCountry" .) -}}
+        {{- $hasAddr = true -}}
+      {{- end -}}
+      {{- if $hasAddr -}}
+        {{- $node = merge $node (dict "address" $addr) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{/* contactPoint[] (repeatable ContactPoint). */}}
+    {{- with $org.contact_point -}}
+      {{- $points := slice -}}
+      {{- range . -}}
+        {{- $cp := dict "@type" "ContactPoint" -}}
+        {{- $hasCp := false -}}
+        {{- with .contact_type -}}
+          {{- $cp = merge $cp (dict "contactType" .) -}}
+          {{- $hasCp = true -}}
+        {{- end -}}
+        {{- with .telephone -}}
+          {{- $cp = merge $cp (dict "telephone" .) -}}
+          {{- $hasCp = true -}}
+        {{- end -}}
+        {{- with .email -}}
+          {{- $cp = merge $cp (dict "email" .) -}}
+          {{- $hasCp = true -}}
+        {{- end -}}
+        {{- if $hasCp -}}
+          {{- $points = $points | append $cp -}}
+        {{- end -}}
+      {{- end -}}
+      {{- with $points -}}
+        {{- $node = merge $node (dict "contactPoint" .) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{- with $org.vat_id -}}
+      {{- $node = merge $node (dict "vatID" .) -}}
+    {{- end -}}
+    {{- with $org.tax_id -}}
+      {{- $node = merge $node (dict "taxID" .) -}}
+    {{- end -}}
+
+    {{/* Identifier dedup: iso6523Code is PREFERRED; when it is present, duns
+         and leiCode are NOT emitted. */}}
+    {{- $iso6523 := $org.iso6523_code | default "" -}}
+    {{- with $iso6523 -}}
+      {{- $node = merge $node (dict "iso6523Code" .) -}}
+    {{- end -}}
+    {{- if not $iso6523 -}}
+      {{- with $org.duns -}}
+        {{- $node = merge $node (dict "duns" .) -}}
+      {{- end -}}
+      {{- with $org.lei_code -}}
+        {{- $node = merge $node (dict "leiCode" .) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{- with $org.global_location_number -}}
+      {{- $node = merge $node (dict "globalLocationNumber" .) -}}
+    {{- end -}}
+    {{- with $org.naics -}}
+      {{- $node = merge $node (dict "naics" .) -}}
+    {{- end -}}
+
+    {{/* numberOfEmployees (QuantitativeValue): value OR minValue+maxValue. */}}
+    {{- with $org.number_of_employees -}}
+      {{- $qv := dict "@type" "QuantitativeValue" -}}
+      {{- $hasQv := false -}}
+      {{- with .value -}}
+        {{- $qv = merge $qv (dict "value" (int .)) -}}
+        {{- $hasQv = true -}}
+      {{- end -}}
+      {{- if not $hasQv -}}
+        {{- $hasRange := false -}}
+        {{- with .min_value -}}
+          {{- $qv = merge $qv (dict "minValue" (int .)) -}}
+          {{- $hasRange = true -}}
+        {{- end -}}
+        {{- with .max_value -}}
+          {{- $qv = merge $qv (dict "maxValue" (int .)) -}}
+          {{- $hasRange = true -}}
+        {{- end -}}
+        {{- $hasQv = $hasRange -}}
+      {{- end -}}
+      {{- if $hasQv -}}
+        {{- $node = merge $node (dict "numberOfEmployees" $qv) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{/* OnlineStore-only merchant policies, referenced by Offer via @id.
+         Gated to type == "OnlineStore". */}}
+    {{- if $isStore -}}
+      {{- with $org.return_policy -}}
+        {{- $rp := dict "@type" "MerchantReturnPolicy" -}}
+        {{- $hasRp := false -}}
+        {{- with .applicable_country -}}
+          {{- $rp = merge $rp (dict "applicableCountry" .) -}}
+          {{- $hasRp = true -}}
+        {{- end -}}
+        {{- with .category -}}
+          {{- $cat := partial "seo/lib/enum.html" (dict
+            "field" "returnPolicyCategory"
+            "value" .
+            "allowed" (slice "MerchantReturnFiniteReturnWindow" "MerchantReturnNotPermitted" "MerchantReturnUnlimitedWindow")
+            "urlForm" true
+            "page" $site.Home
+          ) -}}
+          {{- with $cat -}}
+            {{- $rp = merge $rp (dict "returnPolicyCategory" .) -}}
+            {{- $hasRp = true -}}
+          {{- end -}}
+        {{- end -}}
+        {{- with .merchant_return_days -}}
+          {{- $rp = merge $rp (dict "merchantReturnDays" (int .)) -}}
+          {{- $hasRp = true -}}
+        {{- end -}}
+        {{- with .return_method -}}
+          {{- $rp = merge $rp (dict "returnMethod" .) -}}
+          {{- $hasRp = true -}}
+        {{- end -}}
+        {{- with .return_fees -}}
+          {{- $rp = merge $rp (dict "returnFees" .) -}}
+          {{- $hasRp = true -}}
+        {{- end -}}
+        {{- if $hasRp -}}
+          {{- $node = merge $node (dict "hasMerchantReturnPolicy" $rp) -}}
+        {{- end -}}
+      {{- end -}}
+      {{- with $org.shipping -}}
+        {{- $sh := dict "@type" "ShippingService" -}}
+        {{- $hasSh := false -}}
+        {{- with .name -}}
+          {{- $sh = merge $sh (dict "name" .) -}}
+          {{- $hasSh = true -}}
+        {{- end -}}
+        {{/* shippingConditions (ShippingConditions): shippingOrigin /
+             shippingDestination (DefinedRegion addressCountry) + shippingRate
+             (MonetaryAmount). Emitted only when a sub-field resolves. */}}
+        {{- $cond := dict "@type" "ShippingConditions" -}}
+        {{- $hasCond := false -}}
+        {{- with .origin_country -}}
+          {{- $cond = merge $cond (dict "shippingOrigin" (dict "@type" "DefinedRegion" "addressCountry" .)) -}}
+          {{- $hasCond = true -}}
+        {{- end -}}
+        {{- with .destination_country -}}
+          {{- $cond = merge $cond (dict "shippingDestination" (dict "@type" "DefinedRegion" "addressCountry" .)) -}}
+          {{- $hasCond = true -}}
+        {{- end -}}
+        {{- if isset . "rate" -}}
+          {{- $cond = merge $cond (dict "shippingRate" (dict "@type" "MonetaryAmount" "value" (float .rate))) -}}
+          {{- $hasCond = true -}}
+        {{- end -}}
+        {{- if $hasCond -}}
+          {{- $sh = merge $sh (dict "shippingConditions" $cond) -}}
+          {{- $hasSh = true -}}
+        {{- end -}}
+        {{- if $hasSh -}}
+          {{- $node = merge $node (dict "hasShippingService" $sh) -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- $result = $node -}}
+{{- end -}}
+
+{{- return $result -}}

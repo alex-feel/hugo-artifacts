@@ -1,0 +1,251 @@
+{{/*
+  seo/jsonld/videoobject.html -- VideoObject node builder (self-gates to
+  name + thumbnailUrl + uploadDate).
+
+  Purpose: build the VideoObject content node.
+
+  Expected context (dict):
+  - .page (Page)   the current page.
+  - .seo  (dict)   the resolved $seo context.
+
+  Self-gating: `page` kind AND name AND thumbnailUrl AND uploadDate all
+  resolve. Any of the three missing warns and suppresses the node; lists/home
+  suppress silently by kind.
+
+  Mutual-exclusion and uniqueness rules:
+  - hasPart[] Clip and potentialAction SeekToAction are mutually exclusive;
+    clips win and a warn fires when both are set.
+  - The WHOLE hasPart is dropped (with a warn) when any two clips share a
+    start_offset (Key Moments require unique start offsets).
+  - regionsAllowed XOR ineligibleRegion; both set warns and drops
+    ineligible_region.
+
+  Return value: the VideoObject node dict WITHOUT @context, or an EMPTY dict
+  (dict) when ineligible. One terminal return.
+*/}}
+
+{{- $ctx := . -}}
+{{- $page := $ctx.page -}}
+{{- $seo := $ctx.seo -}}
+{{- $result := dict -}}
+
+{{- $video := $page.Param "seo.video" | default dict -}}
+{{/* Trailing warnf %s placeholder: pages expose no .Position (shortcode-only
+     method), so it stays empty and the page is identified by RelPermalink --
+     the module-wide convention shared with the resolver tier. */}}
+{{- $pos := "" -}}
+
+{{- if eq $page.Kind "page" -}}
+  {{- $name := $seo.title -}}
+
+  {{/* Deprecated video_id alias: a bare YouTube id seeds seo.video.embed_url
+       and seo.video.thumbnail_url; the explicit seo.video keys always win, so
+       the alias fills only the gaps. */}}
+  {{- $videoId := $page.Params.video_id -}}
+
+  {{/* thumbnailUrl[]: seo.video.thumbnail_url -> video_id-derived YouTube
+       thumbnail (alias) -> images[] URLs. */}}
+  {{- $thumbs := slice -}}
+  {{- with $video.thumbnail_url -}}
+    {{- if reflect.IsSlice . -}}
+      {{- range . -}}
+        {{- $thumbs = $thumbs | append . -}}
+      {{- end -}}
+    {{- else -}}
+      {{- $thumbs = $thumbs | append . -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if not $thumbs -}}
+    {{- with $videoId -}}
+      {{- $thumbs = $thumbs | append (printf "https://i.ytimg.com/vi/%s/hqdefault.jpg" .) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if not $thumbs -}}
+    {{- if and $seo.images (gt (len $seo.images) 0) -}}
+      {{- range $seo.images -}}
+        {{- with .url -}}
+          {{- $thumbs = $thumbs | append . -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* uploadDate: seo.video.upload_date -> the resolved $seo.datePublished
+       (which itself falls back to .Date). */}}
+  {{- $uploadDate := "" -}}
+  {{- with $video.upload_date -}}
+    {{- $uploadDate = partial "seo/lib/time.html" . -}}
+  {{- end -}}
+  {{- if not $uploadDate -}}
+    {{- $uploadDate = $seo.datePublished -}}
+  {{- end -}}
+
+  {{/* Self-gate: all three required properties. */}}
+  {{- $missing := slice -}}
+  {{- if not $name -}}{{- $missing = $missing | append "name" -}}{{- end -}}
+  {{- if not $thumbs -}}{{- $missing = $missing | append "thumbnailUrl" -}}{{- end -}}
+  {{- if not $uploadDate -}}{{- $missing = $missing | append "uploadDate" -}}{{- end -}}
+
+  {{- if gt (len $missing) 0 -}}
+    {{- partial "seo/lib/warn.html" (dict
+      "key" (printf "seo:warn:video-required:%s" $page.RelPermalink)
+      "message" (printf "[seo] VideoObject on %q is missing %s; Google requires name, thumbnailUrl, and uploadDate. Node not emitted. %s" $page.RelPermalink (delimit $missing ", ") $pos)
+    ) -}}
+  {{- else -}}
+    {{- $node := dict
+      "@type" "VideoObject"
+      "@id" $seo.ids.content
+      "name" $name
+      "thumbnailUrl" $thumbs
+      "uploadDate" $uploadDate
+    -}}
+
+    {{- with $seo.description -}}
+      {{- $node = merge $node (dict "description" .) -}}
+    {{- end -}}
+    {{- with $video.content_url -}}
+      {{- $node = merge $node (dict "contentUrl" .) -}}
+    {{- end -}}
+    {{/* embedUrl: seo.video.embed_url -> video_id-derived YouTube player URL
+         (alias). */}}
+    {{- $embed := $video.embed_url -}}
+    {{- if not $embed -}}
+      {{- with $videoId -}}
+        {{- $embed = printf "https://www.youtube.com/embed/%s" . -}}
+      {{- end -}}
+    {{- end -}}
+    {{- with $embed -}}
+      {{- $node = merge $node (dict "embedUrl" .) -}}
+    {{- end -}}
+    {{- with $video.duration -}}
+      {{- $node = merge $node (dict "duration" .) -}}
+    {{- end -}}
+    {{- with $video.expires -}}
+      {{- $expires := partial "seo/lib/time.html" . -}}
+      {{- with $expires -}}
+        {{- $node = merge $node (dict "expires" .) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{/* hasPart[] Clip (Key Moments) XOR potentialAction SeekToAction. Clips
+         win the deterministic tiebreak when both are set. This pair carries no
+         dedicated warn message, so the tiebreak is applied silently rather than
+         emitting an invented or mismatched message. Clip start_offsets must be
+         unique or the whole hasPart is dropped (that case has its own warn
+         below). */}}
+    {{- $hasClips := and $video.clips (gt (len $video.clips) 0) -}}
+    {{- $hasSeek := ne ($video.seek_url_template | default "") "" -}}
+    {{- if and $hasClips $hasSeek -}}
+      {{- $hasSeek = false -}}
+    {{- end -}}
+
+    {{- if $hasClips -}}
+      {{/* Detect duplicate start_offsets. */}}
+      {{- $seen := dict -}}
+      {{- $dupOffset := -1 -}}
+      {{- range $video.clips -}}
+        {{- $so := int (.start_offset | default 0) -}}
+        {{- $k := printf "%d" $so -}}
+        {{- if isset $seen $k -}}
+          {{- if lt $dupOffset 0 -}}
+            {{- $dupOffset = $so -}}
+          {{- end -}}
+        {{- else -}}
+          {{- $seen = merge $seen (dict $k true) -}}
+        {{- end -}}
+      {{- end -}}
+      {{- if ge $dupOffset 0 -}}
+        {{- partial "seo/lib/warn.html" (dict
+          "key" (printf "seo:warn:video-clip-offset:%s" $page.RelPermalink)
+          "message" (printf "[seo] VideoObject on %q has two clips sharing startOffset %d; Key Moments require unique start offsets. hasPart omitted. %s" $page.RelPermalink $dupOffset $pos)
+        ) -}}
+      {{- else -}}
+        {{- $clips := slice -}}
+        {{- range $video.clips -}}
+          {{- $clip := dict "@type" "Clip" -}}
+          {{- with .name -}}
+            {{- $clip = merge $clip (dict "name" .) -}}
+          {{- end -}}
+          {{- $clip = merge $clip (dict "startOffset" (int (.start_offset | default 0))) -}}
+          {{- with .end_offset -}}
+            {{- $clip = merge $clip (dict "endOffset" (int .)) -}}
+          {{- end -}}
+          {{- with .url -}}
+            {{- $clip = merge $clip (dict "url" .) -}}
+          {{- end -}}
+          {{- $clips = $clips | append $clip -}}
+        {{- end -}}
+        {{- $node = merge $node (dict "hasPart" $clips) -}}
+      {{- end -}}
+    {{- else if $hasSeek -}}
+      {{- $seekTmpl := $video.seek_url_template -}}
+      {{- $node = merge $node (dict "potentialAction" (dict
+        "@type" "SeekToAction"
+        "target" (dict
+          "@type" "EntryPoint"
+          "urlTemplate" $seekTmpl
+        )
+        "startOffset-input" "required name=seek_to_second_number"
+      )) -}}
+    {{- end -}}
+
+    {{/* interactionStatistic (WatchAction) from watch_count. */}}
+    {{- with $video.watch_count -}}
+      {{- if gt (int .) 0 -}}
+        {{- $node = merge $node (dict "interactionStatistic" (dict
+          "@type" "InteractionCounter"
+          "interactionType" (dict "@type" "WatchAction")
+          "userInteractionCount" (int .)
+        )) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{/* regionsAllowed XOR ineligibleRegion. Both set warns and drops
+         ineligible_region (regionsAllowed wins). */}}
+    {{- $hasRegions := and $video.regions_allowed (gt (len $video.regions_allowed) 0) -}}
+    {{- $hasIneligible := and $video.ineligible_region (gt (len $video.ineligible_region) 0) -}}
+    {{- if and $hasRegions $hasIneligible -}}
+      {{- partial "seo/lib/warn.html" (dict
+        "key" (printf "seo:warn:video-regions:%s" $page.RelPermalink)
+        "message" (printf "[seo] VideoObject on %q sets both regionsAllowed and ineligibleRegion; keeping regionsAllowed. %s" $page.RelPermalink $pos)
+      ) -}}
+    {{- end -}}
+    {{- if $hasRegions -}}
+      {{- $node = merge $node (dict "regionsAllowed" $video.regions_allowed) -}}
+    {{- else if $hasIneligible -}}
+      {{- $node = merge $node (dict "ineligibleRegion" $video.ineligible_region) -}}
+    {{- end -}}
+
+    {{/* publication (BroadcastEvent): isLiveBroadcast + startDate + endDate. */}}
+    {{- with $video.broadcast -}}
+      {{- $b := $video.broadcast -}}
+      {{- $bcast := dict "@type" "BroadcastEvent" -}}
+      {{- $hasBcast := false -}}
+      {{- if isset $b "is_live_broadcast" -}}
+        {{- $bcast = merge $bcast (dict "isLiveBroadcast" $b.is_live_broadcast) -}}
+        {{- $hasBcast = true -}}
+      {{- end -}}
+      {{- with $b.start_date -}}
+        {{- $sd := partial "seo/lib/time.html" . -}}
+        {{- with $sd -}}
+          {{- $bcast = merge $bcast (dict "startDate" .) -}}
+          {{- $hasBcast = true -}}
+        {{- end -}}
+      {{- end -}}
+      {{- with $b.end_date -}}
+        {{- $ed := partial "seo/lib/time.html" . -}}
+        {{- with $ed -}}
+          {{- $bcast = merge $bcast (dict "endDate" .) -}}
+          {{- $hasBcast = true -}}
+        {{- end -}}
+      {{- end -}}
+      {{- if $hasBcast -}}
+        {{- $node = merge $node (dict "publication" $bcast) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{- $result = $node -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $result -}}

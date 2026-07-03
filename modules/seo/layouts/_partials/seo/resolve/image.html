@@ -1,0 +1,125 @@
+{{/*
+  Normalizes ONE image candidate to a stable dict {url, width, height, type,
+  alt}. Pure value chooser: no HTML, no side effects.
+
+  Context (dict):
+  - .candidate (any)  Either a Hugo resource (page-bundle or global) OR a
+                      string (site-root path or absolute/remote URL).
+  - .page (page)      The current page, for the alt fallback chain and for
+                      resolving a string candidate as a global resource.
+
+  Normalization rules:
+  - Local raster resource (jpg/png/webp/gif/...): .Fill "1200x630 Smart" then
+    .Permalink (absolute), .Width (1200), .Height (630), .MediaType.Type. This
+    yields real og:image:width/height/type and a content-aware 1.91:1 crop.
+  - SVG resource: passed through WITHOUT .Fill (Hugo cannot raster-process SVG);
+    url + type only, width/height omitted.
+  - Absolute/remote URL or site-root path string: url only, no processing, NO
+    fabricated dimensions; type inferred from the extension only when
+    unambiguous (.png/.jpg/.jpeg/.webp/.gif/.svg).
+
+  alt chain: seo.image_alt -> resource .Params.alt -> resource .Title (when set
+  to something other than the filename) -> params.seo.image_alt -> resolved page
+  title. So og:image:alt / twitter:image:alt are ALWAYS present when an image is.
+
+  Returns: {url, width, height, type, alt}, or an empty dict when the candidate
+  is unresolvable. ONE terminal return.
+*/}}
+
+{{- $candidate := .candidate -}}
+{{- $page := .page -}}
+
+{{- $result := dict -}}
+{{- $res := "" -}}
+
+{{/* Resolve the candidate to a resource when possible. */}}
+{{- if reflect.IsResource $candidate -}}
+  {{- $res = $candidate -}}
+{{- else if $candidate -}}
+  {{/* String candidate: a site-root path may resolve to a global resource;
+       otherwise it is treated as a bare URL/path below. */}}
+  {{- $s := printf "%v" $candidate -}}
+  {{- if not (or (hasPrefix $s "http://") (hasPrefix $s "https://") (hasPrefix $s "//")) -}}
+    {{- with resources.Get $s -}}
+      {{- $res = . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* alt chain (shared by the resource and string branches). */}}
+{{- $alt := "" -}}
+{{- with $page.Param "seo.image_alt" -}}
+  {{- $alt = . -}}
+{{- end -}}
+
+{{- if $res -}}
+  {{/* Resource branch: distinguish raster from SVG by sub-type. */}}
+  {{- $isImage := eq $res.ResourceType "image" -}}
+  {{- $isSVG := and $isImage (eq $res.MediaType.SubType "svg") -}}
+  {{- if not $alt -}}
+    {{- with $res.Params.alt -}}
+      {{- $alt = . -}}
+    {{- else -}}
+      {{/* Use resource .Title only when it is not merely the filename. */}}
+      {{- $rt := $res.Title -}}
+      {{- if and $rt (ne $rt $res.Name) -}}
+        {{- $alt = $rt -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if and $isImage (not $isSVG) -}}
+    {{/* Local raster: content-aware 1.91:1 crop with real dimensions. */}}
+    {{- $filled := $res.Fill "1200x630 Smart" -}}
+    {{- $result = dict
+      "url" $filled.Permalink
+      "width" $filled.Width
+      "height" $filled.Height
+      "type" $filled.MediaType.Type
+      "alt" $alt
+    -}}
+  {{- else -}}
+    {{/* SVG (or a non-raster resource): url + type only, no dimensions. */}}
+    {{- $result = dict
+      "url" $res.Permalink
+      "type" $res.MediaType.Type
+      "alt" $alt
+    -}}
+  {{- end -}}
+{{- else if $candidate -}}
+  {{/* String branch: bare URL or site-root path, absolutized, no dimensions. */}}
+  {{- $s := printf "%v" $candidate -}}
+  {{- $url := $s | absURL -}}
+  {{- $type := "" -}}
+  {{- $lower := lower $s -}}
+  {{- if hasSuffix $lower ".png" -}}
+    {{- $type = "image/png" -}}
+  {{- else if or (hasSuffix $lower ".jpg") (hasSuffix $lower ".jpeg") -}}
+    {{- $type = "image/jpeg" -}}
+  {{- else if hasSuffix $lower ".webp" -}}
+    {{- $type = "image/webp" -}}
+  {{- else if hasSuffix $lower ".gif" -}}
+    {{- $type = "image/gif" -}}
+  {{- else if hasSuffix $lower ".svg" -}}
+    {{- $type = "image/svg+xml" -}}
+  {{- end -}}
+  {{- $result = dict "url" $url "alt" $alt -}}
+  {{- with $type -}}
+    {{- $result = merge $result (dict "type" .) -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Final alt fallbacks apply only when an image actually resolved. */}}
+{{- if $result.url -}}
+  {{- if not $result.alt -}}
+    {{- $altFallback := "" -}}
+    {{- with $page.Param "seo.image_alt" -}}
+      {{- $altFallback = . -}}
+    {{- else -}}
+      {{- $t := partial "seo/resolve/title.html" $page -}}
+      {{- $altFallback = $t.title -}}
+    {{- end -}}
+    {{- $result = merge $result (dict "alt" $altFallback) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $result -}}

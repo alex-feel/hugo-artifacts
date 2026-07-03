@@ -1,0 +1,62 @@
+{{/*
+  seo/jsonld/person.html -- Person (or Organization) node builder (nested only).
+
+  Purpose: build one nested Person/Organization node from an author or profile
+  descriptor. Shared by article.author[] and profilepage.mainEntity. @type is
+  Person (default) or Organization, NEVER Thing. `name` carries the name only
+  (no honorifics or job titles).
+
+  Expected context: a descriptor dict (as produced by resolve/author.html or
+  assembled by profilepage.html):
+    { name, url, type, id, same_as, job_title, image, description }
+  When an author page resolves, the descriptor carries `id`
+  (<author-permalink>#person) and the node emits it as @id; when no page
+  resolves, `id` is absent and no @id is set (inline anonymous Person).
+
+  Return value: the Person/Organization node dict WITHOUT @context, or an
+  EMPTY dict (dict) when the descriptor resolves no name (caller skips it).
+  One terminal return.
+*/}}
+
+{{- $d := . -}}
+{{- $result := dict -}}
+
+{{- $name := $d.name | default "" -}}
+{{- with $name -}}
+  {{- $type := $d.type | default "Person" -}}
+  {{- if not (in (slice "Person" "Organization") $type) -}}
+    {{- $type = "Person" -}}
+  {{- end -}}
+
+  {{- $node := dict
+    "@type" $type
+    "name" $name
+  -}}
+
+  {{/* @id only when an author-page permalink resolved. */}}
+  {{- with $d.id -}}
+    {{- $node = merge $node (dict "@id" .) -}}
+  {{- end -}}
+
+  {{- with $d.url -}}
+    {{- $node = merge $node (dict "url" .) -}}
+  {{- end -}}
+  {{- with $d.job_title -}}
+    {{- $node = merge $node (dict "jobTitle" .) -}}
+  {{- end -}}
+  {{- with $d.description -}}
+    {{- $node = merge $node (dict "description" .) -}}
+  {{- end -}}
+  {{/* image is absolutized; an already-absolute URL passes through absURL
+       unchanged. */}}
+  {{- with $d.image -}}
+    {{- $node = merge $node (dict "image" (absURL .)) -}}
+  {{- end -}}
+  {{- with $d.same_as -}}
+    {{- $node = merge $node (dict "sameAs" .) -}}
+  {{- end -}}
+
+  {{- $result = $node -}}
+{{- end -}}
+
+{{- return $result -}}

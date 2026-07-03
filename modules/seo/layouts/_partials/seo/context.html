@@ -1,0 +1,127 @@
+{{/*
+  seo/context.html -- resolver-of-resolvers (renderer/resolver bridge).
+
+  Purpose: build the canonical $seo dict consumed by every downstream partial.
+  This is the ONE place that reads raw front matter and site params for the
+  shared fields, calls each resolve/* partial exactly once, reconciles legacy
+  aliases (the deprecated meta_title/meta_description/meta_image/meta_type/
+  noindex/canonical keys, with seo.* always winning), computes the emitJsonld
+  gate, and precomputes every @id string via resolve/id.html. Fan-out,
+  single-resolve: every downstream tag inherits one consistent decision so
+  og:title can never disagree with JSON-LD headline.
+
+  Expected context: the current Page (the dot).
+
+  Return value: the $seo dict with exactly these keys:
+    title, titleFull, description, canonical, images, datePublished,
+    dateModified, dateCreated, locale, lang, robots, robotsBots, ogType,
+    typeSet, authors, ids, isHome, is404, emitJsonld.
+
+  Exactly ONE terminal return.
+*/}}
+
+{{- $page := . -}}
+
+{{/* Page-kind flags. is404 gates JSON-LD off and suppresses canonical/hreflang
+     downstream (a 404 page has no canonical URL). */}}
+{{- $isHome := $page.IsHome -}}
+{{- $is404 := eq $page.Kind "404" -}}
+
+{{/* Title dict {title, titleFull} via the title fallback chain (see
+     resolve/title.html): title feeds og:title/headline; titleFull adds the
+     site title suffix and is used for <title> only. */}}
+{{- $titleDict := partial "seo/resolve/title.html" $page -}}
+
+{{/* Unified description string shared by meta/OG/Twitter/JSON-LD, so those
+     surfaces can never diverge (see resolve/description.html). */}}
+{{- $description := partial "seo/resolve/description.html" $page -}}
+
+{{/* Absolute canonical URL: seo.canonical -> canonical alias -> .Permalink
+     (see resolve/canonical.html). */}}
+{{- $canonical := partial "seo/resolve/canonical.html" $page -}}
+
+{{/* Ordered normalized image dicts {url,width,height,type,alt} (see
+     resolve/images.html); images[0] is the primary OG/Twitter image, full
+     slice feeds JSON-LD. */}}
+{{- $images := partial "seo/resolve/images.html" $page -}}
+
+{{/* Ordered author descriptor slice (see resolve/author.html). */}}
+{{- $authors := partial "seo/resolve/author.html" $page -}}
+
+{{/* Dates {published, modified, created} RFC 3339 (see resolve/dates.html);
+     modified is already "" when .Lastmod equals .Date, because a dateModified
+     identical to datePublished is noise. */}}
+{{- $dates := partial "seo/resolve/dates.html" $page -}}
+
+{{/* Robots {robots, bots}: merged all-bots directive string plus the per-bot
+     map (see resolve/robots.html). $seo.robots feeds the emitJsonld gate and
+     hreflang suppression as well as the classic head. */}}
+{{- $robotsDict := partial "seo/resolve/robots.html" $page -}}
+
+{{/* Content-type dispatch {typeSet, ogType} (see resolve/types.html). */}}
+{{- $typesDict := partial "seo/resolve/types.html" $page -}}
+
+{{/* Locale strings. og:locale wants xx_YY (underscore); JSON-LD inLanguage and
+     cache variants want .Language.Name (RFC 5646 tag); hreflang uses .Locale
+     directly downstream. .Language.Lang is deprecated and never used. */}}
+{{- $locale := replace $page.Language.Locale "-" "_" -}}
+{{- $lang := $page.Language.Name -}}
+
+{{/* Precompute the @id strings. resolve/id.html is called once per node kind;
+     every node references these exact strings so cross-linking is
+     document-independent and per-language by construction (each language home
+     and page permalink differs). The content @id key is derived from the
+     resolved content type; when typeSet is empty there is no content node. */}}
+{{- $contentId := "" -}}
+{{- with $typesDict.typeSet -}}
+  {{- $contentId = partial "seo/resolve/id.html" (dict "page" $page "kind" "content" "type" (index . 0)) -}}
+{{- end -}}
+{{- $ids := dict
+  "website" (partial "seo/resolve/id.html" (dict "page" $page "kind" "website"))
+  "organization" (partial "seo/resolve/id.html" (dict "page" $page "kind" "organization"))
+  "webpage" (partial "seo/resolve/id.html" (dict "page" $page "kind" "webpage"))
+  "breadcrumb" (partial "seo/resolve/id.html" (dict "page" $page "kind" "breadcrumb"))
+  "content" $contentId
+-}}
+
+{{/* emitJsonld gate. Default true. Suppressed only when:
+     (a) the page is 404 kind -- structured data on error pages is noise; or
+     (b) the page resolves to noindex AND the site explicitly set
+     params.seo.jsonld_on_noindex = false. The DEFAULT keeps JSON-LD on
+     noindex pages (they remain crawlable, shareable, and AI-citable). The
+     classic head still emits either way. */}}
+{{- $emitJsonld := true -}}
+{{- if $is404 -}}
+  {{- $emitJsonld = false -}}
+{{- else -}}
+  {{- $isNoindex := in (lower $robotsDict.robots) "noindex" -}}
+  {{- $jsonldOnNoindex := ne ($page.Param "seo.jsonld_on_noindex") false -}}
+  {{- if and $isNoindex (not $jsonldOnNoindex) -}}
+    {{- $emitJsonld = false -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Assemble the canonical $seo dict -- every key listed in the docstring. */}}
+{{- $seo := dict
+  "title" $titleDict.title
+  "titleFull" $titleDict.titleFull
+  "description" $description
+  "canonical" $canonical
+  "images" $images
+  "datePublished" $dates.published
+  "dateModified" $dates.modified
+  "dateCreated" $dates.created
+  "locale" $locale
+  "lang" $lang
+  "robots" $robotsDict.robots
+  "robotsBots" $robotsDict.bots
+  "ogType" $typesDict.ogType
+  "typeSet" $typesDict.typeSet
+  "authors" $authors
+  "ids" $ids
+  "isHome" $isHome
+  "is404" $is404
+  "emitJsonld" $emitJsonld
+-}}
+
+{{- return $seo -}}

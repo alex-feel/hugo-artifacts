@@ -1,0 +1,55 @@
+{{/*
+  Resolves the page's dates once for every surface, formatted through
+  lib/time.html (the single RFC 3339 authority). Pure value chooser: no HTML,
+  no side effects.
+
+  Context: the current Page, passed as the dot.
+
+  Rules:
+  - published = seo.date_published -> .Date; RFC 3339 with the page's own
+    timezone offset; "" when .Date.IsZero.
+  - modified  = seo.date_modified -> .Lastmod, emitted ONLY when it differs from
+    the published time (a dateModified identical to datePublished is noise); ""
+    otherwise. Front-matter lastmod and Hugo's GitInfo both flow through
+    .Lastmod natively.
+  - created   = seo.profile.date_created -> .Date (ProfilePage.dateCreated).
+
+  uploadDate (VideoObject) is NOT resolved here; the videoobject builder derives
+  it via seo.video.upload_date -> .Date.
+
+  Returns: {published, modified, created} of RFC 3339 strings (each may be "").
+  ONE terminal return.
+*/}}
+
+{{- $page := . -}}
+
+{{/* published: explicit override, else native .Date. */}}
+{{- $publishedRaw := $page.Date -}}
+{{- with $page.Param "seo.date_published" -}}
+  {{- $publishedRaw = . -}}
+{{- end -}}
+{{- $published := partial "seo/lib/time.html" $publishedRaw -}}
+
+{{/* modified: explicit override, else native .Lastmod; dropped when it equals
+     the published time. */}}
+{{- $modifiedRaw := $page.Lastmod -}}
+{{- with $page.Param "seo.date_modified" -}}
+  {{- $modifiedRaw = . -}}
+{{- end -}}
+{{- $modified := partial "seo/lib/time.html" $modifiedRaw -}}
+{{- if eq $modified $published -}}
+  {{- $modified = "" -}}
+{{- end -}}
+
+{{/* created: explicit override, else native .Date (ProfilePage.dateCreated). */}}
+{{- $createdRaw := $page.Date -}}
+{{- with $page.Param "seo.profile.date_created" -}}
+  {{- $createdRaw = . -}}
+{{- end -}}
+{{- $created := partial "seo/lib/time.html" $createdRaw -}}
+
+{{- return dict
+  "published" $published
+  "modified" $modified
+  "created" $created
+-}}

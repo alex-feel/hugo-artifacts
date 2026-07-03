@@ -1,0 +1,187 @@
+{{/*
+  seo/jsonld/profilepage.html -- ProfilePage node builder (self-gates to
+  mainEntity.name).
+
+  Purpose: build the ProfilePage node with a nested mainEntity Person (default)
+  or Organization.
+
+  Expected context (dict):
+  - .page (Page)   the current page.
+  - .seo  (dict)   the resolved $seo context.
+
+  Google-correctness notes: url/email/telephone are NOT emitted on the
+  ProfilePage node (Google ignores them there); sameAs and jobTitle sit on
+  mainEntity, not on ProfilePage; dateCreated/dateModified sit on ProfilePage,
+  not on mainEntity.
+
+  Self-gating: `page` kind AND a resolvable mainEntity.name. Lists/home
+  suppress silently by kind; an unresolvable name warns.
+
+  Return value: the ProfilePage node dict WITHOUT @context, or an EMPTY dict
+  (dict) when ineligible. One terminal return.
+*/}}
+
+{{- $ctx := . -}}
+{{- $page := $ctx.page -}}
+{{- $seo := $ctx.seo -}}
+{{- $result := dict -}}
+
+{{- $profile := $page.Param "seo.profile" | default dict -}}
+{{/* Trailing warnf %s placeholder: pages expose no .Position (shortcode-only
+     method), so it stays empty and the page is identified by RelPermalink --
+     the module-wide convention shared with the resolver tier. */}}
+{{- $pos := "" -}}
+
+{{- if eq $page.Kind "page" -}}
+  {{/* mainEntity.name: given_name + family_name assembled, else the resolved
+       $seo.title. */}}
+  {{- $name := "" -}}
+  {{- $given := $profile.given_name | default "" -}}
+  {{- $family := $profile.family_name | default "" -}}
+  {{- if or $given $family -}}
+    {{- $name = trim (printf "%s %s" $given $family) " " -}}
+  {{- end -}}
+  {{- if not $name -}}
+    {{- $name = $seo.title -}}
+  {{- end -}}
+
+  {{- if not $name -}}
+    {{- partial "seo/lib/warn.html" (dict
+      "key" (printf "seo:warn:profile-name:%s" $page.RelPermalink)
+      "message" (printf "[seo] ProfilePage on %q could not resolve mainEntity.name; a real name (or alternateName) is required. Node not emitted. %s" $page.RelPermalink $pos)
+    ) -}}
+  {{- else -}}
+    {{/* mainEntity: Person (default) or Organization. */}}
+    {{- $entityType := $profile.entity_type | default "Person" -}}
+    {{- if not (in (slice "Person" "Organization") $entityType) -}}
+      {{- $entityType = "Person" -}}
+    {{- end -}}
+    {{- $main := dict
+      "@type" $entityType
+      "@id" (printf "%s#person" $page.Permalink)
+      "name" $name
+    -}}
+
+    {{/* alternateName: username -> alternate_name. */}}
+    {{- $alt := $profile.username | default $profile.alternate_name -}}
+    {{- with $alt -}}
+      {{- $main = merge $main (dict "alternateName" .) -}}
+    {{- end -}}
+    {{- with $seo.description -}}
+      {{- $main = merge $main (dict "description" .) -}}
+    {{- end -}}
+    {{- with $profile.identifier -}}
+      {{- $main = merge $main (dict "identifier" .) -}}
+    {{- end -}}
+
+    {{/* image from images[0]. */}}
+    {{- if and $seo.images (gt (len $seo.images) 0) -}}
+      {{- $imgNode := partial "seo/jsonld/image-object.html" (index $seo.images 0) -}}
+      {{- with $imgNode -}}
+        {{- $main = merge $main (dict "image" $imgNode) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{/* sameAs[] on mainEntity: seo.profile.same_as, unioned with the
+         absolute-URL values from seo.social.* when this profile is the
+         site owner (seo.profile.is_site_owner), deduped. */}}
+    {{- $sameAs := slice -}}
+    {{- with $profile.same_as -}}
+      {{- range . -}}
+        {{- $sameAs = $sameAs | append . -}}
+      {{- end -}}
+    {{- end -}}
+    {{- if $profile.is_site_owner -}}
+      {{- with $page.Site.Params.seo.social -}}
+        {{- range $k, $v := . -}}
+          {{- with $v -}}
+            {{- $s := string . -}}
+            {{- if or (hasPrefix $s "http://") (hasPrefix $s "https://") -}}
+              {{- $sameAs = $sameAs | append $s -}}
+            {{- end -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+    {{- $sameAs = $sameAs | uniq -}}
+    {{- with $sameAs -}}
+      {{- $main = merge $main (dict "sameAs" .) -}}
+    {{- end -}}
+
+    {{/* jobTitle (Person only). */}}
+    {{- if eq $entityType "Person" -}}
+      {{- with $profile.job_title -}}
+        {{- $main = merge $main (dict "jobTitle" .) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{/* interactionStatistic[] (InteractionCounter; type enum-validated). */}}
+    {{- with $profile.interaction_statistic -}}
+      {{- $stats := slice -}}
+      {{- range . -}}
+        {{- $t := partial "seo/lib/enum.html" (dict
+          "field" "interactionType"
+          "value" (.type | default "")
+          "allowed" (slice "FollowAction" "LikeAction" "BefriendAction")
+          "urlForm" false
+          "page" $page
+        ) -}}
+        {{- if and $t (isset . "count") -}}
+          {{- $stats = $stats | append (dict
+            "@type" "InteractionCounter"
+            "interactionType" (dict "@type" $t)
+            "userInteractionCount" (int .count)
+          ) -}}
+        {{- end -}}
+      {{- end -}}
+      {{- with $stats -}}
+        {{- $main = merge $main (dict "interactionStatistic" .) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{/* agentInteractionStatistic[] (owner's own actions; type enum). */}}
+    {{- with $profile.agent_interaction_statistic -}}
+      {{- $stats := slice -}}
+      {{- range . -}}
+        {{- $t := partial "seo/lib/enum.html" (dict
+          "field" "agentInteractionType"
+          "value" (.type | default "")
+          "allowed" (slice "FollowAction" "LikeAction" "WriteAction" "ShareAction")
+          "urlForm" false
+          "page" $page
+        ) -}}
+        {{- if and $t (isset . "count") -}}
+          {{- $stats = $stats | append (dict
+            "@type" "InteractionCounter"
+            "interactionType" (dict "@type" $t)
+            "userInteractionCount" (int .count)
+          ) -}}
+        {{- end -}}
+      {{- end -}}
+      {{- with $stats -}}
+        {{- $main = merge $main (dict "agentInteractionStatistic" .) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{/* ProfilePage node. dateCreated/dateModified live here, not on
+         mainEntity. url/email/telephone are intentionally NOT emitted. */}}
+    {{- $node := dict
+      "@type" "ProfilePage"
+      "@id" $seo.ids.content
+      "mainEntity" $main
+    -}}
+    {{- with $seo.dateCreated -}}
+      {{- $node = merge $node (dict "dateCreated" .) -}}
+    {{- end -}}
+    {{- with $seo.dateModified -}}
+      {{- $node = merge $node (dict "dateModified" .) -}}
+    {{- end -}}
+    {{- with $seo.ids.website -}}
+      {{- $node = merge $node (dict "isPartOf" (dict "@id" .)) -}}
+    {{- end -}}
+
+    {{- $result = $node -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $result -}}

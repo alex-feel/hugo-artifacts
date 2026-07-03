@@ -1,0 +1,31 @@
+{{/*
+  Resolves the absolute canonical URL for the page
+  (seo.canonical -> canonical alias -> .Permalink). Pure value chooser: no HTML,
+  no side effects.
+
+  Context: the current Page, passed as the dot.
+
+  Chain (first non-empty wins):
+    seo.canonical (via .Param cascade)
+    -> canonical (legacy front-matter alias)
+    -> .Permalink (Hugo-native, already absolute)
+  An explicit override that is relative is absolutized with absURL; .Permalink
+  is already absolute so it passes through. Resolving exactly one absolute
+  self-referencing canonical guarantees a page never emits duplicate or
+  conflicting rel="canonical" links.
+
+  Returns: the absolute canonical URL string. ONE terminal return.
+*/}}
+
+{{- $page := . -}}
+
+{{- $canonical := "" -}}
+{{- with $page.Param "seo.canonical" -}}
+  {{- $canonical = . | absURL -}}
+{{- else with $page.Params.canonical -}}
+  {{- $canonical = . | absURL -}}
+{{- else -}}
+  {{- $canonical = $page.Permalink -}}
+{{- end -}}
+
+{{- return $canonical -}}

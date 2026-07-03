@@ -1,0 +1,140 @@
+{{/*
+  seo/head-jsonld.html -- renderer / dispatcher (RENDERER tier).
+
+  Purpose: assemble the ordered list of JSON-LD node dicts and serialize them,
+  as SEPARATE <script> blocks (default) or one @graph block (opt-in). It calls
+  each jsonld/* builder, skips every node whose builder returned an empty dict
+  (each builder self-gates and returns empty when the page kind is wrong or a
+  Google-required property is unresolvable), appends the guarded jsonld-extra
+  hook's nodes, applies the params.seo.disable[] suppression filter, then
+  serializes per the container mode.
+
+  Expected context: $ctx = {page, seo}.
+
+  Return value: none. This partial renders.
+
+  When $seo.emitJsonld is false (404 pages, opt-in noindex suppression) it
+  renders nothing. Node builders return container-agnostic dicts WITHOUT
+  @context; this dispatcher injects @context per block in separate mode or once
+  on the @graph wrapper in graph mode, so the container choice never touches
+  builder logic. Numbers are already coerced inside the builders.
+
+  Serialization: each node dict is emitted DIRECTLY inside the <script>
+  element. Go's html/template treats <script> content as a JavaScript context
+  and JSON-marshals a map value into a plain JSON object with <, >, and &
+  escaped as <-style sequences -- valid, HTML-embedding-safe JSON-LD with NO
+  safeJS/safeHTML/noHTMLEscape. Piping a jsonify STRING here instead would be
+  re-escaped as a quoted JavaScript string literal (invalid JSON-LD), so
+  jsonify is not used.
+*/}}
+
+{{- $page := .page -}}
+{{- $seo := .seo -}}
+
+{{- if $seo.emitJsonld -}}
+  {{- $ctx := dict "page" $page "seo" $seo -}}
+
+  {{/* Ordered node list. WebSite and Organization depend only on site params
+       and the language home permalink (never on the current page), so they are
+       built through partialCached keyed on site.Language.Name -- assembled once
+       per language, not once per page. Because those builders receive `site`
+       (never the page), the PLACEMENT gate lives here: WebSite only on the home
+       page; Organization on home plus the single page flagged
+       seo.organization.on_page: true (dedup by identical @id). On every other
+       page the cached builders are not even invoked -- the page references
+       #website/#organization purely by @id. The builders still self-gate on
+       their own required data (name), returning an empty dict. */}}
+  {{- $nodes := slice -}}
+
+  {{- if $seo.isHome -}}
+    {{- $website := partialCached "seo/jsonld/website.html" site site.Language.Name -}}
+    {{- if $website -}}{{- $nodes = $nodes | append $website -}}{{- end -}}
+  {{- end -}}
+
+  {{- $orgOnPage := eq ($page.Param "seo.organization.on_page") true -}}
+  {{- if or $seo.isHome $orgOnPage -}}
+    {{- $org := partialCached "seo/jsonld/organization.html" site site.Language.Name -}}
+    {{- if $org -}}{{- $nodes = $nodes | append $org -}}{{- end -}}
+  {{- end -}}
+
+  {{/* WebPage node: every eligible page; the @id anchor / mainEntityOfPage
+       target. Self-gates on taxonomy/term lists unless webpage_on_lists. */}}
+  {{- $webpage := partial "seo/jsonld/webpage.html" $ctx -}}
+  {{- if $webpage -}}{{- $nodes = $nodes | append $webpage -}}{{- end -}}
+
+  {{/* BreadcrumbList: a slice (derived trail plus explicit trails); each entry
+       is its own node. Empty slice on home / shallow pages. */}}
+  {{- range (partial "seo/jsonld/breadcrumb.html" $ctx) -}}
+    {{- if . -}}{{- $nodes = $nodes | append . -}}{{- end -}}
+  {{- end -}}
+
+  {{/* Content node per typeSet -- dispatch each entry to its builder. In this
+       version typeSet has at most one element; the range keeps it forward
+       compatible. Builders receive {page, seo} and self-gate. */}}
+  {{- range $seo.typeSet -}}
+    {{- $builder := "" -}}
+    {{- if in (slice "Article" "BlogPosting" "NewsArticle") . -}}
+      {{- $builder = "seo/jsonld/article.html" -}}
+    {{- else if eq . "Product" -}}
+      {{- $builder = "seo/jsonld/product.html" -}}
+    {{- else if eq . "ProfilePage" -}}
+      {{- $builder = "seo/jsonld/profilepage.html" -}}
+    {{- else if eq . "SoftwareApplication" -}}
+      {{- $builder = "seo/jsonld/softwareapplication.html" -}}
+    {{- else if eq . "VideoObject" -}}
+      {{- $builder = "seo/jsonld/videoobject.html" -}}
+    {{- end -}}
+    {{- with $builder -}}
+      {{- $node := partial . $ctx -}}
+      {{- if $node -}}{{- $nodes = $nodes | append $node -}}{{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* Consumer JSON-LD node hook: an optional consumer-authored
+       layouts/_partials/seo/jsonld-extra.html returns a slice of extra node
+       dicts appended BEFORE serialization so they join the same container
+       (extra <script> blocks in separate mode, extra @graph members in graph
+       mode) with @id cross-linking intact. The module ships no such file, so
+       the guard is false by default. */}}
+  {{- if templates.Exists "_partials/seo/jsonld-extra.html" -}}
+    {{- range (partial "seo/jsonld-extra.html" $ctx) -}}
+      {{- if . -}}{{- $nodes = $nodes | append . -}}{{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* Config-level node suppression: params.seo.disable[] lists node @type
+       names to drop, e.g. ["VideoObject", "BreadcrumbList"]. Filter by each
+       node's @type (which may be a string or an array when co-typed -- a node
+       is dropped when ANY of its types is listed). */}}
+  {{- $disable := $page.Param "seo.disable" -}}
+  {{- if reflect.IsSlice $disable -}}
+    {{- $kept := slice -}}
+    {{- range $nodes -}}
+      {{- $node := . -}}
+      {{- $t := index $node "@type" -}}
+      {{- $types := cond (reflect.IsSlice $t) $t (slice $t) -}}
+      {{- $drop := false -}}
+      {{- range $types -}}
+        {{- if in $disable . -}}{{- $drop = true -}}{{- end -}}
+      {{- end -}}
+      {{- if not $drop -}}{{- $kept = $kept | append $node -}}{{- end -}}
+    {{- end -}}
+    {{- $nodes = $kept -}}
+  {{- end -}}
+
+  {{/* Serialize. Separate mode (default): one <script> per node, each merged
+       with @context. Graph mode: a single block with @context once on the
+       wrapper and the identical dicts under @graph. The map is emitted directly
+       (see the docstring): the script context JSON-marshals it into valid,
+       HTML-safe JSON-LD. */}}
+  {{- $container := $page.Param "seo.jsonld_container" | default "separate" -}}
+  {{- if eq $container "graph" -}}
+    {{- if $nodes }}
+<script type="application/ld+json">{{ merge (dict "@context" "https://schema.org") (dict "@graph" $nodes) }}</script>
+    {{- end -}}
+  {{- else -}}
+    {{- range $nodes }}
+<script type="application/ld+json">{{ merge (dict "@context" "https://schema.org") . }}</script>
+    {{- end -}}
+  {{- end -}}
+{{- end -}}

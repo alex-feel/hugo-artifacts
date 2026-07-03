@@ -1,0 +1,55 @@
+{{/*
+  Resolves the ONE unified description shared by the meta description,
+  og:description, twitter:description, and every JSON-LD description.
+  Resolving it once makes cross-surface divergence structurally impossible.
+  Pure value chooser: no HTML, no side effects.
+
+  Context: the current Page, passed as the dot.
+
+  Description chain (first non-empty wins):
+    page seo.description (front matter)
+    -> meta_description (alias)
+    -> .Description
+    -> .Summary | plainify | truncate 200  (only when the page has content)
+    -> params.seo.description (site) (alias params.metadata.description)
+    -> site.Params.description
+  The page-level seo.description is read directly from front matter so the
+  site-level params.seo.description can sit BELOW .Description/.Summary as a
+  last-resort default; .Summary sits late because auto-summaries are noisy, so
+  an explicit description always wins.
+
+  Returns: the description string (may be ""). ONE terminal return.
+*/}}
+
+{{- $page := . -}}
+
+{{/* Page-level seo.description, read straight from front matter (not the
+     .Param cascade) so it does not absorb the site default prematurely. */}}
+{{- $pageSeo := $page.Params.seo | default dict -}}
+
+{{- $description := "" -}}
+{{- with (index $pageSeo "description") -}}
+  {{- $description = . -}}
+{{- else with $page.Params.meta_description -}}
+  {{- $description = . -}}
+{{- else with $page.Description -}}
+  {{- $description = . -}}
+{{- else -}}
+  {{/* .Summary fallback only for pages that actually carry content. */}}
+  {{- if $page.Content -}}
+    {{- with $page.Summary -}}
+      {{- $description = . | plainify | strings.TrimSpace | truncate 200 -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if not $description -}}
+    {{- with site.Params.seo.description -}}
+      {{- $description = . -}}
+    {{- else with site.Params.metadata.description -}}
+      {{- $description = . -}}
+    {{- else with site.Params.description -}}
+      {{- $description = . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $description -}}

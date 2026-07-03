@@ -1,0 +1,257 @@
+{{/*
+  seo/head-meta.html -- renderer (RENDERER tier).
+
+  Purpose: write the classic head surface tag-by-tag in a fixed order:
+  <title>, description, canonical, robots (+ per-bot metas), hreflang block
+  (+ x-default), Open Graph block (+ og:type extras keyed on ogType), Twitter
+  Card block, verification block, and feed discovery. No JSON-LD is emitted
+  here.
+
+  Expected context: $ctx = {page, seo} as assembled by seo/head.html.
+
+  Return value: none. This partial renders.
+
+  404 handling: a 404 page has no canonical URL, so canonical and hreflang are
+  suppressed; the robots resolver has already forced noindex. Multilingual
+  output is gated on hugo.IsMultilingual.
+*/}}
+
+{{- $page := .page -}}
+{{- $seo := .seo -}}
+{{- $is404 := $seo.is404 -}}
+
+{{/* ---- Title ---- <title> uses titleFull (adds the site title suffix);
+     OG/JSON-LD use title, because the suffix is a SERP display device, never
+     part of the entity's canonical name. */}}
+<title>{{ $seo.titleFull }}</title>
+
+{{/* ---- Description ---- the unified description shared with OG/Twitter/JSON-LD */}}
+{{- with $seo.description }}
+<meta name="description" content="{{ . }}">
+{{- end }}
+
+{{/* ---- Canonical ---- absolute URL, suppressed on 404 (no canonical URL) */}}
+{{- if not $is404 }}
+{{- with $seo.canonical }}
+<link rel="canonical" href="{{ . }}">
+{{- end }}
+{{- end }}
+
+{{/* ---- Robots ---- merged all-bots directive plus the per-bot map */}}
+{{- with $seo.robots }}
+<meta name="robots" content="{{ . }}">
+{{- end }}
+{{- range $bot, $directive := $seo.robotsBots }}
+{{- with $directive }}
+<meta name="{{ $bot }}" content="{{ . }}">
+{{- end }}
+{{- end }}
+
+{{/* ---- hreflang + x-default ---- Suppressed on 404 and when the current page
+     itself is noindex. Each hreflang value is .Language.Locale, an RFC 5646
+     language-TERRITORY tag (e.g. en-US, de-DE). .AllTranslations includes the
+     current page, so one range yields the full symmetric set. A translation
+     whose own resolved robots contains noindex is skipped so Google never sees
+     an hreflang pointing at a noindexed URL. x-default targets the
+     DEFAULT-language variant selected via .Language.IsDefault (never
+     self-pointing); when no default-language translation exists it is omitted,
+     never fabricated. */}}
+{{- $currentNoindex := in (lower $seo.robots) "noindex" -}}
+{{- if and (not $is404) (not $currentNoindex) (hugo.IsMultilingual) -}}
+  {{- range $page.AllTranslations -}}
+    {{- $tRobots := (partial "seo/resolve/robots.html" .).robots -}}
+    {{- if not (in (lower $tRobots) "noindex") }}
+<link rel="alternate" hreflang="{{ .Language.Locale }}" href="{{ .Permalink }}">
+    {{- end -}}
+  {{- end -}}
+  {{- $default := "" -}}
+  {{- range $page.AllTranslations -}}
+    {{- if .Language.IsDefault -}}
+      {{- $default = . -}}
+    {{- end -}}
+  {{- end -}}
+  {{- with $default }}
+<link rel="alternate" hreflang="x-default" href="{{ .Permalink }}">
+  {{- end -}}
+{{- end }}
+
+{{/* ---- Open Graph ---- og:site_name from organization name -> website name
+     -> site.Title. og:image carries real width/height from resolve/image.html;
+     og:image:alt is ALWAYS present when an image is (ogp.me requires it, and
+     many implementations omit it). The first image is the primary card. */}}
+{{- $ogSiteName := $page.Param "seo.organization.name" | default ($page.Param "seo.website.name") | default site.Title -}}
+<meta property="og:type" content="{{ $seo.ogType }}">
+<meta property="og:title" content="{{ $seo.title }}">
+{{- with $seo.description }}
+<meta property="og:description" content="{{ . }}">
+{{- end }}
+<meta property="og:url" content="{{ $seo.canonical }}">
+{{- with $ogSiteName }}
+<meta property="og:site_name" content="{{ . }}">
+{{- end }}
+{{- with $seo.locale }}
+<meta property="og:locale" content="{{ . }}">
+{{- end }}
+{{- if hugo.IsMultilingual }}
+  {{- range $page.Translations }}
+<meta property="og:locale:alternate" content="{{ replace .Language.Locale "-" "_" }}">
+  {{- end }}
+{{- end }}
+{{- with (index $seo.images 0) }}
+<meta property="og:image" content="{{ .url }}">
+<meta property="og:image:secure_url" content="{{ .url }}">
+{{- with .type }}
+<meta property="og:image:type" content="{{ . }}">
+{{- end }}
+{{- with .width }}
+<meta property="og:image:width" content="{{ . }}">
+{{- end }}
+{{- with .height }}
+<meta property="og:image:height" content="{{ . }}">
+{{- end }}
+{{- with .alt }}
+<meta property="og:image:alt" content="{{ . }}">
+{{- end }}
+{{- end }}
+
+{{/* ---- OG type extras keyed on ogType ---- article:* on article; profile:* on
+     profile; product:price:* on product; og:video:* on video.other. Each field
+     is guarded with `with` so empties never emit. */}}
+{{- if eq $seo.ogType "article" -}}
+  {{- with $seo.datePublished }}
+<meta property="article:published_time" content="{{ . }}">
+  {{- end }}
+  {{- with $seo.dateModified }}
+<meta property="article:modified_time" content="{{ . }}">
+  {{- end }}
+  {{- with $page.ExpiryDate }}
+    {{- if not .IsZero }}
+<meta property="article:expiration_time" content="{{ .Format "2006-01-02T15:04:05Z07:00" }}">
+    {{- end }}
+  {{- end }}
+  {{- range $seo.authors }}
+    {{- with .url }}
+<meta property="article:author" content="{{ . }}">
+    {{- end }}
+  {{- end }}
+  {{- $section := "" -}}
+  {{- with $page.Params.categories -}}
+    {{- $section = index . 0 -}}
+  {{- end -}}
+  {{- if not $section -}}{{- $section = $page.Section -}}{{- end -}}
+  {{- with $section }}
+<meta property="article:section" content="{{ . }}">
+  {{- end }}
+  {{- range $page.Params.tags }}
+<meta property="article:tag" content="{{ . }}">
+  {{- end }}
+{{- else if eq $seo.ogType "profile" -}}
+  {{- $profile := $page.Param "seo.profile" | default (dict) -}}
+  {{- with (index $profile "given_name") }}
+<meta property="profile:first_name" content="{{ . }}">
+  {{- end }}
+  {{- with (index $profile "family_name") }}
+<meta property="profile:last_name" content="{{ . }}">
+  {{- end }}
+  {{- with (index $profile "username") }}
+<meta property="profile:username" content="{{ . }}">
+  {{- end }}
+  {{- with (index $profile "gender") }}
+<meta property="profile:gender" content="{{ . }}">
+  {{- end }}
+{{- else if eq $seo.ogType "product" -}}
+  {{- $offer := $page.Param "seo.offer" | default (dict) -}}
+  {{- with (index $offer "price") }}
+<meta property="product:price:amount" content="{{ . }}">
+  {{- end }}
+  {{- with (index $offer "price_currency") }}
+<meta property="product:price:currency" content="{{ . }}">
+  {{- end }}
+{{- else if eq $seo.ogType "video.other" -}}
+  {{- $video := $page.Param "seo.video" | default (dict) -}}
+  {{- with (index $video "content_url") }}
+<meta property="og:video:url" content="{{ . }}">
+<meta property="og:video:secure_url" content="{{ . }}">
+  {{- end }}
+  {{- with (index $video "duration") }}
+<meta property="video:duration" content="{{ . }}">
+  {{- end }}
+{{- end }}
+
+{{/* ---- Twitter / X Card ---- Card baseline is `summary`; it upgrades to
+     `summary_large_image` when a primary image resolves. twitter:image is
+     emitted ONLY when a value exists (an empty value would break OG fallback);
+     twitter:image:alt (which has no OG fallback) is emitted whenever an image
+     is. twitter:creator = first author's twitter -> twitter_creator ->
+     twitter_site. */}}
+{{- $primaryImage := index $seo.images 0 -}}
+{{- $twSite := $page.Param "seo.twitter_site" | default (index (site.Params) "twitter") -}}
+{{- $twCreator := "" -}}
+{{- with (index $seo.authors 0) -}}
+  {{- with .twitter -}}{{- $twCreator = . -}}{{- end -}}
+{{- end -}}
+{{- with $twCreator -}}{{- else -}}
+  {{- $twCreator = $page.Param "seo.twitter_creator" | default $twSite -}}
+{{- end -}}
+{{- $card := "summary" -}}
+{{- with $primaryImage -}}{{- $card = "summary_large_image" -}}{{- end -}}
+<meta name="twitter:card" content="{{ $card }}">
+{{- with $twSite }}
+<meta name="twitter:site" content="{{ printf "@%s" (trim . "@") }}">
+{{- end }}
+{{- with $twCreator }}
+<meta name="twitter:creator" content="{{ printf "@%s" (trim . "@") }}">
+{{- end }}
+<meta name="twitter:title" content="{{ $seo.title }}">
+{{- with $seo.description }}
+<meta name="twitter:description" content="{{ . }}">
+{{- end }}
+{{- with $primaryImage }}
+<meta name="twitter:image" content="{{ .url }}">
+{{- with .alt }}
+<meta name="twitter:image:alt" content="{{ . }}">
+{{- end }}
+{{- end }}
+
+{{/* ---- Site verification ---- Each token emits its provider's verification
+     tag. Backward-compatible aliases from params.site_verification.* are read
+     only when the seo.verification.* equivalent is absent. */}}
+{{- $ver := $page.Param "seo.verification" | default (dict) -}}
+{{- $legacyVer := index (site.Params) "site_verification" | default (dict) -}}
+{{- with (index $ver "google") | default (index $legacyVer "google") }}
+<meta name="google-site-verification" content="{{ . }}">
+{{- end }}
+{{- with (index $ver "bing") | default (index $legacyVer "bing") }}
+<meta name="msvalidate.01" content="{{ . }}">
+{{- end }}
+{{- with (index $ver "baidu") | default (index $legacyVer "baidu") }}
+<meta name="baidu-site-verification" content="{{ . }}">
+{{- end }}
+{{- with (index $ver "facebook") | default (index $legacyVer "facebook") }}
+<meta name="facebook-domain-verification" content="{{ . }}">
+{{- end }}
+{{- with (index $ver "pinterest") }}
+<meta name="p:domain_verify" content="{{ . }}">
+{{- end }}
+{{- with (index $ver "mastodon") | default (index $legacyVer "mastodon") }}
+<link rel="me" href="{{ . }}">
+{{- end }}
+
+{{/* ---- Feed discovery ---- Emit <link rel="alternate"
+     type="application/rss+xml"> for the page's RSS output when enabled and
+     present. Filter .AlternativeOutputFormats to the RSS format so JSON and
+     other alternates are never mislabeled as feeds. When the page itself has
+     no RSS format (a leaf page), fall back to the page's section RSS. */}}
+{{- if ne ($page.Param "seo.feed.enable") false -}}
+  {{- $feedTitle := $ogSiteName -}}
+  {{- $rss := $page.AlternativeOutputFormats.Get "rss" -}}
+  {{- with $rss }}
+<link rel="alternate" type="{{ .MediaType.Type }}" title="{{ $feedTitle }}" href="{{ .Permalink }}">
+  {{- else -}}
+    {{- with $page.CurrentSection -}}
+      {{- with .OutputFormats.Get "rss" }}
+<link rel="alternate" type="{{ .MediaType.Type }}" title="{{ $feedTitle }}" href="{{ .Permalink }}">
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end }}

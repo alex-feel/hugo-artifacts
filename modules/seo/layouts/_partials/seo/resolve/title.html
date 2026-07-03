@@ -1,0 +1,61 @@
+{{/*
+  Resolves the page title once for every downstream surface. Pure value
+  chooser: no HTML, no side effects.
+
+  Context: the current Page, passed as the dot.
+
+  Returns a dict {title, titleFull}:
+  - title:     the entity title with NO suffix; feeds og:title, twitter:title,
+               JSON-LD headline, WebPage.name, and the like.
+  - titleFull: title + params.seo.title_suffix, for the <title> element ONLY.
+               On the home page titleFull is site.Title alone (a home <title>
+               is never "Home | Acme" or "Acme | Acme").
+
+  Title chain: seo.title -> meta_title (alias) -> .Title -> (home only)
+  params.seo.organization.name -> site.Title.
+
+  ONE terminal return.
+*/}}
+
+{{- $page := . -}}
+
+{{/* Title, first non-empty wins. */}}
+{{- $title := "" -}}
+{{- with $page.Param "seo.title" -}}
+  {{- $title = . -}}
+{{- else with $page.Params.meta_title -}}
+  {{- $title = . -}}
+{{- else with $page.Title -}}
+  {{- $title = . -}}
+{{- else -}}
+  {{- if $page.IsHome -}}
+    {{- with $page.Param "seo.organization.name" -}}
+      {{- $title = . -}}
+    {{- else -}}
+      {{- $title = site.Title -}}
+    {{- end -}}
+  {{- else -}}
+    {{- $title = site.Title -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Suffix is a SERP display device: appended to titleFull only, and never on
+     the home page. Legacy alias params.metadata.title_suffix is honored when
+     params.seo.title_suffix is absent. */}}
+{{- $suffix := "" -}}
+{{- with $page.Param "seo.title_suffix" -}}
+  {{- $suffix = . -}}
+{{- else with $page.Param "metadata.title_suffix" -}}
+  {{- $suffix = . -}}
+{{- end -}}
+
+{{- $titleFull := $title -}}
+{{- if $page.IsHome -}}
+  {{- $titleFull = site.Title -}}
+{{- else -}}
+  {{- with $suffix -}}
+    {{- $titleFull = printf "%s%s" $title . -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return dict "title" $title "titleFull" $titleFull -}}

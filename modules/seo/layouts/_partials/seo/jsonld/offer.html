@@ -1,0 +1,209 @@
+{{/*
+  seo/jsonld/offer.html -- Offer / AggregateOffer node builder (shared).
+
+  Purpose: build the Offer (or AggregateOffer) node, shared by Product and
+  SoftwareApplication.
+
+  Expected context (dict):
+  - .page (Page)     the current page.
+  - .seo  (dict)     the resolved $seo context.
+  - .offer (dict)    the seo.offer.* sub-table.
+  - .product (dict)  the seo.product.* sub-table (for itemCondition precedence),
+                     optional.
+
+  Rules: price is a number (0 explicit for free). priceCurrency is required
+  whenever a price is set; enforcement lives in the callers (the
+  SoftwareApplication builder warns and suppresses its node when price > 0 and
+  priceCurrency is missing; the Product builder demands it for the Merchant
+  Listing track). availability and
+  itemCondition are enum-validated via lib/enum.html and normalized to the
+  https://schema.org/<Value> URL form. When organization.type = "OnlineStore",
+  shippingDetails / hasMerchantReturnPolicy reference the Organization policy by
+  @id; otherwise they inline from seo.offer.* when present.
+
+  Return value: the Offer/AggregateOffer node dict WITHOUT @context, or an
+  EMPTY dict (dict) when no offer data resolves. One terminal return.
+*/}}
+
+{{- $ctx := . -}}
+{{- $page := $ctx.page -}}
+{{- $seo := $ctx.seo -}}
+{{- $offer := $ctx.offer | default dict -}}
+{{- $product := $ctx.product | default dict -}}
+{{- $result := dict -}}
+
+{{- $aggregate := $offer.aggregate | default false -}}
+{{- $offerType := "Offer" -}}
+{{- if $aggregate -}}
+  {{- $offerType = "AggregateOffer" -}}
+{{- end -}}
+
+{{- $node := dict "@type" $offerType -}}
+{{- $hasContent := false -}}
+
+{{- if $aggregate -}}
+  {{/* AggregateOffer (Snippet track only): lowPrice + priceCurrency. */}}
+  {{- with $offer.low_price -}}
+    {{- $node = merge $node (dict "lowPrice" (float .)) -}}
+    {{- $hasContent = true -}}
+  {{- end -}}
+  {{- with $offer.high_price -}}
+    {{- $node = merge $node (dict "highPrice" (float .)) -}}
+  {{- end -}}
+  {{- with $offer.offer_count -}}
+    {{- $node = merge $node (dict "offerCount" (int .)) -}}
+  {{- end -}}
+{{- else -}}
+  {{/* Single Offer: price (number; 0 explicit for free). isset distinguishes
+       an explicit 0 from an absent key. */}}
+  {{- if isset $offer "price" -}}
+    {{- $node = merge $node (dict "price" (float $offer.price)) -}}
+    {{- $hasContent = true -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* priceCurrency (required when a price is set). */}}
+{{- with $offer.price_currency -}}
+  {{- $node = merge $node (dict "priceCurrency" .) -}}
+{{- end -}}
+
+{{/* availability -> ItemAvailability enum, URL form. */}}
+{{- with $offer.availability -}}
+  {{- $val := partial "seo/lib/enum.html" (dict
+    "field" "availability"
+    "value" .
+    "allowed" (slice "BackOrder" "Discontinued" "InStock" "InStoreOnly" "LimitedAvailability" "OnlineOnly" "OutOfStock" "PreOrder" "PreSale" "SoldOut")
+    "urlForm" true
+    "page" $page
+  ) -}}
+  {{- with $val -}}
+    {{- $node = merge $node (dict "availability" .) -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* itemCondition: seo.product.condition wins over seo.offer.condition. */}}
+{{- $condition := $product.condition | default $offer.condition -}}
+{{- with $condition -}}
+  {{- $val := partial "seo/lib/enum.html" (dict
+    "field" "itemCondition"
+    "value" .
+    "allowed" (slice "NewCondition" "UsedCondition" "RefurbishedCondition")
+    "urlForm" true
+    "page" $page
+  ) -}}
+  {{- with $val -}}
+    {{- $node = merge $node (dict "itemCondition" .) -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* priceValidUntil via lib/time.html passthrough (string date accepted). */}}
+{{- with $offer.price_valid_until -}}
+  {{- $formatted := partial "seo/lib/time.html" . -}}
+  {{- with $formatted -}}
+    {{- $node = merge $node (dict "priceValidUntil" .) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- with $offer.url -}}
+  {{- $node = merge $node (dict "url" .) -}}
+{{- end -}}
+
+{{/* priceSpecification (UnitPriceSpecification). priceType and
+     validForMemberTier are mutually exclusive (first-listed priceType wins). */}}
+{{- with $offer.price_specification -}}
+  {{- $ps := $offer.price_specification -}}
+  {{- $spec := dict "@type" "UnitPriceSpecification" -}}
+  {{- $hasSpec := false -}}
+  {{- with $ps.price -}}
+    {{- $spec = merge $spec (dict "price" (float .)) -}}
+    {{- $hasSpec = true -}}
+  {{- end -}}
+  {{- with $ps.price_currency -}}
+    {{- $spec = merge $spec (dict "priceCurrency" .) -}}
+    {{- $hasSpec = true -}}
+  {{- end -}}
+  {{- $hasPriceType := false -}}
+  {{- with $ps.price_type -}}
+    {{- $spec = merge $spec (dict "priceType" .) -}}
+    {{- $hasSpec = true -}}
+    {{- $hasPriceType = true -}}
+  {{- end -}}
+  {{- if not $hasPriceType -}}
+    {{- with $ps.valid_for_member_tier -}}
+      {{- $spec = merge $spec (dict "validForMemberTier" .) -}}
+      {{- $hasSpec = true -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if $hasSpec -}}
+    {{- $node = merge $node (dict "priceSpecification" $spec) -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* shippingDetails / hasMerchantReturnPolicy: reference the Organization
+     policy @id when OnlineStore, else inline from seo.offer.*. */}}
+{{- $orgType := $page.Site.Params.seo.organization.type | default "Organization" -}}
+{{- if eq $orgType "OnlineStore" -}}
+  {{- $orgId := $seo.ids.organization -}}
+  {{- with $orgId -}}
+    {{- $node = merge $node (dict
+      "shippingDetails" (dict "@id" .)
+      "hasMerchantReturnPolicy" (dict "@id" .)
+    ) -}}
+  {{- end -}}
+{{- else -}}
+  {{- with $offer.shipping -}}
+    {{- $sh := $offer.shipping -}}
+    {{- $shNode := dict "@type" "OfferShippingDetails" -}}
+    {{- $hasSh := false -}}
+    {{- with $sh.name -}}
+      {{- $shNode = merge $shNode (dict "name" .) -}}
+      {{- $hasSh = true -}}
+    {{- end -}}
+    {{- if $hasSh -}}
+      {{- $node = merge $node (dict "shippingDetails" $shNode) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- with $offer.return_policy -}}
+    {{- $rp := $offer.return_policy -}}
+    {{- $rpNode := dict "@type" "MerchantReturnPolicy" -}}
+    {{- $hasRp := false -}}
+    {{- with $rp.category -}}
+      {{- $cat := partial "seo/lib/enum.html" (dict
+        "field" "returnPolicyCategory"
+        "value" .
+        "allowed" (slice "MerchantReturnFiniteReturnWindow" "MerchantReturnNotPermitted" "MerchantReturnUnlimitedWindow")
+        "urlForm" true
+        "page" $page
+      ) -}}
+      {{- with $cat -}}
+        {{- $rpNode = merge $rpNode (dict "returnPolicyCategory" .) -}}
+        {{- $hasRp = true -}}
+      {{- end -}}
+    {{- end -}}
+    {{- with $rp.applicable_country -}}
+      {{- $rpNode = merge $rpNode (dict "applicableCountry" .) -}}
+      {{- $hasRp = true -}}
+    {{- end -}}
+    {{- with $rp.merchant_return_days -}}
+      {{- $rpNode = merge $rpNode (dict "merchantReturnDays" (int .)) -}}
+      {{- $hasRp = true -}}
+    {{- end -}}
+    {{- with $rp.return_method -}}
+      {{- $rpNode = merge $rpNode (dict "returnMethod" .) -}}
+      {{- $hasRp = true -}}
+    {{- end -}}
+    {{- with $rp.return_fees -}}
+      {{- $rpNode = merge $rpNode (dict "returnFees" .) -}}
+      {{- $hasRp = true -}}
+    {{- end -}}
+    {{- if $hasRp -}}
+      {{- $node = merge $node (dict "hasMerchantReturnPolicy" $rpNode) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if $hasContent -}}
+  {{- $result = $node -}}
+{{- end -}}
+
+{{- return $result -}}

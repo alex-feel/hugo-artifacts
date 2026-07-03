@@ -1,0 +1,160 @@
+{{/*
+  seo/jsonld/article.html -- Article / BlogPosting / NewsArticle node builder.
+
+  Purpose: build the content node for article-class pages. The concrete @type
+  is the resolved typeSet member (Article, BlogPosting, or NewsArticle).
+  Cross-linked into the entity graph by @id.
+
+  Expected context (dict):
+  - .page (Page)   the current page.
+  - .seo  (dict)   the resolved $seo context (the module's per-page value dict
+                   returned by the seo/context.html resolver: title,
+                   description, images, dates, authors, ids, typeSet, etc.).
+
+  Self-gating: emits only on `page` kind with the chosen type AND a resolvable
+  headline. List/home/taxonomy/term pages and empty headlines are suppressed
+  (empty dict; headline suppression warns via head-jsonld, not here -- an
+  article-typed page without title is unusual but not double-warned).
+
+  Return value: the Article/BlogPosting/NewsArticle node dict WITHOUT @context,
+  or an EMPTY dict (dict) when ineligible. One terminal return.
+*/}}
+
+{{- $ctx := . -}}
+{{- $page := $ctx.page -}}
+{{- $seo := $ctx.seo -}}
+{{- $result := dict -}}
+
+{{- $type := "" -}}
+{{- if and $seo.typeSet (gt (len $seo.typeSet) 0) -}}
+  {{- $type = index $seo.typeSet 0 -}}
+{{- end -}}
+{{- $isArticleType := in (slice "Article" "BlogPosting" "NewsArticle") $type -}}
+
+{{/* Self-gate: page kind + resolvable headline. */}}
+{{- if and (eq $page.Kind "page") $isArticleType $seo.title -}}
+  {{- $node := dict
+    "@type" $type
+    "@id" $seo.ids.content
+    "headline" $seo.title
+  -}}
+
+  {{/* mainEntityOfPage as an @id reference object, never the string "true". */}}
+  {{- with $seo.ids.webpage -}}
+    {{- $node = merge $node (dict "mainEntityOfPage" (dict "@id" .)) -}}
+  {{- end -}}
+
+  {{/* image[] via image-object.html (ImageObject when dims known, else URL). */}}
+  {{- if and $seo.images (gt (len $seo.images) 0) -}}
+    {{- $images := slice -}}
+    {{- range $seo.images -}}
+      {{- $imgNode := partial "seo/jsonld/image-object.html" . -}}
+      {{- with $imgNode -}}
+        {{- $images = $images | append $imgNode -}}
+      {{- end -}}
+    {{- end -}}
+    {{- with $images -}}
+      {{- $node = merge $node (dict "image" .) -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- with $seo.datePublished -}}
+    {{- $node = merge $node (dict "datePublished" .) -}}
+  {{- end -}}
+  {{- with $seo.dateModified -}}
+    {{- $node = merge $node (dict "dateModified" .) -}}
+  {{- end -}}
+
+  {{/* author[]: each descriptor -> its own Person/Organization array entry. */}}
+  {{- if and $seo.authors (gt (len $seo.authors) 0) -}}
+    {{- $authors := slice -}}
+    {{- range $seo.authors -}}
+      {{- $personNode := partial "seo/jsonld/person.html" . -}}
+      {{- with $personNode -}}
+        {{- $authors = $authors | append $personNode -}}
+      {{- end -}}
+    {{- end -}}
+    {{- with $authors -}}
+      {{- $node = merge $node (dict "author" .) -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* publisher -> Organization @id (merged with the home node). */}}
+  {{- with $seo.ids.organization -}}
+    {{- $node = merge $node (dict "publisher" (dict "@id" .)) -}}
+  {{- end -}}
+
+  {{- with $seo.description -}}
+    {{- $node = merge $node (dict "description" .) -}}
+  {{- end -}}
+  {{- $node = merge $node (dict "url" $page.Permalink) -}}
+  {{- with $seo.lang -}}
+    {{- $node = merge $node (dict "inLanguage" .) -}}
+  {{- end -}}
+
+  {{/* keywords: .Keywords -> .Params.tags -> site seo.keywords (alias
+       params.metadata.keywords), comma-joined string. The site keys are a
+       JSON-LD-only fallback; this module never emits <meta name=keywords>. */}}
+  {{- $keywords := "" -}}
+  {{- with $page.Keywords -}}
+    {{- $keywords = delimit . ", " -}}
+  {{- end -}}
+  {{- if not $keywords -}}
+    {{- with $page.Params.tags -}}
+      {{- $keywords = delimit . ", " -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if not $keywords -}}
+    {{- with $page.Param "seo.keywords" -}}
+      {{- $keywords = delimit . ", " -}}
+    {{- else with site.Params.metadata.keywords -}}
+      {{- $keywords = delimit . ", " -}}
+    {{- end -}}
+  {{- end -}}
+  {{- with $keywords -}}
+    {{- $node = merge $node (dict "keywords" .) -}}
+  {{- end -}}
+
+  {{/* articleSection: first category -> .Section. */}}
+  {{- $section := "" -}}
+  {{- with $page.Params.categories -}}
+    {{- if gt (len .) 0 -}}
+      {{- $section = index . 0 -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if not $section -}}
+    {{- with $page.Section -}}
+      {{- $section = . -}}
+    {{- end -}}
+  {{- end -}}
+  {{- with $section -}}
+    {{- $node = merge $node (dict "articleSection" .) -}}
+  {{- end -}}
+
+  {{/* wordCount as a number; omit when zero. */}}
+  {{- with $page.WordCount -}}
+    {{- if gt . 0 -}}
+      {{- $node = merge $node (dict "wordCount" (int .)) -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* isPartOf -> WebSite @id. */}}
+  {{- with $seo.ids.website -}}
+    {{- $node = merge $node (dict "isPartOf" (dict "@id" .)) -}}
+  {{- end -}}
+
+  {{/* sameAs[] from seo.same_as, with the bare top-level same_as front-matter
+       key as its deprecated alias (consulted only when seo.same_as is unset;
+       syndication links; beyond Google's required set). */}}
+  {{- $sameAs := $page.Param "seo.same_as" -}}
+  {{- if not $sameAs -}}
+    {{- $sameAs = $page.Params.same_as -}}
+  {{- end -}}
+  {{- with $sameAs -}}
+    {{- $node = merge $node (dict "sameAs" .) -}}
+  {{- end -}}
+
+  {{- $result = $node -}}
+{{- end -}}
+
+{{- return $result -}}
