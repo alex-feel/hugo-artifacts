@@ -1,0 +1,28 @@
+{{/*
+  Emits one deduplicated warnf per warning key, backed by a hugo.Store
+  sentinel so a given (key, page) issue warns exactly once per build across
+  all output formats.
+
+  This is the single side-effecting helper in the seo/lib/ tier; every other
+  resolver and node builder routes its warnf calls through here so that a
+  misconfiguration surfaces once (a maintainer should fix it) rather than
+  screaming per page-render or per output format.
+
+  Context (dict):
+  - .key (string)     Stable dedup key. Page-specific callers key by
+                      printf "seo:warn:%s:%s" $class $page.RelPermalink;
+                      config-class callers key by class (or by the offending
+                      value, e.g. "seo:warn:unknown-type:Recipe").
+  - .message (string) The fully-formatted, [seo]-prefixed warning text.
+
+  Side effect: warnf once per key. No return value is used by callers.
+*/}}
+
+{{- $key := .key -}}
+{{- $message := .message -}}
+{{- if $key -}}
+  {{- if not (hugo.Store.Get $key) -}}
+    {{- hugo.Store.Set $key true -}}
+    {{- warnf "%s" $message -}}
+  {{- end -}}
+{{- end -}}

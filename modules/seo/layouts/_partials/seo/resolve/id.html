@@ -1,0 +1,68 @@
+{{/*
+  Computes the canonical @id string for one node kind. All @ids are absolute
+  URLs derived from site/page permalinks with a stable URL-fragment
+  discriminator -- globally unique, stable across builds, human-legible in the
+  Rich Results Test, and per-language by construction. Pure value chooser: no
+  HTML, no side effects.
+
+  Context (dict):
+  - .page (page)   The current Page.
+  - .kind (string) One of: "website", "organization", "webpage", "breadcrumb",
+                   "content", "person", plus the content-type fragments
+                   "article", "product", "profilepage", "softwareapplication",
+                   "videoobject".
+  - .type (string) The resolved content type (typeSet[0]), used only when
+                   .kind is "content" to derive the lowercase fragment:
+                   Article/BlogPosting/NewsArticle -> "article"; every other
+                   supported type -> its lowercase name.
+  - .n (int)       Optional 1-based trail index for extra breadcrumb trails; the
+                   derived trail is trail 1 (bare "#breadcrumb"), extra trails
+                   are "#breadcrumb-2", "#breadcrumb-3", ... (gapless).
+
+  @id scheme:
+  - website / organization: site.Home.Permalink + "#website" / "#organization"
+    (one per language home; the organization anchor stays "#organization" even
+    for a Person publisher).
+  - webpage / breadcrumb / content: .Permalink + "#<fragment>".
+  - person: caller passes .page as the author page; .Permalink + "#person".
+
+  Returns: the @id string. ONE terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $kind := .kind -}}
+{{- $type := .type | default "" -}}
+{{- $n := .n -}}
+
+{{- $id := "" -}}
+{{- if eq $kind "website" -}}
+  {{- $id = printf "%s#website" site.Home.Permalink -}}
+{{- else if eq $kind "organization" -}}
+  {{- $id = printf "%s#organization" site.Home.Permalink -}}
+{{- else if eq $kind "webpage" -}}
+  {{- $id = printf "%s#webpage" $page.Permalink -}}
+{{- else if eq $kind "breadcrumb" -}}
+  {{- if and $n (gt (int $n) 1) -}}
+    {{- $id = printf "%s#breadcrumb-%d" $page.Permalink (int $n) -}}
+  {{- else -}}
+    {{- $id = printf "%s#breadcrumb" $page.Permalink -}}
+  {{- end -}}
+{{- else if eq $kind "person" -}}
+  {{- $id = printf "%s#person" $page.Permalink -}}
+{{- else -}}
+  {{/* Content-node fragments: Article subtypes all use "#article";
+       Product/ProfilePage/SoftwareApplication/VideoObject use their lowercase
+       type name. The caller passes the resolved type; a direct fragment kind
+       (e.g. "product") passes through as-is. */}}
+  {{- $fragment := $kind -}}
+  {{- if eq $kind "content" -}}
+    {{- if or (eq $type "") (in (slice "Article" "BlogPosting" "NewsArticle") $type) -}}
+      {{- $fragment = "article" -}}
+    {{- else -}}
+      {{- $fragment = lower $type -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $id = printf "%s#%s" $page.Permalink $fragment -}}
+{{- end -}}
+
+{{- return $id -}}

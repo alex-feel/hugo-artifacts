@@ -1,0 +1,54 @@
+{{/*
+  The single date-format authority for the module. Converts any time.Time
+  value (or a parseable date string) to an RFC 3339 timestamp that carries the
+  page's own timezone offset -- Google's "include the timezone" requirement for
+  datePublished, dateModified, uploadDate, expires, and priceValidUntil -- or,
+  in "date" mode, to a schema.org Date (YYYY-MM-DD) for date-typed properties
+  such as Organization.foundingDate.
+
+  Used by resolve/dates.html and by node builders that pass through dates
+  (VideoObject.expires, Offer.priceValidUntil, Organization.foundingDate).
+
+  Context: EITHER a time.Time value (or a string/other value parseable by
+  time.AsTime) passed as the dot, OR a dict:
+  - .value  the time.Time value or parseable string.
+  - .mode   optional; "date" formats as YYYY-MM-DD (schema.org Date), any
+            other value (or absence) formats as a full RFC 3339 timestamp.
+
+  Returns: an RFC 3339 string (format "2006-01-02T15:04:05Z07:00"), or a
+  "2006-01-02" Date string in "date" mode, or "" when the value is zero,
+  empty, or unparseable.
+
+  ONE terminal return.
+*/}}
+
+{{- $result := "" -}}
+{{- with . -}}
+  {{/* Unwrap the optional {value, mode} dict; a bare value keeps mode "". */}}
+  {{- $val := . -}}
+  {{- $mode := "" -}}
+  {{- if and (reflect.IsMap .) (isset . "value") -}}
+    {{- $val = .value -}}
+    {{- $mode = .mode | default "" -}}
+  {{- end -}}
+  {{- with $val -}}
+    {{- $t := . -}}
+    {{/* Coerce strings and other parseable values to time.Time; a genuine
+         time.Time passes through time.AsTime unchanged. */}}
+    {{- if reflect.IsMap $t -}}
+      {{/* Defensive: a map is never a valid date; leave $result empty. */}}
+    {{- else -}}
+      {{- $parsed := time.AsTime $t -}}
+      {{- with $parsed -}}
+        {{- if not .IsZero -}}
+          {{- if eq $mode "date" -}}
+            {{- $result = .Format "2006-01-02" -}}
+          {{- else -}}
+            {{- $result = .Format "2006-01-02T15:04:05Z07:00" -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- return $result -}}

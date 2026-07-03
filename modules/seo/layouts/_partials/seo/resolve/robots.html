@@ -1,0 +1,283 @@
+{{/*
+  Produces the single all-bots robots directive string and the per-bot map,
+  merging four inputs with token union and most-restrictive-wins per axis. Pure
+  value chooser: the only side effect is a deduplicated warn (via lib/warn.html)
+  when a deprecated token is stripped.
+
+  Context: the current Page, passed as the dot.
+
+  Cascade and merge:
+  1. Site baseline params.seo.robots (shipped default "max-image-preview:large").
+  2. Page seo.robots free-form string (front matter, not the cascade -- the
+     baseline is already source 1), token-UNIONED with the baseline.
+  3. Legacy noindex:true alias -> "noindex, nofollow" (only when page
+     seo.robots is absent; noindex:false is a no-op).
+  4. Structural overrides: (a) non-production forces "noindex, nofollow" unless
+     seo.allow_index_nonprod:true; (b) 404 pages force "noindex"; (c) opt-in
+     expiry: seo.robots_expiry:true + a future .ExpiryDate appends
+     "unavailable_after:<RFC 3339>".
+
+  Merge semantics: tokens parsed, deduped, unioned; any noindex wins the index
+  axis, any nofollow wins the follow axis, "none" expands to noindex+nofollow;
+  for parameterized families the more restrictive value wins
+  (max-snippet:0 > :-1; max-image-preview none > standard > large). Deprecated
+  tokens (noarchive, nocache, nositelinkssearchbox, noodp) are stripped with a
+  deduped warn. When the merged set is empty, "" is returned (no tag emitted).
+
+  Per-bot targeting comes from the seo.robots_bots map; each bot value is merged
+  with the same semantics against the all-bots set.
+
+  Returns: {robots, bots}. ONE terminal return.
+*/}}
+
+{{- $page := . -}}
+
+{{- $deprecated := slice "noarchive" "nocache" "nositelinkssearchbox" "noodp" -}}
+{{- $previewRank := dict "none" 3 "standard" 2 "large" 1 -}}
+
+{{/* Collect the raw directive source strings for the ALL-BOTS set, in order. */}}
+{{- $sources := slice -}}
+
+{{/* 1. Site baseline. */}}
+{{- with site.Params.seo.robots -}}
+  {{- $sources = $sources | append . -}}
+{{- end -}}
+
+{{/* 2 and 3. Page seo.robots OR the legacy noindex:true alias when seo.robots
+     is absent. Read straight from front matter (not the .Param cascade): the
+     site baseline is already source 1, and letting the cascade echo it here
+     would both double-add it and short-circuit the legacy alias. */}}
+{{- $pageSeo := $page.Params.seo | default dict -}}
+{{- $pageRobots := index $pageSeo "robots" -}}
+{{- if $pageRobots -}}
+  {{- $sources = $sources | append $pageRobots -}}
+{{- else -}}
+  {{- if eq $page.Params.noindex true -}}
+    {{- $sources = $sources | append "noindex, nofollow" -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* 4a. Non-production forces noindex,nofollow unless the page escapes. */}}
+{{- if not hugo.IsProduction -}}
+  {{- if ne ($page.Param "seo.allow_index_nonprod") true -}}
+    {{- $sources = $sources | append "noindex, nofollow" -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* 4b. 404 pages force noindex unconditionally. */}}
+{{- if eq $page.Kind "404" -}}
+  {{- $sources = $sources | append "noindex" -}}
+{{- end -}}
+
+{{/* 4c. Opt-in expiry. */}}
+{{- if eq ($page.Param "seo.robots_expiry") true -}}
+  {{- with $page.ExpiryDate -}}
+    {{- if not .IsZero -}}
+      {{- if gt (.Unix) (now.Unix) -}}
+        {{- $rfc := partial "seo/lib/time.html" . -}}
+        {{- with $rfc -}}
+          {{- $sources = $sources | append (printf "unavailable_after:%s" .) -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Merge the all-bots sources into a single directive string. Because Hugo
+     partials support only one terminal return, the reusable merge is expressed
+     inline; the per-bot loop below repeats the same reduction against each
+     bot's own source list. */}}
+{{- $robots := "" -}}
+{{- $mergedTokens := slice -}}
+{{- $hasNoindex := false -}}
+{{- $hasNofollow := false -}}
+{{- $previewBest := 0 -}}
+{{- $snippetSet := false -}}
+{{- $snippetBest := 0 -}}
+{{- $videoSet := false -}}
+{{- $videoBest := 0 -}}
+{{- $simple := slice -}}
+{{- $unavailable := "" -}}
+
+{{- range $src := $sources -}}
+  {{- range $raw := (split $src ",") -}}
+    {{- $tok := $raw | strings.TrimSpace | lower -}}
+    {{- if $tok -}}
+      {{- if in $deprecated $tok -}}
+        {{/* Deprecated: strip with a deduped warn (keyed per page + token). */}}
+        {{- partial "seo/lib/warn.html" (dict
+          "key" (printf "seo:warn:robots-deprecated:%s:%s" $tok $page.RelPermalink)
+          "message" (printf "[seo] robots directive on %q contains deprecated token %q (unsupported since 2026); token stripped. %s" $page.RelPermalink $tok "")
+        ) -}}
+      {{- else if eq $tok "none" -}}
+        {{- $hasNoindex = true -}}
+        {{- $hasNofollow = true -}}
+      {{- else if eq $tok "noindex" -}}
+        {{- $hasNoindex = true -}}
+      {{- else if eq $tok "nofollow" -}}
+        {{- $hasNofollow = true -}}
+      {{- else if hasPrefix $tok "max-image-preview:" -}}
+        {{- $v := strings.TrimPrefix "max-image-preview:" $tok -}}
+        {{- $rank := index $previewRank $v | default 0 -}}
+        {{- if gt $rank $previewBest -}}
+          {{- $previewBest = $rank -}}
+        {{- end -}}
+      {{- else if hasPrefix $tok "max-snippet:" -}}
+        {{/* Most restrictive wins: -1 means unlimited (least restrictive); 0
+             means no snippet (most restrictive); a larger positive N is less
+             restrictive than a smaller one. */}}
+        {{- $v := int (strings.TrimPrefix "max-snippet:" $tok) -}}
+        {{- if not $snippetSet -}}
+          {{- $snippetSet = true -}}
+          {{- $snippetBest = $v -}}
+        {{- else if eq $snippetBest -1 -}}
+          {{- $snippetBest = $v -}}
+        {{- else if and (ne $v -1) (lt $v $snippetBest) -}}
+          {{- $snippetBest = $v -}}
+        {{- end -}}
+      {{- else if hasPrefix $tok "max-video-preview:" -}}
+        {{/* Same restrictiveness rule as max-snippet: -1 is unlimited. */}}
+        {{- $v := int (strings.TrimPrefix "max-video-preview:" $tok) -}}
+        {{- if not $videoSet -}}
+          {{- $videoSet = true -}}
+          {{- $videoBest = $v -}}
+        {{- else if eq $videoBest -1 -}}
+          {{- $videoBest = $v -}}
+        {{- else if and (ne $v -1) (lt $v $videoBest) -}}
+          {{- $videoBest = $v -}}
+        {{- end -}}
+      {{- else if hasPrefix $tok "unavailable_after:" -}}
+        {{- $unavailable = strings.TrimPrefix "unavailable_after:" $tok -}}
+      {{- else if not (in $simple $tok) -}}
+        {{/* Pass-through simple tokens: nosnippet, noimageindex, notranslate,
+             indexifembedded (order-preserving, deduped). */}}
+        {{- $simple = $simple | append $tok -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Assemble the all-bots directive string from the reduced axes, in a stable
+     order: index/follow, then simple tokens, then parameterized families. */}}
+{{- if $hasNoindex -}}
+  {{- $mergedTokens = $mergedTokens | append "noindex" -}}
+{{- end -}}
+{{- if $hasNofollow -}}
+  {{- $mergedTokens = $mergedTokens | append "nofollow" -}}
+{{- end -}}
+{{- range $simple -}}
+  {{- $mergedTokens = $mergedTokens | append . -}}
+{{- end -}}
+{{- if gt $previewBest 0 -}}
+  {{- $label := "" -}}
+  {{- range $k, $v := $previewRank -}}
+    {{- if eq $v $previewBest -}}
+      {{- $label = $k -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $mergedTokens = $mergedTokens | append (printf "max-image-preview:%s" $label) -}}
+{{- end -}}
+{{- if $snippetSet -}}
+  {{- $mergedTokens = $mergedTokens | append (printf "max-snippet:%d" $snippetBest) -}}
+{{- end -}}
+{{- if $videoSet -}}
+  {{- $mergedTokens = $mergedTokens | append (printf "max-video-preview:%d" $videoBest) -}}
+{{- end -}}
+{{- with $unavailable -}}
+  {{- $mergedTokens = $mergedTokens | append (printf "unavailable_after:%s" .) -}}
+{{- end -}}
+{{- $robots = delimit $mergedTokens ", " -}}
+
+{{/* Per-bot map: each bot's directive is the all-bots sources UNIONED with the
+     bot's own string, reduced with the identical semantics. */}}
+{{- $bots := dict -}}
+{{- with $page.Param "seo.robots_bots" -}}
+  {{- range $bot, $botDirective := . -}}
+    {{- $botSources := $sources | append $botDirective -}}
+    {{- $bHasNoindex := false -}}
+    {{- $bHasNofollow := false -}}
+    {{- $bPreviewBest := 0 -}}
+    {{- $bSnippetSet := false -}}
+    {{- $bSnippetBest := 0 -}}
+    {{- $bVideoSet := false -}}
+    {{- $bVideoBest := 0 -}}
+    {{- $bSimple := slice -}}
+    {{- $bUnavailable := "" -}}
+    {{- range $src := $botSources -}}
+      {{- range $raw := (split $src ",") -}}
+        {{- $tok := $raw | strings.TrimSpace | lower -}}
+        {{- if and $tok (not (in $deprecated $tok)) -}}
+          {{- if eq $tok "none" -}}
+            {{- $bHasNoindex = true -}}
+            {{- $bHasNofollow = true -}}
+          {{- else if eq $tok "noindex" -}}
+            {{- $bHasNoindex = true -}}
+          {{- else if eq $tok "nofollow" -}}
+            {{- $bHasNofollow = true -}}
+          {{- else if hasPrefix $tok "max-image-preview:" -}}
+            {{- $v := strings.TrimPrefix "max-image-preview:" $tok -}}
+            {{- $rank := index $previewRank $v | default 0 -}}
+            {{- if gt $rank $bPreviewBest -}}
+              {{- $bPreviewBest = $rank -}}
+            {{- end -}}
+          {{- else if hasPrefix $tok "max-snippet:" -}}
+            {{- $v := int (strings.TrimPrefix "max-snippet:" $tok) -}}
+            {{- if not $bSnippetSet -}}
+              {{- $bSnippetSet = true -}}
+              {{- $bSnippetBest = $v -}}
+            {{- else if eq $bSnippetBest -1 -}}
+              {{- $bSnippetBest = $v -}}
+            {{- else if and (ne $v -1) (lt $v $bSnippetBest) -}}
+              {{- $bSnippetBest = $v -}}
+            {{- end -}}
+          {{- else if hasPrefix $tok "max-video-preview:" -}}
+            {{- $v := int (strings.TrimPrefix "max-video-preview:" $tok) -}}
+            {{- if not $bVideoSet -}}
+              {{- $bVideoSet = true -}}
+              {{- $bVideoBest = $v -}}
+            {{- else if eq $bVideoBest -1 -}}
+              {{- $bVideoBest = $v -}}
+            {{- else if and (ne $v -1) (lt $v $bVideoBest) -}}
+              {{- $bVideoBest = $v -}}
+            {{- end -}}
+          {{- else if hasPrefix $tok "unavailable_after:" -}}
+            {{- $bUnavailable = strings.TrimPrefix "unavailable_after:" $tok -}}
+          {{- else if not (in $bSimple $tok) -}}
+            {{- $bSimple = $bSimple | append $tok -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+    {{- $bTokens := slice -}}
+    {{- if $bHasNoindex -}}
+      {{- $bTokens = $bTokens | append "noindex" -}}
+    {{- end -}}
+    {{- if $bHasNofollow -}}
+      {{- $bTokens = $bTokens | append "nofollow" -}}
+    {{- end -}}
+    {{- range $bSimple -}}
+      {{- $bTokens = $bTokens | append . -}}
+    {{- end -}}
+    {{- if gt $bPreviewBest 0 -}}
+      {{- $label := "" -}}
+      {{- range $k, $v := $previewRank -}}
+        {{- if eq $v $bPreviewBest -}}
+          {{- $label = $k -}}
+        {{- end -}}
+      {{- end -}}
+      {{- $bTokens = $bTokens | append (printf "max-image-preview:%s" $label) -}}
+    {{- end -}}
+    {{- if $bSnippetSet -}}
+      {{- $bTokens = $bTokens | append (printf "max-snippet:%d" $bSnippetBest) -}}
+    {{- end -}}
+    {{- if $bVideoSet -}}
+      {{- $bTokens = $bTokens | append (printf "max-video-preview:%d" $bVideoBest) -}}
+    {{- end -}}
+    {{- with $bUnavailable -}}
+      {{- $bTokens = $bTokens | append (printf "unavailable_after:%s" .) -}}
+    {{- end -}}
+    {{- $bots = merge $bots (dict $bot (delimit $bTokens ", ")) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return dict "robots" $robots "bots" $bots -}}

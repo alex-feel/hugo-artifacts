@@ -1,0 +1,123 @@
+{{/*
+  Resolves the ordered slice of author descriptor dicts for the page. Pure
+  value chooser: no HTML, no side effects.
+
+  Context: the current Page, passed as the dot.
+
+  Ladder (first producing branch wins):
+  1. seo.authors as an inline array of objects -- used verbatim (self-contained;
+     serves sites with no author pages).
+  2. native authors ([]string of slugs): for each slug, resolve
+     site.GetPage (path_prefix + slug) in the current language, else in the
+     default-language site (hugo.Sites.Default) so a default-language-only
+     author page still resolves on translated pages. When a page resolves:
+     name = its .Title, url = its .Permalink, image = its primary bundle
+     image, and same_as/job_title/description/twitter come from its
+     seo.profile.* (with twitter_username as the twitter alias). When it
+     resolves in NO language: degrade to {name: humanized slug} (silent,
+     documented behavior).
+  3. native author (single string): one {name} descriptor.
+  4. site default params.seo.author.{name,url,type}; omitted when that too is
+     empty.
+
+  Each descriptor dict carries: {name, url, type, id, same_as, job_title,
+  image, description, twitter}. Only non-empty keys are set; `id` is the
+  Person @id (<author-permalink>#person), present only when an author page
+  resolves. The first author's twitter handle feeds twitter:creator downstream.
+
+  Returns: an ordered slice of descriptor dicts (possibly empty). ONE terminal
+  return.
+*/}}
+
+{{- $page := . -}}
+{{- $authors := slice -}}
+
+{{- $inline := $page.Param "seo.authors" -}}
+{{- $slugs := $page.Params.authors -}}
+{{- $single := $page.Params.author -}}
+{{- $prefix := $page.Param "seo.author.path_prefix" | default "/authors/" -}}
+
+{{- if $inline -}}
+  {{/* 1. Inline objects, used verbatim; keep only entries that carry a name so
+       every descriptor's own keys (url, type, same_as, job_title, image,
+       description, twitter) pass straight through. */}}
+  {{- range $inline -}}
+    {{- if (index . "name") -}}
+      {{- $authors = $authors | append . -}}
+    {{- end -}}
+  {{- end -}}
+{{- else if $slugs -}}
+  {{/* 2. Native author slugs resolved against the author-page section. */}}
+  {{- range $slug := $slugs -}}
+    {{- $descriptor := dict -}}
+    {{- $path := printf "%s%s" $prefix $slug -}}
+    {{/* Resolve in the current language first, then fall back to the
+         default-language site so a default-language-only author page still
+         resolves on translated pages (hugo.Sites.Default; never the
+         deprecated site.Sites). */}}
+    {{- $ap := site.GetPage $path -}}
+    {{- if not $ap -}}
+      {{- with hugo.Sites.Default -}}
+        {{- $ap = .GetPage $path -}}
+      {{- end -}}
+    {{- end -}}
+    {{- if $ap -}}
+      {{/* Author page resolved: pull its identity and seo.profile.* fields.
+           The Person @id (<author-permalink>#person) links Article.author to
+           that page's ProfilePage.mainEntity, so Google and AI crawlers connect
+           the author to the profile. */}}
+      {{- $descriptor = dict "name" $ap.Title "url" $ap.Permalink "type" "Person" -}}
+      {{- $descriptor = merge $descriptor (dict "id" (partial "seo/resolve/id.html" (dict "page" $ap "kind" "person"))) -}}
+      {{- $profile := $ap.Param "seo.profile" | default dict -}}
+      {{- with (index $profile "entity_type") -}}
+        {{- $descriptor = merge $descriptor (dict "type" .) -}}
+      {{- end -}}
+      {{- with (index $profile "same_as") -}}
+        {{- $descriptor = merge $descriptor (dict "same_as" .) -}}
+      {{- end -}}
+      {{- with (index $profile "job_title") -}}
+        {{- $descriptor = merge $descriptor (dict "job_title" .) -}}
+      {{- end -}}
+      {{- with $ap.Description -}}
+        {{- $descriptor = merge $descriptor (dict "description" .) -}}
+      {{- end -}}
+      {{/* twitter: seo.profile.twitter, else the twitter_username alias. */}}
+      {{- $tw := index $profile "twitter" -}}
+      {{- if not $tw -}}
+        {{- $tw = $ap.Params.twitter_username -}}
+      {{- end -}}
+      {{- with $tw -}}
+        {{- $descriptor = merge $descriptor (dict "twitter" .) -}}
+      {{- end -}}
+      {{/* image: the author page's primary bundle image URL. */}}
+      {{- $imgs := partial "seo/resolve/images.html" $ap -}}
+      {{- with $imgs -}}
+        {{- $descriptor = merge $descriptor (dict "image" (index . 0).url) -}}
+      {{- end -}}
+    {{- else -}}
+      {{/* Author page resolved in no language: degrade to a humanized slug. */}}
+      {{- $descriptor = dict "name" (humanize $slug) -}}
+    {{- end -}}
+    {{- if $descriptor.name -}}
+      {{- $authors = $authors | append $descriptor -}}
+    {{- end -}}
+  {{- end -}}
+{{- else if $single -}}
+  {{/* 3. Single native author string. */}}
+  {{- $authors = $authors | append (dict "name" $single) -}}
+{{- else -}}
+  {{/* 4. Site default author, when configured. */}}
+  {{- $defName := $page.Param "seo.author.name" -}}
+  {{- with $defName -}}
+    {{- $descriptor := dict "name" . -}}
+    {{- with $page.Param "seo.author.url" -}}
+      {{- $descriptor = merge $descriptor (dict "url" .) -}}
+    {{- end -}}
+    {{- with $page.Param "seo.author.type" -}}
+      {{- $descriptor = merge $descriptor (dict "type" .) -}}
+    {{- end -}}
+    {{- $authors = $authors | append $descriptor -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $authors -}}

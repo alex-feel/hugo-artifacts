@@ -1,0 +1,255 @@
+{{/*
+  seo/jsonld/product.html -- Product node builder (two tracks; self-gates).
+
+  Purpose: build the Product content node. Two tracks:
+  - Merchant Listing: when seo.offer.price > 0 AND price_currency set. Then
+    image and the Offer's price/priceCurrency are REQUIRED; offers MUST be a
+    single Offer (never AggregateOffer). Missing name/image/price/currency ->
+    node suppressed with the merchant-listing warn.
+  - Product Snippet: otherwise. At least one of offers/review/aggregateRating
+    must be present or the node is suppressed with the snippet warn.
+    AggregateOffer (via seo.offer.aggregate) is allowed only here.
+
+  Expected context (dict):
+  - .page (Page)   the current page.
+  - .seo  (dict)   the resolved $seo context.
+
+  Self-gating: `page` kind AND name resolves AND (Snippet) at least one of
+  offers/review/aggregateRating. Lists/home suppress silently by page kind; a
+  declared-but-incomplete Product warns.
+
+  Return value: the Product node dict WITHOUT @context, or an EMPTY dict (dict)
+  when ineligible. One terminal return.
+*/}}
+
+{{- $ctx := . -}}
+{{- $page := $ctx.page -}}
+{{- $seo := $ctx.seo -}}
+{{- $result := dict -}}
+
+{{- $prod := $page.Param "seo.product" | default dict -}}
+{{- $offerData := $page.Param "seo.offer" | default dict -}}
+{{/* Trailing warnf %s placeholder: pages expose no .Position (shortcode-only
+     method), so it stays empty and the page is identified by RelPermalink --
+     the module-wide convention shared with the resolver tier. */}}
+{{- $pos := "" -}}
+
+{{/* Only page-kind pages are eligible; lists/home suppress silently. */}}
+{{- if eq $page.Kind "page" -}}
+  {{- $name := $seo.title -}}
+  {{- with $prod.name -}}
+    {{- $name = . -}}
+  {{- end -}}
+
+  {{/* Track determination: Merchant Listing when price > 0 and currency set. */}}
+  {{- $price := 0.0 -}}
+  {{- if isset $offerData "price" -}}
+    {{- $price = float $offerData.price -}}
+  {{- end -}}
+  {{- $currency := $offerData.price_currency | default "" -}}
+  {{- $isMerchant := and (gt $price 0.0) (ne $currency "") -}}
+
+  {{/* Build the shared Offer/AggregateRating/Review fragments up front so the
+       track gates can inspect their presence. */}}
+  {{- $offerNode := dict -}}
+  {{- with $offerData -}}
+    {{- $offerNode = partial "seo/jsonld/offer.html" (dict
+      "page" $page "seo" $seo "offer" $offerData "product" $prod
+    ) -}}
+  {{- end -}}
+  {{- $aggRating := dict -}}
+  {{- with $prod.aggregate_rating -}}
+    {{- $aggRating = partial "seo/jsonld/rating.html" (dict "kind" "aggregate" "data" . "page" $page) -}}
+  {{- end -}}
+  {{- $review := dict -}}
+  {{- with $prod.review -}}
+    {{- $review = partial "seo/jsonld/rating.html" (dict "kind" "review" "data" . "page" $page) -}}
+  {{- end -}}
+
+  {{- $hasOffers := gt (len $offerNode) 0 -}}
+  {{- $hasAgg := gt (len $aggRating) 0 -}}
+  {{- $hasReview := gt (len $review) 0 -}}
+
+  {{/* image[] presence for the Merchant Listing required-image check. */}}
+  {{- $images := slice -}}
+  {{- if and $seo.images (gt (len $seo.images) 0) -}}
+    {{- range $seo.images -}}
+      {{- $imgNode := partial "seo/jsonld/image-object.html" . -}}
+      {{- with $imgNode -}}
+        {{- $images = $images | append $imgNode -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $hasImage := gt (len $images) 0 -}}
+
+  {{/* Self-gate. */}}
+  {{- $suppress := false -}}
+  {{- if not $name -}}
+    {{- $suppress = true -}}
+  {{- else if $isMerchant -}}
+    {{/* Merchant Listing requires name, image, offers.price, priceCurrency. */}}
+    {{- $missing := slice -}}
+    {{- if not $hasImage -}}{{- $missing = $missing | append "image" -}}{{- end -}}
+    {{- if not $hasOffers -}}{{- $missing = $missing | append "offers" -}}{{- end -}}
+    {{- if gt (len $missing) 0 -}}
+      {{- $suppress = true -}}
+      {{- partial "seo/lib/warn.html" (dict
+        "key" (printf "seo:warn:product-merchant:%s" $page.RelPermalink)
+        "message" (printf "[seo] Product on %q is a merchant listing (offer.price > 0) but is missing %s; Merchant Listing requires name, image, offers.price, offers.priceCurrency. Node not emitted. %s" $page.RelPermalink (delimit $missing ", ") $pos)
+      ) -}}
+    {{- end -}}
+  {{- else -}}
+    {{/* Snippet track: at least one of offers/review/aggregateRating. */}}
+    {{- if not (or $hasOffers $hasReview $hasAgg) -}}
+      {{- $suppress = true -}}
+      {{- partial "seo/lib/warn.html" (dict
+        "key" (printf "seo:warn:product-snippet:%s" $page.RelPermalink)
+        "message" (printf "[seo] Product on %q declares Product but has none of offers, review, or aggregateRating; a Product snippet requires at least one. Node not emitted. %s" $page.RelPermalink $pos)
+      ) -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- if not $suppress -}}
+    {{/* @type: literal Product, or ["Product", <additional>]. */}}
+    {{- $ptype := "Product" -}}
+    {{- with $prod.additional_type -}}
+      {{- $ptype = slice "Product" . -}}
+    {{- end -}}
+    {{- $node := dict
+      "@type" $ptype
+      "@id" $seo.ids.content
+      "name" $name
+    -}}
+
+    {{- with $images -}}
+      {{- $node = merge $node (dict "image" .) -}}
+    {{- end -}}
+    {{- if $hasOffers -}}
+      {{- $node = merge $node (dict "offers" $offerNode) -}}
+    {{- end -}}
+    {{- with $seo.description -}}
+      {{- $node = merge $node (dict "description" .) -}}
+    {{- end -}}
+
+    {{/* Product identifiers. */}}
+    {{- with $prod.sku -}}
+      {{- $node = merge $node (dict "sku" .) -}}
+    {{- end -}}
+    {{- with $prod.mpn -}}
+      {{- $node = merge $node (dict "mpn" .) -}}
+    {{- end -}}
+    {{- with $prod.gtin -}}
+      {{- $node = merge $node (dict "gtin" .) -}}
+    {{- end -}}
+    {{- with $prod.gtin8 -}}
+      {{- $node = merge $node (dict "gtin8" .) -}}
+    {{- end -}}
+    {{- with $prod.gtin12 -}}
+      {{- $node = merge $node (dict "gtin12" .) -}}
+    {{- end -}}
+    {{- with $prod.gtin13 -}}
+      {{- $node = merge $node (dict "gtin13" .) -}}
+    {{- end -}}
+    {{- with $prod.gtin14 -}}
+      {{- $node = merge $node (dict "gtin14" .) -}}
+    {{- end -}}
+    {{- with $prod.isbn -}}
+      {{- $node = merge $node (dict "isbn" .) -}}
+    {{- end -}}
+
+    {{/* brand as a Brand node. */}}
+    {{- with $prod.brand -}}
+      {{- $node = merge $node (dict "brand" (dict "@type" "Brand" "name" .)) -}}
+    {{- end -}}
+
+    {{- with $prod.color -}}
+      {{- $node = merge $node (dict "color" .) -}}
+    {{- end -}}
+    {{- with $prod.material -}}
+      {{- $node = merge $node (dict "material" .) -}}
+    {{- end -}}
+    {{- with $prod.pattern -}}
+      {{- $node = merge $node (dict "pattern" .) -}}
+    {{- end -}}
+    {{- with $prod.size -}}
+      {{- $node = merge $node (dict "size" .) -}}
+    {{- end -}}
+
+    {{/* audience (PeopleAudience). */}}
+    {{- with $prod.audience -}}
+      {{- $aud := $prod.audience -}}
+      {{- $audNode := dict "@type" "PeopleAudience" -}}
+      {{- $hasAud := false -}}
+      {{- with $aud.suggested_gender -}}
+        {{- $g := partial "seo/lib/enum.html" (dict
+          "field" "suggestedGender"
+          "value" .
+          "allowed" (slice "Male" "Female" "Unisex")
+          "urlForm" false
+          "page" $page
+        ) -}}
+        {{- with $g -}}
+          {{- $audNode = merge $audNode (dict "suggestedGender" .) -}}
+          {{- $hasAud = true -}}
+        {{- end -}}
+      {{- end -}}
+      {{- with $aud.suggested_min_age -}}
+        {{- $audNode = merge $audNode (dict "suggestedMinAge" (float .)) -}}
+        {{- $hasAud = true -}}
+      {{- end -}}
+      {{- with $aud.suggested_max_age -}}
+        {{- $audNode = merge $audNode (dict "suggestedMaxAge" (float .)) -}}
+        {{- $hasAud = true -}}
+      {{- end -}}
+      {{- if $hasAud -}}
+        {{- $node = merge $node (dict "audience" $audNode) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{/* hasCertification[] (max 10). */}}
+    {{- with $prod.certifications -}}
+      {{- $certs := slice -}}
+      {{- range $i, $c := . -}}
+        {{- if lt $i 10 -}}
+          {{- $certNode := dict "@type" "Certification" -}}
+          {{- with $c.name -}}
+            {{- $certNode = merge $certNode (dict "name" .) -}}
+          {{- end -}}
+          {{- with $c.standard -}}
+            {{- $certNode = merge $certNode (dict "certificationIdentification" .) -}}
+          {{- end -}}
+          {{- $certs = $certs | append $certNode -}}
+        {{- end -}}
+      {{- end -}}
+      {{- with $certs -}}
+        {{- $node = merge $node (dict "hasCertification" .) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{/* hasAdultConsideration. */}}
+    {{- if $prod.adult -}}
+      {{- $node = merge $node (dict "hasAdultConsideration" "SexualContentConsideration") -}}
+    {{- end -}}
+
+    {{- if $hasAgg -}}
+      {{- $node = merge $node (dict "aggregateRating" $aggRating) -}}
+    {{- end -}}
+    {{- if $hasReview -}}
+      {{- $node = merge $node (dict "review" $review) -}}
+    {{- end -}}
+
+    {{/* sameAs[] from seo.same_as, with the bare top-level same_as key as its
+         deprecated alias (consulted only when seo.same_as is unset). */}}
+    {{- $sameAs := $page.Param "seo.same_as" -}}
+    {{- if not $sameAs -}}
+      {{- $sameAs = $page.Params.same_as -}}
+    {{- end -}}
+    {{- with $sameAs -}}
+      {{- $node = merge $node (dict "sameAs" .) -}}
+    {{- end -}}
+
+    {{- $result = $node -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $result -}}

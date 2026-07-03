@@ -1,0 +1,66 @@
+{{/*
+  seo/head.html -- PUBLIC ENTRY (renderer tier).
+
+  Purpose: the module's single stable public API. A consumer places exactly
+  one line inside the site <head>:
+
+      {{ partial "seo/head.html" . }}
+
+  and receives the complete SEO head surface: <title>, meta description,
+  canonical, robots (+ per-bot), hreflang + x-default, all Open Graph (with
+  article/profile/product/video extras), all Twitter Card, site verification,
+  feed discovery, and every applicable JSON-LD <script> block -- all in <head>.
+
+  Expected context: the current Page (the dot). Passing anything else is the
+  module's single build-failing errorf case: a real Page exposes both .Site and
+  .RelPermalink; anything lacking them is a wiring mistake.
+
+  Return value: none. This partial renders; it does not return.
+
+  Data flow: resolve the shared $seo context ONCE via seo/context.html, thread
+  {page, seo} to every child, then fan out to head-meta.html and
+  head-jsonld.html, and finally the guarded head-extra hook. No downstream
+  partial re-derives title, images, dates, or @id strings, so every surface
+  (title, OG, Twitter, JSON-LD) agrees by construction.
+*/}}
+
+{{- $page := . -}}
+
+{{/* Wiring guard: the dot must be the current Page. reflect.IsPage
+     (v0.154.0+, safe on nil, never panics) is the precise, method-independent
+     test -- it returns false for a Site, a Resource, a dict, or nil, exactly the
+     mistaken callers this guard must reject. This is the module's ONE errorf. */}}
+{{- if not (reflect.IsPage $page) -}}
+  {{- errorf "[seo] head.html must be called with the current Page as its context, e.g. {{ partial \"seo/head.html\" . }}" -}}
+{{- end -}}
+
+{{/* Global kill switch: params.seo.enable = false disables the module
+     everywhere; page seo.disable = true is the per-page escape hatch for
+     hand-templated pages. Either one suppresses the entire surface. The site
+     switch reads through the .Param cascade so a language block can flip it. */}}
+{{- $enabled := ne ($page.Param "seo.enable") false -}}
+{{- $disabled := eq ($page.Param "seo.disable") true -}}
+
+{{- if and $enabled (not $disabled) -}}
+  {{/* The single resolve. Every shared decision (title, description, images,
+       dates, @ids, robots, types) is made once here and cached in $seo. */}}
+  {{- $seo := partial "seo/context.html" $page -}}
+  {{- $ctx := dict "page" $page "seo" $seo -}}
+
+  {{/* Classic head surface: always emitted on every non-killed page. */}}
+  {{- partial "seo/head-meta.html" $ctx -}}
+
+  {{/* Structured data: internally gated by $seo.emitJsonld (404 pages and
+       opt-in noindex suppression render nothing from here). */}}
+  {{- partial "seo/head-jsonld.html" $ctx -}}
+
+  {{/* Additive consumer hook: an optional consumer-authored
+       layouts/_partials/seo/head-extra.html runs LAST so extra head tags can
+       reuse the already-resolved title/description/images/@ids in $ctx. The
+       module ships no such file, so the guard is false and the hook is
+       zero-cost until a consumer opts in. templates.Exists needs the _partials/
+       prefix (the layout path), not a partials/ prefix. */}}
+  {{- if templates.Exists "_partials/seo/head-extra.html" -}}
+    {{- partial "seo/head-extra.html" $ctx -}}
+  {{- end -}}
+{{- end -}}

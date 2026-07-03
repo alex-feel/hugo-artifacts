@@ -1,0 +1,95 @@
+{{/*
+  Validates a value against one of the module's seven inlined schema.org enum
+  lists. The lists are inlined here -- never shipped as data/ files -- so a
+  consumer cannot accidentally shadow them via a data mount.
+
+  Accepts both the bare value ("InStock") and the full URL form
+  ("https://schema.org/InStock"); on a valid match it normalizes OUTPUT to the
+  URL form "https://schema.org/<Value>" when .urlForm is true (the shape Google
+  expects for availability, itemCondition, and returnPolicyCategory) or to the
+  BARE value when .urlForm is false (applicationCategory, suggestedGender, and
+  the interaction @type names). On an invalid value it returns "" and emits a
+  deduplicated warn via lib/warn.html.
+
+  Context (dict):
+  - .field (string)   The enum field name; one of:
+                      "applicationCategory", "availability", "itemCondition",
+                      "suggestedGender", "interactionType",
+                      "agentInteractionType", "returnPolicyCategory".
+  - .value (string)   The consumer-supplied value (bare or URL form).
+  - .allowed (slice)  Optional explicit allowed-slice override; when omitted the
+                      field's inlined list is used. (Callers normally omit it.)
+  - .urlForm (bool)   Output shape: true (default) returns the URL form; false
+                      returns the bare value.
+  - .page (page)      The current page, whose RelPermalink identifies the page
+                      in the deduplicated warn message.
+
+  Returns: the normalized value when valid, else "". ONE terminal return.
+*/}}
+
+{{- $field := .field -}}
+{{- $value := .value -}}
+{{- $page := .page -}}
+{{- $urlForm := ne .urlForm false -}}
+{{- $prefix := "https://schema.org/" -}}
+
+{{/* The seven authoritative enum lists, inlined. */}}
+{{- $lists := dict
+  "applicationCategory" (slice
+    "GameApplication" "SocialNetworkingApplication" "TravelApplication"
+    "ShoppingApplication" "SportsApplication" "LifestyleApplication"
+    "BusinessApplication" "DesignApplication" "DeveloperApplication"
+    "DriverApplication" "EducationalApplication" "HealthApplication"
+    "FinanceApplication" "SecurityApplication" "BrowserApplication"
+    "CommunicationApplication" "DesktopEnhancementApplication"
+    "EntertainmentApplication" "MultimediaApplication" "HomeApplication"
+    "UtilitiesApplication" "ReferenceApplication")
+  "availability" (slice
+    "BackOrder" "Discontinued" "InStock" "InStoreOnly" "LimitedAvailability"
+    "OnlineOnly" "OutOfStock" "PreOrder" "PreSale" "SoldOut")
+  "itemCondition" (slice
+    "NewCondition" "UsedCondition" "RefurbishedCondition")
+  "suggestedGender" (slice "Male" "Female" "Unisex")
+  "interactionType" (slice "FollowAction" "LikeAction" "BefriendAction")
+  "agentInteractionType" (slice
+    "FollowAction" "LikeAction" "WriteAction" "ShareAction")
+  "returnPolicyCategory" (slice
+    "MerchantReturnFiniteReturnWindow" "MerchantReturnNotPermitted"
+    "MerchantReturnUnlimitedWindow")
+-}}
+
+{{- $allowed := .allowed | default (index $lists $field) -}}
+
+{{- $result := "" -}}
+{{- with $value -}}
+  {{/* Accept both the bare value and the full URL form: strip the schema.org
+       prefix to obtain the bare token for the membership check. */}}
+  {{- $bare := strings.TrimPrefix $prefix . -}}
+  {{- if in $allowed $bare -}}
+    {{- if $urlForm -}}
+      {{- $result = printf "%s%s" $prefix $bare -}}
+    {{- else -}}
+      {{- $result = $bare -}}
+    {{- end -}}
+  {{- else -}}
+    {{/* Invalid value: drop the property and warn once, keyed by field+value.
+         .Position is a shortcode-context field and is not available on a
+         page.Page here, so the trailing position placeholder is left empty; the
+         page is already identified by its RelPermalink. applicationCategory
+         carries its own message naming Google's 22 supported values; every
+         other field uses the generic enum message. */}}
+    {{- $rel := "" -}}
+    {{- with $page -}}
+      {{- $rel = .RelPermalink -}}
+    {{- end -}}
+    {{- $message := printf "[seo] Offer on %q has %s %q, not a valid schema.org enum value; property omitted. %s" $rel $field $bare "" -}}
+    {{- if eq $field "applicationCategory" -}}
+      {{- $message = printf "[seo] SoftwareApplication on %q has applicationCategory %q, which is not one of Google's 22 supported values; property omitted. %s" $rel $bare "" -}}
+    {{- end -}}
+    {{- partial "seo/lib/warn.html" (dict
+      "key" (printf "seo:warn:enum:%s:%s" $field $bare)
+      "message" $message
+    ) -}}
+  {{- end -}}
+{{- end -}}
+{{- return $result -}}

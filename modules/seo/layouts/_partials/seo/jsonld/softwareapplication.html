@@ -1,0 +1,233 @@
+{{/*
+  seo/jsonld/softwareapplication.html -- SoftwareApplication node builder
+  (co-typing, enum-validated applicationCategory; self-gates).
+
+  Purpose: build the SoftwareApplication content node.
+
+  Expected context (dict):
+  - .page (Page)   the current page.
+  - .seo  (dict)   the resolved $seo context.
+
+  Self-gating: `page` kind AND name AND offer.price set (0 allowed) AND
+  (aggregateRating OR review). Any missing required field warns and suppresses
+  the node; lists/home suppress silently by kind.
+
+  Co-typing: app_type of VideoGame ALONE warns and is co-typed with
+  MobileApplication (Google does not support VideoGame on its own).
+  browserRequirements is gated to WebApplication co-typing;
+  carrierRequirements is gated to MobileApplication co-typing.
+
+  Return value: the SoftwareApplication node dict WITHOUT @context, or an EMPTY
+  dict (dict) when ineligible. One terminal return.
+*/}}
+
+{{- $ctx := . -}}
+{{- $page := $ctx.page -}}
+{{- $seo := $ctx.seo -}}
+{{- $result := dict -}}
+
+{{- $sw := $page.Param "seo.software" | default dict -}}
+{{- $offerData := $page.Param "seo.offer" | default dict -}}
+{{/* Trailing warnf %s placeholder: pages expose no .Position (shortcode-only
+     method), so it stays empty and the page is identified by RelPermalink --
+     the module-wide convention shared with the resolver tier. */}}
+{{- $pos := "" -}}
+
+{{- if eq $page.Kind "page" -}}
+  {{- $name := $seo.title -}}
+
+  {{/* Resolve @type / app_type with VideoGame co-typing. */}}
+  {{- $appType := $sw.app_type | default (slice "SoftwareApplication") -}}
+  {{- if reflect.IsSlice $appType -}}
+    {{- $appType = $appType -}}
+  {{- else -}}
+    {{- $appType = slice $appType -}}
+  {{- end -}}
+  {{- if and (eq (len $appType) 1) (eq (index $appType 0) "VideoGame") -}}
+    {{- partial "seo/lib/warn.html" (dict
+      "key" (printf "seo:warn:videogame:%s" $page.RelPermalink)
+      "message" (printf "[seo] SoftwareApplication on %q sets app_type VideoGame alone, which Google does not support; co-typing with MobileApplication. %s" $page.RelPermalink $pos)
+    ) -}}
+    {{- $appType = slice "VideoGame" "MobileApplication" -}}
+  {{- end -}}
+  {{- $isWeb := in $appType "WebApplication" -}}
+  {{- $isMobile := in $appType "MobileApplication" -}}
+  {{- $typeOut := $appType -}}
+  {{- if eq (len $appType) 1 -}}
+    {{- $typeOut = index $appType 0 -}}
+  {{- end -}}
+
+  {{/* Required: offer.price set (0 allowed). */}}
+  {{- $hasPrice := isset $offerData "price" -}}
+  {{- $price := 0.0 -}}
+  {{- if $hasPrice -}}
+    {{- $price = float $offerData.price -}}
+  {{- end -}}
+  {{- $currency := $offerData.price_currency | default "" -}}
+
+  {{/* Required: aggregateRating OR review. */}}
+  {{- $aggRating := dict -}}
+  {{- with $sw.aggregate_rating -}}
+    {{- $aggRating = partial "seo/jsonld/rating.html" (dict "kind" "aggregate" "data" . "page" $page) -}}
+  {{- end -}}
+  {{- $review := dict -}}
+  {{- with $sw.review -}}
+    {{- $review = partial "seo/jsonld/rating.html" (dict "kind" "review" "data" . "page" $page) -}}
+  {{- end -}}
+  {{- $hasAgg := gt (len $aggRating) 0 -}}
+  {{- $hasReview := gt (len $review) 0 -}}
+
+  {{/* Self-gate with specific warns per missing requirement. */}}
+  {{- $suppress := false -}}
+  {{- if not $name -}}
+    {{- $suppress = true -}}
+  {{- else if not $hasPrice -}}
+    {{- $suppress = true -}}
+    {{- partial "seo/lib/warn.html" (dict
+      "key" (printf "seo:warn:sw-price:%s" $page.RelPermalink)
+      "message" (printf "[seo] SoftwareApplication on %q is missing offers.price; set seo.offer.price (use 0 for free apps). Node not emitted. %s" $page.RelPermalink $pos)
+    ) -}}
+  {{- else if not (or $hasAgg $hasReview) -}}
+    {{- $suppress = true -}}
+    {{- partial "seo/lib/warn.html" (dict
+      "key" (printf "seo:warn:sw-rating:%s" $page.RelPermalink)
+      "message" (printf "[seo] SoftwareApplication on %q has neither aggregateRating nor review; Google requires one for the rich result. Node not emitted. %s" $page.RelPermalink $pos)
+    ) -}}
+  {{- else if and (gt $price 0.0) (eq $currency "") -}}
+    {{- $suppress = true -}}
+    {{- partial "seo/lib/warn.html" (dict
+      "key" (printf "seo:warn:sw-currency:%s" $page.RelPermalink)
+      "message" (printf "[seo] SoftwareApplication on %q has offers.price > 0 but no offers.priceCurrency; set seo.offer.price_currency (ISO 4217). Node not emitted. %s" $page.RelPermalink $pos)
+    ) -}}
+  {{- end -}}
+
+  {{- if not $suppress -}}
+    {{- $node := dict
+      "@type" $typeOut
+      "@id" $seo.ids.content
+      "name" $name
+    -}}
+
+    {{/* offers via the shared Offer builder (price/currency enforced above). */}}
+    {{- $offerNode := partial "seo/jsonld/offer.html" (dict
+      "page" $page "seo" $seo "offer" $offerData
+    ) -}}
+    {{- with $offerNode -}}
+      {{- $node = merge $node (dict "offers" $offerNode) -}}
+    {{- end -}}
+
+    {{- if $hasAgg -}}
+      {{- $node = merge $node (dict "aggregateRating" $aggRating) -}}
+    {{- end -}}
+    {{- if $hasReview -}}
+      {{- $node = merge $node (dict "review" $review) -}}
+    {{- end -}}
+
+    {{/* applicationCategory (enum-validated, Google's 22 values). */}}
+    {{- with $sw.application_category -}}
+      {{- $cat := partial "seo/lib/enum.html" (dict
+        "field" "applicationCategory"
+        "value" .
+        "allowed" (slice "GameApplication" "SocialNetworkingApplication" "TravelApplication" "ShoppingApplication" "SportsApplication" "LifestyleApplication" "BusinessApplication" "DesignApplication" "DeveloperApplication" "DriverApplication" "EducationalApplication" "HealthApplication" "FinanceApplication" "SecurityApplication" "BrowserApplication" "CommunicationApplication" "DesktopEnhancementApplication" "EntertainmentApplication" "MultimediaApplication" "HomeApplication" "UtilitiesApplication" "ReferenceApplication")
+        "urlForm" false
+        "page" $page
+      ) -}}
+      {{- with $cat -}}
+        {{- $node = merge $node (dict "applicationCategory" .) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{- with $sw.application_subcategory -}}
+      {{- $node = merge $node (dict "applicationSubCategory" .) -}}
+    {{- end -}}
+    {{- with $sw.operating_system -}}
+      {{- $node = merge $node (dict "operatingSystem" .) -}}
+    {{- end -}}
+    {{- with $sw.software_version -}}
+      {{- $node = merge $node (dict "softwareVersion" .) -}}
+    {{- end -}}
+
+    {{/* screenshot: explicit key -> images[0]. */}}
+    {{- $shot := "" -}}
+    {{- with $sw.screenshot -}}
+      {{- $shot = . -}}
+    {{- end -}}
+    {{- if $shot -}}
+      {{- $node = merge $node (dict "screenshot" $shot) -}}
+    {{- else if and $seo.images (gt (len $seo.images) 0) -}}
+      {{- $shotNode := partial "seo/jsonld/image-object.html" (index $seo.images 0) -}}
+      {{- with $shotNode -}}
+        {{- $node = merge $node (dict "screenshot" $shotNode) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{- with $sw.download_url -}}
+      {{- $node = merge $node (dict "downloadUrl" .) -}}
+    {{- end -}}
+    {{- with $sw.install_url -}}
+      {{- $node = merge $node (dict "installUrl" .) -}}
+    {{- end -}}
+    {{- with $sw.file_size -}}
+      {{- $node = merge $node (dict "fileSize" .) -}}
+    {{- end -}}
+    {{- with $sw.feature_list -}}
+      {{- $node = merge $node (dict "featureList" .) -}}
+    {{- end -}}
+    {{- with $sw.release_notes -}}
+      {{- $node = merge $node (dict "releaseNotes" .) -}}
+    {{- end -}}
+
+    {{/* browserRequirements gated to WebApplication co-typing. */}}
+    {{- if $isWeb -}}
+      {{- with $sw.browser_requirements -}}
+        {{- $node = merge $node (dict "browserRequirements" .) -}}
+      {{- end -}}
+    {{- end -}}
+    {{/* carrierRequirements gated to MobileApplication co-typing. */}}
+    {{- if $isMobile -}}
+      {{- with $sw.carrier_requirements -}}
+        {{- $node = merge $node (dict "carrierRequirements" .) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{/* author[] via Person builder. */}}
+    {{- if and $seo.authors (gt (len $seo.authors) 0) -}}
+      {{- $authors := slice -}}
+      {{- range $seo.authors -}}
+        {{- $personNode := partial "seo/jsonld/person.html" . -}}
+        {{- with $personNode -}}
+          {{- $authors = $authors | append $personNode -}}
+        {{- end -}}
+      {{- end -}}
+      {{- with $authors -}}
+        {{- $node = merge $node (dict "author" .) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{/* publisher -> Organization @id. */}}
+    {{- with $seo.ids.organization -}}
+      {{- $node = merge $node (dict "publisher" (dict "@id" .)) -}}
+    {{- end -}}
+
+    {{- with $seo.datePublished -}}
+      {{- $node = merge $node (dict "datePublished" .) -}}
+    {{- end -}}
+    {{- with $seo.description -}}
+      {{- $node = merge $node (dict "description" .) -}}
+    {{- end -}}
+    {{- $node = merge $node (dict "url" $page.Permalink) -}}
+    {{/* sameAs[] from seo.same_as, with the bare top-level same_as key as its
+         deprecated alias (consulted only when seo.same_as is unset). */}}
+    {{- $sameAs := $page.Param "seo.same_as" -}}
+    {{- if not $sameAs -}}
+      {{- $sameAs = $page.Params.same_as -}}
+    {{- end -}}
+    {{- with $sameAs -}}
+      {{- $node = merge $node (dict "sameAs" .) -}}
+    {{- end -}}
+
+    {{- $result = $node -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $result -}}

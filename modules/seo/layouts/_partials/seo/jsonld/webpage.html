@@ -1,0 +1,103 @@
+{{/*
+  seo/jsonld/webpage.html -- WebPage / CollectionPage node builder.
+
+  Purpose: build the per-page WebPage node, the @id anchor and
+  mainEntityOfPage target for the content node. CollectionPage @type is used
+  for section list pages (and opted-in taxonomy/term lists).
+
+  Expected context (dict):
+  - .page (Page)   the current page.
+  - .seo  (dict)   the resolved $seo context (the module's per-page value dict
+                   returned by the seo/context.html resolver: title,
+                   description, lang, images, dates, ids, isHome, etc.).
+
+  Self-gating: WebPage emits on home + every page-kind page and on section list
+  pages as CollectionPage. Taxonomy/term list pages emit only when
+  params.seo.webpage_on_lists is true; otherwise this builder returns an EMPTY
+  dict.
+
+  Return value: the WebPage/CollectionPage node dict WITHOUT @context, or an
+  empty dict when suppressed. One terminal return.
+*/}}
+
+{{- $ctx := . -}}
+{{- $page := $ctx.page -}}
+{{- $seo := $ctx.seo -}}
+{{- $result := dict -}}
+
+{{- $kind := $page.Kind -}}
+{{- $isSection := eq $kind "section" -}}
+{{- $isTaxTerm := or (eq $kind "taxonomy") (eq $kind "term") -}}
+{{- $onLists := $page.Site.Params.seo.webpage_on_lists | default false -}}
+
+{{/* Self-gate: taxonomy/term lists only when opted in. */}}
+{{- $emit := true -}}
+{{- if $isTaxTerm -}}
+  {{- $emit = $onLists -}}
+{{- end -}}
+
+{{- if $emit -}}
+  {{/* CollectionPage for section (and opted-in taxonomy/term) list pages;
+       WebPage otherwise. */}}
+  {{- $wpType := "WebPage" -}}
+  {{- if or $isSection $isTaxTerm -}}
+    {{- $wpType = "CollectionPage" -}}
+  {{- end -}}
+
+  {{- $node := dict
+    "@type" $wpType
+    "@id" $seo.ids.webpage
+    "url" $page.Permalink
+  -}}
+
+  {{- with $seo.title -}}
+    {{- $node = merge $node (dict "name" .) -}}
+  {{- end -}}
+  {{- with $seo.description -}}
+    {{- $node = merge $node (dict "description" .) -}}
+  {{- end -}}
+  {{- with $seo.lang -}}
+    {{- $node = merge $node (dict "inLanguage" .) -}}
+  {{- end -}}
+
+  {{/* isPartOf -> WebSite @id (a WebSite exists per language). */}}
+  {{- with $seo.ids.website -}}
+    {{- $node = merge $node (dict "isPartOf" (dict "@id" .)) -}}
+  {{- end -}}
+
+  {{- with $seo.datePublished -}}
+    {{- $node = merge $node (dict "datePublished" .) -}}
+  {{- end -}}
+  {{- with $seo.dateModified -}}
+    {{- $node = merge $node (dict "dateModified" .) -}}
+  {{- end -}}
+
+  {{/* breadcrumb -> BreadcrumbList @id, only when a breadcrumb is emitted.
+       Mirrors breadcrumb.html's derived-trail gate (ancestors + current page
+       >= 2 items) from the same source (.Ancestors): reference the
+       #breadcrumb @id only on non-home pages with >= 1 ancestor. */}}
+  {{- if and (not $seo.isHome) (ge (len $page.Ancestors) 1) -}}
+    {{- with $seo.ids.breadcrumb -}}
+      {{- $node = merge $node (dict "breadcrumb" (dict "@id" .)) -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* mainEntity -> content node @id, only when a content node exists. */}}
+  {{- if and $seo.typeSet (gt (len $seo.typeSet) 0) -}}
+    {{- with $seo.ids.content -}}
+      {{- $node = merge $node (dict "mainEntity" (dict "@id" .)) -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* primaryImageOfPage -> inline ImageObject from images[0]. */}}
+  {{- if and $seo.images (gt (len $seo.images) 0) -}}
+    {{- $primaryImage := partial "seo/jsonld/image-object.html" (index $seo.images 0) -}}
+    {{- with $primaryImage -}}
+      {{- $node = merge $node (dict "primaryImageOfPage" $primaryImage) -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- $result = $node -}}
+{{- end -}}
+
+{{- return $result -}}

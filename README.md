@@ -27,6 +27,10 @@ The payoff: you can build a design of any complexity on top of these artifacts w
 
 Importable Hugo modules live under [`modules/`](modules/). Each module ships its own `README.md` with installation, configuration, and consumption instructions.
 
+### `modules/seo`
+
+Universal SEO module: one `{{ partial "seo/head.html" . }}` call emits the complete head surface (title, meta description, canonical, robots, hreflang, Open Graph, Twitter Cards, site verification, feed discovery) plus Google-eligible JSON-LD structured data (WebSite, Organization, WebPage, BreadcrumbList, Article/BlogPosting/NewsArticle, Product, ProfilePage, SoftwareApplication, VideoObject) cross-linked by `@id`. Reuses Hugo-native front-matter fields, adds a clean `seo.*` contract on top, validates strictly, and degrades gracefully. See [`modules/seo/README.md`](modules/seo/README.md).
+
 ### `modules/pwa`
 
 Consumer-facing Progressive Web App module: web app manifest, RealFaviconGenerator icon set, Workbox-powered service worker, install prompt, and push subscription wiring. See [`modules/pwa/README.md`](modules/pwa/README.md).

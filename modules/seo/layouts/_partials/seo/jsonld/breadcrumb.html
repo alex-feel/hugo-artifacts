@@ -1,0 +1,98 @@
+{{/*
+  seo/jsonld/breadcrumb.html -- BreadcrumbList node builder (returns a SLICE).
+
+  Purpose: build the breadcrumb trail(s) for a page. Trail 1 is the DERIVED
+  trail from .Ancestors.Reverse + the current page. Additional trails come from
+  seo.breadcrumb_trails[] and carry @id suffixes #breadcrumb-2, #breadcrumb-3,
+  ... (gapless; the derived trail is #breadcrumb).
+
+  Expected context (dict):
+  - .page (Page)   the current page.
+  - .seo  (dict)   the resolved $seo context (the module's per-page value dict
+                   returned by the seo/context.html resolver: title, ids,
+                   isHome, etc.).
+
+  Self-gating: home never emits a breadcrumb; any individual trail with fewer
+  than 2 ListItems is suppressed SILENTLY (expected on shallow pages). Each
+  ListItem carries a 1-based gapless integer position; the LAST item omits
+  `item` (Google substitutes the page URL).
+
+  Return value: a SLICE of BreadcrumbList node dicts WITHOUT @context (empty
+  slice when nothing qualifies). One terminal return.
+*/}}
+
+{{- $ctx := . -}}
+{{- $page := $ctx.page -}}
+{{- $seo := $ctx.seo -}}
+{{- $result := slice -}}
+
+{{- if not $seo.isHome -}}
+  {{/* Derived trail 1: ancestors (root-first) followed by the current page.
+       .Ancestors is leaf-first, so .Reverse yields root-first order. */}}
+  {{- $items := slice -}}
+  {{- range $page.Ancestors.Reverse -}}
+    {{- $items = $items | append (dict "name" .LinkTitle "url" .Permalink) -}}
+  {{- end -}}
+  {{- $items = $items | append (dict "name" $seo.title "url" $page.Permalink "last" true) -}}
+
+  {{- if ge (len $items) 2 -}}
+    {{- $elements := slice -}}
+    {{- $pos := 0 -}}
+    {{- range $items -}}
+      {{- $pos = add $pos 1 -}}
+      {{- $li := dict
+        "@type" "ListItem"
+        "position" $pos
+        "name" .name
+      -}}
+      {{/* item omitted on the LAST item only. */}}
+      {{- if not (.last | default false) -}}
+        {{- $li = merge $li (dict "item" .url) -}}
+      {{- end -}}
+      {{- $elements = $elements | append $li -}}
+    {{- end -}}
+    {{- $result = $result | append (dict
+      "@type" "BreadcrumbList"
+      "@id" $seo.ids.breadcrumb
+      "itemListElement" $elements
+    ) -}}
+  {{- end -}}
+
+  {{/* Additional explicit trails from seo.breadcrumb_trails[]. Each trail is
+       a list of {name, url} entries; @id suffix is #breadcrumb-N where N is
+       the gapless 2-based index (trail 1 is the derived trail above). */}}
+  {{- with $page.Param "seo.breadcrumb_trails" -}}
+    {{- $n := 1 -}}
+    {{- range . -}}
+      {{- $trail := . -}}
+      {{- $n = add $n 1 -}}
+      {{- if ge (len $trail) 2 -}}
+        {{- $elements := slice -}}
+        {{- $pos := 0 -}}
+        {{- $count := len $trail -}}
+        {{- range $i, $entry := $trail -}}
+          {{- $pos = add $pos 1 -}}
+          {{- $li := dict
+            "@type" "ListItem"
+            "position" $pos
+            "name" ($entry.name | default "")
+          -}}
+          {{/* item omitted on the LAST item only. */}}
+          {{- if lt (add $i 1) $count -}}
+            {{- with $entry.url -}}
+              {{- $li = merge $li (dict "item" .) -}}
+            {{- end -}}
+          {{- end -}}
+          {{- $elements = $elements | append $li -}}
+        {{- end -}}
+        {{- $result = $result | append (dict
+          "@type" "BreadcrumbList"
+          "@id" (printf "%s#breadcrumb-%d" $page.Permalink $n)
+          "itemListElement" $elements
+        ) -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $result -}}
