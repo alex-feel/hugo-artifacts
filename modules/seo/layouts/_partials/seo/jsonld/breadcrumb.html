@@ -15,7 +15,12 @@
   Self-gating: home never emits a breadcrumb; any individual trail with fewer
   than 2 ListItems is suppressed SILENTLY (expected on shallow pages). Each
   ListItem carries a 1-based gapless integer position; the LAST item omits
-  `item` (Google substitutes the page URL).
+  `item` (Google substitutes the page URL). Ancestors with no URL (sections
+  built with `build.render = "never"`) are skipped, because a non-final
+  ListItem without `item` is invalid; positions stay gapless after the skip.
+  Every BreadcrumbList node carries a `name` (its final crumb's name, falling
+  back to the resolved page title) so testing tools never show an unnamed
+  node.
 
   Return value: a SLICE of BreadcrumbList node dicts WITHOUT @context (empty
   slice when nothing qualifies). One terminal return.
@@ -31,7 +36,11 @@
        .Ancestors is leaf-first, so .Reverse yields root-first order. */}}
   {{- $items := slice -}}
   {{- range $page.Ancestors.Reverse -}}
-    {{- $items = $items | append (dict "name" .LinkTitle "url" .Permalink) -}}
+    {{/* A section built with render "never" has no URL; skip it, because a
+         non-final ListItem without `item` is invalid markup. */}}
+    {{- if .Permalink -}}
+      {{- $items = $items | append (dict "name" .LinkTitle "url" .Permalink) -}}
+    {{- end -}}
   {{- end -}}
   {{- $items = $items | append (dict "name" $seo.title "url" $page.Permalink "last" true) -}}
 
@@ -54,6 +63,7 @@
     {{- $result = $result | append (dict
       "@type" "BreadcrumbList"
       "@id" $seo.ids.breadcrumb
+      "name" $seo.title
       "itemListElement" $elements
     ) -}}
   {{- end -}}
@@ -85,9 +95,16 @@
           {{- end -}}
           {{- $elements = $elements | append $li -}}
         {{- end -}}
+        {{/* Trail name: the final crumb's name, else the resolved page
+             title. */}}
+        {{- $trailName := $seo.title -}}
+        {{- with (index $trail (sub $count 1)).name -}}
+          {{- $trailName = . -}}
+        {{- end -}}
         {{- $result = $result | append (dict
           "@type" "BreadcrumbList"
           "@id" (printf "%s#breadcrumb-%d" $page.Permalink $n)
+          "name" $trailName
           "itemListElement" $elements
         ) -}}
       {{- end -}}
