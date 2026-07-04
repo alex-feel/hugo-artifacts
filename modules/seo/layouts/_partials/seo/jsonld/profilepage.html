@@ -74,9 +74,16 @@
       {{- $main = merge $main (dict "identifier" .) -}}
     {{- end -}}
 
-    {{/* image from images[0]. */}}
+    {{/* image from images[0], native aspect: a portrait cropped to the
+         1.91:1 og shape misrepresents the person, so mainEntity.image uses
+         the un-cropped source values. */}}
     {{- if and $seo.images (gt (len $seo.images) 0) -}}
-      {{- $imgNode := partial "seo/jsonld/image-object.html" (index $seo.images 0) -}}
+      {{- $primary := index $seo.images 0 -}}
+      {{- $imgSrc := $primary -}}
+      {{- with $primary.natural -}}
+        {{- $imgSrc = . -}}
+      {{- end -}}
+      {{- $imgNode := partial "seo/jsonld/image-object.html" $imgSrc -}}
       {{- with $imgNode -}}
         {{- $main = merge $main (dict "image" $imgNode) -}}
       {{- end -}}

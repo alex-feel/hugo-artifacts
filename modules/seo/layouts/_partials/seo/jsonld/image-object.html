@@ -6,10 +6,11 @@
   image-carrying node (WebPage.primaryImageOfPage, Organization.logo,
   Article.image[], Product.image[], mainEntity.image, screenshot, etc.).
 
-  Expected context (dict): the normalized image dict
-    { url, width, height, type, alt }
-  where `url` is an absolute URL string and width/height/type/alt are
-  optional (SVG and remote URLs carry no width/height).
+  Expected context (dict): a normalized image dict -- either the full
+  { url, width, height, type, alt, natural } dict from seo/resolve/image.html
+  or its `natural` sub-dict { url, width, height } -- where `url` is an
+  absolute URL string and every other key is optional (SVG and remote URLs
+  carry no width/height).
 
   Return value:
   - A full ImageObject dict {"@type": "ImageObject", "url", "width", "height"}

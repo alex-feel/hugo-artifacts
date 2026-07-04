@@ -58,8 +58,9 @@ The full annotated surface:
   enable              = true               # Global kill switch. false => the module emits NOTHING anywhere. Default: true.
   title_suffix        = " | Acme Docs"     # Appended to <title> only (never og:title/headline). Default: "". Home page never gets the suffix.
   description         = "Acme builds developer tooling for Hugo sites."  # Site-wide fallback description (last link of the chain).
-  default_image       = "images/og-default.png"  # Global resource path (assets/ or static/) OR absolute URL; site-wide og:image fallback.
+  default_image       = "images/og-default.png"  # Global resource path (assets/ or static/) OR absolute URL; site-wide image fallback, applied only when no page-level image resolves.
   image_alt           = "Acme logo on dark"      # Default og:image:alt when a page image resolves no alt of its own.
+  image_params        = ["tile_image"]     # Extra top-level front-matter params whose values (string or list per key) join the page-image candidates.
   keywords            = ["hugo", "seo", "static site"]  # JSON-LD keywords fallback ONLY; NO <meta name=keywords> is ever emitted.
 
   # --- Robots ---
@@ -173,8 +174,9 @@ The full annotated surface:
 | `enable` | bool | `true` | Global kill switch. `false` emits nothing anywhere. |
 | `title_suffix` | string | `""` | Appended to `<title>` only, never to `og:title` or `headline`. The home page never gets the suffix. |
 | `description` | string | `""` | Site-wide fallback description, last link of the description chain. |
-| `default_image` | string | `""` | Site-wide `og:image` fallback. Resource path (`assets/` or `static/`) or absolute URL. |
+| `default_image` | string | `""` | Site-wide image fallback. Resource path (`assets/` or `static/`) or absolute URL. Applied only when no page-level image resolves. |
 | `image_alt` | string | `""` | Default `og:image:alt` when a page image resolves no alt of its own. |
+| `image_params` | array | `[]` | Names of extra top-level front-matter params (e.g. `["tile_image"]`) whose values (string or list per key) join the page-image candidates -- after `seo.images`/`seo.image`/`meta_image`, before native `images`. |
 | `keywords` | array | `[]` | JSON-LD `keywords` fallback ONLY. No `<meta name="keywords">` is ever emitted. |
 | `robots` | string | `"max-image-preview:large"` (shipped baseline) | Site baseline robots directive; token-unioned with page `seo.robots`, most-restrictive per axis wins. |
 | `jsonld_container` | string | `"separate"` | `"separate"` (one `<script>` per node) or `"graph"` (one `@graph` block). Node dicts are identical either way. |
@@ -200,7 +202,7 @@ The full annotated surface:
 | `name` | string | `site.Title` | `Organization.name` / publisher name. |
 | `alternate_name` / `legal_name` / `description` | string | `""` | `alternateName` / `legalName` / `description`. `legalName` is dropped when `type = "Person"`. |
 | `url` | string | language home Permalink | `Organization.url`. |
-| `logo` | string | `""` | Logo image (`>=112x112`, crawlable, white-background-safe). Resource path or absolute URL. |
+| `logo` | string | `""` | Logo image (`>=112x112`, crawlable, white-background-safe). Resource path or absolute URL. Emitted at its native aspect, never cropped. |
 | `email` / `telephone` | string | `""` | `email` / `telephone` (include country and area code). |
 | `founding_date` | string | `""` | `foundingDate` (ISO 8601). Dropped when `type = "Person"`. |
 | `vat_id` / `tax_id` | string | `""` | `vatID` / `taxID` trust signals; must match the address country. Dropped when `type = "Person"`. |
@@ -273,7 +275,7 @@ description: 'Reach the Acme team by email or phone.'
 # The module still emits the full classic head + WebPage + BreadcrumbList.
 seo:
   robots: 'max-snippet:-1' # optional; token-unioned with the site baseline
-  image: 'images/contact-hero.jpg' # optional explicit page image (resource path or absolute URL)
+  image: 'images/contact-hero.jpg' # optional explicit page image (bundle-relative or global resource path, or absolute URL)
 ---
 ```
 
@@ -432,8 +434,8 @@ Every emitted JSON-LD node is designed to pass the Rich Results Test: no schema 
 
 1. **Explicit `seo.type`** in page front matter (or the mapped `meta_type` alias). Highest precedence, the per-page escape hatch. An unsupported value (e.g. `Recipe`) warns and falls through to step 2. An explicit empty string `seo.type: ""` suppresses the content node entirely.
 2. **Contract-key auto-detect.** With `seo.type` unset, the presence of a type-defining sub-table IS the declaration: `seo.product` -> `Product`, `seo.software` -> `SoftwareApplication`, `seo.video` -> `VideoObject`, `seo.profile` -> `ProfilePage`. (`seo.offer` alone does not auto-detect; it is shared.) Two or more type tables without `seo.type` warns and picks the first in the fixed priority Product, SoftwareApplication, VideoObject, ProfilePage.
-3. **Section mapping** `params.seo.types.sections.<section>` against the page's top-level section -- the zero-annotation "everything under /blog is BlogPosting" case.
-4. **Site default** `params.seo.types.default`, applied only to non-home `page`-kind pages. SHIPPED UNSET, so an arbitrary leaf page gets no content node -- docs, landing, and contact pages are never mislabeled.
+3. **Section mapping** `params.seo.types.sections.<section>` against the page's top-level section -- the zero-annotation "everything under /blog is BlogPosting" case. Applies to regular (kind `page`) pages only, so a section's own list page never inherits the content type meant for the pages under it.
+4. **Site default** `params.seo.types.default`, applied only to regular (kind `page`) pages. SHIPPED UNSET, so an arbitrary leaf page gets no content node -- docs, landing, and contact pages are never mislabeled.
 5. **Nothing.** WebPage + BreadcrumbList and the full classic head still emit.
 
 `og:type` derives from the resolved type (`Article`/`BlogPosting`/`NewsArticle` -> `article`; `ProfilePage` -> `profile`; `Product` -> `product`; `VideoObject` -> `video.other`; otherwise `website`), overridable by `seo.og_type`.
@@ -454,7 +456,7 @@ Each builder self-gates: it returns an empty dict (no emission) when the page ki
 | SoftwareApplication | `page` kind AND name AND `offer.price` set (0 allowed) AND (aggregateRating OR review) | any required field missing (warns); lists, home |
 | VideoObject | `page` kind AND name AND thumbnailUrl AND uploadDate all resolve | any of the three missing (warns); lists, home |
 
-Google-required properties per type: **Product Merchant Listing** needs `name`, `image`, `offers.price` (`> 0`), `offers.priceCurrency`; the **Snippet** track needs `name` plus one of `offers`/`review`/`aggregateRating`. **SoftwareApplication** needs `name`, `offers.price` (`0` allowed for free apps), `offers.priceCurrency` when price `> 0`, and one of `aggregateRating`/`review`. **VideoObject** needs `name`, `thumbnailUrl`, `uploadDate`. **BreadcrumbList** needs at least two `ListItem`s, each with `@type`, `position`, `name`, and `item` (the last item's `item` omitted so Google substitutes the page URL). **ProfilePage** needs `mainEntity.name`. Article, Organization, and WebSite have no hard-required properties per Google -- only recommended ones -- but WebSite/Organization site-name features need `name` and `url`.
+Google-required properties per type: **Product Merchant Listing** needs `name`, `image`, `offers.price` (`> 0`), `offers.priceCurrency`; the **Snippet** track needs `name` plus one of `offers`/`review`/`aggregateRating`. **SoftwareApplication** needs `name`, `offers.price` (`0` allowed for free apps), `offers.priceCurrency` when price `> 0`, and one of `aggregateRating`/`review`. **VideoObject** needs `name`, `thumbnailUrl`, `uploadDate`. **BreadcrumbList** needs at least two `ListItem`s, each with `@type`, `position`, `name`, and `item` (the last item's `item` omitted so Google substitutes the page URL); each BreadcrumbList node also carries a `name` (its final crumb's name), and ancestors without a URL (sections built with `build.render = "never"`) are skipped so no empty `item` is ever emitted. **ProfilePage** needs `mainEntity.name`. Article, Organization, and WebSite have no hard-required properties per Google -- only recommended ones -- but WebSite/Organization site-name features need `name` and `url`.
 
 ### The `@id` entity graph
 
@@ -480,6 +482,7 @@ Cross-references wire the graph: WebPage `isPartOf` -> WebSite, `breadcrumb` -> 
 
 ### Per-type property notes
 
+- **Images:** `og:image`/`twitter:image` and the page-level JSON-LD `image[]` use a content-aware 1200x630 (1.91:1) smart crop with real dimensions; entity images -- `Organization.logo`, ProfilePage `mainEntity.image`, and author `Person.image` -- keep the source image's native aspect, so a logo or portrait is never force-cropped.
 - **Organization / publisher:** `type` selects `Organization` (default), `OnlineStore` (unlocks `hasMerchantReturnPolicy`/`hasShippingService`, referenced by Offers via `@id`), `LocalBusiness`, or `Person` (solo-author sites; the node becomes a Person while keeping the `#organization` anchor, dropping org-only and merchant-only properties). `iso6523Code` is Google's PREFERRED identifier; when set, `duns` and `leiCode` are omitted (duplicate-identifier dedup).
 - **Product:** two tracks. Merchant Listing (`offer.price > 0` and currency) enforces `image` and a single `Offer` (never `AggregateOffer`). Snippet track allows empty image and permits `AggregateOffer` via `seo.offer.aggregate: true`, but needs at least one of offers/review/aggregateRating or the node is suppressed.
 - **ProfilePage:** `url`, `email`, `telephone`, and `jobTitle` are NOT placed on the ProfilePage node (Google ignores them there); `sameAs` and `jobTitle` sit on `mainEntity`; `dateCreated`/`dateModified` sit on ProfilePage.
@@ -587,7 +590,7 @@ modules/seo/
           description.html                 # Returns the unified description string shared by meta, OG, Twitter, and JSON-LD.
           canonical.html                   # Returns the absolute canonical URL.
           images.html                      # Returns the ordered slice of normalized image dicts.
-          image.html                       # Returns one normalized image dict {url,width,height,type,alt} from a candidate.
+          image.html                       # Returns one normalized image dict {url,width,height,type,alt,natural} from a candidate (og crop or natural variant).
           author.html                      # Returns the ordered slice of author descriptor dicts.
           dates.html                       # Returns {published, modified, created} RFC 3339 strings.
           robots.html                      # Returns {robots, bots} -- the merged robots directive string and the per-bot map.
