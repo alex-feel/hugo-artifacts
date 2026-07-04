@@ -18,8 +18,10 @@
      seo.offer alone does NOT auto-detect. Multiple tables without seo.type warn
      (deduped) and pick the first present in the fixed priority Product,
      SoftwareApplication, VideoObject, ProfilePage.
-  3. Section map: params.seo.types.sections.<.Section>.
-  4. Site default params.seo.types.default, only for non-home page-kind pages
+  3. Section map: params.seo.types.sections.<.Section>, regular (kind "page")
+     pages only -- a section's own list page never inherits the content type
+     meant for the pages under it.
+  4. Site default params.seo.types.default, regular (kind "page") pages only
      (SHIPPED UNSET, so arbitrary pages get no content node).
   5. Nothing: typeSet empty.
 
@@ -105,8 +107,10 @@
   {{- end -}}
 {{- end -}}
 
-{{/* Rule 3: section mapping. */}}
-{{- if and (not $type) (not $stop) -}}
+{{/* Rule 3: section mapping, regular (kind "page") pages only -- a section's
+     own list page must not inherit the content type meant for the pages
+     under it. */}}
+{{- if and (not $type) (not $stop) (eq $page.Kind "page") -}}
   {{- with $page.Section -}}
     {{- with $page.Param (printf "seo.types.sections.%s" .) -}}
       {{- $type = . -}}
@@ -114,12 +118,11 @@
   {{- end -}}
 {{- end -}}
 
-{{/* Rule 4: site default, only for non-home page-kind pages. */}}
-{{- if and (not $type) (not $stop) -}}
-  {{- if and (eq $page.Kind "page") (not $page.IsHome) -}}
-    {{- with $page.Param "seo.types.default" -}}
-      {{- $type = . -}}
-    {{- end -}}
+{{/* Rule 4: site default, regular (kind "page") pages only (home, section,
+     taxonomy, term, and 404 pages have other kinds). */}}
+{{- if and (not $type) (not $stop) (eq $page.Kind "page") -}}
+  {{- with $page.Param "seo.types.default" -}}
+    {{- $type = . -}}
   {{- end -}}
 {{- end -}}
 

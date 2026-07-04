@@ -65,9 +65,10 @@
   {{- end -}}
 
   {{/* logo -> image on a Person publisher; logo (ImageObject) otherwise.
-       Normalized through resolve/image.html then image-object.html. */}}
+       Normalized through resolve/image.html (natural variant: a logo is
+       never cropped to the 1.91:1 og shape) then image-object.html. */}}
   {{- with $org.logo -}}
-    {{- $imgDict := partial "seo/resolve/image.html" (dict "candidate" . "site" $site "page" $site.Home) -}}
+    {{- $imgDict := partial "seo/resolve/image.html" (dict "candidate" . "page" $site.Home "variant" "natural") -}}
     {{- with $imgDict -}}
       {{- with .url -}}
         {{- $imgNode := partial "seo/jsonld/image-object.html" $imgDict -}}

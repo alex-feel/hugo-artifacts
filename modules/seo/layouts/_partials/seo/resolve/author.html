@@ -12,8 +12,9 @@
      default-language site (hugo.Sites.Default) so a default-language-only
      author page still resolves on translated pages. When a page resolves:
      name = its .Title, url = its .Permalink, image = its primary bundle
-     image, and same_as/job_title/description/twitter come from its
-     seo.profile.* (with twitter_username as the twitter alias). When it
+     image (native aspect, never the og crop), and same_as/job_title/
+     description/twitter come from its seo.profile.* (with twitter_username
+     as the twitter alias). When it
      resolves in NO language: degrade to {name: humanized slug} (silent,
      documented behavior).
   3. native author (single string): one {name} descriptor.
@@ -89,10 +90,18 @@
       {{- with $tw -}}
         {{- $descriptor = merge $descriptor (dict "twitter" .) -}}
       {{- end -}}
-      {{/* image: the author page's primary bundle image URL. */}}
+      {{/* image: the author page's primary bundle image URL, native aspect
+           (Person.image never carries the 1.91:1 og crop). */}}
       {{- $imgs := partial "seo/resolve/images.html" $ap -}}
       {{- with $imgs -}}
-        {{- $descriptor = merge $descriptor (dict "image" (index . 0).url) -}}
+        {{- $primary := index . 0 -}}
+        {{- $imgURL := $primary.url -}}
+        {{- with $primary.natural -}}
+          {{- with .url -}}
+            {{- $imgURL = . -}}
+          {{- end -}}
+        {{- end -}}
+        {{- $descriptor = merge $descriptor (dict "image" $imgURL) -}}
       {{- end -}}
     {{- else -}}
       {{/* Author page resolved in no language: degrade to a humanized slug. */}}

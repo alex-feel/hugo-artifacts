@@ -1,33 +1,54 @@
 {{/*
   Normalizes ONE image candidate to a stable dict {url, width, height, type,
-  alt}. Pure value chooser: no HTML, no side effects.
+  alt, natural}. Pure value chooser: no HTML, no side effects.
 
   Context (dict):
   - .candidate (any)  Either a Hugo resource (page-bundle or global) OR a
-                      string (site-root path or absolute/remote URL).
+                      string (bundle-relative path, site-root path, or
+                      absolute/remote URL).
   - .page (page)      The current page, for the alt fallback chain and for
-                      resolving a string candidate as a global resource.
+                      resolving a string candidate as a bundle or global
+                      resource.
+  - .variant (string) Optional. "og" (default): a local raster gets the
+                      content-aware 1.91:1 crop that og:image wants.
+                      "natural": no crop; the source image's own dimensions
+                      are kept -- for JSON-LD entity images (Organization
+                      logo, ProfilePage mainEntity image, author Person
+                      image), where a 1.91:1 crop destroys logos and
+                      portraits.
 
   Normalization rules:
-  - Local raster resource (jpg/png/webp/gif/...): .Fill "1200x630 Smart" then
-    .Permalink (absolute), .Width (1200), .Height (630), .MediaType.Type. This
-    yields real og:image:width/height/type and a content-aware 1.91:1 crop.
-  - SVG resource: passed through WITHOUT .Fill (Hugo cannot raster-process SVG);
-    url + type only, width/height omitted.
-  - Absolute/remote URL or site-root path string: url only, no processing, NO
-    fabricated dimensions; type inferred from the extension only when
-    unambiguous (.png/.jpg/.jpeg/.webp/.gif/.svg).
+  - Local raster resource (jpg/png/webp/gif/...), variant "og": .Fill
+    "1200x630 Smart" then .Permalink (absolute), .Width (1200), .Height (630),
+    .MediaType.Type. This yields real og:image:width/height/type and a
+    content-aware 1.91:1 crop.
+  - Local raster resource, variant "natural": the source resource's own
+    .Permalink/.Width/.Height, no processing.
+  - SVG resource: passed through WITHOUT processing (Hugo cannot
+    raster-process SVG); url + type only, width/height omitted.
+  - String candidate (unless absolute or protocol-relative): resolved as a
+    page-bundle resource first ($page.Resources.GetMatch, so bundle-relative
+    values like "tile.png" work), else as a global resource (resources.Get).
+    A string that resolves to neither is treated as a bare URL/path:
+    absolutized, no processing, NO fabricated dimensions; type inferred from
+    the extension only when unambiguous (.png/.jpg/.jpeg/.webp/.gif/.svg).
+
+  natural sub-dict: every resolved image carries `natural` -- the un-cropped
+  source values {url, width, height} (dimensions present only for local
+  raster resources) -- so a consumer that needs the native aspect can read it
+  regardless of the variant that shaped the top-level values.
 
   alt chain: seo.image_alt -> resource .Params.alt -> resource .Title (when set
   to something other than the filename) -> params.seo.image_alt -> resolved page
   title. So og:image:alt / twitter:image:alt are ALWAYS present when an image is.
 
-  Returns: {url, width, height, type, alt}, or an empty dict when the candidate
-  is unresolvable. ONE terminal return.
+  Returns: {url, width, height, type, alt, natural}, or an empty dict when the
+  candidate is unresolvable. ONE terminal return.
 */}}
 
 {{- $candidate := .candidate -}}
 {{- $page := .page -}}
+{{- $variant := .variant | default "og" -}}
 
 {{- $result := dict -}}
 {{- $res := "" -}}
@@ -36,12 +57,18 @@
 {{- if reflect.IsResource $candidate -}}
   {{- $res = $candidate -}}
 {{- else if $candidate -}}
-  {{/* String candidate: a site-root path may resolve to a global resource;
+  {{/* String candidate: a bundle-relative path resolves as a page resource
+       (the more specific scope wins), a project path as a global resource;
        otherwise it is treated as a bare URL/path below. */}}
   {{- $s := printf "%v" $candidate -}}
   {{- if not (or (hasPrefix $s "http://") (hasPrefix $s "https://") (hasPrefix $s "//")) -}}
-    {{- with resources.Get $s -}}
+    {{- with $page.Resources.GetMatch $s -}}
       {{- $res = . -}}
+    {{- end -}}
+    {{- if not $res -}}
+      {{- with resources.Get $s -}}
+        {{- $res = . -}}
+      {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
@@ -68,14 +95,21 @@
     {{- end -}}
   {{- end -}}
   {{- if and $isImage (not $isSVG) -}}
-    {{/* Local raster: content-aware 1.91:1 crop with real dimensions. */}}
-    {{- $filled := $res.Fill "1200x630 Smart" -}}
+    {{/* Local raster: real dimensions. The og variant adds the content-aware
+         1.91:1 crop; the natural variant keeps the source as-is. */}}
+    {{- $natural := dict "url" $res.Permalink "width" $res.Width "height" $res.Height -}}
+    {{- $chosen := $natural -}}
+    {{- if eq $variant "og" -}}
+      {{- $filled := $res.Fill "1200x630 Smart" -}}
+      {{- $chosen = dict "url" $filled.Permalink "width" $filled.Width "height" $filled.Height -}}
+    {{- end -}}
     {{- $result = dict
-      "url" $filled.Permalink
-      "width" $filled.Width
-      "height" $filled.Height
-      "type" $filled.MediaType.Type
+      "url" $chosen.url
+      "width" $chosen.width
+      "height" $chosen.height
+      "type" $res.MediaType.Type
       "alt" $alt
+      "natural" $natural
     -}}
   {{- else -}}
     {{/* SVG (or a non-raster resource): url + type only, no dimensions. */}}
@@ -83,6 +117,7 @@
       "url" $res.Permalink
       "type" $res.MediaType.Type
       "alt" $alt
+      "natural" (dict "url" $res.Permalink)
     -}}
   {{- end -}}
 {{- else if $candidate -}}
@@ -102,7 +137,7 @@
   {{- else if hasSuffix $lower ".svg" -}}
     {{- $type = "image/svg+xml" -}}
   {{- end -}}
-  {{- $result = dict "url" $url "alt" $alt -}}
+  {{- $result = dict "url" $url "alt" $alt "natural" (dict "url" $url) -}}
   {{- with $type -}}
     {{- $result = merge $result (dict "type" .) -}}
   {{- end -}}
