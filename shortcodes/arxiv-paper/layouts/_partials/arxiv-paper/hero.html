@@ -1,0 +1,105 @@
+{{/*
+  Renders V5 featured hero variant of the arxiv-paper shortcode -- the largest,
+  for a single spotlighted paper. A banner carries the arXiv id and primary
+  subject; the body shows the full metadata: title, authors, the TLDR (or
+  abstract), the cross-list subject tags, a dated meta strip, the durable
+  slow-drift counts when enrichment supplied them, an optional "code available"
+  badge, and a "View on arXiv" call-to-action.
+
+  Context expectations:
+  - . (dict) - Normalized paper data from fetch.html (see card.html), plus
+    .categories, .updated, .updatedRelative, .venue, .hasUpvotes, .upvotes,
+    .codeRepo, .hasCodeStars, .codeStars, .aiKeywords.
+
+  Output: An <a> element with BEM class arxiv-paper arxiv-paper--hero.
+*/}}
+
+{{- if .apiOk -}}
+<a href="{{ .absURL }}"
+   class="arxiv-paper arxiv-paper--hero{{ with .extraClass }} {{ . }}{{ end }}"
+   target="_blank"
+   rel="noopener noreferrer"
+   aria-label="{{ .title }} — arXiv:{{ .id }}"
+   data-arxiv-id="{{ .id }}"
+   data-variant="hero"
+   data-api-ok="true"
+   data-arxiv-pdf="{{ .pdfURL }}"
+   {{- with .primaryCategory }} data-arxiv-category="{{ . }}"{{ end }}
+   {{- with .primaryArchive }} data-arxiv-archive="{{ . }}"{{ end }}
+   {{- with .primaryGroup }} data-arxiv-group="{{ . }}"{{ end }}>
+  <div class="arxiv-paper__banner" data-arxiv-archive="{{ .primaryArchive }}">
+    <span class="arxiv-paper__banner-brand">arXiv</span>
+    <span class="arxiv-paper__banner-id">{{ .id }}{{ with .version }}<span class="arxiv-paper__version">v{{ . }}</span>{{ end }}</span>
+    {{- with .primaryCategoryLabel }}<span class="arxiv-paper__banner-cat">{{ . }}</span>{{ end }}
+  </div>
+  <div class="arxiv-paper__hero-body">
+    <div class="arxiv-paper__hero-top">
+      {{- with .primaryGroup }}<span class="arxiv-paper__hero-type">{{ . }}</span>{{ end }}
+      {{- with .publishedYear }}<span class="arxiv-paper__hero-year">{{ . }}</span>{{ end }}
+    </div>
+    <h3 class="arxiv-paper__title arxiv-paper__title--hero">{{ .title }}</h3>
+    {{- with (partial "arxiv-paper/authors.html" (dict "authors" .authors "max" 6)) }}
+    <p class="arxiv-paper__authors">
+      {{- partial "arxiv-paper/icon.html" (dict "name" "authors" "class" "arxiv-paper__icon") }}
+      <span class="arxiv-paper__author-list">{{ . }}</span>
+      {{- if gt $.authorCount 6 }} <span class="arxiv-paper__author-count">({{ $.authorCount }} authors)</span>{{ end }}
+    </p>
+    {{- end }}
+    {{- with .tldr }}
+    <p class="arxiv-paper__tldr">
+      {{- partial "arxiv-paper/icon.html" (dict "name" "sparkle" "class" "arxiv-paper__icon arxiv-paper__icon--tldr") }} {{ . }}
+    </p>
+    {{- else }}{{ with .abstract }}
+    <p class="arxiv-paper__abstract">{{ . }}</p>
+    {{- end }}{{ end }}
+    {{- with .categories }}
+    <div class="arxiv-paper__tags">
+      {{- range . }}
+      <span class="arxiv-paper__tag{{ if .primary }} arxiv-paper__tag--primary{{ end }}" data-arxiv-category="{{ .code }}" data-arxiv-archive="{{ .archive }}">{{ .label }}</span>
+      {{- end }}
+    </div>
+    {{- end }}
+    <div class="arxiv-paper__footer arxiv-paper__hero-foot">
+      <span class="arxiv-paper__meta-item">
+        {{- partial "arxiv-paper/icon.html" (dict "name" "calendar" "class" "arxiv-paper__icon") }}
+        <span>Submitted <time datetime="{{ .published }}">{{ .publishedYear }}</time></span>
+      </span>
+      {{- if and .updatedRelative (ne .updated .published) }}
+      <span class="arxiv-paper__meta-item">
+        {{- partial "arxiv-paper/icon.html" (dict "name" "paper" "class" "arxiv-paper__icon") }}
+        <span>Revised <time datetime="{{ .updated }}">{{ .updatedRelative }}</time></span>
+      </span>
+      {{- end }}
+      {{- with .venue }}
+      <span class="arxiv-paper__meta-item arxiv-paper__venue">
+        {{- partial "arxiv-paper/icon.html" (dict "name" "quote" "class" "arxiv-paper__icon") }} {{ . }}
+      </span>
+      {{- end }}
+      {{- if .hasCitations }}
+      <span class="arxiv-paper__meta-item arxiv-paper__citations" data-arxiv-metrics-asof="{{ .metricsAsOf }}">
+        {{- partial "arxiv-paper/icon.html" (dict "name" "quote" "class" "arxiv-paper__icon") }} <strong>{{ partial "arxiv-paper/compact-number.html" .citationCount }}</strong> citations
+      </span>
+      {{- end }}
+      {{- if .hasUpvotes }}
+      <span class="arxiv-paper__meta-item arxiv-paper__upvotes" data-arxiv-metrics-asof="{{ .metricsAsOf }}">
+        {{- partial "arxiv-paper/icon.html" (dict "name" "upvote" "class" "arxiv-paper__icon") }} <strong>{{ partial "arxiv-paper/compact-number.html" .upvotes }}</strong>
+      </span>
+      {{- end }}
+      {{- with .codeRepo }}
+      <span class="arxiv-paper__meta-item arxiv-paper__code" data-arxiv-code="{{ . }}">
+        {{- partial "arxiv-paper/icon.html" (dict "name" "code" "class" "arxiv-paper__icon") }} Code
+        {{- if $.hasCodeStars }} <span class="arxiv-paper__code-stars" data-arxiv-metrics-asof="{{ $.metricsAsOf }}">{{ partial "arxiv-paper/compact-number.html" $.codeStars }}</span>{{ end }}
+      </span>
+      {{- end }}
+      <span class="arxiv-paper__cta">
+        View on arXiv
+        <span class="arxiv-paper__cta-arrow">
+          {{- partial "arxiv-paper/icon.html" (dict "name" "external") -}}
+        </span>
+      </span>
+    </div>
+  </div>
+</a>
+{{- else -}}
+{{- partial "arxiv-paper/inline.html" (merge . (dict "variant" "hero")) -}}
+{{- end -}}

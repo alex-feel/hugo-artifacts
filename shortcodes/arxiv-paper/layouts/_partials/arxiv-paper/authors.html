@@ -1,0 +1,26 @@
+{{/*
+  Builds a truncated author display string ("A, B, C et al.") from an ordered
+  author-name slice. arXiv papers range from a single author to thousands
+  (collaboration papers), so every card design truncates to a sensible head and
+  appends "et al." -- the provider ships the full ordered list and lets each
+  variant pick its own limit.
+
+  Inputs (context dict):
+  - .authors (slice of strings) - Ordered author names.
+  - .max (int, optional)        - Maximum names to show before "et al." (default 3).
+
+  Output: the display string (empty when there are no authors).
+*/}}
+
+{{- $authors := .authors -}}
+{{- $max := .max | default 3 -}}
+{{- $count := len $authors -}}
+{{- $result := "" -}}
+{{- if gt $count 0 -}}
+  {{- if le $count $max -}}
+    {{- $result = delimit $authors ", " -}}
+  {{- else -}}
+    {{- $result = printf "%s et al." (delimit (first $max $authors) ", ") -}}
+  {{- end -}}
+{{- end -}}
+{{- return $result -}}

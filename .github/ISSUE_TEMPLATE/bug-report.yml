@@ -64,6 +64,7 @@ body:
         - shortcodes/hf-space
         - shortcodes/callout
         - shortcodes/youtube-embed
+        - shortcodes/arxiv-paper
         - Multiple modules
         - Repository-wide (build, conventions, docs)
         - Other

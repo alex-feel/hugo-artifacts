@@ -1,0 +1,62 @@
+{{/*
+  Renders an arXiv paper reference in one of six display variants.
+
+  Parameters:
+  - id (string): arXiv identifier. New scheme "2512.24601" (optionally versioned
+                 "2512.24601v2") or the pre-2007 scheme "hep-th/9901001".
+  - url (string): Full arXiv URL (abs / pdf / html). Provide either id or url;
+                  id wins when both are given.
+  - variant (string, optional): Display variant. One of: inline, card, wide,
+                 stats, hero, cite. Default: "card".
+  - title (string, optional): Title override (defaults to the paper's title).
+  - abstract (string, optional): Abstract override (defaults to the summary).
+  - enrich (string, optional): Enricher selection (csv). "semantic-scholar" / "s2"
+                 adds the TLDR one-liner, resolved venue, fields of study, and
+                 citation count; "hf" adds the AI summary, keyword chips, code-repo
+                 badge, HF upvotes, and artifact counts; "all" enables both.
+                 Defaults to the site param params.arxiv_paper.enrich, else off.
+  - class (string, optional): Additional CSS class(es) appended to the root.
+
+  Usage:
+    arxiv-paper id="2512.24601"
+    arxiv-paper id="2512.24601" variant="hero"
+    arxiv-paper url="https://arxiv.org/abs/1706.03762" variant="stats" enrich="all"
+    arxiv-paper id="hep-th/9901001" variant="cite"
+*/}}
+
+{{- $id := .Get "id" | default "" -}}
+{{- $url := .Get "url" | default "" -}}
+{{- $variant := .Get "variant" | default "card" -}}
+{{- $title := .Get "title" | default "" -}}
+{{- $abstract := .Get "abstract" | default "" -}}
+{{- $enrich := .Get "enrich" | default "" -}}
+{{- $class := .Get "class" | default "" -}}
+
+{{/* Validate that at least one locator was supplied. */}}
+{{- if and (not $id) (not $url) -}}
+  {{- errorf "The %q shortcode requires an 'id' (e.g. \"2512.24601\") or a 'url' parameter. See %s" .Name .Position -}}
+{{- end -}}
+
+{{/* Validate variant against allowed values. */}}
+{{- $validVariants := slice "inline" "card" "wide" "stats" "hero" "cite" -}}
+{{- if not (in $validVariants $variant) -}}
+  {{- errorf "The %q shortcode received invalid variant %q. Must be one of: inline, card, wide, stats, hero, cite. See %s" .Name $variant .Position -}}
+{{- end -}}
+
+{{/* Fetch and normalize paper data. */}}
+{{- $ctx := dict
+  "id" $id
+  "url" $url
+  "variant" $variant
+  "title" $title
+  "abstract" $abstract
+  "enrich" $enrich
+  "position" .Position
+-}}
+{{- $data := partial "arxiv-paper/fetch.html" $ctx -}}
+
+{{/* Merge extra class into data. */}}
+{{- $data = merge $data (dict "extraClass" $class) -}}
+
+{{/* Dispatch to variant partial. */}}
+{{- partial (printf "arxiv-paper/%s.html" $variant) $data -}}

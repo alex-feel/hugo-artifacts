@@ -71,6 +71,7 @@ jobs:
             shortcodes/hf-space
             shortcodes/callout
             shortcodes/youtube-embed
+            shortcodes/arxiv-paper
             modules/pwa/test/fixture
           )
           for leaf in "${leaves[@]}"; do
@@ -91,7 +92,7 @@ jobs:
           # github.com/jakearchibald/idb (both non-Go-aware), which cannot be
           # resolved by Hugo's module fetcher without consumer-side
           # replacements documented in modules/pwa/README.md Installation.
-          for m in modules/seo shortcodes/github-repo shortcodes/hf-space shortcodes/callout shortcodes/youtube-embed; do
+          for m in modules/seo shortcodes/github-repo shortcodes/hf-space shortcodes/callout shortcodes/youtube-embed shortcodes/arxiv-paper; do
             echo "::group::hugo mod graph -- ${m}"
             ( cd "${m}" && hugo mod graph )
             echo "::endgroup::"

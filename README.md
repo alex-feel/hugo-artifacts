@@ -55,6 +55,10 @@ Renders a GitHub repository link in one of five display variants (`inline`, `car
 
 Renders a Hugging Face Space link in one of five display variants (`inline`, `card`, `wide`, `stats`, `hero`) with Hub API-driven metadata (emoji, SDK, hardware, likes, live status, gradient colors), header-aware retries, and graceful degradation. The sibling of `shortcodes/github-repo`. See [`shortcodes/hf-space/README.md`](shortcodes/hf-space/README.md).
 
+### `shortcodes/arxiv-paper`
+
+Renders an [arXiv.org](https://arxiv.org/) paper reference in one of six display variants (`inline`, `card`, `wide`, `stats`, `hero`, `cite`) from the arXiv Atom API, with optional Semantic Scholar (one-sentence TLDR, resolved venue, citation count) and Hugging Face Papers (AI summary, keyword chips, code-repo badge, upvotes) enrichment, header-aware retries, and graceful degradation. Resolves subject codes to human-readable names from a shipped taxonomy map, and stamps volatile counts with a `data-arxiv-metrics-asof` freshness hook. Consuming sites must allow-list `application/atom+xml` in `security.http.mediaTypes` (one line, documented in the module README). See [`shortcodes/arxiv-paper/README.md`](shortcodes/arxiv-paper/README.md).
+
 ### `shortcodes/youtube-embed`
 
 Privacy-first YouTube facade: renders only a same-origin, build-time-fetched poster plus a real play button, and injects the `youtube-nocookie.com` player only on click, so the page makes zero third-party contact before the visitor opts in. Supports `id`/`url` parsing (all common shapes plus `?t=` offsets), playlists, an explicit local poster override, arbitrary player-parameter passthrough, responsive same-origin `<picture>` posters, and a no-JavaScript fallback link. See [`shortcodes/youtube-embed/README.md`](shortcodes/youtube-embed/README.md).

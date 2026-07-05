@@ -1,0 +1,74 @@
+{{/*
+  Renders V3 thumbnail-led horizontal card variant of the arxiv-paper shortcode,
+  for paper round-ups. arXiv papers carry no thumbnail image, so the left column
+  is a subject tile displaying the primary category code and broad group -- a
+  data-driven surface the consuming site can color per archive/group via the
+  data-arxiv-archive / data-arxiv-group hooks.
+
+  Context expectations:
+  - . (dict) - Normalized paper data from fetch.html (see card.html), plus
+    .categories, .updatedRelative, .venue.
+
+  Output: An <a> element with BEM class arxiv-paper arxiv-paper--wide.
+*/}}
+
+{{- if .apiOk -}}
+<a href="{{ .absURL }}"
+   class="arxiv-paper arxiv-paper--wide{{ with .extraClass }} {{ . }}{{ end }}"
+   target="_blank"
+   rel="noopener noreferrer"
+   aria-label="{{ .title }} — arXiv:{{ .id }}"
+   data-arxiv-id="{{ .id }}"
+   data-variant="wide"
+   data-api-ok="true"
+   data-arxiv-pdf="{{ .pdfURL }}"
+   {{- with .primaryCategory }} data-arxiv-category="{{ . }}"{{ end }}
+   {{- with .primaryArchive }} data-arxiv-archive="{{ . }}"{{ end }}
+   {{- with .primaryGroup }} data-arxiv-group="{{ . }}"{{ end }}>
+  <div class="arxiv-paper__tile arxiv-paper__tile--subject" data-arxiv-archive="{{ .primaryArchive }}">
+    <span class="arxiv-paper__tile-code">{{ or .primaryCategory "arXiv" }}</span>
+    {{- with .primaryGroup }}<span class="arxiv-paper__tile-group">{{ . }}</span>{{ end }}
+  </div>
+  <div class="arxiv-paper__body">
+    <div class="arxiv-paper__wide-top">
+      <span class="arxiv-paper__brand">arXiv</span>
+      <span class="arxiv-paper__eyebrow-id">{{ .id }}{{ with .version }}v{{ . }}{{ end }}</span>
+      {{- with .publishedYear }}<span class="arxiv-paper__eyebrow-year">{{ . }}</span>{{ end }}
+    </div>
+    <h3 class="arxiv-paper__title">{{ .title }}</h3>
+    {{- with (partial "arxiv-paper/authors.html" (dict "authors" .authors "max" 4)) }}
+    <p class="arxiv-paper__authors">
+      {{- partial "arxiv-paper/icon.html" (dict "name" "authors" "class" "arxiv-paper__icon") }}
+      <span class="arxiv-paper__author-list">{{ . }}</span>
+      {{- if gt $.authorCount 4 }} <span class="arxiv-paper__author-count">({{ $.authorCount }} authors)</span>{{ end }}
+    </p>
+    {{- end }}
+    {{- with (or .tldr .abstract) }}
+    <p class="arxiv-paper__abstract">{{ . }}</p>
+    {{- end }}
+    <div class="arxiv-paper__footer">
+      {{- with .categories }}
+      <span class="arxiv-paper__categories">
+        {{- range . }}
+        <span class="arxiv-paper__category{{ if .primary }} arxiv-paper__category--primary{{ end }}" data-arxiv-category="{{ .code }}" data-arxiv-archive="{{ .archive }}">{{ .label }}</span>
+        {{- end }}
+      </span>
+      {{- end }}
+      <span class="arxiv-paper__spacer"></span>
+      {{- with .venue }}
+      <span class="arxiv-paper__meta-item arxiv-paper__venue">{{ . }}</span>
+      {{- end }}
+      {{- if .hasCitations }}
+      <span class="arxiv-paper__meta-item arxiv-paper__citations" data-arxiv-metrics-asof="{{ $.metricsAsOf }}">
+        {{- partial "arxiv-paper/icon.html" (dict "name" "quote" "class" "arxiv-paper__icon") }} {{ partial "arxiv-paper/compact-number.html" .citationCount }}
+      </span>
+      {{- end }}
+      <span class="arxiv-paper__open">
+        {{- partial "arxiv-paper/icon.html" (dict "name" "external") -}}
+      </span>
+    </div>
+  </div>
+</a>
+{{- else -}}
+{{- partial "arxiv-paper/inline.html" (merge . (dict "variant" "wide")) -}}
+{{- end -}}

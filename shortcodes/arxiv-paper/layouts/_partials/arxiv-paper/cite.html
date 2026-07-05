@@ -1,0 +1,55 @@
+{{/*
+  Renders V6 citation variant of the arxiv-paper shortcode: a copy-ready
+  reference block. Unlike the other variants the root is a <div> (a citation is
+  not a single click-through), so it carries real inner links -- the versioned
+  abstract page, the PDF, the always-present arXiv DataCite DOI
+  (10.48550/arXiv.<id>), and, when the author supplied one, the published-version
+  journal DOI.
+
+  Context expectations:
+  - . (dict) - Normalized paper data from fetch.html (see card.html), plus
+    .absVersionURL, .journalRef, .doiURL, .dataciteDOI, .dataciteDOIURL.
+
+  Output: A <div> element with BEM class arxiv-paper arxiv-paper--cite.
+*/}}
+
+{{- if .apiOk -}}
+<div class="arxiv-paper arxiv-paper--cite{{ with .extraClass }} {{ . }}{{ end }}"
+     data-arxiv-id="{{ .id }}"
+     data-variant="cite"
+     data-api-ok="true"
+     data-arxiv-doi="{{ .dataciteDOI }}"
+     data-arxiv-pdf="{{ .pdfURL }}"
+     {{- with .primaryCategory }} data-arxiv-category="{{ . }}"{{ end }}
+     {{- with .primaryArchive }} data-arxiv-archive="{{ . }}"{{ end }}>
+  <div class="arxiv-paper__cite-head">
+    {{ partial "arxiv-paper/icon.html" (dict "name" "quote" "class" "arxiv-paper__icon") }}
+    <span class="arxiv-paper__cite-label">Cite this paper</span>
+  </div>
+  <p class="arxiv-paper__cite-ref">
+    {{- with (partial "arxiv-paper/authors.html" (dict "authors" .authors "max" 3)) }}<span class="arxiv-paper__cite-authors">{{ . }}</span> {{ end -}}
+    {{- with .publishedYear }}<span class="arxiv-paper__cite-year">({{ . }})</span>. {{ end -}}
+    <span class="arxiv-paper__cite-title">{{ .title }}</span>.
+    <span class="arxiv-paper__cite-source">arXiv:{{ .id }}{{ with .version }}v{{ . }}{{ end }}{{ with .primaryCategory }} [{{ . }}]{{ end }}</span>.
+    {{- with .journalRef }} <span class="arxiv-paper__cite-journal">{{ . }}</span>.{{ end -}}
+  </p>
+  <div class="arxiv-paper__cite-links">
+    <a class="arxiv-paper__cite-link" href="{{ .absVersionURL }}" target="_blank" rel="noopener noreferrer">
+      {{- partial "arxiv-paper/icon.html" (dict "name" "external" "class" "arxiv-paper__icon") }} arXiv:{{ .id }}
+    </a>
+    <a class="arxiv-paper__cite-link" href="{{ .pdfURL }}" target="_blank" rel="noopener noreferrer">
+      {{- partial "arxiv-paper/icon.html" (dict "name" "download" "class" "arxiv-paper__icon") }} PDF
+    </a>
+    <a class="arxiv-paper__cite-link arxiv-paper__cite-doi" href="{{ .dataciteDOIURL }}" target="_blank" rel="noopener noreferrer">
+      {{- partial "arxiv-paper/icon.html" (dict "name" "paper" "class" "arxiv-paper__icon") }} {{ .dataciteDOI }}
+    </a>
+    {{- with .doiURL }}
+    <a class="arxiv-paper__cite-link arxiv-paper__cite-journal-doi" href="{{ . }}" target="_blank" rel="noopener noreferrer">
+      {{- partial "arxiv-paper/icon.html" (dict "name" "external" "class" "arxiv-paper__icon") }} Published version
+    </a>
+    {{- end }}
+  </div>
+</div>
+{{- else -}}
+{{- partial "arxiv-paper/inline.html" (merge . (dict "variant" "cite")) -}}
+{{- end -}}
