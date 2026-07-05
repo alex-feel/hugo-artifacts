@@ -23,6 +23,7 @@ body:
         - shortcodes/hf-space/README.md
         - shortcodes/callout/README.md
         - shortcodes/youtube-embed/README.md
+        - shortcodes/arxiv-paper/README.md
         - examples/backend-cloudflare-worker/README.md
         - examples/backend-express/README.md
         - examples/backend-firebase-functions/README.md

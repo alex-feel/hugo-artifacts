@@ -1,0 +1,186 @@
+{{/*
+  Parses a decoded arXiv Atom feed (one paper) into the normalized core paper
+  dict the variant partials consume. Isolates every arXiv-XML quirk in one place:
+
+  - Single-vs-slice: repeated elements (author, category) decode to a SLICE when
+    there are several but to a bare MAP when there is exactly one; a single-id
+    query also yields a single `entry` map, not a slice. Every list is coerced to
+    a slice before ranging.
+  - Attributes carry a "-" prefix (`-term`, `-scheme`); namespaced elements are
+    flattened to their local name (`comment`, `primary_category`, `doi`,
+    `journal_ref`). Values are read with `index . "-term"` etc.
+  - arXiv reports errors with HTTP 200: a nonexistent id yields a feed with NO
+    entry; a malformed id yields one entry whose `id` points at
+    `arxiv.org/api/errors`. Both are detected here and reported as not-found.
+  - The id in `entry/id` embeds the resolved version (e.g. `...abs/1706.03762v7`,
+    or `...abs/hep-th/9901001v3` for the pre-2007 scheme whose id contains an
+    internal slash). Both schemes are handled by stripping the trailing `vN`.
+
+  Category codes are resolved to human-readable names and broad groups through
+  the shipped `data/arxiv_categories.json` and `data/arxiv_archive_groups.json`
+  maps (looked up via `hugo.Data`, never the deprecated `.Site.Data`).
+
+  Inputs (context dict):
+  - .feed (map)             The decoded top-level Atom feed.
+  - .titleOverride (string) Optional title override (empty for default).
+  - .abstractOverride (string) Optional abstract override (empty for default).
+
+  Output (returned dict, ONE terminal return -- Hugo forbids multiple):
+  - .found (bool)   false when the feed carries no usable paper entry.
+  - .paper (map)    The normalized core paper dict when .found is true.
+*/}}
+
+{{- $feed := .feed -}}
+{{- $titleOverride := .titleOverride | default "" -}}
+{{- $abstractOverride := .abstractOverride | default "" -}}
+
+{{- $found := false -}}
+{{- $paper := dict -}}
+
+{{/* Coerce `entry` to a slice; a single-id query returns one bare entry map. */}}
+{{- $entries := $feed.entry -}}
+{{- if $entries -}}
+  {{- if not (reflect.IsSlice $entries) -}}
+    {{- $entries = slice $entries -}}
+  {{- end -}}
+  {{- if gt (len $entries) 0 -}}
+    {{- $entry := index $entries 0 -}}
+    {{- $rawId := or $entry.id "" -}}
+    {{/* Skip the error entry arXiv returns (200 with id under /api/errors). */}}
+    {{- if and $rawId (not (strings.Contains $rawId "/api/errors")) -}}
+
+      {{/* Identifier + version. Strip the abs-URL prefix, then peel a trailing
+           vN. The old scheme keeps its internal slash (hep-th/9901001), so never
+           split on the last slash -- match the trailing version explicitly. */}}
+      {{- $idPath := replaceRE "^https?://arxiv\\.org/abs/" "" $rawId -}}
+      {{- $bareId := $idPath -}}
+      {{- $version := 0 -}}
+      {{- $vMatches := findRE "v([0-9]+)$" $idPath 1 -}}
+      {{- if $vMatches -}}
+        {{- $vFull := index $vMatches 0 -}}
+        {{- $version = int (strings.TrimPrefix "v" $vFull) -}}
+        {{- $bareId = strings.TrimSuffix $vFull $idPath -}}
+      {{- end -}}
+
+      {{/* Title + abstract: collapse the whitespace/newlines the feed embeds. */}}
+      {{- $title := $titleOverride -}}
+      {{- if not $title -}}
+        {{- $title = replaceRE "\\s+" " " (trim (or $entry.title "") " \t\n\r") -}}
+      {{- end -}}
+      {{- $abstract := $abstractOverride -}}
+      {{- if not $abstract -}}
+        {{- $abstract = replaceRE "\\s+" " " (trim (or $entry.summary "") " \t\n\r") -}}
+      {{- end -}}
+
+      {{/* Authors, order preserved. Coerce to a slice; each node carries name. */}}
+      {{- $authorNodes := $entry.author -}}
+      {{- if $authorNodes -}}
+        {{- if not (reflect.IsSlice $authorNodes) -}}
+          {{- $authorNodes = slice $authorNodes -}}
+        {{- end -}}
+      {{- else -}}
+        {{- $authorNodes = slice -}}
+      {{- end -}}
+      {{- $authors := slice -}}
+      {{- range $authorNodes -}}
+        {{- with .name -}}
+          {{- $authors = $authors | append (trim . " \t\n\r") -}}
+        {{- end -}}
+      {{- end -}}
+      {{- $authorCount := len $authors -}}
+
+      {{/* Primary category + full category list, resolved to labels and groups. */}}
+      {{- $primaryCategory := "" -}}
+      {{- with $entry.primary_category -}}
+        {{- $primaryCategory = index . "-term" -}}
+      {{- end -}}
+      {{- $primaryArchive := index (split $primaryCategory ".") 0 -}}
+      {{- $primaryCategoryLabel := or (index hugo.Data.arxiv_categories $primaryCategory) $primaryCategory -}}
+      {{- $primaryGroup := or (index hugo.Data.arxiv_archive_groups $primaryArchive) "" -}}
+
+      {{- $catNodes := $entry.category -}}
+      {{- if $catNodes -}}
+        {{- if not (reflect.IsSlice $catNodes) -}}
+          {{- $catNodes = slice $catNodes -}}
+        {{- end -}}
+      {{- else -}}
+        {{- $catNodes = slice -}}
+      {{- end -}}
+      {{- $categories := slice -}}
+      {{- $seen := slice -}}
+      {{- range $catNodes -}}
+        {{- $code := index . "-term" -}}
+        {{- if and $code (not (in $seen $code)) -}}
+          {{- $seen = $seen | append $code -}}
+          {{- $arch := index (split $code ".") 0 -}}
+          {{- $categories = $categories | append (dict
+            "code" $code
+            "label" (or (index hugo.Data.arxiv_categories $code) $code)
+            "archive" $arch
+            "group" (or (index hugo.Data.arxiv_archive_groups $arch) "")
+            "primary" (eq $code $primaryCategory)
+          ) -}}
+        {{- end -}}
+      {{- end -}}
+
+      {{/* Dates. `published` is the v1 date; `updated` the retrieved version's. */}}
+      {{- $published := or $entry.published "" -}}
+      {{- $updated := or $entry.updated "" -}}
+      {{- $publishedYear := "" -}}
+      {{- with $published -}}
+        {{- $publishedYear = dateFormat "2006" . -}}
+      {{- end -}}
+      {{- $publishedRelative := "" -}}
+      {{- with $published -}}
+        {{- $publishedRelative = partial "arxiv-paper/relative-time.html" . -}}
+      {{- end -}}
+      {{- $updatedRelative := "" -}}
+      {{- with $updated -}}
+        {{- $updatedRelative = partial "arxiv-paper/relative-time.html" . -}}
+      {{- end -}}
+
+      {{/* Optional author-supplied fields. */}}
+      {{- $comment := trim (or $entry.comment "") " \t\n\r" -}}
+      {{- $journalRef := trim (or $entry.journal_ref "") " \t\n\r" -}}
+      {{- $doi := trim (or $entry.doi "") " \t\n\r" -}}
+      {{- $doiURL := "" -}}
+      {{- with $doi -}}
+        {{- $doiURL = printf "https://doi.org/%s" . -}}
+      {{- end -}}
+
+      {{/* Canonical (unversioned) URLs + the arXiv DataCite DOI (always exists). */}}
+      {{- $paper = dict
+        "id" $bareId
+        "idVersioned" $idPath
+        "version" $version
+        "title" $title
+        "abstract" $abstract
+        "authors" $authors
+        "authorCount" $authorCount
+        "published" $published
+        "updated" $updated
+        "publishedYear" $publishedYear
+        "publishedRelative" $publishedRelative
+        "updatedRelative" $updatedRelative
+        "primaryCategory" $primaryCategory
+        "primaryCategoryLabel" $primaryCategoryLabel
+        "primaryArchive" $primaryArchive
+        "primaryGroup" $primaryGroup
+        "categories" $categories
+        "comment" $comment
+        "journalRef" $journalRef
+        "doi" $doi
+        "doiURL" $doiURL
+        "absURL" (printf "https://arxiv.org/abs/%s" $bareId)
+        "absVersionURL" (printf "https://arxiv.org/abs/%s" $idPath)
+        "pdfURL" (printf "https://arxiv.org/pdf/%s" $bareId)
+        "dataciteDOI" (printf "10.48550/arXiv.%s" $bareId)
+        "dataciteDOIURL" (printf "https://doi.org/10.48550/arXiv.%s" $bareId)
+      -}}
+      {{- $found = true -}}
+
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return (dict "found" $found "paper" $paper) -}}

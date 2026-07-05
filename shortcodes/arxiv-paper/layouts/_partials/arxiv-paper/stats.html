@@ -1,0 +1,82 @@
+{{/*
+  Renders V4 stats card variant of the arxiv-paper shortcode: an editorial header
+  over a metrics strip. The strip leads with durable facts (submitted year,
+  primary subject, author count, version) that age gracefully, and appends the
+  slow-drift counts (citations, upvotes) only when enrichment supplied them --
+  each stamped with data-arxiv-metrics-asof so an infrequently-rebuilt site can
+  show honest freshness.
+
+  Context expectations:
+  - . (dict) - Normalized paper data from fetch.html (see card.html), plus
+    .hasUpvotes, .upvotes.
+
+  Output: An <a> element with BEM class arxiv-paper arxiv-paper--stats.
+*/}}
+
+{{- if .apiOk -}}
+<a href="{{ .absURL }}"
+   class="arxiv-paper arxiv-paper--stats{{ with .extraClass }} {{ . }}{{ end }}"
+   target="_blank"
+   rel="noopener noreferrer"
+   aria-label="{{ .title }} — arXiv:{{ .id }}"
+   data-arxiv-id="{{ .id }}"
+   data-variant="stats"
+   data-api-ok="true"
+   data-arxiv-pdf="{{ .pdfURL }}"
+   {{- with .primaryCategory }} data-arxiv-category="{{ . }}"{{ end }}
+   {{- with .primaryArchive }} data-arxiv-archive="{{ . }}"{{ end }}
+   {{- with .primaryGroup }} data-arxiv-group="{{ . }}"{{ end }}>
+  <div class="arxiv-paper__head">
+    <div class="arxiv-paper__eyebrow">
+      <span class="arxiv-paper__brand">arXiv</span>
+      <span class="arxiv-paper__eyebrow-sep">·</span>
+      <span class="arxiv-paper__eyebrow-id">{{ .id }}{{ with .version }}v{{ . }}{{ end }}</span>
+    </div>
+    <span class="arxiv-paper__open">
+      {{- partial "arxiv-paper/icon.html" (dict "name" "external") -}}
+    </span>
+  </div>
+  <h3 class="arxiv-paper__title">{{ .title }}</h3>
+  {{- with (partial "arxiv-paper/authors.html" (dict "authors" .authors "max" 4)) }}
+  <p class="arxiv-paper__authors">
+    {{- partial "arxiv-paper/icon.html" (dict "name" "authors" "class" "arxiv-paper__icon") }}
+    <span class="arxiv-paper__author-list">{{ . }}</span>
+  </p>
+  {{- end }}
+  {{- with (or .tldr .abstract) }}
+  <p class="arxiv-paper__abstract">{{ . }}</p>
+  {{- end }}
+  <div class="arxiv-paper__stat-row">
+    <span class="arxiv-paper__stat">
+      <span class="arxiv-paper__stat-label">Submitted</span>
+      <span class="arxiv-paper__stat-value">{{ or .publishedYear "—" }}</span>
+    </span>
+    <span class="arxiv-paper__stat">
+      <span class="arxiv-paper__stat-label">Subject</span>
+      <span class="arxiv-paper__stat-value" data-arxiv-category="{{ .primaryCategory }}">{{ or .primaryCategory "—" }}</span>
+    </span>
+    <span class="arxiv-paper__stat">
+      <span class="arxiv-paper__stat-label">Authors</span>
+      <span class="arxiv-paper__stat-value">{{ .authorCount }}</span>
+    </span>
+    <span class="arxiv-paper__stat">
+      <span class="arxiv-paper__stat-label">Version</span>
+      <span class="arxiv-paper__stat-value">v{{ .version }}</span>
+    </span>
+    {{- if .hasCitations }}
+    <span class="arxiv-paper__stat arxiv-paper__stat--citations" data-arxiv-metrics-asof="{{ .metricsAsOf }}">
+      <span class="arxiv-paper__stat-label">Citations</span>
+      <span class="arxiv-paper__stat-value">{{ partial "arxiv-paper/compact-number.html" .citationCount }}</span>
+    </span>
+    {{- end }}
+    {{- if .hasUpvotes }}
+    <span class="arxiv-paper__stat arxiv-paper__stat--upvotes" data-arxiv-metrics-asof="{{ .metricsAsOf }}">
+      <span class="arxiv-paper__stat-label">HF upvotes</span>
+      <span class="arxiv-paper__stat-value">{{ partial "arxiv-paper/compact-number.html" .upvotes }}</span>
+    </span>
+    {{- end }}
+  </div>
+</a>
+{{- else -}}
+{{- partial "arxiv-paper/inline.html" (merge . (dict "variant" "stats")) -}}
+{{- end -}}

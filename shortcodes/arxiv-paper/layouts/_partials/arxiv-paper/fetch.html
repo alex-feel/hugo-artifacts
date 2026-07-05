@@ -1,0 +1,303 @@
+{{/*
+  Fetches and normalizes an arXiv paper for the variant partials, with the
+  github-repo resilience contract in front of graceful degradation: every fetch
+  is wrapped in `try`, failures are classified and logged once, and the build is
+  NEVER broken by a remote failure. The arXiv Atom API is the required spine;
+  Semantic Scholar and Hugging Face Papers are opt-in enrichers that each degrade
+  independently back to arXiv-only.
+
+  Locator: `id` ("2512.24601", "2512.24601v2", or the pre-2007 "hep-th/9901001")
+  or a full `url` (abs / pdf / html). `id` wins when both are given.
+
+  The arXiv API returns Content-Type application/atom+xml, which Hugo will only
+  fetch when the CONSUMING SITE allow-lists it in its security policy:
+
+    [security.http]
+      mediaTypes = ['^application/atom\+xml']   # unanchored; additive to defaults
+
+  Without it, resources.GetRemote errors; that error is caught, classified as
+  `media-type-config`, warned ONCE with the exact fix, and the widget degrades to
+  the inline chip. See the module README "Requirements".
+
+  Enrichment is selected by the `enrich` parameter (csv: "semantic-scholar"/"s2",
+  "hf", or "all"), falling back to the site param `params.arxiv_paper.enrich`,
+  default off. Read tokens via os.Getenv "HUGO_<X>_TOKEN" (the HUGO_ prefix is
+  mandatory under Hugo's default security policy).
+
+  Context expectations:
+  - .id (string)          arXiv id (wins over .url when both set).
+  - .url (string)         Full arXiv URL.
+  - .variant (string)     Display variant.
+  - .title (string)       Title override (empty for default).
+  - .abstract (string)    Abstract override (empty for default).
+  - .enrich (string)      Enricher selection override (empty -> site param).
+  - .position (text.Position) Shortcode call position (used in warnings).
+
+  Returns: the normalized paper dict the variant partials consume. `apiOk` is the
+  contract they branch on; it is true only when the arXiv spine resolved a paper.
+*/}}
+
+{{- $id := .id | default "" -}}
+{{- $url := .url | default "" -}}
+{{- $titleOverride := .title | default "" -}}
+{{- $abstractOverride := .abstract | default "" -}}
+{{- $position := .position -}}
+
+{{/* ---- Resolve the query id from `id` or a URL. Never split on the last slash
+     -- the pre-2007 scheme (hep-th/9901001) carries an internal slash. ---- */}}
+{{- $locator := or $id $url -}}
+{{- $queryId := $locator -}}
+{{- if strings.Contains (lower $locator) "arxiv.org" -}}
+  {{- $queryId = replaceRE "(?i)^https?://(www\\.)?arxiv\\.org/(abs|pdf|html|format|e-print)/" "" $locator -}}
+  {{- $queryId = replaceRE "(?i)\\.pdf$" "" $queryId -}}
+  {{- $queryId = replaceRE "[?#].*$" "" $queryId -}}
+{{- end -}}
+{{- $queryId = trim $queryId "/ \t" -}}
+{{- if not $queryId -}}
+  {{- errorf "[arxiv-paper] Could not parse an arXiv id from %q. Provide id=\"2512.24601\" or url=\"https://arxiv.org/abs/2512.24601\". See %s" $locator $position -}}
+{{- end -}}
+
+{{/* Bare id (version peeled) for the degraded fallback's deterministic links. */}}
+{{- $bareId := $queryId -}}
+{{- $qv := findRE "v([0-9]+)$" $queryId 1 -}}
+{{- if $qv -}}
+  {{- $bareId = strings.TrimSuffix (index $qv 0) $queryId -}}
+{{- end -}}
+
+{{/* ---- Enricher selection: shortcode param, else site param, else off. ---- */}}
+{{- $enrich := .enrich | default "" -}}
+{{- if not $enrich -}}
+  {{- with site.Params.arxiv_paper -}}
+    {{- with .enrich -}}{{ $enrich = . }}{{ end -}}
+  {{- end -}}
+{{- end -}}
+{{- $enrichLower := lower $enrich -}}
+{{- $enableS2 := or (in $enrichLower "s2") (in $enrichLower "semantic") (in $enrichLower "all") -}}
+{{- $enableHF := or (in $enrichLower "hf") (in $enrichLower "hugging") (in $enrichLower "all") -}}
+
+{{/* ---- Tokens (optional). ---- */}}
+{{- $s2Token := os.Getenv "HUGO_SEMANTIC_SCHOLAR_TOKEN" -}}
+{{- $hfToken := os.Getenv "HUGO_HF_TOKEN" -}}
+
+{{/* Preflight: warn once per build if S2 enrichment is on without a token. */}}
+{{- if and $enableS2 (not $s2Token) -}}
+  {{- $k := "arxiv-paper:warned-no-s2-token" -}}
+  {{- if not (hugo.Store.Get $k) -}}
+    {{- hugo.Store.Set $k true -}}
+    {{- warnf "[arxiv-paper] Semantic Scholar enrichment is enabled but HUGO_SEMANTIC_SCHOLAR_TOKEN is not set. Anonymous requests are heavily rate-limited (HTTP 429); set a free API key to raise the limit. Papers still render from arXiv data. See %s" $position -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---- Enrichment + meta defaults, shared by the fallback and success dicts so
+     every variant finds the same keys regardless of API outcome. ---- */}}
+{{- $defaults := dict
+  "tldr" ""
+  "venue" ""
+  "fieldsOfStudy" (slice)
+  "citationCount" 0
+  "hasCitations" false
+  "s2Ok" false
+  "upvotes" 0
+  "hasUpvotes" false
+  "aiSummary" ""
+  "aiKeywords" (slice)
+  "codeRepo" ""
+  "codeStars" 0
+  "hasCodeStars" false
+  "numModels" 0
+  "numDatasets" 0
+  "numSpaces" 0
+  "hfURL" ""
+  "hfOk" false
+  "metricsAsOf" ""
+  "extraClass" ""
+-}}
+
+{{/* Deterministic degraded fallback (arXiv unreachable / paper not found). */}}
+{{- $fallbackCore := dict
+  "id" $bareId
+  "idVersioned" (or $queryId $bareId)
+  "version" 0
+  "title" (or $titleOverride $bareId)
+  "abstract" $abstractOverride
+  "authors" (slice)
+  "authorCount" 0
+  "published" ""
+  "updated" ""
+  "publishedYear" ""
+  "publishedRelative" ""
+  "updatedRelative" ""
+  "primaryCategory" ""
+  "primaryCategoryLabel" ""
+  "primaryArchive" ""
+  "primaryGroup" ""
+  "categories" (slice)
+  "comment" ""
+  "journalRef" ""
+  "doi" ""
+  "doiURL" ""
+  "absURL" (printf "https://arxiv.org/abs/%s" $bareId)
+  "absVersionURL" (printf "https://arxiv.org/abs/%s" $queryId)
+  "pdfURL" (printf "https://arxiv.org/pdf/%s" $bareId)
+  "dataciteDOI" (printf "10.48550/arXiv.%s" $bareId)
+  "dataciteDOIURL" (printf "https://doi.org/10.48550/arXiv.%s" $bareId)
+  "apiOk" false
+-}}
+{{- $data := merge $defaults $fallbackCore -}}
+
+{{/* ---- Retry constants (baked in; no shortcode/site tuning surface). ---- */}}
+{{- $attempts := 5 -}}
+{{- $perAttemptTimeout := "30s" -}}
+{{- $overallBudgetSec := 120 -}}
+{{- $earlyBreak := slice "auth" "not-found" "rate-limit" "media-type-config" "parse" -}}
+
+{{/* ---- arXiv Atom fetch (required spine). ---- */}}
+{{- $apiUrl := printf "https://export.arxiv.org/api/query?id_list=%s&max_results=1" $queryId -}}
+{{- $startSec := int now.Unix -}}
+{{- $result := dict "ok" false "value" nil "statusCode" 0 "errorClass" "network" "errorMessage" "" "waitHintSeconds" 0 -}}
+{{- $attemptsUsed := 0 -}}
+{{- range $attempt := seq 1 $attempts -}}
+  {{- if $result.ok -}}
+  {{- else -}}
+    {{- $elapsed := sub (int now.Unix) $startSec -}}
+    {{- if le (sub $overallBudgetSec $elapsed) 0 -}}
+    {{- else if and (gt $attempt 1) (in $earlyBreak $result.errorClass) -}}
+    {{- else -}}
+      {{- $result = partial "arxiv-paper/fetch-once.html" (dict
+        "url" $apiUrl
+        "cacheKey" (printf "arxiv-paper:%s:atom:attempt%d" $queryId $attempt)
+        "format" "xml"
+        "timeout" $perAttemptTimeout
+      ) -}}
+      {{- $attemptsUsed = $attempt -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if $result.ok -}}
+  {{- $parsed := partial "arxiv-paper/parse-atom.html" (dict
+    "feed" $result.value
+    "titleOverride" $titleOverride
+    "abstractOverride" $abstractOverride
+  ) -}}
+  {{- if $parsed.found -}}
+    {{- $data = merge $defaults $parsed.paper (dict "apiOk" true) -}}
+  {{- else -}}
+    {{- warnf "[arxiv-paper] arXiv returned no paper for %q (empty or error feed). Rendering a minimal reference. See %s" $queryId $position -}}
+  {{- end -}}
+{{- else -}}
+  {{- if eq $result.errorClass "media-type-config" -}}
+    {{- $k := "arxiv-paper:warned-media-type-config" -}}
+    {{- if not (hugo.Store.Get $k) -}}
+      {{- hugo.Store.Set $k true -}}
+      {{- warnf "[arxiv-paper] %s See %s" $result.errorMessage $position -}}
+    {{- end -}}
+  {{- else -}}
+    {{- warnf "[arxiv-paper] Failed to fetch arXiv paper %q after %d attempt(s) (errorClass=%s, statusCode=%d, message=%q). Rendering a minimal reference. See %s" $queryId $attemptsUsed $result.errorClass $result.statusCode $result.errorMessage $position -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---- Semantic Scholar enrichment (opt-in; degrades to arXiv-only). ---- */}}
+{{- if and $data.apiOk $enableS2 -}}
+  {{- $s2Headers := dict -}}
+  {{- with $s2Token -}}{{ $s2Headers = dict "x-api-key" . }}{{ end -}}
+  {{- $s2Url := printf "https://api.semanticscholar.org/graph/v1/paper/arXiv:%s?fields=tldr,publicationVenue,fieldsOfStudy,citationCount" $data.id -}}
+  {{- $s2res := dict "ok" false "value" nil "errorClass" "network" "errorMessage" "" -}}
+  {{- $s2Start := int now.Unix -}}
+  {{- range $a := seq 1 3 -}}
+    {{- if $s2res.ok -}}
+    {{- else if and (gt $a 1) (in $earlyBreak $s2res.errorClass) -}}
+    {{- else if gt (sub (int now.Unix) $s2Start) 60 -}}
+    {{- else -}}
+      {{- $s2res = partial "arxiv-paper/fetch-once.html" (dict
+        "url" $s2Url
+        "cacheKey" (printf "arxiv-paper:%s:s2:attempt%d" $data.id $a)
+        "format" "json"
+        "headers" $s2Headers
+        "timeout" "20s"
+        "responseHeaders" (slice "Retry-After")
+      ) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if and $s2res.ok (isset $s2res.value "citationCount") -}}
+    {{- $s2 := $s2res.value -}}
+    {{- $tldr := "" -}}
+    {{- with $s2.tldr -}}{{ with .text -}}{{ $tldr = trim . " \t\n\r" }}{{- end -}}{{- end -}}
+    {{- $venue := "" -}}
+    {{- with $s2.publicationVenue -}}{{ with .name -}}{{ $venue = trim . " \t\n\r" }}{{- end -}}{{- end -}}
+    {{- $fos := slice -}}
+    {{- with $s2.fieldsOfStudy -}}{{ if reflect.IsSlice . -}}{{ $fos = . }}{{- end -}}{{- end -}}
+    {{- $data = merge $data (dict
+      "tldr" $tldr
+      "venue" $venue
+      "fieldsOfStudy" $fos
+      "citationCount" (int (or $s2.citationCount 0))
+      "hasCitations" true
+      "s2Ok" true
+    ) -}}
+  {{- else -}}
+    {{- $k := "arxiv-paper:warned-s2-unavailable" -}}
+    {{- if not (hugo.Store.Get $k) -}}
+      {{- hugo.Store.Set $k true -}}
+      {{- warnf "[arxiv-paper] Semantic Scholar enrichment unavailable (errorClass=%s; likely rate-limited -- set HUGO_SEMANTIC_SCHOLAR_TOKEN). Papers render from arXiv data. See %s" $s2res.errorClass $position -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---- Hugging Face Papers enrichment (opportunistic; 404 = not indexed). ---- */}}
+{{- if and $data.apiOk $enableHF -}}
+  {{- $hfHeaders := dict -}}
+  {{- with $hfToken -}}{{ $hfHeaders = dict "Authorization" (printf "Bearer %s" .) }}{{ end -}}
+  {{- $hfUrl := printf "https://huggingface.co/api/papers/%s" $data.id -}}
+  {{- $hfres := dict "ok" false "value" nil "errorClass" "network" "errorMessage" "" -}}
+  {{- $hfStart := int now.Unix -}}
+  {{- range $a := seq 1 3 -}}
+    {{- if $hfres.ok -}}
+    {{- else if and (gt $a 1) (in $earlyBreak $hfres.errorClass) -}}
+    {{- else if gt (sub (int now.Unix) $hfStart) 60 -}}
+    {{- else -}}
+      {{- $hfres = partial "arxiv-paper/fetch-once.html" (dict
+        "url" $hfUrl
+        "cacheKey" (printf "arxiv-paper:%s:hf:attempt%d" $data.id $a)
+        "format" "json"
+        "headers" $hfHeaders
+        "timeout" "20s"
+      ) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if $hfres.ok -}}
+    {{- $hf := $hfres.value -}}
+    {{- $aiKeywords := slice -}}
+    {{- with $hf.ai_keywords -}}{{ if reflect.IsSlice . -}}{{ $aiKeywords = . }}{{- end -}}{{- end -}}
+    {{- $codeStars := int (or $hf.githubStars 0) -}}
+    {{- $data = merge $data (dict
+      "upvotes" (int (or $hf.upvotes 0))
+      "hasUpvotes" true
+      "aiSummary" (replaceRE "\\s+" " " (trim (or $hf.ai_summary "") " \t\n\r"))
+      "aiKeywords" $aiKeywords
+      "codeRepo" (or $hf.githubRepo "")
+      "codeStars" $codeStars
+      "hasCodeStars" (gt $codeStars 0)
+      "numModels" (int (or $hf.numTotalModels 0))
+      "numDatasets" (int (or $hf.numTotalDatasets 0))
+      "numSpaces" (int (or $hf.numTotalSpaces 0))
+      "hfURL" (printf "https://huggingface.co/papers/%s" $data.id)
+      "hfOk" true
+    ) -}}
+  {{- else if ne $hfres.errorClass "not-found" -}}
+    {{- $k := "arxiv-paper:warned-hf-unavailable" -}}
+    {{- if not (hugo.Store.Get $k) -}}
+      {{- hugo.Store.Set $k true -}}
+      {{- warnf "[arxiv-paper] Hugging Face Papers enrichment unavailable (errorClass=%s). Papers render without HF data. See %s" $hfres.errorClass $position -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---- Freshness stamp: set only when a volatile metric was actually baked, so
+     a consumer that rebuilds infrequently can surface an honest "as of" date and
+     a daily rebuild can ignore it. ---- */}}
+{{- if or $data.s2Ok $data.hfOk -}}
+  {{- $data = merge $data (dict "metricsAsOf" (now.Format "2006-01-02T15:04:05Z07:00")) -}}
+{{- end -}}
+
+{{- return $data -}}

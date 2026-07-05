@@ -39,6 +39,7 @@ body:
         - HF Space shortcode
         - Callout shortcode
         - YouTube-embed shortcode
+        - arXiv-paper shortcode
         - Multi-module monorepo / tagging / versioning
         - Hugo template lookup / overrides
         - Other

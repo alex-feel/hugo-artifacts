@@ -36,6 +36,7 @@ body:
         - shortcodes/hf-space
         - shortcodes/callout
         - shortcodes/youtube-embed
+        - shortcodes/arxiv-paper
         - New module (proposing)
         - Repository-wide (build, conventions, docs)
         - Other
@@ -54,7 +55,7 @@ body:
         - Asset pipeline (js.Build, Sass, image processing)
         - TypeScript service worker (modules/pwa)
         - Push notification flow (modules/pwa)
-        - Remote API integration (github-repo, hf-space)
+        - Remote API integration (github-repo, hf-space, arxiv-paper)
         - Documentation
         - Build / CI / tooling
         - Other

@@ -1,0 +1,78 @@
+{{/*
+  Renders V2 editorial card variant of the arxiv-paper shortcode (default).
+
+  Context expectations:
+  - . (dict) - Normalized paper data from fetch.html.
+  - Core: .absURL, .pdfURL, .id, .version, .title, .authors, .authorCount,
+    .abstract, .publishedYear, .comment, .primaryCategory, .primaryCategoryLabel,
+    .primaryArchive, .primaryGroup, .dataciteDOI, .apiOk, .extraClass
+  - Enrichment (optional): .tldr, .venue, .hasCitations, .citationCount,
+    .metricsAsOf
+
+  Output: An <a> element with BEM class arxiv-paper arxiv-paper--card.
+  The whole card links to the abstract page (matching the github-repo / hf-space
+  card pattern); the direct PDF URL is exposed as data-arxiv-pdf so a consuming
+  site can wire its own PDF action.
+*/}}
+
+{{- if .apiOk -}}
+<a href="{{ .absURL }}"
+   class="arxiv-paper arxiv-paper--card{{ with .extraClass }} {{ . }}{{ end }}"
+   target="_blank"
+   rel="noopener noreferrer"
+   aria-label="{{ .title }} — arXiv:{{ .id }}"
+   data-arxiv-id="{{ .id }}"
+   data-variant="card"
+   data-api-ok="true"
+   data-arxiv-pdf="{{ .pdfURL }}"
+   {{- with .primaryCategory }} data-arxiv-category="{{ . }}"{{ end }}
+   {{- with .primaryArchive }} data-arxiv-archive="{{ . }}"{{ end }}
+   {{- with .primaryGroup }} data-arxiv-group="{{ . }}"{{ end }}>
+  <div class="arxiv-paper__head">
+    <div class="arxiv-paper__eyebrow">
+      <span class="arxiv-paper__brand">arXiv</span>
+      {{- with .primaryCategoryLabel }}<span class="arxiv-paper__eyebrow-sep">·</span><span class="arxiv-paper__eyebrow-cat">{{ . }}</span>{{ end }}
+    </div>
+    <span class="arxiv-paper__open">
+      {{- partial "arxiv-paper/icon.html" (dict "name" "external") -}}
+    </span>
+  </div>
+  <h3 class="arxiv-paper__title">{{ .title }}</h3>
+  {{- with (partial "arxiv-paper/authors.html" (dict "authors" .authors "max" 4)) }}
+  <p class="arxiv-paper__authors">
+    {{- partial "arxiv-paper/icon.html" (dict "name" "authors" "class" "arxiv-paper__icon") }}
+    <span class="arxiv-paper__author-list">{{ . }}</span>
+    {{- if gt $.authorCount 4 }} <span class="arxiv-paper__author-count">({{ $.authorCount }} authors)</span>{{ end }}
+  </p>
+  {{- end }}
+  {{- with .tldr }}
+  <p class="arxiv-paper__tldr">
+    {{- partial "arxiv-paper/icon.html" (dict "name" "sparkle" "class" "arxiv-paper__icon arxiv-paper__icon--tldr") }} {{ . }}
+  </p>
+  {{- else }}{{ with .abstract }}
+  <p class="arxiv-paper__abstract">{{ . }}</p>
+  {{- end }}{{ end }}
+  <div class="arxiv-paper__footer">
+    <span class="arxiv-paper__id">{{ .id }}{{ with .version }}<span class="arxiv-paper__version">v{{ . }}</span>{{ end }}</span>
+    {{- with .publishedYear }}
+    <span class="arxiv-paper__meta-item">
+      {{- partial "arxiv-paper/icon.html" (dict "name" "calendar" "class" "arxiv-paper__icon") }} {{ . }}
+    </span>
+    {{- end }}
+    {{- with .venue }}
+    <span class="arxiv-paper__meta-item arxiv-paper__venue">{{ . }}</span>
+    {{- end }}
+    {{- with .comment }}
+    <span class="arxiv-paper__meta-item arxiv-paper__comment">{{ . }}</span>
+    {{- end }}
+    {{- if .hasCitations }}
+    <span class="arxiv-paper__meta-item arxiv-paper__citations" data-arxiv-metrics-asof="{{ $.metricsAsOf }}">
+      {{- partial "arxiv-paper/icon.html" (dict "name" "quote" "class" "arxiv-paper__icon") }} {{ partial "arxiv-paper/compact-number.html" .citationCount }} citations
+    </span>
+    {{- end }}
+  </div>
+</a>
+{{- else -}}
+{{/* Degraded output: delegate to inline chip on API failure. */}}
+{{- partial "arxiv-paper/inline.html" (merge . (dict "variant" "card")) -}}
+{{- end -}}

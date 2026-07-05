@@ -1,0 +1,37 @@
+{{/*
+  Renders V1 inline chip variant of the arxiv-paper shortcode.
+  Also serves as the degraded fallback for the other variants when the arXiv
+  fetch fails or resolves no paper (the root then carries data-api-ok="false").
+
+  Context expectations:
+  - . (dict) - Normalized paper data from fetch.html.
+  - .id, .version, .title, .absURL, .primaryCategory, .primaryCategoryLabel,
+    .primaryArchive, .primaryGroup, .apiOk, .extraClass
+  - .variant (string, optional) - Originating variant for data-variant
+    (default: "inline").
+
+  Output: An <a> element with BEM class arxiv-paper arxiv-paper--inline.
+*/}}
+
+{{- $variant := .variant | default "inline" -}}
+<a href="{{ .absURL }}"
+   class="arxiv-paper arxiv-paper--inline{{ with .extraClass }} {{ . }}{{ end }}"
+   target="_blank"
+   rel="noopener noreferrer"
+   aria-label="arXiv:{{ .id }}{{ if and .apiOk .title }} — {{ .title }}{{ end }}"
+   data-arxiv-id="{{ .id }}"
+   data-variant="{{ $variant }}"
+   data-api-ok="{{ .apiOk }}"
+   {{- with .primaryCategory }} data-arxiv-category="{{ . }}"{{ end }}
+   {{- with .primaryArchive }} data-arxiv-archive="{{ . }}"{{ end }}
+   {{- with .primaryGroup }} data-arxiv-group="{{ . }}"{{ end }}>
+  <span class="arxiv-paper__brand">arXiv</span>
+  <span class="arxiv-paper__id">{{ .id }}{{ with .version }}<span class="arxiv-paper__version">v{{ . }}</span>{{ end }}</span>
+  {{- if and .apiOk .title }}
+  <span class="arxiv-paper__sep"></span>
+  <span class="arxiv-paper__inline-title">{{ .title }}</span>
+  {{- end }}
+  {{- with .primaryCategory }}
+  <span class="arxiv-paper__cat" data-arxiv-category="{{ . }}">{{ or $.primaryCategoryLabel . }}</span>
+  {{- end }}
+</a>

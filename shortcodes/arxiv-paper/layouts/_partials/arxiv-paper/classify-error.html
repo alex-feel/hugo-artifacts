@@ -1,0 +1,103 @@
+{{/*
+  Classifies a failed remote fetch (arXiv Atom API, Semantic Scholar, or Hugging
+  Face Papers) into a structured error category and computes a wait-hint in
+  seconds. Shared by the three endpoints the module fetches; each endpoint is a
+  plain HTTP/JSON(+XML) API without GitHub's dual rate-limit surface, so the
+  taxonomy here is deliberately simpler than the github-repo sibling's.
+
+  Inputs (context dict):
+  - .statusCode (int)   HTTP status observed for the failed attempt. 0 means no
+                        HTTP response was produced (network/timeout OR Hugo could
+                        not resolve the media type before a response object
+                        existed -- see .errString).
+  - .headers (map)      Response headers from Hugo's responseHeaders option. Each
+                        value is a []string; extract index 0.
+  - .body (string)      Raw response body, used for best-effort message
+                        extraction (JSON error bodies with a "message" field).
+  - .errString (string) The stringified Hugo error, used to detect the
+                        "failed to resolve media type" case that arises when the
+                        consuming site has not allow-listed application/atom+xml.
+
+  Output (returned dict):
+  - .errorClass (string) One of:
+      "media-type-config"  Hugo could not resolve the arXiv media type; the
+                           consuming site is missing the security allow-list
+                           entry. Early break -- retrying cannot fix config.
+      "auth"               HTTP 401/403. Early break.
+      "not-found"          HTTP 404. Early break (also: Space/paper not indexed).
+      "rate-limit"         HTTP 429. Early break (window cannot reset mid-build).
+      "server"             HTTP 5xx. Retryable.
+      "network"            No response (status 0, not a media-type issue).
+      "other"              Anything else.
+  - .waitHintSeconds (int) Wait until a rate-limit window resets (Retry-After, or
+                           60s default); 0 for other classes.
+  - .errorMessage (string) Short human-readable diagnostic. For the
+                           media-type-config class it names the exact fix.
+*/}}
+
+{{- $statusCode := .statusCode | default 0 -}}
+{{- $headers := .headers | default (dict) -}}
+{{- $body := .body | default "" -}}
+{{- $errString := .errString | default "" -}}
+
+{{- $errorClass := "other" -}}
+{{- $waitHintSeconds := 0 -}}
+{{- $errorMessage := "" -}}
+
+{{/* Retry-After (numeric seconds) when present. */}}
+{{- $retryAfter := 0 -}}
+{{- with index $headers "Retry-After" -}}
+  {{- with index . 0 -}}
+    {{- $retryAfter = int . -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if eq $statusCode 0 -}}
+  {{- if strings.Contains (lower $errString) "media type" -}}
+    {{- $errorClass = "media-type-config" -}}
+    {{- $errorMessage = "Hugo could not resolve the arXiv API media type (application/atom+xml). Add it to the consuming site's security policy: [security.http] mediaTypes = ['^application/atom\\+xml'] (unanchored -- the '; charset=utf-8' suffix defeats a trailing $)." -}}
+  {{- else -}}
+    {{- $errorClass = "network" -}}
+    {{- $errorMessage = "no response (network or timeout)" -}}
+  {{- end -}}
+{{- else if eq $statusCode 404 -}}
+  {{- $errorClass = "not-found" -}}
+  {{- $errorMessage = "HTTP 404 (not found or not indexed)" -}}
+{{- else if or (eq $statusCode 401) (eq $statusCode 403) -}}
+  {{- $errorClass = "auth" -}}
+  {{- $errorMessage = printf "HTTP %d (authentication or authorization failed)" $statusCode -}}
+{{- else if eq $statusCode 429 -}}
+  {{- $errorClass = "rate-limit" -}}
+  {{- $errorMessage = "HTTP 429 (rate limited)" -}}
+  {{- if gt $retryAfter 0 -}}
+    {{- $waitHintSeconds = $retryAfter -}}
+  {{- else -}}
+    {{- $waitHintSeconds = 60 -}}
+  {{- end -}}
+{{- else if ge $statusCode 500 -}}
+  {{- $errorClass = "server" -}}
+  {{- $errorMessage = printf "HTTP %d (server error)" $statusCode -}}
+{{- else -}}
+  {{- $errorMessage = printf "HTTP %d" $statusCode -}}
+{{- end -}}
+
+{{/* Best-effort enrichment: surface a JSON error body's "message" field. Wrapped
+     in try so a malformed body can never break the build. */}}
+{{- with $body -}}
+  {{- $trimmed := trim . " \t\n\r" -}}
+  {{- if hasPrefix $trimmed "{" -}}
+    {{- with try (transform.Unmarshal (dict "format" "json") $trimmed) -}}
+      {{- with .Value -}}
+        {{- with .message -}}
+          {{- $errorMessage = printf "%s: %s" $errorMessage . -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return (dict
+  "errorClass" $errorClass
+  "waitHintSeconds" $waitHintSeconds
+  "errorMessage" $errorMessage
+) -}}
