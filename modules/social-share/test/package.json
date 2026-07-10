@@ -1,0 +1,13 @@
+{
+  "name": "social-share-module-tests",
+  "private": true,
+  "type": "module",
+  "description": "Playwright validation suite for the social-share Hugo module, run against the fixture site in ./fixture.",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}

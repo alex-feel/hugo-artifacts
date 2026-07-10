@@ -1,0 +1,21 @@
+# Russian UI strings for the social-share module. The key set mirrors
+# i18n/en.toml one to one. Brand names stay in the nominative case, so the
+# phrasing avoids declension ("Поделиться: X", not "Поделиться в X").
+
+social_share_aria_label = "Поделиться этой страницей"
+
+social_share_on = "Поделиться: {{ .Name }}"
+
+social_share_save = "Сохранить: {{ .Name }}"
+
+social_share_email = "Поделиться по электронной почте"
+social_share_sms = "Поделиться в SMS"
+social_share_webshare = "Поделиться"
+social_share_copy = "Скопировать ссылку"
+social_share_print = "Распечатать страницу"
+
+social_share_new_tab_hint = "(откроется в новом окне)"
+
+social_share_copied = "Ссылка скопирована в буфер обмена"
+social_share_copy_error = "Не удалось скопировать ссылку"
+social_share_share_error = "Не удалось поделиться страницей"

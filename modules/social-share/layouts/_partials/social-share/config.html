@@ -1,0 +1,209 @@
+{{/*
+  social-share/config.html -- INTERNAL (resolver tier).
+
+  Purpose: resolves the module's entire configuration and share data through
+  the four-tier cascade, so share.html renders from one consistent dict and
+  no downstream partial re-derives a value. Precedence, highest first:
+  call-site args > page front matter (social_share map) > site params
+  ([params.social_share]) > data/social-share/defaults.toml. Presence wins at
+  every tier (isset, not truthiness), so an explicit false or empty string
+  overrides the tier below it.
+
+  Expected context (dict):
+  - .page (Page) - The current page (already validated by share.html).
+  - .args (map)  - Call-site arguments (possibly empty): networks, new_tab,
+    heading, aria_label, via, hashtags, image, mastodon_instance,
+    lemmy_instance, url, title, description, class, id, position.
+
+  Return value: dict with every key share.html needs:
+  - networks (slice)  - Lowercased, trimmed target slugs in render order.
+  - new_tab (bool), heading, aria_label, via, mastodon_instance,
+    lemmy_instance (strings) - Resolved options; via has no leading "@".
+  - hashtags (string) - Comma-joined tags, each without a leading "#".
+  - url, title, description (strings) - Share data; title and description
+    are collapsed to single-line (runs of whitespace become one space, an
+    RFC 6068 header-injection guard that also satisfies intent composers
+    that reject control characters).
+  - image (string) - Absolute share-image URL or "" (resolution chain:
+    explicit value as page resource, then global resource, then URL; then
+    the page's images front matter; then a page-bundle image resource
+    matching *feature* / *cover* / *thumbnail*; then the site-tier value).
+  - site_host (string) - The consuming site's hostname (Nextdoor "source").
+  - networks_extra (map) - Consumer extension entries (site params only).
+  - class, id (strings) - Root element extras (call-site only).
+  - where (string) - Diagnostics origin for warnings: the shortcode call
+    position when available, else the page path.
+
+  One terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $args := .args | default dict -}}
+
+{{- $data := index hugo.Data "social-share" | default dict -}}
+{{- $defaults := index $data "defaults" | default dict -}}
+{{- if not $defaults -}}
+  {{- partial "social-share/lib/warn.html" (dict
+      "key" "social-share:warn:missing-defaults"
+      "message" "[social-share] data/social-share/defaults.toml was not found; the module is not mounted correctly, so only explicitly configured values apply.") -}}
+{{- end -}}
+
+{{/* Non-map tier values were already warned about in share.html; here they
+     just collapse to empty maps so the isset chains below stay safe. */}}
+{{- $sitep := site.Params.social_share -}}
+{{- if not (reflect.IsMap $sitep) -}}{{- $sitep = dict -}}{{- end -}}
+{{- $pagep := $page.Params.social_share -}}
+{{- if not (reflect.IsMap $pagep) -}}{{- $pagep = dict -}}{{- end -}}
+
+{{/* Uniform presence-wins cascade for every defaults-backed key. */}}
+{{- $cascade := dict -}}
+{{- range $k := slice "networks" "new_tab" "heading" "aria_label" "via" "hashtags" "mastodon_instance" "lemmy_instance" -}}
+  {{- $v := index $defaults $k -}}
+  {{- if isset $sitep $k -}}{{- $v = index $sitep $k -}}{{- end -}}
+  {{- if isset $pagep $k -}}{{- $v = index $pagep $k -}}{{- end -}}
+  {{- if isset $args $k -}}{{- $v = index $args $k -}}{{- end -}}
+  {{- if ne $v nil -}}{{- $cascade = merge $cascade (dict $k $v) -}}{{- end -}}
+{{- end -}}
+
+{{/* Networks: accept a slice or a comma-separated string at any tier;
+     normalize each slug to lowercased, trimmed form. */}}
+{{- $rawNetworks := $cascade.networks | default (slice) -}}
+{{- if not (reflect.IsSlice $rawNetworks) -}}
+  {{- $rawNetworks = split (printf "%v" $rawNetworks) "," -}}
+{{- end -}}
+{{- $networks := slice -}}
+{{- range $rawNetworks -}}
+  {{- with lower (trim (printf "%v" .) " \t\n\r") -}}
+    {{- $networks = $networks | append . -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* new_tab: any tier may deliver a real bool, a string, or an integer
+     form; stringify once so every shape compares alike. */}}
+{{- $newTab := true -}}
+{{- if isset $cascade "new_tab" -}}
+  {{- $newTab = in (slice "true" "1" "yes" "on") (lower (printf "%v" $cascade.new_tab)) -}}
+{{- end -}}
+
+{{- $heading := trim (printf "%v" ($cascade.heading | default "")) " \t\n\r" -}}
+{{- $ariaLabel := trim (printf "%v" ($cascade.aria_label | default "")) " \t\n\r" -}}
+{{- $via := strings.TrimPrefix "@" (trim (printf "%v" ($cascade.via | default "")) " \t\n\r") -}}
+{{- $mastodonInstance := trim (printf "%v" ($cascade.mastodon_instance | default "")) " \t\n\r" -}}
+{{- $lemmyInstance := trim (printf "%v" ($cascade.lemmy_instance | default "")) " \t\n\r" -}}
+
+{{/* Hashtags: slice or comma-separated string; strip a leading "#" per tag
+     (x and tumblr take bare tag names). */}}
+{{- $rawTags := $cascade.hashtags | default (slice) -}}
+{{- if not (reflect.IsSlice $rawTags) -}}
+  {{- $rawTags = split (printf "%v" $rawTags) "," -}}
+{{- end -}}
+{{- $tags := slice -}}
+{{- range $rawTags -}}
+  {{- with strings.TrimPrefix "#" (trim (printf "%v" .) " \t\n\r") -}}
+    {{- $tags = $tags | append . -}}
+  {{- end -}}
+{{- end -}}
+{{- $hashtags := delimit $tags "," -}}
+
+{{/* Share data. Titles and descriptions are semantically single-line. */}}
+{{- $url := "" -}}
+{{- if isset $args "url" -}}{{- $url = printf "%v" (index $args "url") -}}
+{{- else if isset $pagep "url" -}}{{- $url = printf "%v" (index $pagep "url") -}}
+{{- end -}}
+{{- $url = or $url $page.Permalink | absURL -}}
+
+{{- $title := "" -}}
+{{- if isset $args "title" -}}{{- $title = printf "%v" (index $args "title") -}}
+{{- else if isset $pagep "title" -}}{{- $title = printf "%v" (index $pagep "title") -}}
+{{- else -}}{{- $title = $page.Title -}}
+{{- end -}}
+{{- $title = trim (replaceRE `\s+` " " $title) " " -}}
+
+{{- $description := "" -}}
+{{- if isset $args "description" -}}{{- $description = printf "%v" (index $args "description") -}}
+{{- else if isset $pagep "description" -}}{{- $description = printf "%v" (index $pagep "description") -}}
+{{- else -}}{{- $description = $page.Description -}}
+{{- end -}}
+{{- $description = trim (replaceRE `\s+` " " $description) " " -}}
+
+{{/* Share image: explicit values resolve as page resource, then global
+     resource, then literal URL; page-derived fallbacks follow; the site-tier
+     value (site params, then defaults.toml) comes last. */}}
+{{- $image := "" -}}
+{{- $explicitImage := "" -}}
+{{- if isset $args "image" -}}{{- $explicitImage = printf "%v" (index $args "image") -}}
+{{- else if isset $pagep "image" -}}{{- $explicitImage = printf "%v" (index $pagep "image") -}}
+{{- end -}}
+{{- with $explicitImage -}}
+  {{/* URL-shaped values must never reach the resource lookups: on Windows,
+       resources.Get treats them as filesystem paths and errors out instead
+       of returning nil. */}}
+  {{- if or (in . "://") (hasPrefix . "//") -}}
+    {{- $image = . | absURL -}}
+  {{- else -}}
+    {{- with $page.Resources.GetMatch . -}}
+      {{- $image = .Permalink -}}
+    {{- else -}}
+      {{- with resources.Get . -}}
+        {{- $image = .Permalink -}}
+      {{- else -}}
+        {{- $image = . | absURL -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- if not $image -}}
+  {{- with $page.Params.images -}}
+    {{- $first := . -}}
+    {{- if reflect.IsSlice . -}}{{- $first = index . 0 -}}{{- end -}}
+    {{- with $first -}}{{- $image = printf "%v" . | absURL -}}{{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- if not $image -}}
+  {{- with ($page.Resources.ByType "image").GetMatch "{*feature*,*cover*,*thumbnail*}" -}}
+    {{- $image = .Permalink -}}
+  {{- end -}}
+{{- end -}}
+{{- if not $image -}}
+  {{- $siteImage := printf "%v" ($defaults.image | default "") -}}
+  {{- if isset $sitep "image" -}}{{- $siteImage = printf "%v" (index $sitep "image") -}}{{- end -}}
+  {{- with $siteImage -}}
+    {{- if or (in . "://") (hasPrefix . "//") -}}
+      {{- $image = . | absURL -}}
+    {{- else -}}
+      {{- with resources.Get . -}}
+        {{- $image = .Permalink -}}
+      {{- else -}}
+        {{- $image = . | absURL -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $siteHost := "" -}}
+{{- with urls.Parse site.Home.Permalink -}}
+  {{- $siteHost = .Hostname -}}
+{{- end -}}
+
+{{- $where := printf "%v" $page.Path -}}
+{{- with $args.position -}}{{- $where = printf "%s" . -}}{{- end -}}
+
+{{- return (dict
+  "networks" $networks
+  "new_tab" $newTab
+  "heading" $heading
+  "aria_label" $ariaLabel
+  "via" $via
+  "hashtags" $hashtags
+  "mastodon_instance" $mastodonInstance
+  "lemmy_instance" $lemmyInstance
+  "url" $url
+  "title" $title
+  "description" $description
+  "image" $image
+  "site_host" $siteHost
+  "networks_extra" ($sitep.networks_extra | default dict)
+  "class" (printf "%v" ($args.class | default ""))
+  "id" (printf "%v" ($args.id | default ""))
+  "where" $where
+) -}}

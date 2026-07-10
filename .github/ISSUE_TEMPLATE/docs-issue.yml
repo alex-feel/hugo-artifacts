@@ -16,6 +16,7 @@ body:
         - CLAUDE.md
         - LICENSE
         - modules/seo/README.md
+        - modules/social-share/README.md
         - modules/pwa/README.md
         - modules/workbox/README.md
         - modules/idb/README.md

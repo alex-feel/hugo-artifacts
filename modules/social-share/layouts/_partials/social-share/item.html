@@ -1,0 +1,68 @@
+{{/*
+  social-share/item.html -- INTERNAL (renderer tier).
+
+  Purpose: renders exactly one list item -- a share-intent link, or a
+  JavaScript-revealed action button for the webshare/copy/print pseudo
+  targets. The accessible name is REAL TEXT in the __label span (not an
+  aria-label): real text survives machine translation and CSS failures; a
+  consumer that wants icon-only buttons visually hides the __label and
+  __hint spans with a clip pattern (the README Styling section ships one).
+
+  Expected context (dict):
+  - .slug    (string) - Canonical target slug (class modifier, data value).
+  - .entry   (map)    - Registry entry (label, label_key, label_default,
+    icon, kind).
+  - .href    (string) - Fully encoded share URL (link kind only).
+  - .scheme  (string) - Endpoint scheme, already allowlisted by share.html
+    (link kind only). https links get rel + optional target; mailto/sms/
+    viber links get neither (meaningless on non-document schemes); sms and
+    viber hrefs pass through safeURL because Go's contextual autoescaping
+    would otherwise sanitize those two schemes -- the value itself is safe:
+    every variable part was querify-encoded in url.html.
+  - .new_tab (bool)   - Open https links in a new tab; appends the
+    translated "(opens in a new window)" hint to the accessible name.
+
+  Return value: none. This partial renders.
+*/}}
+
+{{- $slug := .slug -}}
+{{- $entry := .entry -}}
+{{- $href := .href -}}
+{{- $scheme := .scheme -}}
+{{- $newTab := .new_tab -}}
+
+{{- $label := printf "%v" ($entry.label | default $slug) -}}
+{{- $labelKey := printf "%v" ($entry.label_key | default "social_share_on") -}}
+{{- $labelDefault := printf "%v" ($entry.label_default | default (printf "Share on %s" $label)) -}}
+{{- $text := T $labelKey (dict "Name" $label) | default $labelDefault -}}
+{{- $icon := printf "%v" ($entry.icon | default $slug) -}}
+
+{{- if eq ($entry.kind | default "link") "action" -}}
+{{/* Hidden until the module script confirms the capability. The inline
+     display:none backs up the weak [hidden] UA rule: an ordinary consumer
+     rule like `.social-share__item {display: inline-block}` would override
+     [hidden] and expose a dead control, but it cannot override an inline
+     declaration. This is functional capability gating, not a design
+     decision, so it does not breach the zero-CSS contract; the script
+     removes both when it reveals the item. */}}
+<li class="social-share__item social-share__item--{{ $slug }}" hidden style="display:none">
+  <button type="button" class="social-share__button social-share__button--{{ $slug }}" data-share-action="{{ $slug }}">
+    <span class="social-share__icon">{{- partial "social-share/icon.html" (dict "name" $icon) -}}</span>
+    <span class="social-share__label">{{ $text }}</span>
+  </button>
+</li>
+{{- else -}}
+{{- $external := eq $scheme "https" -}}
+{{- $hrefAttr := $href -}}
+{{- if in (slice "sms" "viber") $scheme -}}
+  {{- $hrefAttr = $href | safeURL -}}
+{{- end -}}
+<li class="social-share__item social-share__item--{{ $slug }}">
+  <a class="social-share__link social-share__link--{{ $slug }}" href="{{ $hrefAttr }}" data-share-network="{{ $slug }}"
+    {{- if $external }} rel="noopener noreferrer nofollow"{{ if $newTab }} target="_blank"{{ end }}{{ end }}>
+    <span class="social-share__icon">{{- partial "social-share/icon.html" (dict "name" $icon) -}}</span>
+    <span class="social-share__label">{{ $text }}</span>
+    {{- if and $external $newTab }} <span class="social-share__hint">{{ T "social_share_new_tab_hint" | default "(opens in a new window)" }}</span>{{ end -}}
+  </a>
+</li>
+{{- end -}}

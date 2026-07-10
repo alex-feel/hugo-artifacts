@@ -1,0 +1,64 @@
+# Consumer-facing defaults for the social-share module.
+#
+# Every key can be overridden, from lowest to highest precedence:
+#   1. this file (module defaults)
+#   2. site config:       [params.social_share]
+#   3. page front matter: social_share: (map)
+#   4. call-site args:    {{ partial "social-share/share.html" (dict "page" . "<key>" <value>) }}
+# Presence wins at every tier, so an explicit false or empty value overrides
+# the tier below it.
+
+# Sharing targets rendered, in list order. Accepts any canonical slug or alias
+# from the README Networks table plus consumer-defined
+# [params.social_share.networks_extra.*] slugs. "webshare", "copy", and
+# "print" are JavaScript-revealed buttons; every other target renders as a
+# plain share-intent link that works without JavaScript.
+networks = [
+  "webshare",
+  "copy",
+  "x",
+  "facebook",
+  "linkedin",
+  "bluesky",
+  "threads",
+  "mastodon",
+  "telegram",
+  "whatsapp",
+  "reddit",
+  "email",
+]
+
+# Open web share links in a new tab: adds target="_blank" plus a hidden
+# "(opens in a new window)" hint to each link's accessible name.
+# mailto:/sms:/viber: links never receive a target.
+new_tab = true
+
+# Optional visible heading above the list (inline Markdown allowed). An empty
+# string renders no heading; the <nav> aria-label always names the landmark.
+heading = ""
+
+# Accessible name of the <nav> landmark. An empty string uses the localized
+# default ("Share this page"). Set distinct values when one page renders
+# several bars with DIFFERENT network sets.
+aria_label = ""
+
+# X (Twitter) attribution username, without the leading @.
+via = ""
+
+# Hashtags for targets that accept them (x, tumblr), without the leading #.
+hashtags = []
+
+# Site-wide fallback share image for image-aware targets (pinterest, vk,
+# odnoklassniki, weibo): a global asset path (looked up in assets/) or a URL.
+# Page front matter and page-bundle resources take precedence.
+image = ""
+
+# Mastodon instance hostname (for example "mastodon.social"). When empty, the
+# module uses the official instance-remembering sharer at
+# share.joinmastodon.org, which carries the text in a URL fragment so it never
+# reaches any server.
+mastodon_instance = ""
+
+# Lemmy instance hostname (for example "lemmy.world"). Lemmy has no central
+# sharer, so the "lemmy" target renders only when this is set.
+lemmy_instance = ""

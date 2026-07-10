@@ -1,0 +1,309 @@
+{{/*
+  social-share/networks.html -- INTERNAL (resolver tier).
+
+  Purpose: the single source of truth for every built-in sharing target. The
+  registry lives in this template (not in data/) so a consumer data mount
+  cannot accidentally shadow it; deliberate extension happens through
+  [params.social_share.networks_extra.<slug>] entries merged over the
+  built-ins, which lets a site add a new target or patch an existing one
+  (endpoint, params, label) without forking the module.
+
+  Endpoint status: verified against official or authoritative sources as of
+  2026-07-10. Facebook, LinkedIn, and XING accept only the URL; their preview
+  content comes from the consuming site's Open Graph tags.
+
+  Expected context (dict) - the resolved config from config.html; read here:
+  - .mastodon_instance (string) - Mastodon instance hostname or "".
+  - .lemmy_instance    (string) - Lemmy instance hostname or "".
+  - .networks_extra    (map)    - Consumer extension entries (site params).
+
+  Entry schema (also the networks_extra contract):
+  - label         (string) - Brand display name, used verbatim (never
+    translated; brand names are proper nouns).
+  - label_key     (string, optional) - i18n key for the accessible name.
+    Default "social_share_on"; save-style targets use "social_share_save";
+    action targets use their dedicated keys.
+  - label_default (string, optional) - English fallback when the i18n key has
+    no translation. Default "Share on <label>".
+  - icon          (string, optional) - icon.html glyph name. Default: slug.
+  - endpoint      (string) - Base share URL. Scheme must be https, mailto,
+    sms, or viber (share.html enforces the allowlist).
+  - take          (map or slice, optional) - Query parameters filled from
+    resolved share data. Map form: param name -> token. Slice form (needed in
+    site params, where Hugo lowercases map keys): "paramName=token" strings,
+    preserving parameter-name case. Tokens: url, title, titleurl
+    (title + space + url), description, description_or_title, image, via,
+    hashtags, site (consumer site hostname).
+  - fixed         (map or slice, optional) - Literal query parameters, same
+    dual shape as take.
+  - mode          (string, optional) - "query" (default) joins parameters
+    with "?" (or "&" when the endpoint already carries a query); "fragment"
+    joins with "#" so values never reach the target's server.
+  - kind          (string, optional) - "link" (default) or "action" (a
+    JavaScript-revealed button; endpoint/take/fixed unused).
+  - unavailable   (string, internal) - Reason this target cannot render;
+    share.html warns once and skips. Set here for instance-dependent targets
+    with a missing or malformed instance hostname.
+
+  Return value: dict with
+  - .entries (map) - canonical slug -> entry (built-ins merged with
+    networks_extra, consumer entries winning).
+  - .aliases (map) - alias -> canonical slug (true synonyms only).
+
+  One terminal return.
+*/}}
+
+{{- $cfg := . -}}
+
+{{/* Bare-hostname shape for consumer-supplied instance values: these land in
+     the URL authority, so anything but a plain registrable name (letters,
+     digits, hyphens, dots) is rejected to keep front-matter-tier input from
+     redirecting shares to an attacker-chosen URL. */}}
+{{- $hostnameRE := `^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$` -}}
+
+{{/* ---- Global social networks ---- */}}
+{{- $social := dict
+  "x" (dict
+    "label" "X"
+    "endpoint" "https://x.com/intent/post"
+    "take" (dict "text" "title" "url" "url" "via" "via" "hashtags" "hashtags")
+  )
+  "facebook" (dict
+    "label" "Facebook"
+    "endpoint" "https://www.facebook.com/sharer/sharer.php"
+    "take" (dict "u" "url")
+  )
+  "linkedin" (dict
+    "label" "LinkedIn"
+    "endpoint" "https://www.linkedin.com/sharing/share-offsite/"
+    "take" (dict "url" "url")
+  )
+  "reddit" (dict
+    "label" "Reddit"
+    "endpoint" "https://www.reddit.com/submit"
+    "take" (dict "url" "url" "title" "title")
+    "fixed" (dict "type" "LINK")
+  )
+  "bluesky" (dict
+    "label" "Bluesky"
+    "endpoint" "https://bsky.app/intent/compose"
+    "take" (dict "text" "titleurl")
+  )
+  "threads" (dict
+    "label" "Threads"
+    "endpoint" "https://www.threads.com/intent/post"
+    "take" (dict "text" "title" "url" "url")
+  )
+  "pinterest" (dict
+    "label" "Pinterest"
+    "label_key" "social_share_save"
+    "label_default" "Save to Pinterest"
+    "endpoint" "https://www.pinterest.com/pin/create/button/"
+    "take" (dict "url" "url" "media" "image" "description" "description_or_title")
+  )
+  "tumblr" (dict
+    "label" "Tumblr"
+    "endpoint" "https://www.tumblr.com/widgets/share/tool"
+    "take" (slice "canonicalUrl=url" "title=title" "caption=description" "tags=hashtags")
+  )
+-}}
+
+{{/* ---- Messengers ---- */}}
+{{- $messengers := dict
+  "telegram" (dict
+    "label" "Telegram"
+    "endpoint" "https://t.me/share/url"
+    "take" (dict "url" "url" "text" "title")
+  )
+  "whatsapp" (dict
+    "label" "WhatsApp"
+    "endpoint" "https://wa.me/"
+    "take" (dict "text" "titleurl")
+  )
+  "viber" (dict
+    "label" "Viber"
+    "endpoint" "viber://forward"
+    "take" (dict "text" "titleurl")
+  )
+  "line" (dict
+    "label" "LINE"
+    "endpoint" "https://social-plugins.line.me/lineit/share"
+    "take" (dict "url" "url" "text" "title")
+  )
+  "sms" (dict
+    "label" "SMS"
+    "label_key" "social_share_sms"
+    "label_default" "Share via text message"
+    "endpoint" "sms:"
+    "take" (dict "body" "titleurl")
+  )
+  "email" (dict
+    "label" "Email"
+    "label_key" "social_share_email"
+    "label_default" "Share via email"
+    "endpoint" "mailto:"
+    "take" (dict "subject" "title" "body" "titleurl")
+  )
+-}}
+
+{{/* ---- Communities, aggregators, regional networks, read-later ---- */}}
+{{- $communities := dict
+  "hackernews" (dict
+    "label" "Hacker News"
+    "endpoint" "https://news.ycombinator.com/submitlink"
+    "take" (dict "u" "url" "t" "title")
+  )
+  "flipboard" (dict
+    "label" "Flipboard"
+    "endpoint" "https://share.flipboard.com/bookmarklet/popout"
+    "take" (dict "url" "url" "title" "title")
+    "fixed" (dict "v" "2")
+  )
+  "xing" (dict
+    "label" "XING"
+    "endpoint" "https://www.xing.com/spi/shares/new"
+    "take" (dict "url" "url")
+  )
+  "nextdoor" (dict
+    "label" "Nextdoor"
+    "endpoint" "https://nextdoor.com/sharekit/"
+    "take" (dict "source" "site" "body" "titleurl")
+  )
+  "truthsocial" (dict
+    "label" "Truth Social"
+    "endpoint" "https://truthsocial.com/share"
+    "take" (dict "title" "title" "url" "url")
+  )
+  "vk" (dict
+    "label" "VK"
+    "endpoint" "https://vk.com/share.php"
+    "take" (dict "url" "url" "title" "title" "comment" "description" "image" "image")
+  )
+  "odnoklassniki" (dict
+    "label" "Odnoklassniki"
+    "endpoint" "https://connect.ok.ru/offer"
+    "take" (slice "url=url" "title=title" "imageUrl=image")
+  )
+  "weibo" (dict
+    "label" "Weibo"
+    "endpoint" "https://service.weibo.com/share/share.php"
+    "take" (dict "url" "url" "title" "title" "pic" "image")
+  )
+  "naver" (dict
+    "label" "Naver"
+    "endpoint" "https://share.naver.com/web/shareView"
+    "take" (dict "url" "url" "title" "title")
+  )
+  "instapaper" (dict
+    "label" "Instapaper"
+    "label_key" "social_share_save"
+    "label_default" "Save to Instapaper"
+    "endpoint" "https://www.instapaper.com/hello2"
+    "take" (dict "url" "url" "title" "title" "description" "description")
+  )
+-}}
+
+{{/* ---- Decentralized and indie networks ---- */}}
+
+{{/* Mastodon has no central instance. The default is the official
+     instance-remembering sharer, which takes the text in a URL FRAGMENT so
+     it never reaches any server. A consumer-set instance hostname switches
+     to that instance's /share endpoint (a query parameter: the text then
+     necessarily reaches the chosen instance). */}}
+{{- $mastodon := dict
+  "label" "Mastodon"
+  "endpoint" "https://share.joinmastodon.org/"
+  "take" (dict "text" "titleurl")
+  "mode" "fragment"
+-}}
+{{- with $cfg.mastodon_instance -}}
+  {{- if findRE $hostnameRE . -}}
+    {{- $mastodon = merge $mastodon (dict "endpoint" (printf "https://%s/share" .) "mode" "query") -}}
+  {{- else -}}
+    {{- $mastodon = merge $mastodon (dict "unavailable" (printf "mastodon_instance %q is not a bare hostname (expected a name like \"mastodon.social\")" .)) -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Lemmy also has no central instance and no first-party sharer, so the
+     target renders only when the consumer names an instance. */}}
+{{- $lemmy := dict
+  "label" "Lemmy"
+  "unavailable" "the \"lemmy\" target requires params.social_share.lemmy_instance (Lemmy has no central sharer)"
+-}}
+{{- with $cfg.lemmy_instance -}}
+  {{- if findRE $hostnameRE . -}}
+    {{- $lemmy = dict
+      "label" "Lemmy"
+      "endpoint" (printf "https://%s/create_post" .)
+      "take" (dict "url" "url" "title" "title")
+    -}}
+  {{- else -}}
+    {{- $lemmy = merge $lemmy (dict "unavailable" (printf "lemmy_instance %q is not a bare hostname (expected a name like \"lemmy.world\")" .)) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $fediverse := dict
+  "mastodon" $mastodon
+  "lemmy" $lemmy
+  "farcaster" (dict
+    "label" "Farcaster"
+    "endpoint" "https://farcaster.xyz/~/compose"
+    "take" (dict "text" "title" "embeds[]" "url")
+  )
+  "microblog" (dict
+    "label" "Micro.blog"
+    "endpoint" "https://micro.blog/post"
+    "take" (dict "text" "titleurl")
+  )
+-}}
+
+{{/* ---- JavaScript-revealed actions (no endpoint; hidden until the module
+        script detects support) ---- */}}
+{{- $actions := dict
+  "webshare" (dict
+    "label" "Share"
+    "label_key" "social_share_webshare"
+    "label_default" "Share"
+    "kind" "action"
+  )
+  "copy" (dict
+    "label" "Copy link"
+    "label_key" "social_share_copy"
+    "label_default" "Copy link"
+    "kind" "action"
+  )
+  "print" (dict
+    "label" "Print"
+    "label_key" "social_share_print"
+    "label_default" "Print this page"
+    "kind" "action"
+  )
+-}}
+
+{{- $entries := merge $social $messengers $communities $fediverse $actions -}}
+
+{{/* Consumer extension entries win over built-ins. merge is recursive, so an
+     entry can patch a single field (for example just the endpoint) without
+     restating the rest. */}}
+{{- with $cfg.networks_extra -}}
+  {{- $entries = merge $entries . -}}
+{{- end -}}
+
+{{/* True synonyms only: each alias renders identically to its canonical
+     slug (same class hooks, same data attribute, same icon). */}}
+{{- $aliases := dict
+  "twitter" "x"
+  "fb" "facebook"
+  "hacker-news" "hackernews"
+  "hn" "hackernews"
+  "ok" "odnoklassniki"
+  "truth-social" "truthsocial"
+  "micro-blog" "microblog"
+  "web-share" "webshare"
+  "native" "webshare"
+  "copy-link" "copy"
+  "copy-url" "copy"
+  "clipboard" "copy"
+-}}
+
+{{- return (dict "entries" $entries "aliases" $aliases) -}}

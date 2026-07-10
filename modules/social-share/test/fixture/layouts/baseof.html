@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="{{ site.Language.Locale }}">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ .Title }} | {{ site.Title }}</title>
+    <style>
+      /* Consumer CSS that would defeat the weak [hidden] UA default: the
+         module's action items must stay hidden regardless (they also carry
+         an inline display:none until the script reveals them). */
+      .social-share__item {
+        display: inline-block;
+      }
+    </style>
+  </head>
+  <body>
+    {{ block "main" . }}{{ end }}
+  </body>
+</html>

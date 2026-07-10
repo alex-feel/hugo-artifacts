@@ -29,6 +29,7 @@ body:
       multiple: true
       options:
         - modules/seo
+        - modules/social-share
         - modules/pwa
         - modules/workbox
         - modules/idb
