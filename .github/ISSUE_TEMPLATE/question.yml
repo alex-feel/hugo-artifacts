@@ -9,6 +9,7 @@ body:
 
         - [Repository README](https://github.com/alex-feel/hugo-artifacts#readme) -- Overview, modules index, and consumer setup
         - [modules/seo README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/seo/README.md) -- Full SEO module reference
+        - [modules/social-share README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/social-share/README.md) -- Full social-share module reference
         - [modules/pwa README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/pwa/README.md) -- Full PWA module reference
         - [shortcodes/github-repo README](https://github.com/alex-feel/hugo-artifacts/blob/main/shortcodes/github-repo/README.md) -- GitHub-repo shortcode reference
         - [CONTRIBUTING.md](https://github.com/alex-feel/hugo-artifacts/blob/main/CONTRIBUTING.md) -- Development setup and conventions
@@ -32,6 +33,7 @@ body:
         - Module installation / hugo mod get
         - hugo.work / [module.replacements] / vendor-mount
         - SEO module configuration (params.seo.* / seo front matter)
+        - Social-share module configuration (params.social_share.*)
         - PWA module configuration (params.pwa.*)
         - Push notifications / VAPID / reference backends
         - Service worker / Workbox / idb

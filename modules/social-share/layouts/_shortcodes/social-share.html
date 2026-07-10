@@ -1,0 +1,49 @@
+{{/*
+  Renders the module's sharing bar inside content:
+
+    {{< social-share >}}
+    {{< social-share "x,telegram,copy" >}}
+    {{< social-share networks="x,telegram,copy" heading="Share this" >}}
+
+  This shortcode is a thin wrapper: it forwards only the parameters that are
+  actually present to the social-share/share.html partial, so omitted
+  parameters fall through the module's cascade (page front matter
+  social_share map, then [params.social_share], then the shipped defaults).
+  The rendered markup is identical to the partial's.
+
+  Parameters (all optional; named, with one positional shorthand):
+  - networks (positional 0, or networks=): comma-separated target slugs from
+    the README Networks table, e.g. "x,telegram,copy".
+  - heading: visible heading above the list (inline Markdown allowed).
+  - aria_label: accessible name of the <nav> landmark (set distinct values
+    when one page renders several bars with different network sets).
+  - via: X (Twitter) attribution username, with or without the leading @.
+  - hashtags: comma-separated tags, with or without leading #.
+  - url, title, description: share-data overrides (default: page values).
+  - image: share image for image-aware targets (page resource path, global
+    asset path, or URL).
+  - mastodon_instance, lemmy_instance: fediverse instance hostnames.
+  - new_tab: open web share links in a new tab (true/false/1/0/yes/no/on).
+  - class: extra class(es) appended to the root element.
+  - id: id attribute on the root element.
+
+  Never errorf: parameter problems degrade exactly as the partial documents
+  (deduplicated warnf or silent omission of the affected item).
+*/}}
+
+{{- $args := dict "page" .Page "position" .Position -}}
+
+{{- if .IsNamedParams -}}
+  {{- range $k := slice "networks" "heading" "aria_label" "via" "hashtags" "url" "title" "description" "image" "mastodon_instance" "lemmy_instance" "class" "id" -}}
+    {{- if isset $.Params $k -}}
+      {{- $args = merge $args (dict $k ($.Get $k)) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if isset .Params "new_tab" -}}
+    {{- $args = merge $args (dict "new_tab" (in (slice "true" "1" "yes" "on") (lower (printf "%v" (.Get "new_tab"))))) -}}
+  {{- end -}}
+{{- else if gt (len .Params) 0 -}}
+  {{- $args = merge $args (dict "networks" (.Get 0)) -}}
+{{- end -}}
+
+{{- partial "social-share/share.html" $args -}}

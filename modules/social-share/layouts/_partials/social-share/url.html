@@ -1,0 +1,79 @@
+{{/*
+  social-share/url.html -- INTERNAL (resolver tier).
+
+  Purpose: builds the fully encoded share href for one registry entry. Every
+  variable value is URL-encoded exactly once via querify, then the querify
+  output alone has "+" rewritten to "%20" -- strictly BEFORE endpoint joining,
+  so an endpoint's own literal characters are never touched. The rewrite is
+  lossless because querify has already encoded a literal "+" as "%2B"; "%20"
+  is decoded as a space by every web endpoint and is REQUIRED (never "+") in
+  mailto: and sms: URLs per RFC 6068.
+
+  Empty values are omitted (a with-guard per parameter), so a page without a
+  description or image simply sends fewer parameters. Parameter order is
+  deterministic: querify sorts map keys alphabetically.
+
+  Expected context (dict):
+  - .entry (map) - Registry entry from networks.html (endpoint, take, fixed,
+    mode). take/fixed accept the map form (param -> token) or the slice form
+    ("param=token" strings, preserving parameter-name case).
+  - .share (map) - Resolved share data: url, title, titleurl, description,
+    description_or_title, image, via, hashtags, site (all strings).
+
+  Return value: the href string. The bare endpoint when no parameter
+  resolves to a value. One terminal return.
+*/}}
+
+{{- $entry := .entry -}}
+{{- $share := .share -}}
+
+{{/* Normalize take/fixed to one pair list: {param, value}. */}}
+{{- $params := dict -}}
+
+{{- $take := $entry.take | default dict -}}
+{{- $takePairs := slice -}}
+{{- if reflect.IsMap $take -}}
+  {{- range $param, $token := $take -}}
+    {{- $takePairs = $takePairs | append (dict "param" $param "token" $token) -}}
+  {{- end -}}
+{{- else -}}
+  {{- range $take -}}
+    {{- $parts := split (printf "%v" .) "=" -}}
+    {{- if ge (len $parts) 2 -}}
+      {{- $takePairs = $takePairs | append (dict "param" (index $parts 0) "token" (index $parts 1)) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- range $pair := $takePairs -}}
+  {{- with index $share $pair.token -}}
+    {{- $params = merge $params (dict $pair.param (printf "%v" .)) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $fixed := $entry.fixed | default dict -}}
+{{- if reflect.IsMap $fixed -}}
+  {{- range $param, $value := $fixed -}}
+    {{- $params = merge $params (dict $param (printf "%v" $value)) -}}
+  {{- end -}}
+{{- else -}}
+  {{- range $fixed -}}
+    {{- $parts := split (printf "%v" .) "=" -}}
+    {{- if ge (len $parts) 2 -}}
+      {{- $params = merge $params (dict (index $parts 0) (delimit (after 1 $parts) "=")) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $href := printf "%v" ($entry.endpoint | default "") -}}
+{{- if $params -}}
+  {{- $qs := replace (querify $params) "+" "%20" -}}
+  {{- if eq ($entry.mode | default "query") "fragment" -}}
+    {{- $href = printf "%s#%s" $href $qs -}}
+  {{- else if in $href "?" -}}
+    {{- $href = printf "%s&%s" $href $qs -}}
+  {{- else -}}
+    {{- $href = printf "%s?%s" $href $qs -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $href -}}

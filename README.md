@@ -31,6 +31,10 @@ Importable Hugo modules live under [`modules/`](modules/). Each module ships its
 
 Universal SEO module: one `{{ partial "seo/head.html" . }}` call emits the complete head surface (title, meta description, canonical, robots, hreflang, Open Graph, Twitter Cards, site verification, feed discovery) plus Google-eligible JSON-LD structured data (WebSite, Organization, WebPage, BreadcrumbList, Article/BlogPosting/NewsArticle, Product, ProfilePage, SoftwareApplication, VideoObject) cross-linked by `@id`. Reuses Hugo-native front-matter fields, adds a clean `seo.*` contract on top, validates strictly, and degrades gracefully. See [`modules/seo/README.md`](modules/seo/README.md).
 
+### `modules/social-share`
+
+Universal sharing bar: one `{{ partial "social-share/share.html" . }}` call (or the `social-share` shortcode) renders style-agnostic BEM markup with plain share-intent links for up to 28 networks -- X, Facebook, LinkedIn, Reddit, Bluesky, Threads, Mastodon, Telegram, WhatsApp, VK, and more -- plus JavaScript-revealed Web Share, copy-link, and print buttons. Zero CSS, zero third-party contact before a deliberate click, real-text accessible names, full i18n, a four-tier configuration cascade, and consumer-extensible network registry. See [`modules/social-share/README.md`](modules/social-share/README.md).
+
 ### `modules/pwa`
 
 Consumer-facing Progressive Web App module: web app manifest, RealFaviconGenerator icon set, Workbox-powered service worker, install prompt, and push subscription wiring. See [`modules/pwa/README.md`](modules/pwa/README.md).

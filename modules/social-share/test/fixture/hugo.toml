@@ -1,0 +1,34 @@
+baseURL = "http://localhost:1414/"
+defaultContentLanguage = "en"
+title = "Social Share Fixture"
+
+[languages]
+
+  [languages.en]
+    locale = "en-US"
+    weight = 1
+
+[params]
+description = "Hugo social-share module Playwright validation fixture site."
+
+[params.social_share]
+lemmy_instance = "lemmy.world"
+# Leading @ and # must be stripped by the module.
+via = "@example"
+hashtags = ["#hugo", "sharing"]
+
+# Consumer extension target with an endpoint that already carries a query
+# (the module must join further parameters with "&"). The slice forms keep
+# parameter-name case intact (site params lowercase map keys).
+[params.social_share.networks_extra.customq]
+label = "CustomQ"
+endpoint = "https://example.com/share?v=1"
+take = ["u=url", "t=title"]
+
+[module]
+
+  [module.hugoVersion]
+    min = "0.160.0"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/social-share"

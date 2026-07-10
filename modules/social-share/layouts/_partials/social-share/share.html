@@ -1,0 +1,197 @@
+{{/*
+  social-share/share.html -- PUBLIC ENTRY (renderer tier).
+
+  Purpose: the module's single stable public API. A consumer places one line
+  in a layout (typically single.html, below the content):
+
+      {{ partial "social-share/share.html" . }}
+
+  or passes an options dict for call-site overrides:
+
+      {{ partial "social-share/share.html" (dict
+        "page" .
+        "networks" (slice "x" "telegram" "copy")
+        "heading" "Share this post"
+      ) }}
+
+  and receives a complete, style-agnostic sharing bar: a <nav> landmark
+  wrapping a list of plain share-intent links (fully functional without
+  JavaScript, zero third-party contact before a deliberate click) plus
+  JavaScript-revealed Web Share, copy-link, and print buttons. The module
+  ships semantic BEM markup and ZERO CSS -- the consuming site owns all
+  visual styling. The in-content equivalent is the social-share shortcode,
+  which dispatches here.
+
+  Expected context: the current Page, or a dict whose "page" key is the
+  current Page plus any of the option keys documented in config.html
+  (networks, new_tab, heading, aria_label, via, hashtags, image,
+  mastodon_instance, lemmy_instance, url, title, description, class, id).
+  Anything else is the module's single build-failing errorf: a wiring
+  mistake, not a content problem.
+
+  Kill switches: site params.social_share.enable = false disables the module
+  everywhere; page front matter social_share.disable = true is the per-page
+  escape hatch. Every other misconfiguration degrades: a deduplicated warnf
+  (unknown slug, disallowed endpoint scheme, missing instance hostname,
+  imageless Pinterest) or silent omission of the affected item. The module
+  NEVER breaks a build over sharing configuration.
+
+  Return value: none. This partial renders. It also emits the module's
+  progressive-enhancement script once per page (a .Page.Store sentinel), as
+  a minified, fingerprinted <script defer> with Subresource Integrity.
+*/}}
+
+{{- $arg := . -}}
+{{- $page := $arg -}}
+{{- $args := dict -}}
+{{- if not (reflect.IsPage $arg) -}}
+  {{- if reflect.IsMap $arg -}}
+    {{- $args = $arg -}}
+    {{- $page = $args.page -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if not (reflect.IsPage $page) -}}
+  {{- errorf "[social-share] share.html must be called with the current Page as its context ({{ partial \"social-share/share.html\" . }}) or as the \"page\" key of an options dict ({{ partial \"social-share/share.html\" (dict \"page\" . ...) }})." -}}
+{{- else -}}
+
+{{/* Both config tiers must be maps; any other type (social_share: false is
+     a natural first guess for disabling the bar) is discarded with a warning
+     instead of crashing the field accesses below -- the never-break
+     contract covers config of the wrong shape too. */}}
+{{- $sitep := site.Params.social_share -}}
+{{- if not (reflect.IsMap $sitep) -}}
+  {{- if ne $sitep nil -}}
+    {{- partial "social-share/lib/warn.html" (dict
+        "key" "social-share:warn:nonmap-config:site"
+        "message" (printf "[social-share] Ignoring params.social_share: expected a map, got %v. To disable the module site-wide, set params.social_share.enable = false." $sitep)) -}}
+  {{- end -}}
+  {{- $sitep = dict -}}
+{{- end -}}
+{{- $pagep := $page.Params.social_share -}}
+{{- if not (reflect.IsMap $pagep) -}}
+  {{- if ne $pagep nil -}}
+    {{- partial "social-share/lib/warn.html" (dict
+        "key" (printf "social-share:warn:nonmap-config:%s" $page.RelPermalink)
+        "message" (printf "[social-share] Ignoring the social_share front matter value on %s: expected a map, got %v. To disable the bar on this page, set social_share.disable: true." $page.RelPermalink $pagep)) -}}
+  {{- end -}}
+  {{- $pagep = dict -}}
+{{- end -}}
+{{/* Kill switches accept bool and string forms alike. */}}
+{{- $enabled := not (in (slice "false" "0" "no" "off") (lower (printf "%v" ($sitep.enable | default true)))) -}}
+{{- $disabled := in (slice "true" "1" "yes" "on") (lower (printf "%v" ($pagep.disable | default false))) -}}
+{{- if and $enabled (not $disabled) -}}
+
+{{- $cfg := partial "social-share/config.html" (dict "page" $page "args" $args) -}}
+{{- $reg := partial "social-share/networks.html" $cfg -}}
+
+{{/* The token map url.html fills query parameters from. titleurl backs
+     compose-style targets that take one text field carrying both. */}}
+{{- $share := dict
+  "url" $cfg.url
+  "title" $cfg.title
+  "titleurl" (trim (printf "%s %s" $cfg.title $cfg.url) " ")
+  "description" $cfg.description
+  "description_or_title" (or $cfg.description $cfg.title)
+  "image" $cfg.image
+  "via" $cfg.via
+  "hashtags" $cfg.hashtags
+  "site" $cfg.site_host
+-}}
+
+{{/* Resolve the requested slugs into renderable items first: aliases map to
+     canonical entries, invalid requests warn once and drop out, and a list
+     that resolves to nothing renders nothing at all. */}}
+{{- $items := slice -}}
+{{- $hasActions := false -}}
+{{- range $slug := $cfg.networks -}}
+  {{/* A direct registry entry wins over alias resolution, so a consumer
+       networks_extra entry keyed like a built-in alias stays reachable
+       (consumer entries always win). */}}
+  {{- $canonical := $slug -}}
+  {{- if not (index $reg.entries $slug) -}}
+    {{- $canonical = or (index $reg.aliases $slug) $slug -}}
+  {{- end -}}
+  {{- $entry := index $reg.entries $canonical -}}
+  {{- if not $entry -}}
+    {{- partial "social-share/lib/warn.html" (dict
+        "key" (printf "social-share:warn:unknown-network:%s" $canonical)
+        "message" (printf "[social-share] Unknown network %q was skipped. Use a canonical slug or alias from the module README Networks table, or define [params.social_share.networks_extra.%s]. See %s" $canonical $canonical $cfg.where)) -}}
+  {{- else if $entry.unavailable -}}
+    {{- partial "social-share/lib/warn.html" (dict
+        "key" (printf "social-share:warn:unavailable:%s" $canonical)
+        "message" (printf "[social-share] Skipped %q: %s. See %s" $canonical $entry.unavailable $cfg.where)) -}}
+  {{- else if eq ($entry.kind | default "link") "action" -}}
+    {{- $items = $items | append (dict "slug" $canonical "entry" $entry) -}}
+    {{- $hasActions = true -}}
+  {{- else -}}
+    {{- $endpoint := printf "%v" ($entry.endpoint | default "") -}}
+    {{- $scheme := lower (index (split $endpoint ":") 0) -}}
+    {{- if not (in (slice "https" "mailto" "sms" "viber") $scheme) -}}
+      {{- partial "social-share/lib/warn.html" (dict
+          "key" (printf "social-share:warn:scheme:%s" $canonical)
+          "message" (printf "[social-share] Skipped %q: endpoint %q does not use an allowed scheme (https, mailto, sms, viber). See %s" $canonical $endpoint $cfg.where)) -}}
+    {{- else -}}
+      {{- if and (eq $canonical "pinterest") (not $cfg.image) -}}
+        {{- partial "social-share/lib/warn.html" (dict
+            "key" (printf "social-share:warn:pinterest-image:%s" $page.RelPermalink)
+            "message" (printf "[social-share] Pinterest is enabled but no share image resolved for %s; the pin builder will fall back to scraping the page. Set social_share.image in front matter, add a *feature*/*cover*/*thumbnail* page resource, or set params.social_share.image." $page.RelPermalink)) -}}
+      {{- end -}}
+      {{- $href := partial "social-share/url.html" (dict "entry" $entry "share" $share) -}}
+      {{- $items = $items | append (dict "slug" $canonical "entry" $entry "href" $href "scheme" $scheme) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if $items -}}
+{{- $ariaLabel := $cfg.aria_label | default (T "social_share_aria_label" | default "Share this page") -}}
+{{- $copiedLabel := T "social_share_copied" | default "Link copied to clipboard" -}}
+{{- $copyErrorLabel := T "social_share_copy_error" | default "Could not copy the link" -}}
+{{- $shareErrorLabel := T "social_share_share_error" | default "Could not share the page" -}}
+<nav class="social-share{{ with $cfg.class }} {{ . }}{{ end }}"
+  {{- with $cfg.id }} id="{{ . }}"{{ end }}
+  aria-label="{{ $ariaLabel }}"
+  data-share-url="{{ $cfg.url }}"
+  data-share-title="{{ $cfg.title }}"
+  {{- with $cfg.description }} data-share-text="{{ . }}"{{ end }}
+  data-share-copied-label="{{ $copiedLabel }}"
+  data-share-copy-error-label="{{ $copyErrorLabel }}"
+  data-share-error-label="{{ $shareErrorLabel }}">
+  {{- with $cfg.heading }}
+  <p class="social-share__heading">{{ $page.RenderString (dict "display" "inline") . }}</p>
+  {{- end }}
+  <ul class="social-share__list">
+    {{- range $items }}
+    {{ partial "social-share/item.html" (merge . (dict "new_tab" $cfg.new_tab)) }}
+    {{- end }}
+  </ul>
+  {{- if $hasActions }}
+  <span class="social-share__status" role="status"></span>
+  {{- end }}
+</nav>
+
+{{/* ---- Progressive-enhancement script, once per page ----
+
+     Emitted whenever a bar renders (not only when action buttons are
+     present): the script also fires the social-share:share CustomEvent on
+     plain link clicks and sets the --enhanced state class, so link-only
+     bars keep the documented event surface. The script never causes any
+     third-party contact. */}}
+{{- $scriptKey := "social-share:script-emitted" -}}
+{{- if not ($page.Store.Get $scriptKey) -}}
+  {{- $page.Store.Set $scriptKey true -}}
+  {{- with resources.Get "js/social-share.js" -}}
+    {{- $built := . | js.Build (dict "minify" true) -}}
+    {{- with $built | fingerprint -}}
+<script defer src="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" crossorigin="anonymous"></script>
+    {{- end -}}
+  {{- else -}}
+    {{- partial "social-share/lib/warn.html" (dict
+        "key" "social-share:warn:missing-script"
+        "message" "[social-share] assets/js/social-share.js was not found; the module is not mounted correctly. Share links still work, but the Web Share, copy-link, and print buttons stay hidden.") -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{- end -}}
+{{- end -}}

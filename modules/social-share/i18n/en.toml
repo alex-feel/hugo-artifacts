@@ -1,0 +1,27 @@
+# English UI strings for the social-share module. Templates look up keys via
+# {{ T "social_share_copy" }}; every lookup carries an English fallback, so a
+# site whose language ships no translation still renders accessible names.
+
+# <nav> landmark name.
+social_share_aria_label = "Share this page"
+
+# Accessible name for share-style targets; {{ .Name }} is the brand label.
+social_share_on = "Share on {{ .Name }}"
+
+# Accessible name for save-style targets (Instapaper, Pinterest).
+social_share_save = "Save to {{ .Name }}"
+
+# Dedicated target labels.
+social_share_email = "Share via email"
+social_share_sms = "Share via text message"
+social_share_webshare = "Share"
+social_share_copy = "Copy link"
+social_share_print = "Print this page"
+
+# Hidden hint appended to a link's accessible name when it opens a new tab.
+social_share_new_tab_hint = "(opens in a new window)"
+
+# Status-line announcements (live region) driven by the module script.
+social_share_copied = "Link copied to clipboard"
+social_share_copy_error = "Could not copy the link"
+social_share_share_error = "Could not share the page"
