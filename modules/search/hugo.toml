@@ -1,0 +1,33 @@
+[outputFormats]
+
+  # Emits the per-language search index at /searchindex.json (home page).
+  # A dedicated format rather than the built-in json format: it gives the
+  # index a stable dedicated URL and leaves the built-in json home output
+  # free for consumer sites and themes that already wire it for their own
+  # purposes. isPlainText switches to text/template so Go's HTML
+  # auto-escaping cannot mangle the JSON. notAlternative keeps it out
+  # of .AlternativeOutputFormats. permalinkable stays false (default) so
+  # .RelPermalink inside the template returns each page's HTML URL.
+  [outputFormats.searchindex]
+    mediaType = 'application/json'
+    baseName = 'searchindex'
+    isPlainText = true
+    notAlternative = true
+
+[module]
+
+  [module.hugoVersion]
+    min = "0.160.0"
+
+  # MiniSearch (MIT) is vendored by mounting the upstream TypeScript sources
+  # as Hugo assets; js.Build compiles them, so a bare
+  # `import MiniSearch from 'minisearch'` resolves with no npm step.
+  # The exclusion entries use the `files` setting with the `! ` prefix
+  # INCLUDING the trailing space -- the no-space form empties the mount.
+  [[module.imports]]
+    path = "github.com/lucaong/minisearch"
+
+    [[module.imports.mounts]]
+      source = "src"
+      target = "assets/minisearch"
+      files = ['! **.test.js', '! testSetup/**']

@@ -1,0 +1,110 @@
+{{/*
+  search/page.html -- PUBLIC ENTRY (renderer tier).
+
+  Purpose: the dedicated search page surface -- the module's mandatory
+  progressive-enhancement baseline. A consumer creates a search page per
+  language (content/search.md and translations), places the search
+  shortcode on it, and this partial renders a complete, style-agnostic
+  surface: a real GET form that works without JavaScript, live regions, a
+  results container, a load-more button, and a noscript guidance slot. The
+  layout-partial form is:
+
+      {{ partial "search/page.html" . }}
+
+  or with call-site overrides:
+
+      {{ partial "search/page.html" (dict "page" . "autofocus" true) }}
+
+  Expected context: the current Page, or a dict whose "page" key is the
+  current Page plus option keys (any four-tier key from
+  data/search/defaults.toml, plus class, id, placeholder, aria_label,
+  heading, autofocus). Anything else is the module's single build-failing
+  errorf: a wiring mistake, not a content problem.
+
+  Kill switches: site params.search.enable = false disables every surface;
+  page front matter search.disable = true suppresses surface rendering on
+  that page. When the searchindex output format is not wired, this surface
+  still renders its server-side form (it degrades to plain navigation), but
+  no scripts are emitted and one actionable warning names the fix.
+
+  Return value: none. This partial renders.
+*/}}
+
+{{- $arg := . -}}
+{{- $page := $arg -}}
+{{- $args := dict -}}
+{{- if not (reflect.IsPage $arg) -}}
+  {{- if reflect.IsMap $arg -}}
+    {{- $args = $arg -}}
+    {{- $page = $args.page -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if not (reflect.IsPage $page) -}}
+  {{- errorf "[search] page.html must be called with the current Page as its context ({{ partial \"search/page.html\" . }}) or as the \"page\" key of an options dict ({{ partial \"search/page.html\" (dict \"page\" . ...) }})." -}}
+{{- else -}}
+
+{{- partial "search/lib/guard.html" $page -}}
+{{- $pagep := $page.Params.search -}}
+{{- if not (reflect.IsMap $pagep) -}}{{- $pagep = dict -}}{{- end -}}
+{{- $disabled := in (slice "true" "1" "yes" "on") (lower (printf "%v" ($pagep.disable | default false))) -}}
+{{- $cfg := partial "search/config.html" (dict "page" $page "args" $args) -}}
+{{- if and $cfg.enable (not $disabled) -}}
+
+{{- $n := add (int ($page.Store.Get "search:instances" | default 0)) 1 -}}
+{{- $page.Store.Set "search:instances" $n -}}
+{{- $seed := printf "%d" $n -}}
+{{- with $cfg.id -}}{{- $seed = . -}}{{- end -}}
+{{- $inputId := printf "search-input-%s" $seed -}}
+{{- $options := (dict
+  "stemming" $cfg.stemming
+  "stopwords" $cfg.stopwords
+  "stopwordsExtra" $cfg.stopwords_extra
+  "headings" $cfg.headings
+  "taxonomies" $cfg.taxonomies
+  "boost" $cfg.boost
+  "fuzzy" $cfg.fuzzy
+  "prefix" $cfg.prefix
+  "worker" $cfg.worker
+  "cache" $cfg.cache
+) | jsonify -}}
+<search class="search search--page{{ with $cfg.class }} {{ . }}{{ end }}"
+  {{- with $cfg.id }} id="{{ . }}"{{ end }}
+  data-search-surface="page"
+  {{- with $cfg.index_url }} data-search-index-url="{{ . }}"{{ end }}
+  data-search-lang="{{ site.Language.Lang }}"
+  data-search-page-url="{{ $cfg.page_url }}"
+  {{- with $cfg.worker_url }} data-search-worker-url="{{ . }}"{{ end }}
+  data-search-min-length="{{ $cfg.min_query_length }}"
+  data-search-debounce="{{ $cfg.debounce_ms }}"
+  data-search-page-size="{{ $cfg.page_size }}"
+  {{- if $cfg.show_description }} data-search-show-description="true"{{ end }}
+  {{- if $cfg.show_image }} data-search-show-image="true"{{ end }}
+  {{- if $cfg.show_tags }} data-search-show-tags="true"{{ end }}
+  {{- if $cfg.show_categories }} data-search-show-categories="true"{{ end }}
+  {{- if $cfg.show_dates }} data-search-show-dates="true"{{ end }}
+  {{- if $cfg.group_by_section }} data-search-group-by-section="true"{{ end }}
+  data-search-options="{{ $options }}"
+  data-search-i18n-idle="{{ $cfg.i18n.idle }}"
+  data-search-i18n-loading="{{ $cfg.i18n.loading }}"
+  data-search-i18n-no-results="{{ $cfg.i18n.no_results }}"
+  data-search-i18n-error="{{ $cfg.i18n.error }}"
+  data-search-i18n-count-one="{{ $cfg.i18n.count_one }}"
+  data-search-i18n-count-few="{{ $cfg.i18n.count_few }}"
+  data-search-i18n-count-many="{{ $cfg.i18n.count_many }}"
+  data-search-i18n-count-other="{{ $cfg.i18n.count_other }}"
+  data-search-i18n-showing="{{ $cfg.i18n.showing }}"
+  data-search-i18n-min-chars="{{ $cfg.i18n.min_chars }}">
+  {{- with $cfg.heading }}
+  <h2 class="search__heading">{{ . }}</h2>
+  {{- end }}
+  {{ partial "search/form.html" (dict "page" $page "cfg" $cfg "surface" "page" "input_id" $inputId) }}
+  {{ partial "search/results.html" (dict "page" $page "cfg" $cfg "surface" "page") }}
+  <noscript class="search__noscript">{{ partial "search/noscript.html" (dict "page" $page "cfg" $cfg) }}</noscript>
+</search>
+{{- if $cfg.index_url }}
+{{ partial "search/assets.html" (dict "page" $page "cfg" $cfg) }}
+{{- end }}
+
+{{- end -}}
+{{- end -}}

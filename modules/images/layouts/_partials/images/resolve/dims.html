@@ -1,0 +1,40 @@
+{{/*
+  images/resolve/dims.html -- PURE (resolver tier).
+
+  Purpose: normalizes raw width/height values into integers. Shortcode named
+  parameters and Markdown attributes deliver strings, front matter may hold
+  ints or floats, and authors write "1920px"-style values by hand; this
+  partial accepts all of those shapes at ONE place so no caller ever feeds a
+  non-numeric string into an integer cast (a build-crash class this module
+  designs out).
+
+  Context (dict):
+  - .width  (any, optional) Raw width value: int, float, "1920", "1920px".
+  - .height (any, optional) Raw height value, same shapes.
+
+  Return value: dict
+  - width  (int)  Parsed width, 0 when absent or unparseable.
+  - height (int)  Parsed height, 0 when absent or unparseable.
+  - ok     (bool) false when any SUPPLIED value failed to parse (the caller
+                  warns once and ignores the failed value); true otherwise.
+
+  One terminal return.
+*/}}
+
+{{- $ctx := . -}}
+{{- $out := dict "width" 0 "height" 0 "ok" true -}}
+{{- range $k := slice "width" "height" -}}
+  {{- $raw := index $ctx $k -}}
+  {{- if ne $raw nil -}}
+    {{- $s := lower (trim (printf "%v" $raw) " \t\n\r") -}}
+    {{- $s = strings.TrimSuffix "px" $s -}}
+    {{- if findRE `^\d+$` $s -}}
+      {{- $out = merge $out (dict $k (int $s)) -}}
+    {{- else if findRE `^\d+\.\d+$` $s -}}
+      {{- $out = merge $out (dict $k (int (float $s))) -}}
+    {{- else if ne $s "" -}}
+      {{- $out = merge $out (dict "ok" false) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- return $out -}}

@@ -1,0 +1,48 @@
+baseURL = "http://localhost:1515/"
+defaultContentLanguage = "en"
+title = "Search Fixture"
+
+[languages]
+
+  [languages.en]
+    locale = "en-US"
+    weight = 1
+
+  [languages.ru]
+    locale = "ru-RU"
+    weight = 2
+    title = "Фикстура поиска"
+
+# The one irreducible consumer wiring step: the searchindex output format on
+# the home page. The config list replaces the entire default home list, so
+# html and rss are kept.
+[outputs]
+  home = ['html', 'rss', 'searchindex']
+
+[params]
+description = "Hugo search module Playwright validation fixture site."
+
+# Deliberately exercises edge shapes: a comma-string sections allow-list
+# with a nested path, a capitalized entry ("Blog" must scope /blog/... --
+# matching is case-insensitive), an entry covering the dedicated search page
+# (which must still exclude itself from the index), forced caching
+# (deterministic on a small corpus), heading sub-records, the slash hotkey
+# opt-in, and every display toggle the result template ships.
+[params.search]
+sections = "Blog, docs/guides, hostile, excluded, search"
+headings = true
+hotkey_slash = true
+cache = true
+show_tags = true
+show_categories = true
+show_image = true
+group_by_section = true
+
+[module]
+
+  [module.hugoVersion]
+    min = "0.160.0"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/search"
+

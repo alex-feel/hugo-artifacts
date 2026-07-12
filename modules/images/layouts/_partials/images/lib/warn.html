@@ -1,0 +1,28 @@
+{{/*
+  Emits one deduplicated warnf per warning key, backed by a hugo.Store
+  sentinel so a given issue warns exactly once per build across all pages
+  and output formats.
+
+  This is the single side-effecting helper in the images/lib/ tier; every
+  other partial routes its warnf calls through here so that a
+  misconfiguration surfaces once (a maintainer should fix it) rather than
+  screaming per page-render or per output format.
+
+  Context (dict):
+  - .key (string)     Stable dedup key. Callers key by class plus the
+                      offending value or page, e.g.
+                      printf "images:warn:missing:%s" $src.
+  - .message (string) The fully-formatted, [images]-prefixed warning text,
+                      ending with the call position where one is known.
+
+  Side effect: warnf once per key. No return value is used by callers.
+*/}}
+
+{{- $key := .key -}}
+{{- $message := .message -}}
+{{- if $key -}}
+  {{- if not (hugo.Store.Get $key) -}}
+    {{- hugo.Store.Set $key true -}}
+    {{- warnf "%s" $message -}}
+  {{- end -}}
+{{- end -}}

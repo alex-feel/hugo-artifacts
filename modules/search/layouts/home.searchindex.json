@@ -1,0 +1,100 @@
+{{- /*
+  home.searchindex.json -- the per-language search index.
+
+  Rendered once per language into that language's URL tree
+  (/searchindex.json, /ru/searchindex.json) because Hugo renders the home
+  page's output formats per language. The whole document is ONE Go dict
+  serialized with a single jsonify call -- never hand-assembled JSON.
+  noHTMLEscape is safe for a standalone .json file and smaller; the envelope
+  must not be inlined into a <script> tag as-is.
+
+  Envelope (schemaVersion 1): schemaVersion, lang, generated (RFC 3339,
+  data-only, excluded from the digest), docCount, digest (xxHash of the
+  serialized docs -- the content signal the client-side cache key requires,
+  because this URL is stable rather than fingerprinted), docs.
+
+  Inclusion filters, in order: master switch (enable = false empties the
+  range but the envelope still emits so the wired URL never 404s); section
+  allow-list at segment boundaries; per-page opt-out (search: false or
+  search.exclude: true); the dedicated search page itself (indexing it
+  would surface its own UI chrome as a result); robots noindex interplay.
+  The last two are overridable per page by explicitly setting
+  search.exclude: false.
+*/ -}}
+{{- $cfg := partial "search/config.html" (dict "page" . "site_only" true) -}}
+{{- $searchPagePath := "" -}}
+{{- with site.GetPage $cfg.page_path -}}{{- $searchPagePath = .Path -}}{{- end -}}
+{{- $docs := slice -}}
+{{- if $cfg.enable -}}
+  {{- range site.RegularPages -}}
+    {{- $keep := true -}}
+
+    {{/* Section scope: equality or normalized-entry-plus-slash prefix, so
+         docs never matches /docs-internal/... and docs/guides never matches
+         /docs/guides-old/.... */}}
+    {{- if $cfg.sections -}}
+      {{- $keep = false -}}
+      {{- $p := .Path -}}
+      {{- $section := .Section -}}
+      {{- range $cfg.sections -}}
+        {{- if or (eq (printf "/%s" $section) .) (eq $p .) (hasPrefix $p (printf "%s/" .)) -}}
+          {{- $keep = true -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{/* Per-page opt-out: bare `search: false` (or its string forms) and the
+         map form search.exclude: true. Any other non-map value warns once
+         and is ignored. */}}
+    {{- $pagep := .Params.search -}}
+    {{- $excludeSet := false -}}
+    {{- $exclude := false -}}
+    {{- if reflect.IsMap $pagep -}}
+      {{- if isset $pagep "exclude" -}}
+        {{- $excludeSet = true -}}
+        {{- $exclude = in (slice "true" "1" "yes" "on") (lower (printf "%v" (index $pagep "exclude"))) -}}
+      {{- end -}}
+    {{- else if ne $pagep nil -}}
+      {{- if in (slice "false" "0" "no" "off") (lower (printf "%v" $pagep)) -}}
+        {{- $excludeSet = true -}}
+        {{- $exclude = true -}}
+      {{- else -}}
+        {{- partial "search/lib/warn.html" (dict
+            "key" (printf "search:warn:nonmap-config:%s" .RelPermalink)
+            "message" (printf "[search] Ignoring the search front matter value on %s: expected a map (or the bare `search: false` opt-out shorthand), got %v." .RelPermalink $pagep)) -}}
+      {{- end -}}
+    {{- end -}}
+    {{- if $exclude -}}{{- $keep = false -}}{{- end -}}
+
+    {{/* The dedicated search page hosts the search UI itself; indexing it
+         would surface its own rendered chrome (labels, hints, noscript
+         guidance) as a result. It stays out unless the author explicitly
+         sets search.exclude: false (presence wins). */}}
+    {{- if and $keep $searchPagePath (eq .Path $searchPagePath) -}}
+      {{- if not (and $excludeSet (not $exclude)) -}}
+        {{- $keep = false -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{/* A page hidden from crawlers stays out of site search too, unless the
+         author explicitly sets search.exclude: false (presence wins). */}}
+    {{- if and $keep (in (lower (printf "%v" (.Params.robots | default ""))) "noindex") -}}
+      {{- if not (and $excludeSet (not $exclude)) -}}
+        {{- $keep = false -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{- if $keep -}}
+      {{- $docs = $docs | append (partialCached "search/lib/record.html" (dict "page" . "cfg" $cfg) .Path) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $envelope := dict
+  "schemaVersion" 1
+  "lang" site.Language.Lang
+  "generated" (now.Format "2006-01-02T15:04:05Z07:00")
+  "docCount" (len $docs)
+  "digest" (hash.XxHash ($docs | jsonify))
+  "docs" $docs
+-}}
+{{- $envelope | jsonify (dict "noHTMLEscape" true) -}}

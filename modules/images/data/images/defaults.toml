@@ -1,0 +1,110 @@
+# Consumer-facing defaults for the images module.
+#
+# Every key can be overridden, from lowest to highest precedence:
+#   1. this file (module defaults)
+#   2. site config:       [params.img]
+#   3. page front matter: img: (map)
+#   4. call-site args:    partial "images/image.html" (dict ...) / shortcode named params
+# Presence wins at every tier, so an explicit false, 0, or "" overrides the
+# tier below it. The namespace is `img` (NOT `images`): Hugo's embedded Open
+# Graph / Twitter Cards templates and common front-matter conventions already
+# use `images` as an ARRAY, which cannot coexist with a map at the same key.
+
+# Master switch. false renders every surface as the neutral fallback: the
+# original image published as-is with alt/class/loading, no derivatives, no
+# picture, no placeholder/lightbox/dark handling. Content keeps rendering.
+enable = true
+
+# Width ladder for w-descriptor srcsets, ascending CSS pixels. Entries at or
+# above the source width are dropped (never upscale); the capped source width
+# joins as the top candidate when smaller than the ladder top.
+widths = [640, 960, 1280, 1920]
+
+# Modern format chain emitted as <source> elements before the original-format
+# fallback. Allowed tokens: 'webp', 'avif'. AVIF requires Hugo 0.163.0+ and
+# is skipped (with one build warning) below that version.
+formats = ['webp']
+
+# Density descriptors for layout = 'fixed' (x-descriptor srcsets). The
+# per-call max_density parameter defaults to this list's maximum; a larger
+# value appends itself (3x opt-in), a smaller value filters the list.
+densities = [1, 2]
+
+# Default layout vocabulary: 'constrained' | 'full' | 'fixed'.
+layout = 'constrained'
+
+# Explicit sizes attribute override. Empty = generate from layout.
+sizes = ''
+
+# Prepend "auto, " to the sizes attribute on lazy-loaded images
+# (Chromium 126+/Firefox 150+; safely ignored elsewhere). Never on eager.
+sizes_auto = true
+
+# Default loading mode for non-priority images: 'lazy' | 'eager'.
+loading = 'lazy'
+
+# Emit a single derivative instead of the responsive ladder (build-speed
+# kill switch for constrained CI budgets).
+responsive = true
+
+# Read the IPTC credit/byline from the ORIGINAL image's metadata when no
+# explicit credit is supplied.
+credit_from_meta = false
+
+# Per-format lossy quality, passed explicitly in every spec string.
+[quality]
+webp = 75
+avif = 60
+jpeg = 75
+
+# Explicit spec-string processing defaults (deterministic across consumers).
+[process_defaults]
+# Anchor for fill/crop operations: 'Smart', 'Center', 'TopLeft', ...
+anchor = 'Smart'
+# Resampling filter token for every scaling operation.
+resample = 'lanczos'
+# Background fill '#RRGGBB' for transparent-to-opaque conversions; empty
+# defers to the site's own [imaging] bgColor.
+bg = ''
+# WebP encoding preset hint: '' | 'drawing' | 'icon' | 'photo' | 'picture'
+# | 'text'. Applies to WebP chains only; empty = encoder default.
+hint = ''
+# Compression mode: '' | 'lossy' | 'lossless'. 'lossless' is WebP-only and
+# suppresses the quality token for that chain; empty = lossy with quality.
+compression = ''
+
+# Opt-in JS-free placeholders: 'none' | 'dominant' | 'blur'.
+[placeholder]
+mode = 'none'
+# Tiny-derivative width (px) and Gaussian blur sigma for mode = 'blur'.
+blur_width = 20
+blur_sigma = 3
+
+# Lightbox enablement (anchor to a capped full-size derivative).
+[lightbox]
+# Cap (px) on the full-size derivative's width; never links originals.
+width = 2048
+
+# Dark-variant strategy when a `dark` source is supplied:
+# 'media' (prefers-color-scheme) | 'class' (dual trees for class togglers).
+[theme]
+strategy = 'media'
+
+# Remote-source handling.
+[remote]
+# false = passthrough URLs untouched; true = build-time fetch-and-process
+# with same-origin republishing (requires consumer [security.http] config;
+# see the README).
+fetch = false
+
+# Markdown image render hook behavior.
+[hook]
+# false = the shipped render-image.html emits the neutral fallback markup
+# (resolved URL, alt, lazy) instead of the full pipeline.
+enable = true
+
+# Gallery defaults (image-gallery shortcode / images/gallery.html).
+[gallery]
+lightbox = true
+# Optional uniform thumbnail ratio 'WxH' (e.g. '1x1'); empty = no crop.
+crop = ''

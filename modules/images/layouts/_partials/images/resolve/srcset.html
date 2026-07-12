@@ -1,0 +1,53 @@
+{{/*
+  images/resolve/srcset.html -- IDEMPOTENT-EFFECTFUL (resolver tier).
+
+  Purpose: executes one format chain of a derivative plan. Together with
+  resolve/placeholder.html this is the only partial that touches the image
+  pipeline: every ladder derivative and the capped lightbox derivative is
+  generated here, each as exactly ONE cached transformation --
+  $src.Filter images.AutoOrient (images.Process $spec) -- so orientation
+  correction rides inside each derivative and no full-resolution oriented
+  intermediate is ever written to the resource cache. Derivative URLs are
+  content-addressed; they are referenced ONLY via .RelPermalink, never
+  guessed.
+
+  Context (dict):
+  - .resource   (Resource) The ORIGINAL processable resource.
+  - .candidates (slice)    Ascending {w (int), desc (string)} from
+                resolve/plan.html.
+  - .process    (string)   resize | fit | fill | crop.
+  - .ratio      (float)    Height/width ratio; 0 emits width-only geometry.
+  - .suffix     (string)   The chain's spec suffix (anchor, format, quality,
+                resampling filter, hint, compression, background).
+
+  Return value: dict
+  - srcset (string)   Comma-joined "URL DESC" entries in candidate order.
+  - top    (Resource) The largest derivative (candidate order is ascending,
+           so the last one). Its .Width/.Height are post-orientation truth.
+  - first  (Resource) The smallest derivative (the 1x rendition in fixed
+           layout, whose dimensions are the intrinsic display size).
+
+  One terminal return.
+*/}}
+
+{{- $resource := .resource -}}
+{{- $process := .process -}}
+{{- $ratio := .ratio -}}
+{{- $suffix := .suffix -}}
+
+{{- $parts := slice -}}
+{{- $topResource := "" -}}
+{{- $firstResource := "" -}}
+{{- range $c := .candidates -}}
+  {{- $dims := printf "%dx" $c.w -}}
+  {{- if gt $ratio 0.0 -}}
+    {{- $dims = printf "%dx%d" $c.w (int (math.Round (mul $c.w $ratio))) -}}
+  {{- end -}}
+  {{- $spec := printf "%s %s %s" $process $dims $suffix -}}
+  {{- $img := $resource.Filter images.AutoOrient (images.Process $spec) -}}
+  {{- $parts = $parts | append (printf "%s %s" $img.RelPermalink $c.desc) -}}
+  {{- if not $firstResource -}}{{- $firstResource = $img -}}{{- end -}}
+  {{- $topResource = $img -}}
+{{- end -}}
+
+{{- return (dict "srcset" (delimit $parts ", ") "top" $topResource "first" $firstResource) -}}

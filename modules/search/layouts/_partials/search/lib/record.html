@@ -1,0 +1,146 @@
+{{/*
+  search/lib/record.html -- INTERNAL (lib tier).
+
+  Purpose: builds one index record for one page. Called from the index
+  template as partialCached with the page path as the cache variant, so the
+  per-page computation (including the single .Plain/.Content render) runs
+  exactly once per page per language.
+
+  Every text field is piped through plainify | htmlUnescape: plainify strips
+  tags but preserves entities, so without the unescape &amp;/&mdash; leak
+  into displayed titles. All fields are DATA ONLY -- no pre-rendered HTML
+  ever enters the index. href is sourced EXCLUSIVELY from .RelPermalink; the
+  client-side renderer trusts it as safe-by-construction, so any change that
+  sources href from anywhere else must revisit that trust boundary.
+
+  Expected context (dict):
+  - .page (Page) - The page to serialize.
+  - .cfg  (map)  - The site-scoped configuration from search/config.html
+    (content, content_max_length, summary_max_length, strip_code_blocks,
+    headings, headings_max_level, taxonomies, show_image).
+
+  Return value: one dict (the record). One terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $cfg := .cfg -}}
+
+{{- $record := dict
+  "href" $page.RelPermalink
+  "title" ($page.Title | plainify | htmlUnescape)
+  "section" $page.Section
+-}}
+
+{{/* Group label: the first section's title, else the humanized slug; root
+     pages have no section and get no label. */}}
+{{- $sectionTitle := "" -}}
+{{- if $page.Section -}}
+  {{- $sectionTitle = humanize $page.Section -}}
+  {{- with $page.FirstSection -}}
+    {{- with .Title -}}{{- $sectionTitle = . -}}{{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $record = merge $record (dict "sectionTitle" $sectionTitle) -}}
+
+{{- if not $page.Date.IsZero -}}
+  {{- $record = merge $record (dict "date" ($page.Date.Format "2006-01-02")) -}}
+{{- end -}}
+
+{{- with $page.Description | plainify | htmlUnescape -}}
+  {{- $record = merge $record (dict "description" .) -}}
+{{- end -}}
+
+{{- with $page.Summary | plainify | htmlUnescape -}}
+  {{- $summary := trim (replaceRE `\s+` " " .) " " -}}
+  {{- if gt $cfg.summary_max_length 0 -}}
+    {{/* truncate HTML-escapes plain-string input, so the unescape runs
+         again AFTER it; escape-then-unescape round-trips losslessly. */}}
+    {{- $summary = truncate $cfg.summary_max_length "" $summary | htmlUnescape -}}
+  {{- end -}}
+  {{- with $summary -}}
+    {{- $record = merge $record (dict "summary" .) -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Author-supplied extra terms: participate in matching, never displayed. */}}
+{{- $pagep := $page.Params.search -}}
+{{- if reflect.IsMap $pagep -}}
+  {{- $rawKeywords := index $pagep "keywords" -}}
+  {{- if ne $rawKeywords nil -}}
+    {{- if not (reflect.IsSlice $rawKeywords) -}}
+      {{- $rawKeywords = split (printf "%v" $rawKeywords) "," -}}
+    {{- end -}}
+    {{- $keywords := slice -}}
+    {{- range $rawKeywords -}}
+      {{- with trim (printf "%v" .) " \t\n\r" -}}
+        {{- $keywords = $keywords | append . -}}
+      {{- end -}}
+    {{- end -}}
+    {{- with $keywords -}}
+      {{- $record = merge $record (dict "keywords" .) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* One array per configured taxonomy, term order as authored. */}}
+{{- range $name := $cfg.taxonomies -}}
+  {{- $terms := slice -}}
+  {{- range $page.GetTerms $name -}}
+    {{- $terms = $terms | append .LinkTitle -}}
+  {{- end -}}
+  {{- with $terms -}}
+    {{- $record = merge $record (dict $name .) -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Indexed body text. .Plain preserves HTML entities, hence the mandatory
+     htmlUnescape. Indexed, not stored client-side. */}}
+{{- if ne $cfg.content "none" -}}
+  {{- $body := "" -}}
+  {{- if eq $cfg.content "summary" -}}
+    {{- $body = $page.Summary | plainify | htmlUnescape -}}
+  {{- else if $cfg.strip_code_blocks -}}
+    {{- $body = $page.Content | replaceRE `(?s)<pre.*?</pre>` " " | plainify | htmlUnescape -}}
+  {{- else -}}
+    {{- $body = $page.Plain | htmlUnescape -}}
+  {{- end -}}
+  {{- $body = trim (replaceRE `\s+` " " $body) " " -}}
+  {{- if and (eq $cfg.content "full") (gt $cfg.content_max_length 0) -}}
+    {{/* Same truncate escape round-trip as the summary above. */}}
+    {{- $body = truncate $cfg.content_max_length "" $body | htmlUnescape -}}
+  {{- end -}}
+  {{- with $body -}}
+    {{- $record = merge $record (dict "content" .) -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Result thumbnail, only when the defaults or site tier enables it: the
+     first images front matter entry, else a page-bundle image resource
+     whose name matches the feature, cover, or thumbnail patterns. Front
+     matter strings are emitted as authored; the client-side renderer's
+     scheme filter decides what may reach the img src attribute. */}}
+{{- if $cfg.show_image -}}
+  {{- $image := "" -}}
+  {{- with $page.Params.images -}}
+    {{- $first := . -}}
+    {{- if reflect.IsSlice . -}}{{- $first = index . 0 -}}{{- end -}}
+    {{- with $first -}}{{- $image = printf "%v" . -}}{{- end -}}
+  {{- end -}}
+  {{- if not $image -}}
+    {{- with ($page.Resources.ByType "image").GetMatch "{*feature*,*cover*,*thumbnail*}" -}}
+      {{- $image = .RelPermalink -}}
+    {{- end -}}
+  {{- end -}}
+  {{- with $image -}}
+    {{- $record = merge $record (dict "image" .) -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Heading sub-records (anchor deep links), opt-in. */}}
+{{- if $cfg.headings -}}
+  {{- with partial "search/lib/headings.html" (dict "nodes" $page.Fragments.Headings "max" $cfg.headings_max_level) -}}
+    {{- $record = merge $record (dict "headings" .) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $record -}}

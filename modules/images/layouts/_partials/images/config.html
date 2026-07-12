@@ -1,0 +1,377 @@
+{{/*
+  images/config.html -- INTERNAL (resolver tier).
+
+  Purpose: resolves the module's entire configuration through the four-tier
+  cascade, so every surface renders from ONE consistent options dict and no
+  downstream partial re-derives a value. Precedence, highest first:
+  call-site args > page front matter (img: map) > site params ([params.img])
+  > data/images/defaults.toml. Presence wins at every tier (isset, not
+  truthiness), so an explicit false, 0, or "" overrides the tier below it.
+  Nested sections (quality, process_defaults, placeholder, lightbox, theme,
+  remote, hook, gallery) cascade per KEY within the section, so a page can
+  override quality.webp alone without restating the section.
+
+  The namespace is `img` (NOT `images`): Hugo's embedded Open Graph and
+  Twitter Cards templates and common front-matter conventions already claim
+  `images` as an ARRAY, which cannot coexist with a map at the same key.
+
+  Because shortcode named parameters and hook Markdown attributes deliver
+  STRINGS only, every typed key is normalized here, at one place, with one
+  uniform contract per type class:
+  - bool:       truthy iff "true"/"1"/"yes"/"on" (case-insensitive); native
+                bools pass through.
+  - int:        integer cast after stringifying; garbage warns once and the
+                tier below wins.
+  - dimension:  images/resolve/dims.html (int, float, "1920px" strings).
+  - int slice:  native slices pass through; "480,800" strings comma-split;
+                garbage tokens warn once and drop; an all-garbage value
+                collapses to the tier below; an explicitly empty value is
+                honored as empty.
+  - token slice (formats): allowed tokens 'webp' and 'avif'; unknown tokens
+                warn once and drop.
+  - enum:       unknown tokens warn once and fall back to the feature
+                default.
+
+  Expected context (dict):
+  - .page (Page) The current page (already validated by the caller).
+  - .args (map)  Call-site arguments (possibly empty), flat names per the
+    README Parameters table. `fetchpriority` is deliberately accepted at the
+    call tier ONLY (a site-wide deprioritized-images default must be
+    impossible to configure).
+
+  Return value: dict with every key the renderer needs -- enable,
+  hook_enable, widths, formats, densities, layout, sizes, sizes_auto,
+  loading, responsive, quality (per-format map), quality_override, process,
+  anchor, resample, bg, hint, compression, placeholder, blur_width,
+  blur_sigma, lightbox, lightbox_width, theme_strategy, remote_fetch,
+  remote_key, gallery_lightbox, gallery_crop, credit_from_meta, width,
+  height, max_density, priority, fetchpriority, decorative, alt, caption,
+  credit, license, license_url, class, id, dark, and where (the diagnostics
+  origin: the call position when available, else the page path).
+
+  One terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $args := .args | default dict -}}
+
+{{- $data := index hugo.Data "images" | default dict -}}
+{{- $defaults := index $data "defaults" | default dict -}}
+{{- if not $defaults -}}
+  {{- partial "images/lib/warn.html" (dict
+      "key" "images:warn:missing-defaults"
+      "message" "[images] data/images/defaults.toml was not found; the module is not mounted correctly, so only explicitly configured values apply.") -}}
+{{- end -}}
+
+{{- $sitep := site.Params.img -}}
+{{- if not (reflect.IsMap $sitep) -}}
+  {{- if ne $sitep nil -}}
+    {{- partial "images/lib/warn.html" (dict
+        "key" "images:warn:nonmap-config:site"
+        "message" (printf "[images] Ignoring params.img: expected a map, got %v. To disable the module site-wide, set params.img.enable = false." $sitep)) -}}
+  {{- end -}}
+  {{- $sitep = dict -}}
+{{- end -}}
+{{- $pagep := $page.Params.img -}}
+{{- if not (reflect.IsMap $pagep) -}}
+  {{- if ne $pagep nil -}}
+    {{- partial "images/lib/warn.html" (dict
+        "key" (printf "images:warn:nonmap-config:%s" $page.RelPermalink)
+        "message" (printf "[images] Ignoring the img front matter value on %s: expected a map, got %v. To disable the module on this page, set img: { enable: false }." $page.RelPermalink $pagep)) -}}
+  {{- end -}}
+  {{- $pagep = dict -}}
+{{- end -}}
+
+{{- $where := printf "%v" $page.Path -}}
+{{- with $args.position -}}{{- $where = printf "%s" . -}}{{- end -}}
+
+{{- $opts := dict "where" $where -}}
+
+{{/* ---- Nested sections: per-key merge, defaults -> site -> page ---- */}}
+{{- $sections := dict -}}
+{{- range $name := slice "quality" "process_defaults" "placeholder" "lightbox" "theme" "remote" "hook" "gallery" -}}
+  {{- $m := index $defaults $name -}}
+  {{- if not (reflect.IsMap $m) -}}{{- $m = dict -}}{{- end -}}
+  {{- range $tier := slice $sitep $pagep -}}
+    {{- $tv := index $tier $name -}}
+    {{- if reflect.IsMap $tv -}}
+      {{- $m = merge $m $tv -}}
+    {{- else if ne $tv nil -}}
+      {{- partial "images/lib/warn.html" (dict
+          "key" (printf "images:warn:nonmap-section:%s" $name)
+          "message" (printf "[images] Ignoring the img.%s configuration value: expected a map, got %v. See %s" $name $tv $where)) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $sections = merge $sections (dict $name $m) -}}
+{{- end -}}
+
+{{/* ---- Bool keys cascading across all four tiers ---- */}}
+{{- $truthy := slice "true" "1" "yes" "on" -}}
+{{- range $k := slice "enable" "responsive" "sizes_auto" "credit_from_meta" -}}
+  {{- $v := index $defaults $k -}}
+  {{- if isset $sitep $k -}}{{- $v = index $sitep $k -}}{{- end -}}
+  {{- if isset $pagep $k -}}{{- $v = index $pagep $k -}}{{- end -}}
+  {{- if isset $args $k -}}{{- $v = index $args $k -}}{{- end -}}
+  {{- $opts = merge $opts (dict $k (in $truthy (lower (printf "%v" $v)))) -}}
+{{- end -}}
+
+{{/* ---- Slice keys (int ladders and format tokens), all four tiers.
+     A tier's value applies when it parses to at least one entry, or when it
+     is explicitly empty; a value whose every token is garbage collapses to
+     the tier below. ---- */}}
+{{- range $k := slice "widths" "densities" "formats" -}}
+  {{- $cur := slice -}}
+  {{- range $tier := slice $defaults $sitep $pagep $args -}}
+    {{- if isset $tier $k -}}
+      {{- $rawv := index $tier $k -}}
+      {{- $items := $rawv -}}
+      {{- if not (reflect.IsSlice $items) -}}
+        {{- $items = split (printf "%v" $items) "," -}}
+      {{- end -}}
+      {{- $parsed := slice -}}
+      {{- $hadTokens := false -}}
+      {{- range $it := $items -}}
+        {{- $t := trim (printf "%v" $it) " \t\n\r" -}}
+        {{- if ne $t "" -}}
+          {{- $hadTokens = true -}}
+          {{- if eq $k "formats" -}}
+            {{- $t = lower $t -}}
+            {{- if in (slice "webp" "avif") $t -}}
+              {{- $parsed = $parsed | append $t -}}
+            {{- else -}}
+              {{- partial "images/lib/warn.html" (dict
+                  "key" (printf "images:warn:unknown-format:%s" $t)
+                  "message" (printf "[images] Unknown format token %q was dropped (allowed: webp, avif). See %s" $t $where)) -}}
+            {{- end -}}
+          {{- else if findRE `^\d+$` $t -}}
+            {{- if gt (int $t) 0 -}}
+              {{- $parsed = $parsed | append (int $t) -}}
+            {{- else -}}
+              {{- partial "images/lib/warn.html" (dict
+                  "key" (printf "images:warn:nonpositive-int-token:%s:%s" $k $t)
+                  "message" (printf "[images] Ignoring non-positive %s entry %q (widths and densities must be at least 1). See %s" $k $t $where)) -}}
+            {{- end -}}
+          {{- else -}}
+            {{- partial "images/lib/warn.html" (dict
+                "key" (printf "images:warn:bad-int-token:%s:%s" $k $t)
+                "message" (printf "[images] Ignoring non-numeric %s entry %q. See %s" $k $t $where)) -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+      {{- if or $parsed (not $hadTokens) -}}
+        {{- $cur = $parsed -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $opts = merge $opts (dict $k $cur) -}}
+{{- end -}}
+
+{{/* ---- Enum and string keys cascading across all four tiers ---- */}}
+{{- $enumDefs := dict
+    "layout" (dict "allowed" (slice "constrained" "full" "fixed") "fallback" "constrained")
+    "loading" (dict "allowed" (slice "lazy" "eager") "fallback" "lazy") -}}
+{{- range $k, $def := $enumDefs -}}
+  {{- $v := printf "%v" (index $defaults $k | default $def.fallback) -}}
+  {{- if isset $sitep $k -}}{{- $v = printf "%v" (index $sitep $k) -}}{{- end -}}
+  {{- if isset $pagep $k -}}{{- $v = printf "%v" (index $pagep $k) -}}{{- end -}}
+  {{- if isset $args $k -}}{{- $v = printf "%v" (index $args $k) -}}{{- end -}}
+  {{- $v = lower (trim $v " \t\n\r") -}}
+  {{- if not (in $def.allowed $v) -}}
+    {{- if ne $v "" -}}
+      {{- partial "images/lib/warn.html" (dict
+          "key" (printf "images:warn:unknown-enum:%s:%s" $k $v)
+          "message" (printf "[images] Unknown %s value %q; falling back to %q. See %s" $k $v $def.fallback $where)) -}}
+    {{- end -}}
+    {{- $v = $def.fallback -}}
+  {{- end -}}
+  {{- $opts = merge $opts (dict $k $v) -}}
+{{- end -}}
+
+{{- $sizes := printf "%v" (index $defaults "sizes" | default "") -}}
+{{- if isset $sitep "sizes" -}}{{- $sizes = printf "%v" (index $sitep "sizes") -}}{{- end -}}
+{{- if isset $pagep "sizes" -}}{{- $sizes = printf "%v" (index $pagep "sizes") -}}{{- end -}}
+{{- if isset $args "sizes" -}}{{- $sizes = printf "%v" (index $args "sizes") -}}{{- end -}}
+{{- $opts = merge $opts (dict "sizes" (trim $sizes " \t\n\r")) -}}
+
+{{/* ---- Section-backed values with call-tier flat overrides ---- */}}
+{{- $pd := index $sections "process_defaults" -}}
+{{- $sectionEnums := dict
+    "anchor" (dict "section" $pd "skey" "anchor" "akey" "anchor" "allowed" (slice "topleft" "top" "topright" "left" "center" "right" "bottomleft" "bottom" "bottomright" "smart") "fallback" "Smart")
+    "resample" (dict "section" $pd "skey" "resample" "akey" "resample" "allowed" (slice "box" "lanczos" "catmullrom" "mitchellnetravali" "linear" "nearestneighbor") "fallback" "lanczos")
+    "hint" (dict "section" $pd "skey" "hint" "akey" "hint" "allowed" (slice "" "drawing" "icon" "photo" "picture" "text") "fallback" "")
+    "compression" (dict "section" $pd "skey" "compression" "akey" "compression" "allowed" (slice "" "lossy" "lossless") "fallback" "")
+    "placeholder" (dict "section" (index $sections "placeholder") "skey" "mode" "akey" "placeholder" "allowed" (slice "none" "dominant" "blur") "fallback" "none")
+    "theme_strategy" (dict "section" (index $sections "theme") "skey" "strategy" "akey" "theme_strategy" "allowed" (slice "media" "class") "fallback" "media") -}}
+{{- range $k, $def := $sectionEnums -}}
+  {{- $v := printf "%v" (index $def.section $def.skey | default $def.fallback) -}}
+  {{- if isset $args $def.akey -}}{{- $v = printf "%v" (index $args $def.akey) -}}{{- end -}}
+  {{- $probe := lower (trim $v " \t\n\r") -}}
+  {{- if in $def.allowed $probe -}}
+    {{- $v = trim $v " \t\n\r" -}}
+  {{- else -}}
+    {{- partial "images/lib/warn.html" (dict
+        "key" (printf "images:warn:unknown-enum:%s:%s" $k $probe)
+        "message" (printf "[images] Unknown %s value %q; falling back to %q. See %s" $k $probe $def.fallback $where)) -}}
+    {{- $v = $def.fallback -}}
+  {{- end -}}
+  {{- $opts = merge $opts (dict $k $v) -}}
+{{- end -}}
+
+{{- $bg := printf "%v" (index $pd "bg" | default "") -}}
+{{- if isset $args "bg" -}}{{- $bg = printf "%v" (index $args "bg") -}}{{- end -}}
+{{- $bg = trim $bg " \t\n\r" -}}
+{{- if and $bg (not (findRE `^#[0-9a-fA-F]{6}$` $bg)) -}}
+  {{- partial "images/lib/warn.html" (dict
+      "key" (printf "images:warn:bad-bg:%s" $bg)
+      "message" (printf "[images] Ignoring bg value %q: expected '#RRGGBB'. See %s" $bg $where)) -}}
+  {{- $bg = "" -}}
+{{- end -}}
+{{- $opts = merge $opts (dict "bg" $bg) -}}
+
+{{/* process: call tier only, resize default. */}}
+{{- $process := "resize" -}}
+{{- if isset $args "process" -}}
+  {{- $pv := lower (trim (printf "%v" (index $args "process")) " \t\n\r") -}}
+  {{- if in (slice "resize" "fit" "fill" "crop") $pv -}}
+    {{- $process = $pv -}}
+  {{- else -}}
+    {{- partial "images/lib/warn.html" (dict
+        "key" (printf "images:warn:unknown-enum:process:%s" $pv)
+        "message" (printf "[images] Unknown process value %q; falling back to \"resize\". See %s" $pv $where)) -}}
+  {{- end -}}
+{{- end -}}
+{{- $opts = merge $opts (dict "process" $process) -}}
+
+{{/* fetchpriority: call tier ONLY, no default. */}}
+{{- $fp := "" -}}
+{{- if isset $args "fetchpriority" -}}
+  {{- $fpv := lower (trim (printf "%v" (index $args "fetchpriority")) " \t\n\r") -}}
+  {{- if in (slice "high" "low" "auto") $fpv -}}
+    {{- $fp = $fpv -}}
+  {{- else -}}
+    {{- partial "images/lib/warn.html" (dict
+        "key" (printf "images:warn:unknown-enum:fetchpriority:%s" $fpv)
+        "message" (printf "[images] Unknown fetchpriority value %q (use high, low, or auto); the attribute is not emitted. See %s" $fpv $where)) -}}
+  {{- end -}}
+{{- end -}}
+{{- $opts = merge $opts (dict "fetchpriority" $fp) -}}
+
+{{/* ---- Section ints (with sensible shipped fallbacks) ---- */}}
+{{- $qsec := index $sections "quality" -}}
+{{- $quality := dict -}}
+{{- range $f, $qdef := dict "webp" 75 "avif" 60 "jpeg" 75 -}}
+  {{- $q := $qdef -}}
+  {{- $qraw := printf "%v" (index $qsec $f | default $qdef) -}}
+  {{- if and (findRE `^\d+$` $qraw) (ge (int $qraw) 1) (le (int $qraw) 100) -}}
+    {{- $q = int $qraw -}}
+  {{- else -}}
+    {{- partial "images/lib/warn.html" (dict
+        "key" (printf "images:warn:bad-int:quality.%s:%s" $f $qraw)
+        "message" (printf "[images] Ignoring quality.%s value %q (quality must be an integer from 1 to 100); using %d. See %s" $f $qraw $qdef $where)) -}}
+  {{- end -}}
+  {{- $quality = merge $quality (dict $f $q) -}}
+{{- end -}}
+{{- $opts = merge $opts (dict "quality" $quality) -}}
+
+{{- $phsec := index $sections "placeholder" -}}
+{{- $blurWidth := 20 -}}
+{{- $bwraw := printf "%v" (index $phsec "blur_width" | default 20) -}}
+{{- if and (findRE `^\d+$` $bwraw) (gt (int $bwraw) 0) -}}
+  {{- $blurWidth = int $bwraw -}}
+{{- else if ne $bwraw "20" -}}
+  {{- partial "images/lib/warn.html" (dict
+      "key" (printf "images:warn:bad-int:blur_width:%s" $bwraw)
+      "message" (printf "[images] Ignoring placeholder.blur_width value %q (must be a positive integer); using 20. See %s" $bwraw $where)) -}}
+{{- end -}}
+{{- $blurSigma := 3.0 -}}
+{{- $bsraw := printf "%v" (index $phsec "blur_sigma" | default 3) -}}
+{{- if findRE `^\d+(\.\d+)?$` $bsraw -}}{{- $blurSigma = float $bsraw -}}{{- end -}}
+{{- $opts = merge $opts (dict "blur_width" $blurWidth "blur_sigma" $blurSigma) -}}
+
+{{- $lbsec := index $sections "lightbox" -}}
+{{- $lbWidth := 2048 -}}
+{{- $lbraw := printf "%v" (index $lbsec "width" | default 2048) -}}
+{{- if and (findRE `^\d+$` $lbraw) (gt (int $lbraw) 0) -}}
+  {{- $lbWidth = int $lbraw -}}
+{{- else if ne $lbraw "2048" -}}
+  {{- partial "images/lib/warn.html" (dict
+      "key" (printf "images:warn:bad-int:lightbox.width:%s" $lbraw)
+      "message" (printf "[images] Ignoring lightbox.width value %q (must be a positive integer); using 2048. See %s" $lbraw $where)) -}}
+{{- end -}}
+{{- $opts = merge $opts (dict "lightbox_width" $lbWidth) -}}
+
+{{/* ---- Remote / hook / gallery sections ---- */}}
+{{- $rsec := index $sections "remote" -}}
+{{- $fetch := in $truthy (lower (printf "%v" (index $rsec "fetch" | default false))) -}}
+{{- if isset $args "fetch" -}}
+  {{- $fetch = in $truthy (lower (printf "%v" (index $args "fetch"))) -}}
+{{- end -}}
+{{- $opts = merge $opts (dict "remote_fetch" $fetch "remote_key" (printf "%v" ($args.remote_key | default ""))) -}}
+
+{{- $hsec := index $sections "hook" -}}
+{{- $opts = merge $opts (dict "hook_enable" (in $truthy (lower (printf "%v" (index $hsec "enable" | default true))))) -}}
+
+{{- $gsec := index $sections "gallery" -}}
+{{- $opts = merge $opts (dict
+    "gallery_lightbox" (in $truthy (lower (printf "%v" (index $gsec "lightbox" | default true))))
+    "gallery_crop" (trim (printf "%v" (index $gsec "crop" | default "")) " \t\n\r")) -}}
+
+{{/* ---- Call-only bools ---- */}}
+{{- range $k := slice "decorative" "priority" "lightbox" -}}
+  {{- $v := false -}}
+  {{- if isset $args $k -}}
+    {{- $v = in $truthy (lower (printf "%v" (index $args $k))) -}}
+  {{- end -}}
+  {{- $opts = merge $opts (dict $k $v) -}}
+{{- end -}}
+
+{{/* ---- Call-only ints ---- */}}
+{{- $qo := 0 -}}
+{{- if isset $args "quality" -}}
+  {{- $qov := printf "%v" (index $args "quality") -}}
+  {{- if and (findRE `^\d+$` $qov) (ge (int $qov) 1) (le (int $qov) 100) -}}
+    {{- $qo = int $qov -}}
+  {{- else -}}
+    {{- partial "images/lib/warn.html" (dict
+        "key" (printf "images:warn:bad-int:quality:%s" $qov)
+        "message" (printf "[images] Ignoring quality value %q (quality must be an integer from 1 to 100); using the per-format defaults. See %s" $qov $where)) -}}
+  {{- end -}}
+{{- end -}}
+{{- $opts = merge $opts (dict "quality_override" $qo) -}}
+
+{{- $densMax := 0 -}}
+{{- range $d := $opts.densities -}}
+  {{- if gt $d $densMax -}}{{- $densMax = $d -}}{{- end -}}
+{{- end -}}
+{{- $maxd := cond (gt $densMax 0) $densMax 2 -}}
+{{- if isset $args "max_density" -}}
+  {{- $mdv := printf "%v" (index $args "max_density") -}}
+  {{- if and (findRE `^\d+$` $mdv) (gt (int $mdv) 0) -}}
+    {{- $maxd = int $mdv -}}
+  {{- else -}}
+    {{- partial "images/lib/warn.html" (dict
+        "key" (printf "images:warn:bad-int:max_density:%s" $mdv)
+        "message" (printf "[images] Ignoring max_density value %q (must be a positive integer); using %d. See %s" $mdv $maxd $where)) -}}
+  {{- end -}}
+{{- end -}}
+{{- $opts = merge $opts (dict "max_density" $maxd) -}}
+
+{{/* ---- Dimensions ---- */}}
+{{- $dims := partial "images/resolve/dims.html" (dict "width" $args.width "height" $args.height) -}}
+{{- if not $dims.ok -}}
+  {{- partial "images/lib/warn.html" (dict
+      "key" (printf "images:warn:bad-dims:%s" $where)
+      "message" (printf "[images] Ignoring a non-numeric width/height value (got width=%v height=%v). See %s" $args.width $args.height $where)) -}}
+{{- end -}}
+{{- $opts = merge $opts (dict "width" $dims.width "height" $dims.height) -}}
+
+{{/* ---- Call-only strings ---- */}}
+{{- range $k := slice "alt" "caption" "credit" "license" "license_url" "class" "id" "dark" -}}
+  {{- $v := "" -}}
+  {{- if isset $args $k -}}
+    {{- $v = trim (printf "%v" (index $args $k)) " \t\n\r" -}}
+  {{- end -}}
+  {{- $opts = merge $opts (dict $k $v) -}}
+{{- end -}}
+
+{{- return $opts -}}

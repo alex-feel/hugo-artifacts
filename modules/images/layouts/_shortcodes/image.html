@@ -1,0 +1,68 @@
+{{/*
+  Renders one build-time optimized, responsive, accessible image inside
+  content:
+
+    {{< image src="photo.jpg" alt="A described scene" >}}
+    {{< image "photo.jpg" "A described scene" >}}
+    {{< image src="photo.jpg" alt="..." caption="A *fine* view" credit="Photo: Jane Doe" >}}
+    {{< image src="hero.jpg" alt="..." priority="true" layout="full" >}}
+    {{< image src="avatar.png" alt="..." layout="fixed" width="96" >}}
+    {{< image src="photo.jpg" alt="..." dark="photo-dark.jpg" lightbox="true" >}}
+
+  This shortcode is a thin wrapper: it forwards only the parameters that are
+  actually present to the images/image.html partial, so omitted parameters
+  fall through the module's cascade (page front matter img: map, then
+  [params.img], then the shipped defaults). The rendered markup is identical
+  to the partial's.
+
+  Parameters (named, with a two-positional shorthand):
+  - src (positional 0, or src=): the image source -- a page-bundle resource,
+    an assets/ path, a /static path, or a URL. REQUIRED.
+  - alt (positional 1, or alt=): alternative text. REQUIRED unless
+    decorative="true". Positional alt keeps the shorthand accessible, since
+    alt is a call-tier-only key and never cascades from a lower tier.
+  - decorative: emit the explicit empty alt of a purely decorative image.
+  - caption, credit, license, license_url: figure surfaces (inline Markdown
+    in caption and credit).
+  - credit_from_meta: when credit is empty, fall back to the original
+    image's IPTC Credit/By-line metadata.
+  - width, height ("640" or "640px"), process (resize|fit|fill|crop),
+    quality, anchor, resample, bg, hint, compression: derivative geometry
+    and spec options.
+  - layout (constrained|full|fixed), widths ("480,800"), max_density,
+    sizes, sizes_auto, formats ("avif,webp"), responsive: responsive
+    behavior.
+  - loading (lazy|eager), priority, fetchpriority: loading policy.
+  - placeholder (none|dominant|blur), lightbox, dark, theme_strategy
+    (media|class): feature surfaces.
+  - fetch, remote_key: build-time remote fetch opt-in.
+  - enable: per-call kill switch.
+  - class: extra class(es) appended to the <img> element.
+  - id: id attribute on the root element.
+
+  Validation: missing src or alt (without decorative), decorative combined
+  with a non-empty alt or with lightbox, layout=fixed without width, and
+  process=fit/fill/crop without height are build-failing authoring mistakes
+  (errorf with this call's position). Everything environmental degrades with
+  one deduplicated warning.
+
+  A single call uses EITHER positional arguments (src, then optional alt) OR
+  named arguments -- Hugo forbids mixing the two conventions in one call.
+*/}}
+
+{{- $args := dict "page" .Page "position" (printf "%s" .Position) "surface" "shortcode" -}}
+
+{{- if .IsNamedParams -}}
+  {{- range $k := slice "src" "alt" "decorative" "dark" "caption" "credit" "credit_from_meta" "license" "license_url" "width" "height" "process" "quality" "anchor" "resample" "bg" "hint" "compression" "layout" "widths" "max_density" "sizes" "sizes_auto" "formats" "loading" "priority" "fetchpriority" "placeholder" "lightbox" "theme_strategy" "fetch" "remote_key" "responsive" "enable" "class" "id" -}}
+    {{- if isset $.Params $k -}}
+      {{- $args = merge $args (dict $k ($.Get $k)) -}}
+    {{- end -}}
+  {{- end -}}
+{{- else if gt (len .Params) 0 -}}
+  {{- $args = merge $args (dict "src" (.Get 0)) -}}
+  {{- if gt (len .Params) 1 -}}
+    {{- $args = merge $args (dict "alt" (.Get 1)) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- partial "images/image.html" $args -}}

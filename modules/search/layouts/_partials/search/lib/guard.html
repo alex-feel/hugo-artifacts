@@ -1,0 +1,34 @@
+{{/*
+  search/lib/guard.html -- INTERNAL (lib tier).
+
+  Purpose: warns once about configuration tiers of the wrong shape. Both
+  config tiers must be maps; any other type is discarded with a warning
+  instead of crashing the field accesses downstream -- the never-break
+  contract covers config of the wrong shape too. ONE deliberate carve-out:
+  a page front matter value of bare `search: false` (bool or the strings
+  "false"/"0"/"no"/"off") is NOT a shape error; it is the documented
+  shorthand for the per-page indexing opt-out and is treated as
+  search.exclude: true elsewhere.
+
+  Expected context: the current Page.
+
+  Return value: none. Side effect: at most one warnf per offending tier.
+*/}}
+
+{{- $page := . -}}
+{{- $sitep := site.Params.search -}}
+{{- if not (reflect.IsMap $sitep) -}}
+  {{- if ne $sitep nil -}}
+    {{- partial "search/lib/warn.html" (dict
+        "key" "search:warn:nonmap-config:site"
+        "message" (printf "[search] Ignoring params.search: expected a map, got %v. To disable the module site-wide, set params.search.enable = false." $sitep)) -}}
+  {{- end -}}
+{{- end -}}
+{{- $pagep := $page.Params.search -}}
+{{- if not (reflect.IsMap $pagep) -}}
+  {{- if and (ne $pagep nil) (not (in (slice "false" "0" "no" "off") (lower (printf "%v" $pagep)))) -}}
+    {{- partial "search/lib/warn.html" (dict
+        "key" (printf "search:warn:nonmap-config:%s" $page.RelPermalink)
+        "message" (printf "[search] Ignoring the search front matter value on %s: expected a map (or the bare `search: false` opt-out shorthand), got %v. To suppress search surfaces on this page, set search.disable: true." $page.RelPermalink $pagep)) -}}
+  {{- end -}}
+{{- end -}}

@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="{{ site.Language.Locale }}">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ .Title }} | {{ site.Title }}</title>
+  </head>
+  <body>
+    <header>
+      {{/* The heading call-site key must render inside the dialog too. */}}
+      {{ partial "search/modal.html" (dict "page" . "heading" "Palette search") }}
+    </header>
+    <main>
+      {{ block "main" . }}{{ end }}
+    </main>
+  </body>
+</html>

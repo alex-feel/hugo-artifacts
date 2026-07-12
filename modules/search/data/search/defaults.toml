@@ -1,0 +1,150 @@
+# Consumer-facing defaults for the search module.
+#
+# Every key can be overridden, from lowest to highest precedence:
+#   1. this file (module defaults)
+#   2. site config:       [params.search]
+#   3. page front matter: search: (map)
+#   4. call-site args:    {{ partial "search/page.html" (dict "page" . "<key>" <value>) }}
+# Presence wins at every tier, so an explicit false or empty value overrides
+# the tier below it. Keys marked INDEX-TIME shape the emitted site-wide index
+# and are honored at tiers 1 and 2 only; keys marked BACKEND-SCOPED shape the
+# shared client-side index build (one backend per page) and are likewise
+# honored at tiers 1 and 2 only.
+
+# --- Scope (INDEX-TIME) ---
+
+# Sections to index (slice or comma-separated string of top-level section
+# names or nested path prefixes like "docs/guides"; entries match
+# case-insensitively). Empty: index ALL regular pages. The sentinel
+# ["mainSections"] scopes to site.MainSections (which itself falls back to
+# the single largest top-level section when the site does not configure
+# mainSections).
+sections = []
+
+# Taxonomies serialized into each record and matched during search. Every
+# listed taxonomy becomes a client-side search field and accepts a
+# boost.<name> key. Display contract: tags and categories have result
+# template slots; any other listed taxonomy is matched but not displayed.
+taxonomies = ["tags", "categories"]
+
+# --- Record shape (INDEX-TIME) ---
+
+# Body strategy: "full" (plain text, truncated), "summary" (page summary
+# only), or "none" (title/description/keywords/taxonomies only).
+content = "full"
+
+# Truncation bound (in characters) for the indexed body text; 0 = unlimited.
+content_max_length = 8000
+
+# Truncation bound (in characters) for the stored result summary.
+summary_max_length = 240
+
+# Remove fenced/indented code blocks from the indexed body text.
+strip_code_blocks = true
+
+# Emit heading-level sub-records (anchor deep links into long pages).
+# Raises index size ~1.4x; see the README Performance section.
+headings = false
+
+# Deepest heading level emitted when headings = true (2 = h2 only).
+headings_max_level = 3
+
+# --- Matching and ranking ---
+
+# Minimum query length (in characters) before a search runs.
+min_query_length = 2
+
+# Debounce for search-as-you-type, in milliseconds.
+debounce_ms = 220
+
+# Typo tolerance: maximum edit distance as a fraction of term length
+# (0 disables). Exact and prefix matches always rank above fuzzy ones.
+fuzzy = 0.15
+
+# Prefix-match the final query term (search-as-you-type completion).
+prefix = true
+
+# Language-aware stemming (English Porter2 + Russian Snowball), applied
+# symmetrically to indexing and querying (BACKEND-SCOPED).
+stemming = true
+
+# Drop the module's conservative built-in per-language stopword lists
+# by setting this to false (BACKEND-SCOPED).
+stopwords = true
+
+# Extra stopwords (slice or comma-separated string), added to the built-ins
+# and applied symmetrically (BACKEND-SCOPED).
+stopwords_extra = []
+
+# Per-field relevance boosts (BM25 field weighting). Dotted keys, NOT a
+# [boost] table: a TOML table header claims every key-value pair that
+# follows it until the next header, so a mid-file [boost] table would
+# silently swallow all the flat keys below into boost.* and kill them.
+boost.title = 5.0
+boost.headings = 3.0
+boost.description = 2.0
+boost.keywords = 2.0
+boost.tags = 1.5
+boost.content = 1.0
+
+# --- Display toggles (delivered to the client as data-* configuration) ---
+
+# Show each result's description/summary line.
+show_description = true
+
+# Show each result's image thumbnail. Also INDEX-TIME: the image field is
+# emitted into the index only when enabled here or in [params.search].
+show_image = false
+
+# Show each result's tags.
+show_tags = false
+
+# Show each result's categories.
+show_categories = false
+
+# Show each result's date as a <time datetime> element.
+show_dates = true
+
+# Group results by top-level section, labeled with the section title.
+group_by_section = false
+
+# --- Surfaces ---
+
+# Path of the consumer-created dedicated search page (resolved per language
+# via site.GetPage; form submissions and "see all results" links target it).
+page_path = "/search"
+
+# Results shown in the modal and inline dropdowns before "see all results".
+results_limit = 8
+
+# Results per "show more" chunk on the dedicated search page.
+page_size = 10
+
+# Modal toggle hotkey. Grammar (case-insensitive): zero or more modifiers
+# from "mod", "ctrl", "alt", "shift" joined with "+", ending in exactly one
+# key -- a single printable character or a named key like "f1"; "mod" means
+# Ctrl on Windows/Linux and Cmd on macOS. Examples: "mod+k", "ctrl+shift+p",
+# "k". Empty string disables the hotkey entirely; an unparseable value warns
+# once (search:warn:bad-hotkey) and disables it.
+hotkey = "mod+k"
+
+# Also open the modal on "/" (off by default: single-character shortcuts
+# need an explicit opt-in and are suppressed while typing in any field).
+hotkey_slash = false
+
+# --- Runtime ---
+
+# Build and query the index in a Web Worker (an automatic main-thread
+# fallback engages when worker construction fails). Configures the shared
+# per-page backend (BACKEND-SCOPED).
+worker = true
+
+# Serialized-index caching in Cache Storage: "auto" (enabled once the index
+# payload is large enough to pay off), true, or false. Configures the shared
+# per-page backend (BACKEND-SCOPED).
+cache = "auto"
+
+# --- Kill switch ---
+
+# Master switch: false disables every surface and empties the index.
+enable = true

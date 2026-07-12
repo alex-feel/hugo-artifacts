@@ -1,0 +1,64 @@
+{{/*
+  images/resolve/placeholder.html -- IDEMPOTENT-EFFECTFUL (resolver tier).
+
+  Purpose: derives the JS-free placeholder data for a processable source.
+  This partial generates its own probe/tiny derivatives (the only image
+  pipeline site besides resolve/srcset.html) and returns pure data; the
+  central renderer folds the attributes and the style declaration into the
+  root element. The values crossing into style are OBJECTIVE MEASURED DATA
+  about the image (a sampled color, the image's own pixels), never design
+  decisions -- presentation stays 100 percent consumer CSS, and with no
+  consumer CSS the placeholders are inert attributes.
+
+  Modes:
+  - "dominant": downscale to a 100px-wide probe first (color extraction is
+    pixel data, and downscaling is the documented speed idiom; orientation
+    is irrelevant to color sampling), read the most dominant color, and emit
+    data-dominant-color, data-dominant-luminance (two decimals, so consumer
+    CSS/JS can pick contrasting overlays), and the
+    --image-dominant-color custom property.
+  - "blur": ONE chained cached transformation -- AutoOrient, then a tiny
+    WebP resize, then a Gaussian blur (filters apply left to right;
+    AutoOrient is chained because the preview's shape must match the
+    oriented image) -- inlined as a base64 data URI in the
+    --image-placeholder custom property.
+
+  Context (dict):
+  - .resource (Resource) The ORIGINAL processable resource.
+  - .mode     (string)   "dominant" | "blur".
+  - .opts     (dict)     Cascaded options (blur_width, blur_sigma).
+
+  Return value: dict
+  - attrs (dict)   data-* attribute names to values (empty on failure).
+  - style (string) The custom-property declaration for the root style
+                   attribute (safeCSS-ready), "" when none.
+
+  One terminal return.
+*/}}
+
+{{- $resource := .resource -}}
+{{- $mode := .mode -}}
+{{- $opts := .opts -}}
+
+{{- $attrs := dict -}}
+{{- $style := "" -}}
+
+{{- if eq $mode "dominant" -}}
+  {{- $probe := $resource.Resize "100x" -}}
+  {{- with $probe.Colors -}}
+    {{- $c := index . 0 -}}
+    {{- $attrs = dict
+        "data-placeholder" "dominant"
+        "data-dominant-color" $c.ColorHex
+        "data-dominant-luminance" (printf "%.2f" $c.Luminance) -}}
+    {{- $style = printf "--image-dominant-color: %s" $c.ColorHex -}}
+  {{- end -}}
+{{- else if eq $mode "blur" -}}
+  {{- $spec := printf "resize %dx webp q20" $opts.blur_width -}}
+  {{- $blurred := $resource.Filter images.AutoOrient (images.Process $spec) (images.GaussianBlur $opts.blur_sigma) -}}
+  {{- $uri := printf "data:image/webp;base64,%s" ($blurred.Content | base64Encode) -}}
+  {{- $attrs = dict "data-placeholder" "blur" -}}
+  {{- $style = printf "--image-placeholder: url('%s')" $uri -}}
+{{- end -}}
+
+{{- return (dict "attrs" $attrs "style" $style) -}}

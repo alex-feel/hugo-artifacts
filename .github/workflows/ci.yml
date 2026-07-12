@@ -68,6 +68,8 @@ jobs:
             modules/idb
             modules/seo
             modules/social-share
+            modules/search
+            modules/images
             shortcodes/github-repo
             shortcodes/hf-space
             shortcodes/callout
@@ -75,6 +77,8 @@ jobs:
             shortcodes/arxiv-paper
             modules/pwa/test/fixture
             modules/social-share/test/fixture
+            modules/search/test/fixture
+            modules/images/test/fixture
           )
           for leaf in "${leaves[@]}"; do
             echo "::group::go mod edit -fmt -print -- ${leaf}/go.mod"
@@ -86,15 +90,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # These leaf modules have no module imports beyond
-          # [module.hugoVersion], so they can be graphed standalone without
-          # any [module.replacements] configuration. Keep this list in sync
+          # These leaf modules graph standalone: any module imports they
+          # declare resolve over the Go module proxy at real tags (no
+          # placeholder pseudo-versions), so no [module.replacements]
+          # configuration is needed. Keep this list in sync
           # with the leaf module set. The pwa/workbox/idb chain is excluded:
           # it transitively depends on github.com/GoogleChrome/workbox or
           # github.com/jakearchibald/idb (both non-Go-aware), which cannot be
           # resolved by Hugo's module fetcher without consumer-side
           # replacements documented in modules/pwa/README.md Installation.
-          for m in modules/seo modules/social-share shortcodes/github-repo shortcodes/hf-space shortcodes/callout shortcodes/youtube-embed shortcodes/arxiv-paper; do
+          for m in modules/seo modules/social-share modules/search modules/images shortcodes/github-repo shortcodes/hf-space shortcodes/callout shortcodes/youtube-embed shortcodes/arxiv-paper; do
             echo "::group::hugo mod graph -- ${m}"
             ( cd "${m}" && hugo mod graph )
             echo "::endgroup::"

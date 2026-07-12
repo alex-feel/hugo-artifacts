@@ -1,0 +1,74 @@
+{{/*
+  images/src.html -- PUBLIC value-returning partial (renderer tier).
+
+  Purpose: feeds a processed image URL to consumer-owned styling, for
+  example a hero background:
+
+      {{ $bg := partial "images/src.html" (dict "page" . "src" "hero.jpg" "width" 1600) }}
+      <div class="hero" style="background-image: url('{{ $bg.url }}')">...</div>
+
+  It takes the same dict vocabulary as images/image.html (at minimum "page"
+  and "src", honoring the width/process/quality/format cascade keys),
+  resolves through the identical config/source/plan path, and RETURNS the
+  TOP fallback-chain derivative: post-orientation dimensions, the
+  content-hashed URL, and the derivative's MIME type. The consumer owns
+  everything visual; the module emits no markup and no style here.
+
+  Degradation: on unprocessable or passthrough sources the dict carries the
+  passthrough URL with zero-value dimensions and the source's MIME type when
+  known; on a missing source it carries the raw src after one deduplicated
+  warning. A missing page/src is errorf (mis-wired public entry).
+
+  Return value: dict
+  - url    (string) The derivative's .RelPermalink (or the passthrough URL).
+  - width  (int)    Post-orientation derivative width (0 on passthrough).
+  - height (int)    Post-orientation derivative height (0 on passthrough).
+  - type   (string) MIME type ("image/webp", ...; "" when unknown).
+
+  One terminal return.
+*/}}
+
+{{- $args := . -}}
+{{- $page := "" -}}
+{{- if reflect.IsMap $args -}}
+  {{- $page = $args.page -}}
+{{- end -}}
+
+{{- $result := dict "url" "" "width" 0 "height" 0 "type" "" -}}
+
+{{- if or (not (reflect.IsPage $page)) (not $args.src) -}}
+  {{- errorf "[images] images/src.html must be called with an options dict carrying at least the current Page and a source: {{ partial \"images/src.html\" (dict \"page\" . \"src\" \"photo.jpg\") }}." -}}
+{{- else -}}
+  {{- $opts := partial "images/config.html" (dict "page" $page "args" $args) -}}
+  {{- $source := partial "images/resolve/source.html" (dict "page" $page "src" $args.src) -}}
+  {{- $source = partial "images/resolve/remote.html" (dict "page" $page "source" $source "opts" $opts) -}}
+  {{- if $source.missing -}}
+    {{- partial "images/lib/warn.html" (dict
+        "key" (printf "images:warn:missing:%s" $source.url)
+        "message" (printf "[images] Image %q could not be resolved as a page resource, a global resource, or a static path; returning the raw src. See %s" $source.url $opts.where)) -}}
+    {{- $result = merge $result (dict "url" $source.url) -}}
+  {{- else if and $source.processable $opts.enable -}}
+    {{- $plan := partial "images/resolve/plan.html" (dict "source" $source "opts" $opts "overrides" (dict) "eager" true) -}}
+    {{- $fbChain := dict -}}
+    {{- range $chain := $plan.chains -}}
+      {{- if $chain.fallback -}}{{- $fbChain = $chain -}}{{- end -}}
+    {{- end -}}
+    {{- $res := partial "images/resolve/srcset.html" (dict
+        "resource" $source.resource
+        "candidates" $plan.candidates
+        "process" $plan.process
+        "ratio" $plan.ratio
+        "suffix" $fbChain.suffix) -}}
+    {{- $result = dict
+        "url" $res.top.RelPermalink
+        "width" $res.top.Width
+        "height" $res.top.Height
+        "type" $fbChain.mime -}}
+  {{- else -}}
+    {{- $mime := "" -}}
+    {{- with $source.resource -}}{{- $mime = printf "%s" .MediaType.Type -}}{{- end -}}
+    {{- $result = merge $result (dict "url" $source.url "type" $mime) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $result -}}

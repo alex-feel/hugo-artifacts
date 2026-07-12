@@ -1,0 +1,333 @@
+{{/*
+  search/config.html -- INTERNAL (resolver tier).
+
+  Purpose: resolves the module's entire configuration through the four-tier
+  cascade, so every surface renders from one consistent dict and no
+  downstream partial re-derives a value. Precedence, highest first:
+  call-site args > page front matter (search map) > site params
+  ([params.search]) > data/search/defaults.toml. Presence wins at every tier
+  (isset, not truthiness), so an explicit false or empty value overrides the
+  tier below it. INDEX-TIME and BACKEND-SCOPED keys (sections, taxonomies,
+  content, content_max_length, summary_max_length, strip_code_blocks,
+  headings, headings_max_level, stemming, stopwords, stopwords_extra,
+  worker, cache, enable) are honored at the defaults and site tiers only:
+  the emitted index is site-wide and all surfaces on a page share one
+  client-side backend, so those keys cannot vary per page or per surface.
+
+  Expected context (dict):
+  - .page      (Page) - The current page (already validated by the caller).
+  - .args      (map)  - Call-site arguments (possibly empty).
+  - .site_only (bool) - True when called from the index template: resolves
+    the defaults and site tiers only and skips every surface-scoped step
+    (index URL, search-page resolution, script resources, i18n strings).
+
+  Return value: one dict with every key the surfaces and the index template
+  need (resolved cascade keys, normalized types, hotkey_tokens, index_url,
+  page_url, page_found, worker_url, script resource, i18n map, where). One
+  terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $args := .args | default dict -}}
+{{- $siteOnly := .site_only | default false -}}
+
+{{- $data := index hugo.Data "search" | default dict -}}
+{{- $defaults := index $data "defaults" | default dict -}}
+{{- if not $defaults -}}
+  {{- partial "search/lib/warn.html" (dict
+      "key" "search:warn:missing-defaults"
+      "message" "[search] data/search/defaults.toml was not found; the module is not mounted correctly, so only explicitly configured values apply.") -}}
+{{- end -}}
+
+{{/* Non-map tier values were already warned about by the entry partials;
+     here they just collapse so the isset chains below stay safe. A page
+     front matter value of bare `search: false` (or its string forms) is the
+     documented per-page indexing opt-out shorthand, not a shape error. */}}
+{{- $sitep := site.Params.search -}}
+{{- if not (reflect.IsMap $sitep) -}}{{- $sitep = dict -}}{{- end -}}
+{{- $pagep := dict -}}
+{{- if not $siteOnly -}}
+  {{- $pagep = $page.Params.search -}}
+  {{- if not (reflect.IsMap $pagep) -}}
+    {{- if in (slice "false" "0" "no" "off") (lower (printf "%v" $pagep)) -}}
+      {{- $pagep = dict "exclude" true -}}
+    {{- else -}}
+      {{- $pagep = dict -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Uniform presence-wins cascade. Site-scoped keys stop at the site tier;
+     the remaining keys run through all four tiers. */}}
+{{- $cascade := dict -}}
+{{- $siteScoped := slice "sections" "taxonomies" "content" "content_max_length" "summary_max_length" "strip_code_blocks" "headings" "headings_max_level" "stemming" "stopwords" "stopwords_extra" "worker" "cache" "enable" -}}
+{{- $allTiers := slice "min_query_length" "debounce_ms" "fuzzy" "prefix" "show_description" "show_image" "show_tags" "show_categories" "show_dates" "group_by_section" "page_path" "results_limit" "page_size" "hotkey" "hotkey_slash" -}}
+{{- range $k := $siteScoped -}}
+  {{- $v := index $defaults $k -}}
+  {{- if isset $sitep $k -}}{{- $v = index $sitep $k -}}{{- end -}}
+  {{- if ne $v nil -}}{{- $cascade = merge $cascade (dict $k $v) -}}{{- end -}}
+{{- end -}}
+{{- range $k := $allTiers -}}
+  {{- $v := index $defaults $k -}}
+  {{- if isset $sitep $k -}}{{- $v = index $sitep $k -}}{{- end -}}
+  {{- if not $siteOnly -}}
+    {{- if isset $pagep $k -}}{{- $v = index $pagep $k -}}{{- end -}}
+    {{- if isset $args $k -}}{{- $v = index $args $k -}}{{- end -}}
+  {{- end -}}
+  {{- if ne $v nil -}}{{- $cascade = merge $cascade (dict $k $v) -}}{{- end -}}
+{{- end -}}
+
+{{/* show_image is a display toggle at every tier, but the image field is
+     emitted into the site-wide index only when the defaults or site tier
+     enables it; the index template resolves this partial with site_only. */}}
+
+{{/* Diagnostic location for the warnings below: the shortcode's .Position
+     when the resolver was reached through a call site, else the page path
+     of the first caller to resolve the offending value. */}}
+{{- $where := printf "%v" $page.Path -}}
+{{- with $args.position -}}{{- $where = printf "%s" . -}}{{- end -}}
+
+{{/* Booleans: any tier may deliver a real bool, a string, or an integer
+     form; stringify once so every shape compares alike. */}}
+{{- $bools := dict -}}
+{{- range $k := slice "strip_code_blocks" "headings" "stemming" "stopwords" "prefix" "show_description" "show_image" "show_tags" "show_categories" "show_dates" "group_by_section" "hotkey_slash" "worker" "enable" -}}
+  {{- $b := false -}}
+  {{- if isset $cascade $k -}}
+    {{- $b = in (slice "true" "1" "yes" "on") (lower (printf "%v" (index $cascade $k))) -}}
+  {{- end -}}
+  {{- $bools = merge $bools (dict $k $b) -}}
+{{- end -}}
+
+{{/* cache is tri-state: "auto", true, or false. */}}
+{{- $cache := "auto" -}}
+{{- $cacheRaw := lower (printf "%v" ($cascade.cache | default "auto")) -}}
+{{- if in (slice "true" "1" "yes" "on") $cacheRaw -}}{{- $cache = "true" -}}
+{{- else if in (slice "false" "0" "no" "off") $cacheRaw -}}{{- $cache = "false" -}}
+{{- end -}}
+
+{{/* Integers and the fuzzy fraction: guarded casts so a malformed value
+     degrades to the shipped default instead of failing the build. */}}
+{{- $ints := dict -}}
+{{- range $k := slice "content_max_length" "summary_max_length" "headings_max_level" "min_query_length" "debounce_ms" "results_limit" "page_size" -}}
+  {{- $n := 0 -}}
+  {{- $r := try (int (float (printf "%v" (index $cascade $k | default 0)))) -}}
+  {{- if $r.Err -}}
+    {{- partial "search/lib/warn.html" (dict
+        "key" (printf "search:warn:bad-number:%s" $k)
+        "message" (printf "[search] Ignoring the %s value %v (first resolved at %s): expected a number; the shipped default applies." $k (index $cascade $k) $where)) -}}
+    {{- $n = int (float (printf "%v" (index $defaults $k | default 0))) -}}
+  {{- else -}}
+    {{- $n = $r.Value -}}
+  {{- end -}}
+  {{- $ints = merge $ints (dict $k $n) -}}
+{{- end -}}
+{{- $fuzzy := 0.0 -}}
+{{- $fr := try (float (printf "%v" ($cascade.fuzzy | default 0))) -}}
+{{- if $fr.Err -}}
+  {{- partial "search/lib/warn.html" (dict
+      "key" "search:warn:bad-number:fuzzy"
+      "message" (printf "[search] Ignoring the fuzzy value %v (first resolved at %s): expected a number; the shipped default applies." $cascade.fuzzy $where)) -}}
+  {{- $fuzzy = float (printf "%v" ($defaults.fuzzy | default 0)) -}}
+{{- else -}}
+  {{- $fuzzy = $fr.Value -}}
+{{- end -}}
+
+{{/* Body strategy: full, summary, or none; anything else degrades to full. */}}
+{{- $content := lower (trim (printf "%v" ($cascade.content | default "full")) " ") -}}
+{{- if not (in (slice "full" "summary" "none") $content) -}}{{- $content = "full" -}}{{- end -}}
+
+{{/* Section allow-list: slice or comma-separated string; each entry is
+     trimmed, lowercased (Page.Path is always lowercase, so a capitalized
+     entry like "Blog" would otherwise silently empty the scope), stripped
+     of one optional leading and one optional trailing slash, and prefixed
+     with "/" (docs, /docs, docs/, and Docs all normalize to /docs). The
+     sentinel "mainSections" (any case) expands to site.MainSections. */}}
+{{- $rawSections := $cascade.sections | default (slice) -}}
+{{- if not (reflect.IsSlice $rawSections) -}}
+  {{- $rawSections = split (printf "%v" $rawSections) "," -}}
+{{- end -}}
+{{- $sections := slice -}}
+{{- range $rawSections -}}
+  {{- $e := lower (trim (printf "%v" .) " \t\n\r") -}}
+  {{- if eq $e "mainsections" -}}
+    {{- range site.MainSections -}}
+      {{- $sections = $sections | append (printf "/%s" (lower (strings.TrimSuffix "/" (strings.TrimPrefix "/" .)))) -}}
+    {{- end -}}
+  {{- else -}}
+    {{- with strings.TrimSuffix "/" (strings.TrimPrefix "/" $e) -}}
+      {{- $sections = $sections | append (printf "/%s" .) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Taxonomies: slice or comma-separated string of taxonomy plural names. */}}
+{{- $rawTax := $cascade.taxonomies | default (slice) -}}
+{{- if not (reflect.IsSlice $rawTax) -}}
+  {{- $rawTax = split (printf "%v" $rawTax) "," -}}
+{{- end -}}
+{{- $taxonomies := slice -}}
+{{- range $rawTax -}}
+  {{- with trim (printf "%v" .) " \t\n\r" -}}
+    {{- $taxonomies = $taxonomies | append . -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Extra stopwords: slice or comma-separated string, lowercased so they
+     match the client pipeline's normalized terms. */}}
+{{- $rawStop := $cascade.stopwords_extra | default (slice) -}}
+{{- if not (reflect.IsSlice $rawStop) -}}
+  {{- $rawStop = split (printf "%v" $rawStop) "," -}}
+{{- end -}}
+{{- $stopwordsExtra := slice -}}
+{{- range $rawStop -}}
+  {{- with lower (trim (printf "%v" .) " \t\n\r") -}}
+    {{- $stopwordsExtra = $stopwordsExtra | append . -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Per-field boosts: maps merge across tiers, so a tier overriding one
+     field keeps the shipped weights for the rest. */}}
+{{- $boost := dict -}}
+{{- with $defaults.boost -}}{{- if reflect.IsMap . -}}{{- $boost = merge $boost . -}}{{- end -}}{{- end -}}
+{{- with $sitep.boost -}}{{- if reflect.IsMap . -}}{{- $boost = merge $boost . -}}{{- end -}}{{- end -}}
+{{- if not $siteOnly -}}
+  {{- with $pagep.boost -}}{{- if reflect.IsMap . -}}{{- $boost = merge $boost . -}}{{- end -}}{{- end -}}
+  {{- with $args.boost -}}{{- if reflect.IsMap . -}}{{- $boost = merge $boost . -}}{{- end -}}{{- end -}}
+{{- end -}}
+
+{{/* Hotkey grammar (case-insensitive): zero or more modifiers from mod,
+     ctrl, alt, shift joined with "+", ending in exactly one key -- a single
+     printable character or a named key like f1. Empty disables the hotkey;
+     an unparseable value warns once and disables it. hotkey_tokens carries
+     the parsed tokens for the server-rendered kbd hints. */}}
+{{- $hotkeyRaw := trim (printf "%v" ($cascade.hotkey | default "")) " " -}}
+{{- $hotkey := "" -}}
+{{- $hotkeyTokens := slice -}}
+{{- if $hotkeyRaw -}}
+  {{- $tokens := slice -}}
+  {{- $valid := true -}}
+  {{- $parts := split (lower $hotkeyRaw) "+" -}}
+  {{- $count := len $parts -}}
+  {{- range $i, $t := $parts -}}
+    {{- $t = trim $t " " -}}
+    {{- if lt $i (sub $count 1) -}}
+      {{- if not (in (slice "mod" "ctrl" "alt" "shift") $t) -}}{{- $valid = false -}}{{- end -}}
+    {{- else -}}
+      {{- if not (or (eq (strings.RuneCount $t) 1) (findRE `^f([1-9]|1[0-2])$` $t)) -}}{{- $valid = false -}}{{- end -}}
+    {{- end -}}
+    {{- if not $t -}}{{- $valid = false -}}{{- end -}}
+    {{- $tokens = $tokens | append $t -}}
+  {{- end -}}
+  {{- if $valid -}}
+    {{- $hotkey = delimit $tokens "+" -}}
+    {{- $hotkeyTokens = $tokens -}}
+  {{- else -}}
+    {{- partial "search/lib/warn.html" (dict
+        "key" "search:warn:bad-hotkey"
+        "message" (printf "[search] Ignoring the hotkey value %q (first resolved at %s): expected zero or more modifiers from mod, ctrl, alt, shift joined with \"+\", ending in one key (a single character or a named key like f1), for example \"mod+k\". The hotkey is disabled." $hotkeyRaw $where)) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $pagePath := trim (printf "%v" ($cascade.page_path | default "/search")) " " -}}
+{{- if not $pagePath -}}{{- $pagePath = "/search" -}}{{- end -}}
+
+{{- $enable := $bools.enable -}}
+
+{{/* ---- Surface-scoped resolution (skipped for the index template) ---- */}}
+{{- $indexURL := "" -}}
+{{- $pageURL := "" -}}
+{{- $pageFound := false -}}
+{{- $workerURL := "" -}}
+{{- $script := "" -}}
+{{- $i18n := dict -}}
+{{- if and (not $siteOnly) $enable -}}
+
+  {{/* The index output format is resolved through the home page's output
+       formats -- the path is never hardcoded (subpath baseURLs, language
+       prefixes, multihost all change it). */}}
+  {{- with site.Home -}}
+    {{- with .OutputFormats.Get "searchindex" -}}
+      {{- $indexURL = .RelPermalink -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if not $indexURL -}}
+    {{- partial "search/lib/warn.html" (dict
+        "key" "search:warn:missing-output"
+        "message" "[search] The searchindex output format is not wired to the home page, so no index is emitted and search stays inert. Add 'searchindex' to your existing [outputs] home list in the site config -- the config list replaces the ENTIRE default home list, so keep 'html', 'rss', and every other format you already wire there -- or add `outputs: [searchindex]` to the home page front matter. If disableKinds includes 'home', the index cannot be emitted at all.") -}}
+  {{- end -}}
+
+  {{/* Dedicated search page, resolved per language. When it does not exist
+       yet, every URL that targets it falls back to page_path | relLangURL,
+       so a later-created page starts working with no template change. */}}
+  {{- with site.GetPage $pagePath -}}
+    {{- $pageURL = .RelPermalink -}}
+    {{- $pageFound = true -}}
+  {{- else -}}
+    {{- $pageURL = $pagePath | relLangURL -}}
+    {{- partial "search/lib/warn.html" (dict
+        "key" (printf "search:warn:missing-page:%s" site.Language.Lang)
+        "message" (printf "[search] No page exists at %q for language %q, so search-page links can land on a 404. Create content%s.md (or that language's equivalent) and place the search shortcode on it, or point params.search.page_path at your search page." $pagePath site.Language.Lang $pagePath)) -}}
+  {{- end -}}
+
+  {{/* Built page and worker scripts. fingerprint runs LAST so the hash
+       covers the built output; js.Build keeps its default target (esnext)
+       because the vendored stemmers use ES2022 #private fields. */}}
+  {{- if $indexURL -}}
+    {{- with resources.Get "js/search-worker.js" -}}
+      {{- $workerURL = (. | js.Build (dict "minify" true "format" "esm" "targetPath" "js/search-worker.js") | fingerprint "sha384").RelPermalink -}}
+    {{- end -}}
+    {{- with resources.Get "js/search.js" -}}
+      {{- $script = . | js.Build (dict "minify" true "format" "esm" "targetPath" "js/search.js") | fingerprint "sha384" -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* Strings the script writes at runtime, delivered as data-* attributes
+       (server-side i18n; the script is translation-free). min_chars is
+       pre-resolved with the configured minimum through the CLDR plural key. */}}
+  {{- $i18n = dict
+    "idle" (T "search_idle" | default "Start typing to search")
+    "loading" (T "search_loading" | default "Loading search…")
+    "no_results" (T "search_no_results" | default "No results for “%s”")
+    "error" (T "search_error" | default "Search is unavailable. Reload the page to try again.")
+    "count_one" (T "search_count_one" | default "%d result")
+    "count_few" (T "search_count_few" | default "%d results")
+    "count_many" (T "search_count_many" | default "%d results")
+    "count_other" (T "search_count_other" | default "%d results")
+    "showing" (T "search_showing" | default "Showing %d of %d results")
+    "min_chars" (T "search_min_chars" $ints.min_query_length | default (printf "Type at least %d characters" $ints.min_query_length))
+  -}}
+{{- end -}}
+
+{{- return (merge $bools (dict
+  "enable" $enable
+  "sections" $sections
+  "taxonomies" $taxonomies
+  "content" $content
+  "content_max_length" $ints.content_max_length
+  "summary_max_length" $ints.summary_max_length
+  "headings_max_level" $ints.headings_max_level
+  "min_query_length" $ints.min_query_length
+  "debounce_ms" $ints.debounce_ms
+  "results_limit" $ints.results_limit
+  "page_size" $ints.page_size
+  "fuzzy" $fuzzy
+  "boost" $boost
+  "stopwords_extra" $stopwordsExtra
+  "cache" $cache
+  "hotkey" $hotkey
+  "hotkey_tokens" $hotkeyTokens
+  "page_path" $pagePath
+  "index_url" $indexURL
+  "page_url" $pageURL
+  "page_found" $pageFound
+  "worker_url" $workerURL
+  "script" $script
+  "i18n" $i18n
+  "class" (printf "%v" ($args.class | default ""))
+  "id" (printf "%v" ($args.id | default ""))
+  "placeholder" (printf "%v" ($args.placeholder | default ""))
+  "aria_label" (printf "%v" ($args.aria_label | default ""))
+  "heading" (printf "%v" ($args.heading | default ""))
+  "autofocus" (in (slice "true" "1" "yes" "on") (lower (printf "%v" ($args.autofocus | default false))))
+  "where" $where
+)) -}}

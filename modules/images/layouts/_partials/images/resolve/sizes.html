@@ -1,0 +1,51 @@
+{{/*
+  images/resolve/sizes.html -- PURE (resolver tier).
+
+  Purpose: derives the final sizes attribute value from the layout
+  vocabulary. The omitted-sizes trap (browsers assume 100vw and download
+  oversized candidates) is the most common responsive-image failure mode;
+  generating sizes from a small layout vocabulary is this module's answer.
+
+  Rules:
+  - An explicit sizes value always wins verbatim.
+  - layout "constrained" -> "(min-width: {W}px) {W}px, 100vw" where W is the
+    explicit width when given, else the plan's top candidate width.
+  - layout "full"        -> "100vw".
+  - layout "fixed"       -> "" (x-descriptor srcsets do not use sizes).
+  - When sizes_auto is true AND the image is lazy-loaded, the value is
+    prefixed with "auto, " (Chromium 126+/Firefox 150+; non-supporting
+    parsers skip the invalid first entry and use the fallback list). The
+    prefix is NEVER emitted on eager/priority images (invalid there) and
+    never doubled onto a value already starting with "auto".
+
+  Context (dict):
+  - .layout     (string) "constrained" | "full" | "fixed".
+  - .width      (int)    Explicit display width, 0 when absent.
+  - .top        (int)    The plan's top candidate width.
+  - .sizes      (string) Explicit sizes override, "" when absent.
+  - .sizes_auto (bool)   Whether the auto prefix is enabled.
+  - .eager      (bool)   true for eager/priority loading (no auto prefix).
+
+  Return value: the sizes attribute value, "" when none applies.
+
+  One terminal return.
+*/}}
+
+{{- $out := "" -}}
+{{- if .sizes -}}
+  {{- $out = .sizes -}}
+{{- else if eq .layout "full" -}}
+  {{- $out = "100vw" -}}
+{{- else if eq .layout "fixed" -}}
+  {{- $out = "" -}}
+{{- else -}}
+  {{- $w := .top -}}
+  {{- if gt .width 0 -}}{{- $w = .width -}}{{- end -}}
+  {{- if gt $w 0 -}}
+    {{- $out = printf "(min-width: %dpx) %dpx, 100vw" $w $w -}}
+  {{- end -}}
+{{- end -}}
+{{- if and $out .sizes_auto (not .eager) (not (hasPrefix (lower $out) "auto")) -}}
+  {{- $out = printf "auto, %s" $out -}}
+{{- end -}}
+{{- return $out -}}

@@ -1,0 +1,136 @@
+{{/*
+  images/gallery.html -- PUBLIC gallery renderer (renderer tier).
+
+  Purpose: renders an ORDERED figure list from a page-resource glob:
+
+      {{ partial "images/gallery.html" (dict "page" . "match" "gallery/*") }}
+
+  emitting <ol class="image-gallery" data-count="N"> with one
+  <li class="image-gallery__item" data-index="i"> per matched resource, each
+  containing a complete standard render (a full `image` block: srcset,
+  dimensions, lazy loading, lightbox). Layout is 100 percent consumer CSS.
+  The in-content equivalent is the image-gallery shortcode.
+
+  Per-item alt/caption/credit come from the page's front-matter `resources:`
+  metadata: `title` maps to the caption (only when it differs from the
+  resource name, so default titles never leak into captions), `params.alt`
+  to alt, and `params.credit` to the credit line. An item with no resolvable
+  alt warns once (naming the resource) and renders alt="" WITHOUT the
+  lightbox anchor -- an anchor whose accessible name would be the empty alt
+  fails WCAG 2.4.4/4.1.2, so the anchor is suppressed and the reason folds
+  into the same warning. A glob batch has no single call site to errorf
+  against, so gallery items always degrade, never break the build.
+
+  Parameters (dict):
+  - page  (Page)   REQUIRED. The page whose resources are matched.
+  - match (string) REQUIRED. Page-resource glob (via .Resources.Match).
+  - crop  (string) Optional aspect-ratio token "WxH" (a RATIO, never pixel
+                   dimensions, e.g. "1x1" or "4x3"): every ladder width w is
+                   rendered as `fill wxh` with h = round(w * H/W), so every
+                   tile shares one exact aspect ratio while the lightbox
+                   anchor still targets the UNCROPPED capped derivative.
+                   A malformed token warns once and degrades to no crop.
+  - lightbox (bool) Default true for galleries (config gallery.lightbox).
+  - id    (string) id attribute on the <ol>.
+  - class (string) Extra class(es) appended to the <ol>.
+  - plus the standard cascade keys (widths, sizes, formats, loading,
+    placeholder, quality, ...), forwarded to every item.
+
+  Return value: none. This partial renders.
+*/}}
+
+{{- $args := . -}}
+{{- $page := "" -}}
+{{- if reflect.IsMap $args -}}
+  {{- $page = $args.page -}}
+{{- end -}}
+
+{{- if or (not (reflect.IsPage $page)) (not $args.match) -}}
+  {{- errorf "[images] images/gallery.html must be called with an options dict carrying at least the current Page and a resource glob: {{ partial \"images/gallery.html\" (dict \"page\" . \"match\" \"gallery/*\") }}." -}}
+{{- else -}}
+
+{{- $opts := partial "images/config.html" (dict "page" $page "args" $args) -}}
+{{- $where := $opts.where -}}
+{{- $items := $page.Resources.Match (printf "%v" $args.match) -}}
+
+{{- if not $items -}}
+  {{- partial "images/lib/warn.html" (dict
+      "key" (printf "images:warn:gallery-empty:%s:%v" $where $args.match)
+      "message" (printf "[images] The gallery glob %q matched no page resources; rendering nothing. See %s" $args.match $where)) -}}
+{{- else -}}
+
+{{/* ---- Crop ratio ---- */}}
+{{- $cropTok := $opts.gallery_crop -}}
+{{- if isset $args "crop" -}}
+  {{- $cropTok = trim (printf "%v" (index $args "crop")) " \t\n\r" -}}
+{{- end -}}
+{{- $ratio := 0.0 -}}
+{{- if $cropTok -}}
+  {{- if findRE `^[1-9]\d*x[1-9]\d*$` $cropTok -}}
+    {{- $parts := split $cropTok "x" -}}
+    {{- $ratio = div (float (index $parts 1)) (int (index $parts 0)) -}}
+  {{- else -}}
+    {{- partial "images/lib/warn.html" (dict
+        "key" (printf "images:warn:bad-crop:%s" $cropTok)
+        "message" (printf "[images] Ignoring malformed gallery crop token %q: expected a 'WxH' ratio such as '1x1' or '4x3'. See %s" $cropTok $where)) -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---- Gallery-wide lightbox default ---- */}}
+{{- $lightbox := $opts.gallery_lightbox -}}
+{{- if isset $args "lightbox" -}}
+  {{- $lightbox = in (slice "true" "1" "yes" "on") (lower (printf "%v" (index $args "lightbox"))) -}}
+{{- end -}}
+
+{{/* ---- Cascade keys forwarded into every item ---- */}}
+{{- $shared := dict -}}
+{{- range $k := slice "widths" "sizes" "sizes_auto" "formats" "loading" "placeholder" "responsive" "enable" "quality" "anchor" "resample" "bg" "hint" "compression" "layout" "max_density" "position" -}}
+  {{- if isset $args $k -}}
+    {{- $shared = merge $shared (dict $k (index $args $k)) -}}
+  {{- end -}}
+{{- end -}}
+
+<ol class="image-gallery{{ with $opts.class }} {{ . }}{{ end }}"{{ with $opts.id }} id="{{ . }}"{{ end }} data-count="{{ len $items }}">
+  {{- range $i, $r := $items }}
+  {{- $alt := trim (printf "%v" ($r.Params.alt | default "")) " \t\n\r" -}}
+  {{- $caption := "" -}}
+  {{- if ne $r.Title $r.Name -}}{{- $caption = $r.Title -}}{{- end -}}
+  {{- $credit := trim (printf "%v" ($r.Params.credit | default "")) " \t\n\r" -}}
+  {{- $suppress := false -}}
+  {{- if not $alt -}}
+    {{- $suppress = true -}}
+    {{- partial "images/lib/warn.html" (dict
+        "key" (printf "images:warn:gallery-alt:%s:%s" $page.RelPermalink $r.Name)
+        "message" (printf "[images] Gallery resource %q has no alt text (set params.alt in the page's resources: metadata); rendering alt=\"\" and suppressing its lightbox anchor, because an anchor named by an empty alt fails WCAG 2.4.4/4.1.2. See %s" $r.Name $where)) -}}
+  {{- end -}}
+  {{- $itemArgs := merge $shared (dict "src" $r.Name "alt" $alt "caption" $caption "credit" $credit "lightbox" $lightbox) -}}
+  {{- $itemOpts := partial "images/config.html" (dict "page" $page "args" $itemArgs) -}}
+  {{- $subtype := $r.MediaType.SubType -}}
+  {{- $itemSource := dict
+      "kind" "page"
+      "resource" $r
+      "url" $r.RelPermalink
+      "processable" (and (reflect.IsImageResourceProcessable $r) (ne $subtype "gif"))
+      "withMeta" (reflect.IsImageResourceWithMeta $r)
+      "subtype" $subtype
+      "missing" false
+      "raw" false -}}
+  <li class="image-gallery__item" data-index="{{ add $i 1 }}">
+    {{- partial "images/render.html" (dict
+        "page" $page
+        "surface" "gallery"
+        "block" true
+        "opts" $itemOpts
+        "source" $itemSource
+        "darkSource" ""
+        "variants" (slice)
+        "neutral" false
+        "suppressAnchor" $suppress
+        "ratio" $ratio
+        "attrs" (dict)
+        "requested" $itemArgs) -}}
+  </li>
+  {{- end }}
+</ol>
+{{- end -}}
+{{- end -}}

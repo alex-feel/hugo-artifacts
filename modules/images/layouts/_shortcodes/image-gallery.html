@@ -1,0 +1,43 @@
+{{/*
+  Renders an ordered gallery of page-bundle resources inside content:
+
+    {{< image-gallery match="gallery/*" >}}
+    {{< image-gallery match="gallery/*.png" crop="1x1" >}}
+    {{< image-gallery match="photos/*" lightbox="false" >}}
+
+  This shortcode is a thin wrapper over the images/gallery.html partial: it
+  forwards only the parameters that are actually present, so omitted
+  parameters fall through the module's cascade. Each matched resource
+  renders as a complete `image` block inside
+  <ol class="image-gallery"><li class="image-gallery__item">; per-item
+  alt/caption/credit come from the page's front-matter resources: metadata
+  (params.alt, title, params.credit). Layout is 100 percent consumer CSS.
+
+  Parameters (all named):
+  - match: page-resource glob (e.g. "gallery/*"). REQUIRED (errorf when
+    missing -- an empty gallery call is an authoring mistake).
+  - crop: optional uniform aspect-ratio token "WxH" (e.g. "1x1", "4x3");
+    every tile is fill-cropped to that exact ratio while lightbox anchors
+    still target the uncropped capped derivative.
+  - lightbox: per-gallery override of the gallery.lightbox default (true).
+  - id, class: attributes on the <ol> element.
+  - widths, sizes, sizes_auto, formats, loading, placeholder, responsive,
+    enable, quality, anchor, resample, bg, hint, compression, layout,
+    max_density: the standard cascade keys, forwarded to every item.
+
+  Degradation: a glob that matches nothing, a malformed crop token, and an
+  item without alt metadata all warn once (deduplicated) and degrade; item
+  problems never break the build.
+*/}}
+
+{{- $args := dict "page" .Page "position" (printf "%s" .Position) -}}
+
+{{- if .IsNamedParams -}}
+  {{- range $k := slice "match" "crop" "lightbox" "id" "class" "widths" "sizes" "sizes_auto" "formats" "loading" "placeholder" "responsive" "enable" "quality" "anchor" "resample" "bg" "hint" "compression" "layout" "max_density" -}}
+    {{- if isset $.Params $k -}}
+      {{- $args = merge $args (dict $k ($.Get $k)) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- partial "images/gallery.html" $args -}}

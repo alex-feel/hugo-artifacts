@@ -1,0 +1,34 @@
+{{/*
+  search/lib/headings.html -- INTERNAL (lib tier).
+
+  Purpose: recursively flattens a page's .Fragments.Headings tree into the
+  index's heading sub-record shape. The walked tree exposes capitalized
+  ID/Level/Title keys, its first node is an empty level-0 root that is
+  skipped, and heading titles arrive as rendered inline HTML (<code> etc.),
+  so each title is piped through plainify | htmlUnescape to keep the index
+  data-only.
+
+  Expected context (dict):
+  - .nodes (slice) - Heading nodes to walk (each with ID, Level, Title,
+    Headings).
+  - .max   (int)   - Deepest heading level to emit (2 = h2 only).
+
+  Return value: flat slice of dicts, each {"id": ..., "level": ...,
+  "title": ...}, in document order. One terminal return.
+*/}}
+
+{{- $max := .max -}}
+{{- $out := slice -}}
+{{- range .nodes -}}
+  {{- if and .ID .Title (ge .Level 2) (le .Level $max) -}}
+    {{- $out = $out | append (dict "id" .ID "level" .Level "title" (.Title | plainify | htmlUnescape)) -}}
+  {{- end -}}
+  {{- if and .Headings (lt .Level $max) -}}
+    {{/* append with a slice argument nests it as one element, so the child
+         results are appended one by one. */}}
+    {{- range partial "search/lib/headings.html" (dict "nodes" .Headings "max" $max) -}}
+      {{- $out = $out | append . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- return $out -}}

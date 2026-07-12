@@ -1,0 +1,50 @@
+{{/*
+  Renders a search surface inside content:
+
+    {{< search >}}
+    {{< search modal >}}
+    {{< search surface="inline" placeholder="Search the docs" >}}
+
+  This shortcode is a thin wrapper: it forwards only the parameters that are
+  actually present to the matching search partial, so omitted parameters
+  fall through the module's cascade (page front matter search map, then
+  [params.search], then the shipped defaults). The rendered markup is
+  identical to the partial's.
+
+  Parameters (all optional; named, with one positional shorthand):
+  - surface (positional 0, or surface=): "page" (default), "modal", or
+    "inline". An unknown value degrades to "page" with a deduplicated
+    warning.
+  - class, id, placeholder, aria_label, heading, autofocus: call-site
+    presentation keys (see the module README Parameters table).
+  - results_limit, page_size, min_query_length, debounce_ms, fuzzy, prefix,
+    show_description, show_image, show_tags, show_categories, show_dates,
+    group_by_section, hotkey, hotkey_slash, page_path: per-surface cascade
+    keys, forwarded only when present.
+
+  Never errorf: parameter problems degrade exactly as the partials document
+  (deduplicated warnf or the shipped default).
+*/}}
+
+{{- $args := dict "page" .Page "position" (printf "%s" .Position) -}}
+
+{{- $surface := "page" -}}
+{{- if .IsNamedParams -}}
+  {{- range $k := slice "surface" "class" "id" "placeholder" "aria_label" "heading" "autofocus" "results_limit" "page_size" "min_query_length" "debounce_ms" "fuzzy" "prefix" "show_description" "show_image" "show_tags" "show_categories" "show_dates" "group_by_section" "hotkey" "hotkey_slash" "page_path" -}}
+    {{- if isset $.Params $k -}}
+      {{- $args = merge $args (dict $k ($.Get $k)) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- with .Get "surface" -}}{{- $surface = lower (trim (printf "%v" .) " ") -}}{{- end -}}
+{{- else if gt (len .Params) 0 -}}
+  {{- $surface = lower (trim (printf "%v" (.Get 0)) " ") -}}
+{{- end -}}
+
+{{- if not (in (slice "page" "modal" "inline") $surface) -}}
+  {{- partial "search/lib/warn.html" (dict
+      "key" (printf "search:warn:unknown-surface:%s" $surface)
+      "message" (printf "[search] Unknown search surface %q at %s; expected \"page\", \"modal\", or \"inline\". Rendering the page surface instead." $surface .Position)) -}}
+  {{- $surface = "page" -}}
+{{- end -}}
+
+{{- partial (printf "search/%s.html" $surface) $args -}}

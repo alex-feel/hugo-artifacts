@@ -1,0 +1,39 @@
+{{/*
+  search/result-template.html -- INTERNAL (renderer tier), designed for
+  shadowing.
+
+  Purpose: the native <template data-search-template> the module script
+  clones once per result, filling the data-search-slot elements via
+  textContent and attribute setters only -- never innerHTML. Consumers
+  shadow this ONE partial (layouts/_partials/search/result-template.html)
+  to restyle result markup for every surface at once; unknown extra
+  elements in a shadowed template are preserved untouched.
+
+  Slot contract: title/section/snippet/date/tags/categories receive text
+  and are revealed per the display toggles (snippet = the hit's description
+  when non-empty, else its truncated summary; section displays the hit's
+  section title); href is set on the link element; datetime plus localized
+  text go on the time element; src is set on the img only when show_image
+  is on AND the value is an http(s) or relative URL. In listbox surfaces
+  the script swaps the clone's root li class and role to
+  search__option / role="option".
+
+  Expected context (dict): the surface context (page, cfg); the default
+  ignores it, but shadowing sites receive the full picture.
+
+  Return value: none. This partial renders.
+*/}}
+
+<template data-search-template>
+  <li class="search__result">
+    <a class="search__result-link" href="#" data-search-slot="href">
+      <span class="search__result-title" data-search-slot="title"></span>
+      <span class="search__result-section" data-search-slot="section" hidden style="display:none"></span>
+      <span class="search__result-snippet" data-search-slot="snippet" hidden style="display:none"></span>
+      <time class="search__result-date" data-search-slot="date" hidden style="display:none"></time>
+      <span class="search__result-tags" data-search-slot="tags" hidden style="display:none"></span>
+      <span class="search__result-categories" data-search-slot="categories" hidden style="display:none"></span>
+      <img class="search__result-image" data-search-slot="image" alt="" hidden style="display:none">
+    </a>
+  </li>
+</template>
