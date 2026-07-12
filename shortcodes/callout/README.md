@@ -2,7 +2,7 @@
 
 Hugo shortcode module that renders a paired admonition / callout block -- a titled, optionally collapsible box for notes, tips, warnings, and any other emphasis. The module outputs style-agnostic semantic HTML with [BEM](https://getbem.com/) CSS class hooks, data attributes, and CSS custom-property tone names, delegating all visual styling to the consuming site. It is the sibling of [`shortcodes/github-repo`](../github-repo/README.md) and [`shortcodes/hf-space`](../hf-space/README.md) and follows the same conventions (unstyled, universal, ship-zero-CSS).
 
-It supersedes the older `notice` shortcode, fixing that module's limitations: only four types, hard-coded hex colors, a baked-in `.dark` rule, no ARIA semantics, no collapsibility, no aliases, a blanket `| title` filter that mangled user title casing, an invalid `<p>`-wrapped body that broke multi-paragraph and block content, and an inverted color map. This module ships no color, no hex, no dark-mode rule, and no CSS at all.
+It offers fifteen first-class types with true-synonym aliases and arbitrary custom-type passthrough, native `<details>` collapsibility, opt-in ARIA semantics, verbatim (never re-cased) user titles, and a block-level body that handles multiple paragraphs, lists, code blocks, and nested shortcodes. This module ships no color, no hex, no dark-mode rule, and no CSS at all.
 
 ## Installation
 

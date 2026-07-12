@@ -69,7 +69,7 @@ Privacy-first YouTube facade: renders only a same-origin, build-time-fetched pos
 
 ### `shortcodes/callout`
 
-Universal, unstyled paired admonition shortcode (`{{< callout "type" >}}...{{< /callout >}}`) with fifteen first-class types, true-synonym aliases, arbitrary custom-type passthrough, native `<details>` collapsibility, opt-in ARIA, and overridable icons. Also ships a blockquote render hook so GitHub-style `> [!NOTE]` alerts render as the same markup. Supersedes the legacy `notice` module. See [`shortcodes/callout/README.md`](shortcodes/callout/README.md).
+Universal, unstyled paired admonition shortcode (`{{< callout "type" >}}...{{< /callout >}}`) with fifteen first-class types, true-synonym aliases, arbitrary custom-type passthrough, native `<details>` collapsibility, opt-in ARIA, and overridable icons. Also ships a blockquote render hook so GitHub-style `> [!NOTE]` alerts render as the same markup. See [`shortcodes/callout/README.md`](shortcodes/callout/README.md).
 
 ## Examples
 
