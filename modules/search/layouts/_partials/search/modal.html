@@ -1,0 +1,128 @@
+{{/*
+  search/modal.html -- PUBLIC ENTRY (renderer tier).
+
+  Purpose: the command-palette modal surface. A consumer places one line in
+  a layout (typically the header):
+
+      {{ partial "search/modal.html" . }}
+
+  and receives a JavaScript-revealed trigger button plus a NATIVE <dialog>
+  opened with showModal(), so focus containment, background inertness,
+  Escape handling, and focus return come from the platform. The dialog is
+  emitted once per page (a .Page.Store sentinel); additional modal
+  placements on the same page render another trigger that reuses it.
+
+  Expected context: the current Page, or a dict whose "page" key is the
+  current Page plus option keys (any four-tier key from
+  data/search/defaults.toml, plus class, id, placeholder, aria_label,
+  heading). Anything else is the module's single build-failing errorf.
+
+  A palette cannot open without JavaScript, so the trigger is dual-hidden
+  (hidden attribute plus inline display:none) until the script reveals it.
+  When the searchindex output format is not wired, this surface renders
+  NOTHING (a dead palette is worse than no palette) and one actionable
+  warning names the fix.
+
+  Return value: none. This partial renders. It also emits the module's
+  script once per page.
+*/}}
+
+{{- $arg := . -}}
+{{- $page := $arg -}}
+{{- $args := dict -}}
+{{- if not (reflect.IsPage $arg) -}}
+  {{- if reflect.IsMap $arg -}}
+    {{- $args = $arg -}}
+    {{- $page = $args.page -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if not (reflect.IsPage $page) -}}
+  {{- errorf "[search] modal.html must be called with the current Page as its context ({{ partial \"search/modal.html\" . }}) or as the \"page\" key of an options dict ({{ partial \"search/modal.html\" (dict \"page\" . ...) }})." -}}
+{{- else -}}
+
+{{- partial "search/lib/guard.html" $page -}}
+{{- $pagep := $page.Params.search -}}
+{{- if not (reflect.IsMap $pagep) -}}{{- $pagep = dict -}}{{- end -}}
+{{- $disabled := in (slice "true" "1" "yes" "on") (lower (printf "%v" ($pagep.disable | default false))) -}}
+{{- $cfg := partial "search/config.html" (dict "page" $page "args" $args) -}}
+{{- if and $cfg.enable (not $disabled) $cfg.index_url -}}
+
+{{- $n := add (int ($page.Store.Get "search:instances" | default 0)) 1 -}}
+{{- $page.Store.Set "search:instances" $n -}}
+{{- $seed := printf "%d" $n -}}
+{{- with $cfg.id -}}{{- $seed = . -}}{{- end -}}
+{{- $inputId := printf "search-input-%s" $seed -}}
+{{- $listboxId := printf "search-listbox-%s" $seed -}}
+{{- $options := (dict
+  "stemming" $cfg.stemming
+  "stopwords" $cfg.stopwords
+  "stopwordsExtra" $cfg.stopwords_extra
+  "headings" $cfg.headings
+  "taxonomies" $cfg.taxonomies
+  "boost" $cfg.boost
+  "fuzzy" $cfg.fuzzy
+  "prefix" $cfg.prefix
+  "worker" $cfg.worker
+  "cache" $cfg.cache
+) | jsonify -}}
+{{- $dialogKey := "search:modal-emitted" -}}
+{{- $ownsDialog := not ($page.Store.Get $dialogKey) -}}
+{{- if $ownsDialog -}}{{- $page.Store.Set $dialogKey true -}}{{- end -}}
+<search class="search search--modal{{ with $cfg.class }} {{ . }}{{ end }}"
+  {{- with $cfg.id }} id="{{ . }}"{{ end }}
+  data-search-surface="modal"
+  data-search-index-url="{{ $cfg.index_url }}"
+  data-search-lang="{{ site.Language.Lang }}"
+  data-search-page-url="{{ $cfg.page_url }}"
+  {{- with $cfg.worker_url }} data-search-worker-url="{{ . }}"{{ end }}
+  data-search-min-length="{{ $cfg.min_query_length }}"
+  data-search-debounce="{{ $cfg.debounce_ms }}"
+  data-search-limit="{{ $cfg.results_limit }}"
+  data-search-hotkey="{{ $cfg.hotkey }}"
+  data-search-hotkey-slash="{{ $cfg.hotkey_slash }}"
+  {{- if $cfg.show_description }} data-search-show-description="true"{{ end }}
+  {{- if $cfg.show_image }} data-search-show-image="true"{{ end }}
+  {{- if $cfg.show_tags }} data-search-show-tags="true"{{ end }}
+  {{- if $cfg.show_categories }} data-search-show-categories="true"{{ end }}
+  {{- if $cfg.show_dates }} data-search-show-dates="true"{{ end }}
+  data-search-options="{{ $options }}"
+  data-search-i18n-idle="{{ $cfg.i18n.idle }}"
+  data-search-i18n-loading="{{ $cfg.i18n.loading }}"
+  data-search-i18n-no-results="{{ $cfg.i18n.no_results }}"
+  data-search-i18n-error="{{ $cfg.i18n.error }}"
+  data-search-i18n-count-one="{{ $cfg.i18n.count_one }}"
+  data-search-i18n-count-few="{{ $cfg.i18n.count_few }}"
+  data-search-i18n-count-many="{{ $cfg.i18n.count_many }}"
+  data-search-i18n-count-other="{{ $cfg.i18n.count_other }}"
+  data-search-i18n-showing="{{ $cfg.i18n.showing }}"
+  data-search-i18n-min-chars="{{ $cfg.i18n.min_chars }}">
+  <button class="search__trigger" type="button" hidden style="display:none" aria-haspopup="dialog">
+    <span class="search__trigger-icon">{{ partial "search/icon.html" (dict "name" "search") }}</span>
+    <span class="search__trigger-label">{{ T "search_open" | default "Open search" }}</span>
+    {{- range $cfg.hotkey_tokens }}
+    {{- if eq . "mod" }}<kbd class="search__kbd" data-search-kbd="mod">Ctrl</kbd>
+    {{- else if in (slice "ctrl" "alt" "shift") . }}<kbd class="search__kbd">{{ title . }}</kbd>
+    {{- else }}<kbd class="search__kbd">{{ upper . }}</kbd>
+    {{- end }}
+    {{- end }}
+  </button>
+  {{- if $ownsDialog }}
+  <dialog class="search__dialog" aria-label="{{ $cfg.aria_label | default (T "search_dialog_label" | default "Site search") }}">
+    {{- with $cfg.heading }}
+    <h2 class="search__heading">{{ . }}</h2>
+    {{- end }}
+    {{ partial "search/form.html" (dict "page" $page "cfg" $cfg "surface" "modal" "input_id" $inputId "listbox_id" $listboxId) }}
+    {{ partial "search/results.html" (dict "page" $page "cfg" $cfg "surface" "modal" "listbox_id" $listboxId) }}
+    <div class="search__hints">
+      <span class="search__hint"><kbd class="search__kbd">↑</kbd><kbd class="search__kbd">↓</kbd> <span class="search__hint-label">{{ T "search_hint_navigate" | default "to navigate" }}</span></span>
+      <span class="search__hint"><kbd class="search__kbd">Enter</kbd> <span class="search__hint-label">{{ T "search_hint_select" | default "to open" }}</span></span>
+      <span class="search__hint"><kbd class="search__kbd">Esc</kbd> <span class="search__hint-label">{{ T "search_hint_close" | default "to close" }}</span></span>
+    </div>
+  </dialog>
+  {{- end }}
+</search>
+{{ partial "search/assets.html" (dict "page" $page "cfg" $cfg) }}
+
+{{- end -}}
+{{- end -}}

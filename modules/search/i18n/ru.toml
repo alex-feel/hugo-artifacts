@@ -1,0 +1,56 @@
+# Russian UI strings for the search module. The key set mirrors i18n/en.toml
+# one to one. Phrasing decisions: nominative-friendly phrasing, «guillemets»
+# for quoted queries, and ё written out where the word carries it.
+#
+# The plural [search_min_chars] table sits LAST: a TOML table header claims
+# every key-value pair that follows it until the next header, so a mid-file
+# table would silently swallow all the flat keys below it.
+
+search_label = "Поиск по сайту"
+
+search_placeholder = "Поиск"
+
+search_submit = "Найти"
+
+search_clear = "Очистить поиск"
+
+search_open = "Открыть поиск"
+
+search_close = "Закрыть поиск"
+
+search_dialog_label = "Поиск по сайту"
+
+search_results_label = "Результаты поиска"
+
+search_idle = "Начните вводить запрос"
+
+search_loading = "Загрузка поиска…"
+
+search_no_results = "По запросу «%s» ничего не найдено"
+
+search_error = "Поиск недоступен. Перезагрузите страницу и попробуйте снова."
+
+search_count_one = "%d результат"
+search_count_few = "%d результата"
+search_count_many = "%d результатов"
+search_count_other = "%d результата"
+
+search_showing = "Показано %d из %d результатов"
+
+search_see_all = "Все результаты"
+
+search_more = "Показать ещё"
+
+search_hint_navigate = "для навигации"
+search_hint_select = "открыть"
+search_hint_close = "закрыть"
+
+search_noscript = "Для поиска по сайту требуется JavaScript. Воспользуйтесь навигацией по разделам."
+
+# The forms are declined for the «не менее N ...» genitive construction,
+# which is why few and many share a form while one and other share the other.
+[search_min_chars]
+one = "Введите не менее {{ . }} символа"
+few = "Введите не менее {{ . }} символов"
+many = "Введите не менее {{ . }} символов"
+other = "Введите не менее {{ . }} символа"

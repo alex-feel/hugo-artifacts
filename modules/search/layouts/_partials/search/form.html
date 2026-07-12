@@ -1,0 +1,61 @@
+{{/*
+  search/form.html -- INTERNAL (renderer tier).
+
+  Purpose: the shared form fragment. Every surface renders a REAL
+  <form method="get"> so a no-JavaScript submission always navigates with
+  the query intact. The dedicated page's own form action is ALWAYS the
+  current page's URL (an un-enhanced GET submit must land back on the
+  surface the visitor is using), while the modal and inline forms target
+  the resolved dedicated search page.
+
+  Expected context (dict):
+  - .page      (Page)   - The current page.
+  - .cfg       (map)    - Resolved configuration from search/config.html.
+  - .surface   (string) - "page", "modal", or "inline".
+  - .input_id  (string) - id for the input and the label's for attribute.
+  - .listbox_id (string) - id of the listbox (combobox wiring; modal and
+    inline only).
+
+  Return value: none. This partial renders.
+*/}}
+
+{{- $page := .page -}}
+{{- $cfg := .cfg -}}
+{{- $surface := .surface -}}
+{{- $inputId := .input_id -}}
+{{- $listboxId := .listbox_id -}}
+{{- $action := $cfg.page_url -}}
+{{- if eq $surface "page" -}}{{- $action = $page.RelPermalink -}}{{- end -}}
+{{- $placeholder := $cfg.placeholder | default (T "search_placeholder" | default "Search") -}}
+{{- $label := T "search_label" | default "Search this site" -}}
+<form class="search__form" method="get" action="{{ $action }}" role="search">
+  {{- if eq $surface "modal" }}
+  <label class="search__label search__label--hidden-hook" for="{{ $inputId }}">{{ $label }}</label>
+  {{- else }}
+  <label class="search__label" for="{{ $inputId }}">{{ $label }}</label>
+  {{- end }}
+  {{- if eq $surface "page" }}
+  <input class="search__input" id="{{ $inputId }}" type="search" name="q" autocomplete="off" spellcheck="false" placeholder="{{ $placeholder }}"{{ if $cfg.autofocus }} autofocus{{ end }}>
+  <button class="search__submit" type="submit">
+    <span class="search__submit-icon">{{ partial "search/icon.html" (dict "name" "search") }}</span>
+    <span class="search__submit-label">{{ T "search_submit" | default "Search" }}</span>
+  </button>
+  <button class="search__clear" type="button" hidden style="display:none">
+    <span class="search__clear-icon">{{ partial "search/icon.html" (dict "name" "close") }}</span>
+    <span class="search__clear-label">{{ T "search_clear" | default "Clear search" }}</span>
+  </button>
+  {{- else }}
+  <input class="search__input" id="{{ $inputId }}" type="search" name="q" role="combobox" aria-expanded="false" aria-controls="{{ $listboxId }}" aria-autocomplete="list" autocomplete="off" spellcheck="false" placeholder="{{ $placeholder }}">
+  {{- if eq $surface "modal" }}
+  <button class="search__close" type="button">
+    <span class="search__close-icon">{{ partial "search/icon.html" (dict "name" "close") }}</span>
+    <span class="search__close-label">{{ T "search_close" | default "Close search" }}</span>
+  </button>
+  {{- else }}
+  <button class="search__submit" type="submit">
+    <span class="search__submit-icon">{{ partial "search/icon.html" (dict "name" "search") }}</span>
+    <span class="search__submit-label">{{ T "search_submit" | default "Search" }}</span>
+  </button>
+  {{- end }}
+  {{- end }}
+</form>

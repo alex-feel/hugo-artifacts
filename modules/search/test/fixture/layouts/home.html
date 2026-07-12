@@ -1,0 +1,11 @@
+{{ define "main" }}
+  <h1>{{ .Title }}</h1>
+  {{/* worker and cache are BACKEND-SCOPED: this call-site override attempt
+       MUST be ignored, keeping the site-tier values on the shared backend. */}}
+  {{ partial "search/inline.html" (dict "page" . "worker" false "cache" false) }}
+  <ul>
+    {{ range site.RegularPages }}
+      <li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>
+    {{ end }}
+  </ul>
+{{ end }}

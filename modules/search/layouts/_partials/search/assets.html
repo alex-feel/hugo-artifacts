@@ -1,0 +1,32 @@
+{{/*
+  search/assets.html -- INTERNAL (renderer tier).
+
+  Purpose: emits the module's page script once per page (a .Page.Store
+  sentinel), as a minified, fingerprinted ESM <script type="module"> with
+  Subresource Integrity. Called only by surfaces whose index wiring check
+  passed: no index URL, no scripts. The worker artifact has no SRI
+  mechanism, so the content hash in its fingerprinted filename (delivered
+  via data-search-worker-url on each surface root) is the integrity
+  control.
+
+  Expected context (dict):
+  - .page (Page) - The current page.
+  - .cfg  (map)  - Resolved configuration from search/config.html, carrying
+    the built script resource and worker_url.
+
+  Return value: none. Side effect: at most one script tag per page.
+*/}}
+
+{{- $page := .page -}}
+{{- $cfg := .cfg -}}
+{{- $key := "search:assets-emitted" -}}
+{{- if not ($page.Store.Get $key) -}}
+  {{- $page.Store.Set $key true -}}
+  {{- if and $cfg.script $cfg.worker_url -}}
+<script type="module" src="{{ $cfg.script.RelPermalink }}" integrity="{{ $cfg.script.Data.Integrity }}" crossorigin="anonymous"></script>
+  {{- else -}}
+    {{- partial "search/lib/warn.html" (dict
+        "key" "search:warn:missing-script"
+        "message" "[search] assets/js/search.js or assets/js/search-worker.js was not found; the module is not mounted correctly. The server-rendered search form keeps working, but client-side search stays inert.") -}}
+  {{- end -}}
+{{- end -}}

@@ -16,7 +16,7 @@ For the full architectural rules and exemplar modules, see the root [`README.md`
 
 - **Hugo v0.160.0+** (extended edition) -- required by every module's `[module.hugoVersion]` floor.
 - **Go 1.22+** -- required by every leaf `go.mod`.
-- **Node.js v22+** -- needed for `modules/pwa`'s TypeScript service worker (compiled via `js.Build`), the project's ESLint/Prettier setup, and the Playwright validation suites under `modules/pwa/test/` and `modules/social-share/test/`.
+- **Node.js v22+** -- needed for `modules/pwa`'s TypeScript service worker (compiled via `js.Build`), the project's ESLint/Prettier setup, and the validation suites under `modules/pwa/test/`, `modules/social-share/test/`, and `modules/search/test/` (all Playwright) plus `modules/images/test/` (Node build-output assertions).
 
 ## Development Setup
 

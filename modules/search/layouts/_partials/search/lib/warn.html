@@ -1,0 +1,22 @@
+{{/*
+  search/lib/warn.html -- INTERNAL (lib tier).
+
+  Purpose: single funnel for every module warning, deduplicated per build via
+  a hugo.Store sentinel, so a misconfiguration repeated across hundreds of
+  pages surfaces exactly once. The module never breaks a build over search
+  configuration; its one errorf (a non-Page context) lives in the three
+  public entry partials.
+
+  Expected context (dict):
+  - .key     (string) - Deduplication key, unique per warning class and
+    offending value, e.g. "search:warn:missing-page:ru".
+  - .message (string) - Complete, actionable warning text, already formatted
+    and "[search]"-prefixed by the caller.
+
+  Return value: none. Side effect: at most one warnf per key per build.
+*/}}
+
+{{- if not (hugo.Store.Get .key) -}}
+  {{- hugo.Store.Set .key true -}}
+  {{- warnf "%s" .message -}}
+{{- end -}}

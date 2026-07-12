@@ -58,6 +58,7 @@ body:
       options:
         - modules/seo
         - modules/social-share
+        - modules/search
         - modules/images
         - modules/pwa
         - modules/workbox

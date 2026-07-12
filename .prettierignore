@@ -18,6 +18,10 @@ modules/pwa/test/fixture/public/
 # Vendor-mounted JavaScript source -- managed upstream, do not reformat.
 # (These are mounted at build time via hugo.toml; not stored in this repo.)
 
+# Vendored generated Snowball stemmers -- upstream compiler output, do not
+# reformat (regenerate from the upstream .sbl sources instead).
+modules/search/assets/snowball/
+
 # Hugo Go template sources. Files under layouts/ contain Go template directives
 # ({{ ... }}) interleaved with HTML; Prettier's HTML parser does not understand
 # Go template syntax and either errors out or rewrites the template into invalid

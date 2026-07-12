@@ -1,0 +1,17 @@
+{{/*
+  search/noscript.html -- INTERNAL (renderer tier), designed for shadowing.
+
+  Purpose: the content of the dedicated search page's <noscript> slot. The
+  shipped default is one localized guidance line; a consuming site shadows
+  this partial (layouts/_partials/search/noscript.html) to link browsable
+  section, taxonomy, or archive indexes -- or, strictly as an opt-in
+  privacy trade-off documented in the module README, an external-engine GET
+  form -- without touching the page skeleton.
+
+  Expected context (dict): the surface context (page, cfg); the default
+  ignores it, but shadowing sites receive the full picture.
+
+  Return value: none. This partial renders.
+*/}}
+
+<p class="search__noscript-text">{{ T "search_noscript" | default "Searching this site requires JavaScript. Use the site navigation to browse instead." }}</p>

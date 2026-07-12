@@ -1,0 +1,75 @@
+# English UI strings for the search module. Templates look up keys via
+# {{ T "search_label" }}; every lookup carries an English fallback, so a
+# site whose language ships no translation still renders accessible names.
+# The %s/%d tokens are literal placeholders the module script substitutes
+# client-side; substitution output is written with textContent only.
+#
+# The plural [search_min_chars] table sits LAST: a TOML table header claims
+# every key-value pair that follows it until the next header, so a mid-file
+# table would silently swallow all the flat keys below it.
+
+# Visible label of the search input.
+search_label = "Search this site"
+
+# Input placeholder.
+search_placeholder = "Search"
+
+# Submit button label.
+search_submit = "Search"
+
+# Clear button label (page surface, JavaScript-revealed).
+search_clear = "Clear search"
+
+# Modal trigger label (JavaScript-revealed).
+search_open = "Open search"
+
+# Modal close button label.
+search_close = "Close search"
+
+# Accessible name of the modal dialog.
+search_dialog_label = "Site search"
+
+# Accessible name of the results listbox / results container.
+search_results_label = "Search results"
+
+# Idle status message.
+search_idle = "Start typing to search"
+
+search_loading = "Loading search…"
+
+# Zero-results alert; %s is the query the visitor typed.
+search_no_results = "No results for “%s”"
+
+search_error = "Search is unavailable. Reload the page to try again."
+
+# Result-count announcements; the script picks the CLDR plural form with
+# Intl.PluralRules and substitutes %d. All four categories ship as separate
+# flat keys because the substitution happens client-side.
+search_count_one = "%d result"
+search_count_few = "%d results"
+search_count_many = "%d results"
+search_count_other = "%d results"
+
+# Page-surface announcement after "show more"; %d twice: shown, then total.
+search_showing = "Showing %d of %d results"
+
+# Link from the modal / inline dropdown to the dedicated search page.
+search_see_all = "See all results"
+
+# Load-more button on the dedicated search page.
+search_more = "Show more results"
+
+# Keyboard hint labels in the modal footer.
+search_hint_navigate = "to navigate"
+search_hint_select = "to open"
+search_hint_close = "to close"
+
+# Default no-JavaScript guidance on the dedicated search page.
+search_noscript = "Searching this site requires JavaScript. Use the site navigation to browse instead."
+
+# Minimum-length status message; CLDR plural key resolved server-side with
+# the configured minimum, so "1 character" and "2 characters" both read
+# correctly.
+[search_min_chars]
+one = "Type at least {{ . }} character"
+other = "Type at least {{ . }} characters"

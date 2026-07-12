@@ -1,0 +1,5 @@
+# Project-level i18n override: Hugo deep-merges module and project i18n
+# files by key with the project winning, which this file exercises end to
+# end. The override deliberately carries TWO %s tokens to pin that the
+# client substitutes EVERY occurrence, not only the first.
+search_no_results = "По запросу «%s» ничего не найдено (запрос: %s)"

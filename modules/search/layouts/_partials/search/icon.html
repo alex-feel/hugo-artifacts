@@ -1,0 +1,31 @@
+{{/*
+  search/icon.html -- INTERNAL (renderer tier).
+
+  Renders an inline SVG icon by name for the search module.
+
+  Context expectations:
+  - .name  (string) - Icon identifier: "search" or "close". An unrecognized
+    name renders nothing (no fallback glyph), which is the correct behavior
+    for consumers that bring their own icon via a site-level override of
+    this partial.
+  - .class (string, optional) - Additional CSS class(es).
+
+  Contract (identical to the sibling modules so the family reads as one):
+  every icon uses width="1em" height="1em" so it scales with font size,
+  aria-hidden="true" and focusable="false" because the accessible name lives
+  on the surrounding link or button, and a 24x24 viewBox. Both glyphs are
+  original line art in the Lucide / Tabler visual idiom (24x24 grid, 2px
+  stroke, round caps and joins, stroke="currentColor"). The consuming site
+  colors and sizes them through the BEM class hooks -- the module ships NO
+  color and depends on NO external icon font.
+*/}}
+
+{{- $name := .name -}}
+{{- $class := .class | default "" -}}
+{{- $stroke := `width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"` -}}
+
+{{- if eq $name "search" -}}
+<svg{{ with $class }} class="{{ . }}"{{ end }} {{ $stroke | safeHTMLAttr }}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+{{- else if eq $name "close" -}}
+<svg{{ with $class }} class="{{ . }}"{{ end }} {{ $stroke | safeHTMLAttr }}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+{{- end -}}
