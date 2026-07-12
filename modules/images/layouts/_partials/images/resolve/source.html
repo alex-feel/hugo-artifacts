@@ -1,0 +1,144 @@
+{{/*
+  images/resolve/source.html -- PURE (resolver tier).
+
+  Purpose: classifies and resolves a raw src string into a normalized source
+  descriptor. Every surface (partial, shortcode, render hook, gallery item,
+  preload, src feed) resolves through this one partial so identical inputs
+  always land on the identical source.
+
+  Classification order (first match wins):
+  1. data: URI                     -> kind "data" (verbatim passthrough).
+  2. URL-shaped (contains "://", starts with "//", or carries one of the
+     explicit non-authority schemes javascript/vbscript/mailto/tel/file)
+     -> kind "remote". This test runs BEFORE any resources.Get call because
+     on Windows resources.Get ERRORS on URL-shaped ("://") paths instead of
+     returning nil, and the scheme allow-list keeps a bare hostile scheme
+     (javascript:, vbscript:) out of resource lookup so contextual
+     auto-escaping neutralizes it to #ZgotmplZ. The allow-list is
+     DELIBERATELY narrow: a relative filename that merely contains a colon
+     (`img:v2.png`, legal on a Linux page bundle; also a Windows
+     drive-letter shape) is NOT a scheme and falls through to page/global
+     resource resolution.
+  3. Page resource: .Resources.Get (exact path, immune to glob metacharacters
+     in filenames), then .Resources.GetMatch (glob convenience) -> kind "page".
+  4. Global resource: resources.Get / resources.GetMatch with a leading "/"
+     stripped (assets/ paths never start with "/") -> kind "global".
+  5. Leading-slash path resolved nowhere -> kind "static": a deliberate
+     static/ (or otherwise site-served) URL, emitted via relURL, warning-free.
+  6. Anything else -> kind "static" with missing=true: the CALLER warns once
+     (this partial is pure) and emits the raw-src fallback.
+
+  Destination normalization: whitespace trimmed, a leading "./" stripped, and
+  a query/fragment suffix split off before lookup (fragments never reach
+  resources.Get). The suffix is re-appended to the emitted URL after local
+  resolution (an SVG sprite fragment survives the round trip), with ONE
+  consumed exception: a bare "#raw" fragment on a local destination is the
+  per-image render-hook bypass and sets raw=true instead of re-emitting.
+
+  Context (dict):
+  - .page (Page)   The calling page (for .Resources).
+  - .src  (string) The raw source string.
+
+  Return value: dict
+  - kind        (string) "data" | "remote" | "page" | "global" | "static".
+  - resource    (Resource or absent) The resolved resource (page/global only).
+  - url         (string) Passthrough URL: RelPermalink plus preserved suffix
+                for local kinds, the verbatim value for remote/data kinds,
+                relURL for static kinds, the raw src when missing.
+  - processable (bool)   true when the resolved resource may enter the image
+                pipeline. GIF resources report false by design: animation
+                survives only when the target stays GIF, and resized animated
+                GIFs report original dimensions on a cold cache, so GIF is
+                always passthrough.
+  - withMeta    (bool)   reflect.IsImageResourceWithMeta on the resource
+                (safe dimension/metadata reads; false for SVG/ICO).
+  - subtype     (string) The resource's media subtype ("png", "gif", ...).
+  - missing     (bool)   true only for step 6 (unresolvable relative path).
+  - raw         (bool)   true when the consumed "#raw" bypass fragment was
+                present on a local destination.
+
+  One terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $s := trim (printf "%v" .src) " \t\n\r" -}}
+{{- $s = strings.TrimPrefix "./" $s -}}
+
+{{- $result := dict "kind" "static" "url" $s "processable" false "withMeta" false "subtype" "" "missing" false "raw" false -}}
+
+{{- if hasPrefix $s "data:" -}}
+  {{- $result = merge $result (dict "kind" "data" "url" $s) -}}
+{{- else if or (in $s "://") (hasPrefix $s "//") (findRE `(?i)^(javascript|vbscript|mailto|tel|file):` $s) -}}
+  {{/* URL-shaped -> remote. The authority forms (`://`, leading `//`) are
+       real remote URLs, and the scheme allow-list captures the bare
+       non-authority schemes that must NOT hit a resource lookup: dangerous
+       ones (javascript/vbscript) whose contextual auto-escaping
+       neutralization to #ZgotmplZ we rely on, plus mailto/tel/file. This is
+       DELIBERATELY narrow -- a relative filename that merely contains a
+       colon (`img:v2.png`, legal on a Linux page bundle) is NOT a scheme
+       and falls through to page/global resource resolution. */}}
+  {{- $result = merge $result (dict "kind" "remote" "url" $s) -}}
+{{- else -}}
+  {{/* Split off the fragment, then the query, preserving both for
+       re-emission. The regexes cut at the FIRST occurrence. */}}
+  {{- $frag := "" -}}
+  {{- $query := "" -}}
+  {{- $path := $s -}}
+  {{- if in $path "#" -}}
+    {{- $frag = replaceRE `^[^#]*#` "" $path -}}
+    {{- $path = replaceRE `#.*$` "" $path -}}
+  {{- end -}}
+  {{- if in $path "?" -}}
+    {{- $query = replaceRE `^[^?]*\?` "" $path -}}
+    {{- $path = replaceRE `\?.*$` "" $path -}}
+  {{- end -}}
+  {{- $raw := false -}}
+  {{- $suffix := "" -}}
+  {{- if and (eq $frag "raw") (eq $query "") -}}
+    {{- $raw = true -}}
+  {{- else -}}
+    {{- with $query -}}{{- $suffix = printf "?%s" . -}}{{- end -}}
+    {{- with $frag -}}{{- $suffix = printf "%s#%s" $suffix . -}}{{- end -}}
+  {{- end -}}
+
+  {{- $r := "" -}}
+  {{- $kind := "" -}}
+  {{- with $page.Resources.Get $path -}}
+    {{- $r = . -}}
+    {{- $kind = "page" -}}
+  {{- else -}}
+    {{- with $page.Resources.GetMatch $path -}}
+      {{- $r = . -}}
+      {{- $kind = "page" -}}
+    {{- else -}}
+      {{- $lookup := strings.TrimPrefix "/" $path -}}
+      {{- with resources.Get $lookup -}}
+        {{- $r = . -}}
+        {{- $kind = "global" -}}
+      {{- else -}}
+        {{- with resources.GetMatch $lookup -}}
+          {{- $r = . -}}
+          {{- $kind = "global" -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- if $r -}}
+    {{- $subtype := $r.MediaType.SubType -}}
+    {{- $result = merge $result (dict
+        "kind" $kind
+        "resource" $r
+        "url" (printf "%s%s" $r.RelPermalink $suffix)
+        "processable" (and (reflect.IsImageResourceProcessable $r) (ne $subtype "gif"))
+        "withMeta" (reflect.IsImageResourceWithMeta $r)
+        "subtype" $subtype
+        "raw" $raw) -}}
+  {{- else if hasPrefix $path "/" -}}
+    {{- $result = merge $result (dict "kind" "static" "url" (printf "%s%s" (relURL $path) $suffix) "raw" $raw) -}}
+  {{- else -}}
+    {{- $result = merge $result (dict "kind" "static" "url" $s "missing" true "raw" $raw) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $result -}}

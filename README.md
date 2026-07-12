@@ -35,6 +35,10 @@ Universal SEO module: one `{{ partial "seo/head.html" . }}` call emits the compl
 
 Universal sharing bar: one `{{ partial "social-share/share.html" . }}` call (or the `social-share` shortcode) renders style-agnostic BEM markup with plain share-intent links for up to 28 networks -- X, Facebook, LinkedIn, Reddit, Bluesky, Threads, Mastodon, Telegram, WhatsApp, VK, and more -- plus JavaScript-revealed Web Share, copy-link, and print buttons. Zero CSS, zero third-party contact before a deliberate click, real-text accessible names, full i18n, a four-tier configuration cascade, and consumer-extensible network registry. See [`modules/social-share/README.md`](modules/social-share/README.md).
 
+### `modules/images`
+
+Universal build-time image module: one `{{ partial "images/image.html" (dict "page" . "src" "..." "alt" "...") }}` call (or the `image` shortcode, or plain Markdown `![...]()` via the shipped render hook) emits style-agnostic BEM `<picture>` markup with width-descriptor srcsets that never upscale, WebP plus original-format fallback (AVIF opt-in on Hugo 0.163.0+), guaranteed `width`/`height` for zero layout shift, strict alt discipline, figure/caption/credit surfaces, JS-free dominant-color and blur placeholders, light/dark variant pairs for both OS-preference and class-based togglers, art direction, gallery rendering, and a PhotoSwipe-compatible lightbox enablement contract. Zero CSS, zero JavaScript, a four-tier configuration cascade under `params.img`, and graceful degradation on every unprocessable source. See [`modules/images/README.md`](modules/images/README.md).
+
 ### `modules/pwa`
 
 Consumer-facing Progressive Web App module: web app manifest, RealFaviconGenerator icon set, Workbox-powered service worker, install prompt, and push subscription wiring. See [`modules/pwa/README.md`](modules/pwa/README.md).

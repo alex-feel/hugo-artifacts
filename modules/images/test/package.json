@@ -1,0 +1,12 @@
+{
+  "name": "images-module-tests",
+  "private": true,
+  "type": "module",
+  "description": "Build-output assertion suite for the images Hugo module, run against the static HTML and published files that a hugo build of ./fixture produces. The module ships zero JavaScript, so there is no browser behavior to test.",
+  "scripts": {
+    "test": "node --test \"tests/*.spec.js\""
+  },
+  "devDependencies": {
+    "node-html-parser": "^7.0.1"
+  }
+}

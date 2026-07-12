@@ -1,0 +1,129 @@
+{{/*
+  Markdown image render hook: upgrades plain ![alt](src) images site-wide to
+  the SAME build-time optimized markup the images/image.html partial and the
+  image shortcode emit (one shared central renderer, so identical inputs
+  produce identical output).
+
+  IMPORTANT (consumer note, also documented in the README): importing this
+  module activates this hook SITE-WIDE for every Markdown image on the
+  consuming site. Escape hatches, per image to site-wide: the "#raw"
+  destination fragment (![alt](photo.jpg#raw)) bypasses the pipeline for one
+  image; [params.img.hook] enable = false (site or page tier) makes the hook
+  emit the neutral fallback while partial/shortcode call sites keep the full
+  pipeline; and a project-level layouts/_markup/render-image.html replaces
+  this template entirely (a project template wins over a module-provided one
+  in Hugo's lookup order).
+
+  Consumer config this module cannot ship (Hugo does not merge a module's
+  markup configuration): set
+  markup.goldmark.parser.wrapStandAloneImageWithinParagraph = false for
+  block-level figure output (without it every hook image renders the inline
+  form -- a graceful, valid degradation) and
+  markup.goldmark.parser.attribute.block = true for per-image attribute
+  overrides (without it .Attributes is empty; attributes are enhancement,
+  never a dependency). The attribute block goes on its OWN LINE directly
+  BELOW a standalone image; a same-line block silently delivers nothing.
+
+  Attribute handling: attribute names matching the module's parameter
+  vocabulary become call-tier overrides; the rest pass through onto the
+  <img> under a DENY-LIST of every attribute name the module itself emits
+  (a verbatim duplicate would produce invalid HTML that silently ignores the
+  author). Goldmark strips HTML event attributes before the hook sees them.
+
+  Non-destructive duty: this hook NEVER calls errorf -- Markdown content can
+  never break the build. Every contradiction that fails the partial and
+  shortcode surfaces demotes here to one deduplicated warning plus a defined
+  degradation: empty alt renders alt=""; layout=fixed without width falls
+  back to constrained; process=fit/fill/crop without height falls back to
+  resize; decorative with non-empty Markdown alt prefers decorative
+  (alt=""); decorative with an effective lightbox suppresses the anchor.
+
+  Context (Hugo image render hook): .Destination, .PlainText (alt), .Title
+  (caption when .IsBlock), .IsBlock, .Attributes, .Page, .Position,
+  .Ordinal.
+*/}}
+
+{{- $page := .Page -}}
+{{- $position := printf "%s" .Position -}}
+{{- $ordinal := .Ordinal -}}
+{{- $isBlock := .IsBlock -}}
+
+{{/* ---- Split Markdown attributes into parameter overrides and verbatim
+     pass-through ---- */}}
+{{- $vocab := slice "decorative" "dark" "caption" "credit" "credit_from_meta" "license" "license_url" "width" "height" "process" "quality" "anchor" "resample" "bg" "hint" "compression" "layout" "widths" "max_density" "sizes" "sizes_auto" "formats" "loading" "priority" "fetchpriority" "placeholder" "lightbox" "theme_strategy" "fetch" "remote_key" "responsive" "enable" "class" "id" -}}
+{{- $deny := slice "src" "srcset" "sizes" "alt" "width" "height" "loading" "decoding" "fetchpriority" "class" "style" "data-kind" "data-layout" "data-placeholder" "data-dominant-color" "data-dominant-luminance" "data-full-src" "data-full-width" "data-full-height" "data-theme-swap" "data-theme-variant" "data-count" "data-index" -}}
+{{- $args := dict "page" $page "position" $position "surface" "hook" -}}
+{{- $passthrough := dict -}}
+{{- range $k, $v := (.Attributes | default dict) -}}
+  {{- if in $vocab $k -}}
+    {{- $args = merge $args (dict $k $v) -}}
+  {{- else if in $deny $k -}}
+    {{- partial "images/lib/warn.html" (dict
+        "key" (printf "images:warn:denied-attr:%s:%s:%v" $page.RelPermalink $k $ordinal)
+        "message" (printf "[images] Dropping the Markdown attribute %q: the module emits that attribute itself, and a duplicate would produce invalid HTML that silently ignores the author. See %s" $k $position)) -}}
+  {{- else -}}
+    {{- $passthrough = merge $passthrough (dict $k (printf "%v" $v)) -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---- Alt and caption mapping with surface-aware demotions ---- */}}
+{{- $alt := .PlainText -}}
+{{- $decorative := in (slice "true" "1" "yes" "on") (lower (printf "%v" ($args.decorative | default ""))) -}}
+{{- if and $decorative $alt -}}
+  {{- partial "images/lib/warn.html" (dict
+      "key" (printf "images:warn:hook-decorative-alt:%s:%v" $page.RelPermalink $ordinal)
+      "message" (printf "[images] A Markdown image marked decorative also carries alt text; decorative wins and alt=\"\" is emitted (a decorative image is skipped by assistive technology). See %s" $position)) -}}
+  {{- $alt = "" -}}
+{{- end -}}
+{{- if and (not $alt) (not $decorative) -}}
+  {{- partial "images/lib/warn.html" (dict
+      "key" (printf "images:warn:hook-alt:%s:%v" $page.RelPermalink $ordinal)
+      "message" (printf "[images] Markdown image %q has no alt text; emitting alt=\"\". Add alt text describing the image (![Alt text](%s)), or mark it decorative deliberately with {decorative=\"true\"}. See %s" .Destination .Destination $position)) -}}
+{{- end -}}
+{{- $args = merge $args (dict "alt" $alt) -}}
+{{- if and (not (isset $args "caption")) $isBlock .Title -}}
+  {{- $args = merge $args (dict "caption" .Title) -}}
+{{- else if and (not $isBlock) .Title -}}
+  {{/* An inline image cannot carry a figure; route the title through the
+       caption parameter so the central renderer emits the uniform
+       dropped-caption warning (never a silent drop). */}}
+  {{- $args = merge $args (dict "caption" .Title) -}}
+{{- end -}}
+
+{{- $opts := partial "images/config.html" (dict "page" $page "args" $args) -}}
+
+{{/* ---- Demote the partial/shortcode errorf contradictions ---- */}}
+{{- if and (eq $opts.layout "fixed") (eq $opts.width 0) -}}
+  {{- partial "images/lib/warn.html" (dict
+      "key" (printf "images:warn:hook-fixed:%s:%v" $page.RelPermalink $ordinal)
+      "message" (printf "[images] layout=\"fixed\" requires an explicit width; falling back to \"constrained\". See %s" $position)) -}}
+  {{- $opts = merge $opts (dict "layout" "constrained") -}}
+{{- end -}}
+{{- if and (in (slice "fit" "fill" "crop") $opts.process) (or (eq $opts.width 0) (eq $opts.height 0)) -}}
+  {{- partial "images/lib/warn.html" (dict
+      "key" (printf "images:warn:hook-process:%s:%v" $page.RelPermalink $ordinal)
+      "message" (printf "[images] process=%q requires BOTH width and height; falling back to \"resize\". See %s" $opts.process $position)) -}}
+  {{- $opts = merge $opts (dict "process" "resize") -}}
+{{- end -}}
+
+{{- $source := partial "images/resolve/source.html" (dict "page" $page "src" .Destination) -}}
+{{- $dark := "" -}}
+{{- with $opts.dark -}}
+  {{- $dark = partial "images/resolve/source.html" (dict "page" $page "src" .) -}}
+  {{- $dark = partial "images/resolve/remote.html" (dict "page" $page "source" $dark "opts" $opts) -}}
+{{- end -}}
+
+{{- partial "images/render.html" (dict
+    "page" $page
+    "surface" "hook"
+    "block" $isBlock
+    "opts" $opts
+    "source" $source
+    "darkSource" $dark
+    "variants" (slice)
+    "neutral" (or $source.raw (not $opts.hook_enable))
+    "suppressAnchor" false
+    "ratio" 0.0
+    "attrs" $passthrough
+    "requested" $args) -}}
+{{- /* chomp trailing newline */ -}}

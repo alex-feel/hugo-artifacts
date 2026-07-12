@@ -1,0 +1,98 @@
+{{/*
+  images/preload.html -- PUBLIC head partial (renderer tier).
+
+  Purpose: emits the <link rel="preload" as="image"> for the page's LCP hero
+  from the consumer's <head>, with the SAME dict as the body call:
+
+      {{ partial "images/preload.html" (dict "page" . "src" "hero.jpg") }}
+
+  The link carries the srcset/sizes of the FIRST enabled modern-format chain
+  (AVIF when enabled and gate-passed, else WebP, else the fallback chain)
+  and that chain's type, so non-supporting browsers skip the preload instead
+  of double-fetching. It resolves through the identical config/plan path
+  with ONE forced difference: the eager/priority sizes path is ALWAYS taken,
+  because the "auto," prefix is meaningless inside imagesizes and must never
+  appear there.
+
+  Preload/body matching: with a dark source under the media strategy it
+  emits a media-qualified light/dark PAIR (an unqualified light-only preload
+  would be a wasted high-priority download for dark-OS visitors); under the
+  class strategy it preloads the default (light) tree only (the toggler
+  class is unknowable at preload time). With art-direction variants it emits
+  NOTHING and warns once: a base preload cannot express "no variant media
+  matched" as a media attribute -- art-directed heroes need hand-authored
+  media-qualified preloads.
+
+  Deduplication: one emission per (page, src) via a .Page.Store sentinel.
+  Pair it with priority=true on the body call, and preload exactly one hero
+  per page.
+
+  Expected context: a dict carrying at least "page" and "src" (errorf
+  otherwise), plus the standard option keys. Unprocessable or missing
+  sources emit nothing after one deduplicated warning.
+
+  Return value: none. This partial renders (possibly nothing).
+*/}}
+
+{{- $args := . -}}
+{{- $page := "" -}}
+{{- if reflect.IsMap $args -}}
+  {{- $page = $args.page -}}
+{{- end -}}
+
+{{- if or (not (reflect.IsPage $page)) (not $args.src) -}}
+  {{- errorf "[images] images/preload.html must be called with an options dict carrying at least the current Page and a source: {{ partial \"images/preload.html\" (dict \"page\" . \"src\" \"hero.jpg\") }}." -}}
+{{- else -}}
+
+{{- $opts := partial "images/config.html" (dict "page" $page "args" $args) -}}
+{{- $where := $opts.where -}}
+{{- $storeKey := printf "images:preload:%v" $args.src -}}
+{{- if and $opts.enable (not ($page.Store.Get $storeKey)) -}}
+  {{- $page.Store.Set $storeKey true -}}
+  {{- if $args.variants -}}
+    {{- partial "images/lib/warn.html" (dict
+        "key" (printf "images:warn:preload-variants:%s" $where)
+        "message" (printf "[images] images/preload.html emits nothing for art-directed images: a base preload cannot express \"no variant media matched\" and would double-download on variant-matching viewports. Hand-author media-qualified preloads for art-directed heroes. See %s" $where)) -}}
+  {{- else -}}
+    {{- $source := partial "images/resolve/source.html" (dict "page" $page "src" $args.src) -}}
+    {{- $source = partial "images/resolve/remote.html" (dict "page" $page "source" $source "opts" $opts) -}}
+    {{- if not $source.processable -}}
+      {{- partial "images/lib/warn.html" (dict
+          "key" (printf "images:warn:preload-unprocessable:%s" $source.url)
+          "message" (printf "[images] images/preload.html emits nothing for %q: the source could not be resolved or processed. See %s" $source.url $where)) -}}
+    {{- else -}}
+      {{- $plan := partial "images/resolve/plan.html" (dict "source" $source "opts" $opts "overrides" (dict) "eager" true) -}}
+      {{- $chain := index $plan.chains 0 -}}
+      {{- $res := partial "images/resolve/srcset.html" (dict
+          "resource" $source.resource
+          "candidates" $plan.candidates
+          "process" $plan.process
+          "ratio" $plan.ratio
+          "suffix" $chain.suffix) -}}
+      {{- $dark := "" -}}
+      {{- if eq $opts.theme_strategy "media" -}}
+        {{- with $opts.dark -}}
+          {{- $d := partial "images/resolve/source.html" (dict "page" $page "src" .) -}}
+          {{- $d = partial "images/resolve/remote.html" (dict "page" $page "source" $d "opts" $opts) -}}
+          {{- if $d.processable -}}{{- $dark = $d -}}{{- end -}}
+        {{- end -}}
+      {{- end -}}
+      {{- if $dark -}}
+        {{- $dplan := partial "images/resolve/plan.html" (dict "source" $dark "opts" $opts "overrides" (dict) "eager" true) -}}
+        {{- $dchain := index $dplan.chains 0 -}}
+        {{- $dres := partial "images/resolve/srcset.html" (dict
+            "resource" $dark.resource
+            "candidates" $dplan.candidates
+            "process" $dplan.process
+            "ratio" $dplan.ratio
+            "suffix" $dchain.suffix) -}}
+<link rel="preload" as="image" {{ printf "imagesrcset=%q" $res.srcset | safeHTMLAttr }}{{ with $plan.sizes }} imagesizes="{{ . }}"{{ end }} type="{{ $chain.mime }}" media="(prefers-color-scheme: light)" fetchpriority="high">
+<link rel="preload" as="image" {{ printf "imagesrcset=%q" $dres.srcset | safeHTMLAttr }}{{ with $dplan.sizes }} imagesizes="{{ . }}"{{ end }} type="{{ $dchain.mime }}" media="(prefers-color-scheme: dark)" fetchpriority="high">
+      {{- else -}}
+<link rel="preload" as="image" {{ printf "imagesrcset=%q" $res.srcset | safeHTMLAttr }}{{ with $plan.sizes }} imagesizes="{{ . }}"{{ end }} type="{{ $chain.mime }}" fetchpriority="high">
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- end -}}

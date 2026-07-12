@@ -1,0 +1,70 @@
+{{/*
+  images/resolve/remote.html -- IDEMPOTENT-EFFECTFUL (resolver tier).
+
+  Purpose: the shared build-time remote fetch-and-process step. Every surface
+  (the partial, the shortcode, the render hook, preload, src, and the dark /
+  art-direction sources) resolves a remote source through THIS one partial
+  right after resolve/source.html, so `fetch=true` behaves identically
+  everywhere: a fetched remote image gets the full pipeline on every surface,
+  and a passthrough remote URL degrades identically. Without this shared step
+  only the base <img> in render.html honored fetch, so a remote hero with
+  fetch=true rendered a processed <picture> in the body but emitted nothing
+  from preload.html, a raw URL from src.html, and unprocessed dark/variant
+  sources -- a doc/behavior mismatch this partial designs out.
+
+  When the source is not a remote kind, or remote_fetch is off, the input
+  source dict is returned unchanged (a no-op), so callers can invoke it
+  unconditionally.
+
+  Follows the github-repo resilience contract: the fetch rides in `try`
+  (never the deprecated remote-resource .Err method), every failure branch
+  (transport/5xx, HTTP 404-class miss, unprocessable body) degrades to remote
+  PASSTHROUGH with exactly ONE structured warnf per endpoint (Store-keyed on
+  the URL), and the build NEVER breaks on a remote failure.
+
+  Context (dict):
+  - .page   (Page)   The calling page (for the diagnostics position).
+  - .source (dict)   The resolve/source.html result to upgrade.
+  - .opts   (dict)   The cascaded options (remote_fetch, remote_key, where).
+
+  Return value: the source dict, upgraded in place with the fetched resource
+  and processable=true on success, or returned unchanged on a no-op or any
+  degradation.
+
+  One terminal return.
+*/}}
+
+{{- $src := .source -}}
+{{- $opts := .opts -}}
+{{- $where := $opts.where -}}
+
+{{- if and (eq $src.kind "remote") $opts.remote_fetch -}}
+  {{- $ropts := dict -}}
+  {{- with $opts.remote_key -}}{{- $ropts = dict "key" . -}}{{- end -}}
+  {{- with try (resources.GetRemote $src.url $ropts) -}}
+    {{- with .Err -}}
+      {{- partial "images/lib/warn.html" (dict
+          "key" (printf "images:warn:remote:%s" $src.url)
+          "message" (printf "[images] Remote image fetch failed for %q (%s); emitting the URL as a passthrough <img>. See %s" $src.url . $where)) -}}
+    {{- else with .Value -}}
+      {{- $subtype := .MediaType.SubType -}}
+      {{- if and (reflect.IsImageResourceProcessable .) (ne $subtype "gif") -}}
+        {{- $src = merge $src (dict
+            "resource" .
+            "processable" true
+            "withMeta" (reflect.IsImageResourceWithMeta .)
+            "subtype" $subtype) -}}
+      {{- else -}}
+        {{- partial "images/lib/warn.html" (dict
+            "key" (printf "images:warn:remote:%s" $src.url)
+            "message" (printf "[images] Remote image %q was fetched but is not processable; emitting the URL as a passthrough <img>. See %s" $src.url $where)) -}}
+      {{- end -}}
+    {{- else -}}
+      {{- partial "images/lib/warn.html" (dict
+          "key" (printf "images:warn:remote:%s" $src.url)
+          "message" (printf "[images] Remote image %q was not found (HTTP error); emitting the URL as a passthrough <img>. See %s" $src.url $where)) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $src -}}

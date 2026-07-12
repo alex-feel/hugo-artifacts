@@ -1,0 +1,38 @@
+baseURL = "http://localhost:1515/"
+defaultContentLanguage = "en"
+title = "Images Fixture"
+
+# The hostile-caption scenario feeds raw HTML through goldmark on purpose;
+# goldmark strips it (unsafe = false) and would log one warning per build.
+ignoreLogs = ['warning-goldmark-raw-html']
+
+[languages]
+
+  [languages.en]
+    locale = "en-US"
+    weight = 1
+
+[markup]
+
+  [markup.goldmark.parser]
+    wrapStandAloneImageWithinParagraph = false
+
+    [markup.goldmark.parser.attribute]
+      block = true
+      title = true
+
+[params]
+description = "Hugo images module build-output validation fixture site."
+
+# Site tier of the cascade: a short ladder keeps the derivative matrix lean
+# and exercises the exact-rung and no-upscale clamp cases.
+[params.img]
+widths = [480, 800]
+
+[module]
+
+  [module.hugoVersion]
+    min = "0.160.0"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/images"

@@ -25,6 +25,11 @@ modules/pwa/test/fixture/public/
 **/layouts/**
 **/*.webmanifest
 
+# Images-module fixture content: deliberately trap-shaped Markdown test data
+# (below-the-image attribute blocks and hostile URLs whose line structure is
+# semantically load-bearing; Prettier would join or rewrap them).
+modules/images/test/fixture/content/
+
 # Phase 7 locked Playwright test artifacts. Per master plan, these files
 # achieved 9 PASS / 0 SKIPPED / 0 FAIL and MUST NOT be modified to preserve
 # regression-free status. They use indent / quoting styles that differ from

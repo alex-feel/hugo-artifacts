@@ -1,0 +1,642 @@
+{{/*
+  images/render.html -- INTERNAL (central renderer).
+
+  Purpose: the single rendering surface shared by the images/image.html
+  partial, the image shortcode, the Markdown image render hook, and the
+  gallery, so every surface emits IDENTICAL markup for identical inputs. It
+  owns wrapper orchestration (figure / lightbox anchor / theme swap
+  wrapper), the loading policy, placeholder attributes, caption/credit/
+  license surfaces, and the final class/data-attribute assembly, and
+  dispatches the actual tree emission to images/picture.html.
+
+  Degradation contract: this partial NEVER calls errorf. Parameter-shape
+  contradictions are validated (errorf) or demoted (warnf) by the calling
+  surface BEFORE dispatch; everything environmental degrades here with one
+  deduplicated warnf and a safe rendering. The build never breaks on a
+  missing file, a remote failure, or an unprocessable source.
+
+  Expected context (dict):
+  - .page       (Page)   The calling page (required).
+  - .surface    (string) "partial" | "shortcode" | "hook" | "gallery".
+  - .block      (bool)   Block context (figure allowed) versus inline
+                         context (phrasing-only markup).
+  - .opts       (dict)   The cascaded options from images/config.html
+                         (already surface-adjusted by the caller).
+  - .source     (dict)   images/resolve/source.html result for src.
+  - .darkSource (dict or "") Resolved dark-variant source, when supplied.
+  - .variants   (slice)  Art-direction variants (partial surface only),
+                         each {source, darkSource (or ""), media, and
+                         optional width/height/widths/process overrides}.
+  - .neutral    (bool)   Force the neutral fallback (kill switches, the
+                         "#raw" bypass, hook.enable=false).
+  - .suppressAnchor (bool) Suppress the lightbox anchor (an anchor whose
+                         accessible name would be an empty alt is a WCAG
+                         2.4.4/4.1.2 failure; the caller folded the reason
+                         into its own warning).
+  - .ratio      (float)  Gallery crop ratio (height/width); 0 = none.
+  - .attrs      (map)    Verbatim pass-through attributes for the <img>
+                         (already deny-list filtered by the hook).
+  - .requested  (map)    The raw call-tier argument map (presence checks for
+                         explicitly-requested-feature warnings).
+
+  Renders markup; no return value.
+*/}}
+
+{{- $ctx := . -}}
+{{- $page := $ctx.page -}}
+{{- $opts := $ctx.opts -}}
+{{- $surface := $ctx.surface -}}
+{{- $block := $ctx.block -}}
+{{- $where := $opts.where -}}
+{{- $requested := $ctx.requested | default dict -}}
+{{- $neutral := or ($ctx.neutral | default false) (not $opts.enable) -}}
+{{- $src := $ctx.source -}}
+
+{{/* ---- Missing local file: warn once, then the raw-src fallback ---- */}}
+{{- if $src.missing -}}
+  {{- partial "images/lib/warn.html" (dict
+      "key" (printf "images:warn:missing:%s" $src.url)
+      "message" (printf "[images] Image %q could not be resolved as a page resource, a global resource, or a static path; emitting the raw src as a plain <img>. See %s" $src.url $where)) -}}
+{{- end -}}
+
+{{/* ---- Remote fetch-and-process opt-in (default is passthrough) ---- */}}
+{{/* The base source, the dark source, and every art-direction variant source
+     each pass through the shared images/resolve/remote.html step (invoked by
+     the caller for dark/variant sources and here for the base), so fetch
+     behaves identically on every surface. */}}
+{{- if not $neutral -}}
+  {{- $src = partial "images/resolve/remote.html" (dict "page" $page "source" $src "opts" $opts) -}}
+{{- end -}}
+
+{{- $canProcess := and (not $neutral) $src.processable -}}
+
+{{/* ---- Explicitly requested features on an unprocessable source ---- */}}
+{{- if and (not $canProcess) (not $neutral) -}}
+  {{- if and (isset $requested "placeholder") (ne $opts.placeholder "none") -}}
+    {{- partial "images/lib/warn.html" (dict
+        "key" (printf "images:warn:skipped-feature:placeholder:%s" $where)
+        "message" (printf "[images] The requested placeholder cannot be generated because the source is not processable; rendering without it. See %s" $where)) -}}
+  {{- end -}}
+  {{- if isset $requested "dark" -}}
+    {{- partial "images/lib/warn.html" (dict
+        "key" (printf "images:warn:skipped-feature:dark:%s" $where)
+        "message" (printf "[images] The requested dark variant is skipped because the base source is not processable. See %s" $where)) -}}
+  {{- end -}}
+  {{- if isset $requested "formats" -}}
+    {{- partial "images/lib/warn.html" (dict
+        "key" (printf "images:warn:skipped-feature:formats:%s" $where)
+        "message" (printf "[images] The requested format conversion is skipped because the source is not processable. See %s" $where)) -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---- Loading policy ---- */}}
+{{- $loading := $opts.loading -}}
+{{- $decoding := "async" -}}
+{{- $fp := $opts.fetchpriority -}}
+{{- if $opts.priority -}}
+  {{- $loading = "eager" -}}
+  {{- $decoding = "" -}}
+  {{- if not $fp -}}{{- $fp = "high" -}}{{- end -}}
+{{- end -}}
+{{- $eager := or $opts.priority (eq $loading "eager") -}}
+
+{{/* ---- Caption / credit / license surfaces ---- */}}
+{{- $caption := $opts.caption -}}
+{{- $credit := $opts.credit -}}
+{{- $license := $opts.license -}}
+{{- $licenseUrl := $opts.license_url -}}
+{{/* Credit from embedded IPTC metadata (opt-in). .Meta.IPTC is the tag
+     collection documented at https://gohugo.io/methods/resource/meta/ (read
+     on the ORIGINAL resource -- transformation strips metadata). The key
+     names are the IPTC IIM standard field labels Hugo exposes verbatim:
+     "Credit" (IIM dataset 2:110) and "By-line" (2:080, the photographer);
+     Credit wins, By-line is the fallback. Test 06 asserts the surfaced
+     value against an IPTC-tagged fixture image. */}}
+{{- if and (not $credit) $opts.credit_from_meta $src.withMeta -}}
+  {{- with $src.resource -}}
+    {{- with .Meta.IPTC -}}
+      {{- $v := index . "Credit" | default (index . "By-line") -}}
+      {{- with $v -}}{{- $credit = printf "%v" . -}}{{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- if and $opts.decorative $caption -}}
+  {{- partial "images/lib/warn.html" (dict
+      "key" (printf "images:warn:decorative-caption:%s" $where)
+      "message" (printf "[images] A decorative image carries a caption; keeping the caption (valid, but unusual -- a captioned image is rarely purely decorative). See %s" $where)) -}}
+{{- end -}}
+{{- if and (not $block) (or $caption $credit $license) -}}
+  {{- partial "images/lib/warn.html" (dict
+      "key" (printf "images:warn:inline-caption:%s" $where)
+      "message" (printf "[images] Dropping the caption/credit/license of an INLINE image: <figure> is invalid inside a paragraph. Make the image standalone (its own block) to keep the caption. See %s" $where)) -}}
+  {{- $caption = "" -}}
+  {{- $credit = "" -}}
+  {{- $license = "" -}}
+  {{- $licenseUrl = "" -}}
+{{- end -}}
+{{- $hasCaptionArea := or $caption $credit $license -}}
+
+{{/* ---- Lightbox enablement ---- */}}
+{{- $wantLightbox := and $opts.lightbox (not $neutral) -}}
+{{- if and $wantLightbox $opts.decorative -}}
+  {{/* Only the hook and gallery surfaces can reach this state; the partial
+       and shortcode errorf it at validation time. An anchor named by an
+       empty alt is announced as a bare "link" (WCAG 2.4.4/4.1.2). */}}
+  {{- partial "images/lib/warn.html" (dict
+      "key" (printf "images:warn:decorative-lightbox:%s" $where)
+      "message" (printf "[images] Suppressing the lightbox anchor of a decorative image: an anchor whose accessible name is the empty alt fails WCAG 2.4.4/4.1.2. See %s" $where)) -}}
+  {{- $wantLightbox = false -}}
+{{- end -}}
+{{- if $ctx.suppressAnchor -}}{{- $wantLightbox = false -}}{{- end -}}
+
+{{/* ==== Pipeline execution (processable sources only) ==== */}}
+{{- $plan := dict -}}
+{{- $chainResults := slice -}}
+{{- $fb := dict -}}
+{{- $fbDisplay := "" -}}
+{{- $imgW := 0 -}}
+{{- $imgH := 0 -}}
+{{- $darkPlan := dict -}}
+{{- $darkResults := slice -}}
+{{- $darkFb := dict -}}
+{{- $darkDisplay := "" -}}
+{{- $darkActive := false -}}
+{{- $varGroups := slice -}}
+{{- $ph := dict "attrs" dict "style" "" -}}
+{{- $lbHref := "" -}}
+{{- $lbW := 0 -}}
+{{- $lbH := 0 -}}
+{{- $classStrategy := false -}}
+
+{{- if $canProcess -}}
+  {{- $overrides := dict -}}
+  {{- if gt ($ctx.ratio | default 0.0) 0.0 -}}
+    {{- $overrides = dict "ratio" $ctx.ratio "process" "fill" -}}
+  {{- end -}}
+  {{- $plan = partial "images/resolve/plan.html" (dict "source" $src "opts" $opts "overrides" $overrides "eager" $eager) -}}
+
+  {{- if $plan.avifGated -}}
+    {{- partial "images/lib/warn.html" (dict
+        "key" "images:warn:avif-gate"
+        "message" (printf "[images] AVIF output requires Hugo 0.163.0+ (per-image AVIF quality in spec strings); this build runs %s, so WebP plus the original format is emitted instead. See %s" hugo.Version $where)) -}}
+  {{- end -}}
+  {{- if $plan.fixedOverflow -}}
+    {{- partial "images/lib/warn.html" (dict
+        "key" (printf "images:warn:fixed-overflow:%s" $where)
+        "message" (printf "[images] The requested fixed display width exceeds the %dpx source width; emitting the bare source width instead (never upscale). See %s" $plan.srcW $where)) -}}
+  {{- end -}}
+  {{- if $plan.hintDropped -}}
+    {{- partial "images/lib/warn.html" (dict
+        "key" (printf "images:warn:hint-dropped:%s" $opts.hint)
+        "message" (printf "[images] The WebP hint %q applies to WebP chains only and was dropped from the other format chains. See %s" $opts.hint $where)) -}}
+  {{- end -}}
+  {{- if $plan.compressionDropped -}}
+    {{- partial "images/lib/warn.html" (dict
+        "key" (printf "images:warn:compression-dropped:%s" $opts.compression)
+        "message" (printf "[images] The compression mode %q is WebP-only and was dropped from the other format chains. See %s" $opts.compression $where)) -}}
+  {{- end -}}
+
+  {{- range $chain := $plan.chains -}}
+    {{- $res := partial "images/resolve/srcset.html" (dict
+        "resource" $src.resource
+        "candidates" $plan.candidates
+        "process" $plan.process
+        "ratio" $plan.ratio
+        "suffix" $chain.suffix) -}}
+    {{- $chainResults = $chainResults | append (dict "chain" $chain "res" $res) -}}
+    {{- if $chain.fallback -}}{{- $fb = merge $res (dict "mime" $chain.mime) -}}{{- end -}}
+  {{- end -}}
+  {{/* Fixed layout displays at the 1x rendition's size (and uses it as the
+       fallback src); w-descriptor layouts use the largest derivative. */}}
+  {{- $fbDisplay = cond $plan.fixed $fb.first $fb.top -}}
+  {{- $imgW = $fbDisplay.Width -}}
+  {{- $imgH = $fbDisplay.Height -}}
+
+  {{/* ---- Dark variant ---- */}}
+  {{- with $ctx.darkSource -}}
+    {{- if .processable -}}
+      {{- $darkActive = true -}}
+    {{- else -}}
+      {{- partial "images/lib/warn.html" (dict
+          "key" (printf "images:warn:dark-unresolvable:%s" $where)
+          "message" (printf "[images] The dark variant source could not be resolved or processed; rendering the light image only. See %s" $where)) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $classStrategy = and $darkActive (eq $opts.theme_strategy "class") -}}
+  {{- if $darkActive -}}
+    {{- $darkEager := $eager -}}
+    {{- if $classStrategy -}}{{- $darkEager = false -}}{{- end -}}
+    {{- $darkPlan = partial "images/resolve/plan.html" (dict "source" $ctx.darkSource "opts" $opts "overrides" (dict) "eager" $darkEager) -}}
+    {{- range $chain := $darkPlan.chains -}}
+      {{- $res := partial "images/resolve/srcset.html" (dict
+          "resource" $ctx.darkSource.resource
+          "candidates" $darkPlan.candidates
+          "process" $darkPlan.process
+          "ratio" $darkPlan.ratio
+          "suffix" $chain.suffix) -}}
+      {{- $darkResults = $darkResults | append (dict "chain" $chain "res" $res) -}}
+      {{- if $chain.fallback -}}{{- $darkFb = merge $res (dict "mime" $chain.mime) -}}{{- end -}}
+    {{- end -}}
+    {{- $darkDisplay = cond $darkPlan.fixed $darkFb.first $darkFb.top -}}
+  {{- end -}}
+  {{- if and $opts.priority $classStrategy -}}
+    {{- partial "images/lib/warn.html" (dict
+        "key" (printf "images:warn:priority-class:%s" $where)
+        "message" (printf "[images] priority=true with theme_strategy=class costs dark-default visitors their LCP: the visible dark tree is lazy while the hidden light tree downloads eagerly at high priority. Use the media strategy for priority heroes with dark variants. See %s" $where)) -}}
+  {{- end -}}
+
+  {{/* ---- Art-direction variants ---- */}}
+  {{- range $v := ($ctx.variants | default slice) -}}
+    {{- $vov := dict -}}
+    {{- range $k := slice "width" "height" "widths" "process" -}}
+      {{- if isset $v $k -}}{{- $vov = merge $vov (dict $k (index $v $k)) -}}{{- end -}}
+    {{- end -}}
+    {{- $vplan := partial "images/resolve/plan.html" (dict "source" $v.source "opts" $opts "overrides" $vov "eager" $eager) -}}
+    {{- $vresults := slice -}}
+    {{- $vfb := dict -}}
+    {{- range $chain := $vplan.chains -}}
+      {{- $res := partial "images/resolve/srcset.html" (dict
+          "resource" $v.source.resource
+          "candidates" $vplan.candidates
+          "process" $vplan.process
+          "ratio" $vplan.ratio
+          "suffix" $chain.suffix) -}}
+      {{- $vresults = $vresults | append (dict "chain" $chain "res" $res) -}}
+      {{- if $chain.fallback -}}{{- $vfb = $res -}}{{- end -}}
+    {{- end -}}
+    {{- $vw := $vfb.top.Width -}}
+    {{- $vh := $vfb.top.Height -}}
+    {{- if and (gt ($vov.width | default 0) 0) (gt ($vov.height | default 0) 0) -}}
+      {{- $vw = $vov.width -}}
+      {{- $vh = $vov.height -}}
+    {{- end -}}
+    {{- $vdResults := slice -}}
+    {{- $vdw := 0 -}}
+    {{- $vdh := 0 -}}
+    {{- with $v.darkSource -}}
+      {{- if .processable -}}
+        {{- $vdplan := partial "images/resolve/plan.html" (dict "source" . "opts" $opts "overrides" $vov "eager" $eager) -}}
+        {{- $vdfb := dict -}}
+        {{- range $chain := $vdplan.chains -}}
+          {{- $res := partial "images/resolve/srcset.html" (dict
+              "resource" $v.darkSource.resource
+              "candidates" $vdplan.candidates
+              "process" $vdplan.process
+              "ratio" $vdplan.ratio
+              "suffix" $chain.suffix) -}}
+          {{- $vdResults = $vdResults | append (dict "chain" $chain "res" $res) -}}
+          {{- if $chain.fallback -}}{{- $vdfb = $res -}}{{- end -}}
+        {{- end -}}
+        {{- $vdw = $vdfb.top.Width -}}
+        {{- $vdh = $vdfb.top.Height -}}
+        {{- if and (gt ($vov.width | default 0) 0) (gt ($vov.height | default 0) 0) -}}
+          {{- $vdw = $vov.width -}}
+          {{- $vdh = $vov.height -}}
+        {{- end -}}
+      {{- else -}}
+        {{- partial "images/lib/warn.html" (dict
+            "key" (printf "images:warn:dark-unresolvable:%s:%s" $where $v.media)
+            "message" (printf "[images] The dark source of the variant with media %q could not be resolved or processed; serving its light source in dark mode too. See %s" $v.media $where)) -}}
+      {{- end -}}
+    {{- end -}}
+    {{- $varGroups = $varGroups | append (dict
+        "media" $v.media
+        "results" $vresults
+        "width" $vw
+        "height" $vh
+        "darkResults" $vdResults
+        "darkWidth" $vdw
+        "darkHeight" $vdh) -}}
+  {{- end -}}
+
+  {{/* ---- Placeholder ---- */}}
+  {{- if ne $opts.placeholder "none" -}}
+    {{- $ph = partial "images/resolve/placeholder.html" (dict
+        "resource" $src.resource
+        "mode" $opts.placeholder
+        "opts" $opts) -}}
+  {{- end -}}
+
+  {{/* ---- Lightbox capped derivative ---- */}}
+  {{- if $wantLightbox -}}
+    {{- $lbRes := partial "images/resolve/srcset.html" (dict
+        "resource" $src.resource
+        "candidates" (slice (dict "w" $plan.lightboxW "desc" "1x"))
+        "process" "resize"
+        "ratio" 0.0
+        "suffix" $plan.lightboxSuffix) -}}
+    {{- $lbHref = $lbRes.top.RelPermalink -}}
+    {{- $lbW = $lbRes.top.Width -}}
+    {{- $lbH = $lbRes.top.Height -}}
+  {{- end -}}
+{{- else -}}
+  {{/* Passthrough / neutral: dimensions come from the original resource
+       when metadata-capable reads are safe (never on SVG/ICO), else from
+       the caller-supplied width/height. */}}
+  {{- with $src.resource -}}
+    {{- if $src.withMeta -}}
+      {{- $imgW = .Width -}}
+      {{- $imgH = .Height -}}
+      {{- with .Meta -}}
+        {{- if in (slice 5 6 7 8) .Orientation -}}
+          {{- $imgW = $src.resource.Height -}}
+          {{- $imgH = $src.resource.Width -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{/* Passthrough dimensions come from the caller-supplied pair, but ONLY
+       when BOTH are present: an <img height="0"> renders as a zero-height
+       box in every browser, inverting the CLS guarantee, so a width without
+       a height (or vice versa) reserves no box at all. */}}
+  {{- if and (eq $imgW 0) (gt $opts.width 0) (gt $opts.height 0) -}}
+    {{- $imgW = $opts.width -}}
+    {{- $imgH = $opts.height -}}
+  {{- end -}}
+  {{- if $wantLightbox -}}
+    {{- $lbHref = $src.url -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ==== Root class / attribute assembly ==== */}}
+{{- $phActive := and $canProcess (ne $opts.placeholder "none") (gt (len $ph.attrs) 0) -}}
+{{- $rootClass := "image" -}}
+{{- if $opts.decorative -}}{{- $rootClass = printf "%s image--decorative" $rootClass -}}{{- end -}}
+{{- if $opts.priority -}}{{- $rootClass = printf "%s image--priority" $rootClass -}}{{- end -}}
+{{- if $phActive -}}{{- $rootClass = printf "%s image--placeholder-%s" $rootClass $opts.placeholder -}}{{- end -}}
+{{- if $classStrategy -}}{{- $rootClass = printf "%s image--theme-class" $rootClass -}}{{- end -}}
+{{- if $lbHref -}}{{- $rootClass = printf "%s image--lightbox" $rootClass -}}{{- end -}}
+{{- if not $canProcess -}}{{- $rootClass = printf "%s image--static" $rootClass -}}{{- end -}}
+{{- $rootData := dict "data-kind" $src.kind -}}
+{{- if $canProcess -}}{{- $rootData = merge $rootData (dict "data-layout" $opts.layout) -}}{{- end -}}
+{{- if $phActive -}}{{- $rootData = merge $rootData $ph.attrs -}}{{- end -}}
+{{- $rootStyle := "" -}}
+{{- if $phActive -}}{{- $rootStyle = $ph.style -}}{{- end -}}
+{{- $rootId := $opts.id -}}
+
+{{/* ==== Tree assembly ==== */}}
+{{- $themeTag := false -}}
+{{- if and (not $classStrategy) $canProcess -}}
+  {{- if $darkActive -}}{{- $themeTag = true -}}{{- end -}}
+  {{- range $g := $varGroups -}}
+    {{- if $g.darkResults -}}{{- $themeTag = true -}}{{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $lightTag := "" -}}
+{{- $darkTag := "" -}}
+{{- if $themeTag -}}
+  {{- $lightTag = "light" -}}
+  {{- $darkTag = "dark" -}}
+{{- end -}}
+
+{{- $trees := slice -}}
+{{- if not $canProcess -}}
+  {{- $trees = slice (dict
+      "sources" slice
+      "img" (dict
+        "src" $src.url
+        "datauri" (and (eq $src.kind "data") (hasPrefix $src.url "data:image/"))
+        "width" $imgW
+        "height" $imgH
+        "alt" $opts.alt
+        "loading" $loading
+        "decoding" $decoding
+        "fetchpriority" $fp
+        "class" $opts.class
+        "attrs" ($ctx.attrs | default dict))) -}}
+{{- else if $classStrategy -}}
+  {{/* Two complete trees; the alternate (dark) tree is unconditionally
+       lazy -- an eager hidden variant is a guaranteed double download. */}}
+  {{- $lightSources := slice -}}
+  {{- range $g := $varGroups -}}
+    {{- range $cr := $g.results -}}
+      {{- $lightSources = $lightSources | append (dict
+          "srcset" $cr.res.srcset
+          "type" (cond $cr.chain.fallback "" $cr.chain.mime)
+          "media" $g.media
+          "sizes" $plan.sizes
+          "width" $g.width
+          "height" $g.height
+          "variant" "") -}}
+    {{- end -}}
+  {{- end -}}
+  {{- range $cr := $chainResults -}}
+    {{- if not $cr.chain.fallback -}}
+      {{- $lightSources = $lightSources | append (dict
+          "srcset" $cr.res.srcset
+          "type" $cr.chain.mime
+          "media" ""
+          "sizes" $plan.sizes
+          "width" 0
+          "height" 0
+          "variant" "") -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $darkSources := slice -}}
+  {{- range $g := $varGroups -}}
+    {{- $groupResults := $g.results -}}
+    {{- $gw := $g.width -}}
+    {{- $gh := $g.height -}}
+    {{- if $g.darkResults -}}
+      {{- $groupResults = $g.darkResults -}}
+      {{- $gw = $g.darkWidth -}}
+      {{- $gh = $g.darkHeight -}}
+    {{- end -}}
+    {{- range $cr := $groupResults -}}
+      {{- $darkSources = $darkSources | append (dict
+          "srcset" $cr.res.srcset
+          "type" (cond $cr.chain.fallback "" $cr.chain.mime)
+          "media" $g.media
+          "sizes" $darkPlan.sizes
+          "width" $gw
+          "height" $gh
+          "variant" "") -}}
+    {{- end -}}
+  {{- end -}}
+  {{- range $cr := $darkResults -}}
+    {{- if not $cr.chain.fallback -}}
+      {{- $darkSources = $darkSources | append (dict
+          "srcset" $cr.res.srcset
+          "type" $cr.chain.mime
+          "media" ""
+          "sizes" $darkPlan.sizes
+          "width" 0
+          "height" 0
+          "variant" "") -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $trees = slice
+      (dict
+        "sources" $lightSources
+        "pictureClass" "image__picture--light"
+        "pictureVariant" "light"
+        "img" (dict
+          "src" $fbDisplay.RelPermalink
+          "srcset" $fb.srcset
+          "sizes" $plan.sizes
+          "width" $imgW
+          "height" $imgH
+          "alt" $opts.alt
+          "loading" $loading
+          "decoding" $decoding
+          "fetchpriority" $fp
+          "class" $opts.class
+          "attrs" ($ctx.attrs | default dict)
+          "variant" (cond (gt (len $lightSources) 0) "" "light")))
+      (dict
+        "sources" $darkSources
+        "pictureClass" "image__picture--dark"
+        "pictureVariant" "dark"
+        "img" (dict
+          "src" $darkDisplay.RelPermalink
+          "srcset" $darkFb.srcset
+          "sizes" $darkPlan.sizes
+          "width" $darkDisplay.Width
+          "height" $darkDisplay.Height
+          "alt" $opts.alt
+          "loading" "lazy"
+          "decoding" "async"
+          "fetchpriority" ""
+          "class" $opts.class
+          "attrs" ($ctx.attrs | default dict)
+          "variant" (cond (gt (len $darkSources) 0) "" "dark"))) -}}
+{{- else -}}
+  {{/* Media strategy (or no dark at all): one tree. Selection is
+       first-match in document order, so per-variant dark sources ride
+       COMBINED media queries ahead of their light siblings, base dark
+       sources come after every variant group, base light sources follow,
+       and the light fallback <img> closes the tree. */}}
+  {{- $sources := slice -}}
+  {{- range $g := $varGroups -}}
+    {{- range $cr := $g.darkResults -}}
+      {{- $sources = $sources | append (dict
+          "srcset" $cr.res.srcset
+          "type" (cond $cr.chain.fallback "" $cr.chain.mime)
+          "media" (printf "(prefers-color-scheme: dark) and %s" $g.media)
+          "sizes" $plan.sizes
+          "width" $g.darkWidth
+          "height" $g.darkHeight
+          "variant" $darkTag) -}}
+    {{- end -}}
+    {{- range $cr := $g.results -}}
+      {{- $sources = $sources | append (dict
+          "srcset" $cr.res.srcset
+          "type" (cond $cr.chain.fallback "" $cr.chain.mime)
+          "media" $g.media
+          "sizes" $plan.sizes
+          "width" $g.width
+          "height" $g.height
+          "variant" $lightTag) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if $darkActive -}}
+    {{- $dw := 0 -}}
+    {{- $dh := 0 -}}
+    {{- if or (ne $darkDisplay.Width $imgW) (ne $darkDisplay.Height $imgH) -}}
+      {{- $dw = $darkDisplay.Width -}}
+      {{- $dh = $darkDisplay.Height -}}
+    {{- end -}}
+    {{- range $cr := $darkResults -}}
+      {{- $sources = $sources | append (dict
+          "srcset" $cr.res.srcset
+          "type" (cond $cr.chain.fallback "" $cr.chain.mime)
+          "media" "(prefers-color-scheme: dark)"
+          "sizes" $plan.sizes
+          "width" $dw
+          "height" $dh
+          "variant" $darkTag) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- range $cr := $chainResults -}}
+    {{- if not $cr.chain.fallback -}}
+      {{- $sources = $sources | append (dict
+          "srcset" $cr.res.srcset
+          "type" $cr.chain.mime
+          "media" ""
+          "sizes" $plan.sizes
+          "width" 0
+          "height" 0
+          "variant" $lightTag) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $trees = slice (dict
+      "sources" $sources
+      "img" (dict
+        "src" $fbDisplay.RelPermalink
+        "srcset" $fb.srcset
+        "sizes" $plan.sizes
+        "width" $imgW
+        "height" $imgH
+        "alt" $opts.alt
+        "loading" $loading
+        "decoding" $decoding
+        "fetchpriority" $fp
+        "class" $opts.class
+        "attrs" ($ctx.attrs | default dict)
+        "variant" $lightTag)) -}}
+{{- end -}}
+
+{{/* ==== Wrapper orchestration and emission ==== */}}
+{{- $useFigure := and $block $hasCaptionArea -}}
+{{- $swapOnWrapper := and $classStrategy (or $useFigure $lbHref) -}}
+{{- $useSwapSpan := and $classStrategy (not $swapOnWrapper) -}}
+{{- $treesAreRoot := and (not $useFigure) (not $lbHref) (not $useSwapSpan) -}}
+
+{{- if $useFigure -}}
+<figure class="{{ $rootClass }}"
+  {{- range $k, $v := $rootData }} {{ printf "%s=%q" $k $v | safeHTMLAttr }}{{- end -}}
+  {{- with $rootId }} id="{{ . }}"{{- end -}}
+  {{- with $rootStyle }} style="{{ . | safeCSS }}"{{- end -}}
+  {{- if $classStrategy }} data-theme-swap="class"{{- end }}>
+  {{- if $lbHref }}
+  <a class="image__link" href="{{ $lbHref }}" data-full-src="{{ $lbHref }}"{{ if gt $lbW 0 }} data-full-width="{{ $lbW }}" data-full-height="{{ $lbH }}"{{ end }}>
+    {{- range $t := $trees -}}
+    {{- partial "images/picture.html" (merge $t (dict "root" false)) -}}
+    {{- end }}
+  </a>
+  {{- else -}}
+    {{- range $t := $trees -}}
+    {{- partial "images/picture.html" (merge $t (dict "root" false)) -}}
+    {{- end -}}
+  {{- end }}
+  <figcaption class="image__caption-area">
+    {{- with $caption }}<span class="image__caption">{{ $page.RenderString (dict "display" "inline") . }}</span>{{ end -}}
+    {{- with $credit }}<span class="image__credit">{{ $page.RenderString (dict "display" "inline") . }}</span>{{ end -}}
+    {{- with $license -}}
+      {{- if $licenseUrl -}}
+        <a class="image__license" href="{{ $licenseUrl }}" rel="license">{{ . }}</a>
+      {{- else -}}
+        <span class="image__license">{{ . }}</span>
+      {{- end -}}
+    {{- end -}}
+  </figcaption>
+</figure>
+{{- else if $lbHref -}}
+<a class="{{ $rootClass }} image__link"
+  {{- range $k, $v := $rootData }} {{ printf "%s=%q" $k $v | safeHTMLAttr }}{{- end -}}
+  {{- with $rootId }} id="{{ . }}"{{- end -}}
+  {{- with $rootStyle }} style="{{ . | safeCSS }}"{{- end -}}
+  {{- if $classStrategy }} data-theme-swap="class"{{- end }} href="{{ $lbHref }}" data-full-src="{{ $lbHref }}"{{ if gt $lbW 0 }} data-full-width="{{ $lbW }}" data-full-height="{{ $lbH }}"{{ end }}>
+  {{- range $t := $trees -}}
+  {{- partial "images/picture.html" (merge $t (dict "root" false)) -}}
+  {{- end -}}
+</a>
+{{- else if $useSwapSpan -}}
+<span class="{{ $rootClass }}"
+  {{- range $k, $v := $rootData }} {{ printf "%s=%q" $k $v | safeHTMLAttr }}{{- end -}}
+  {{- with $rootId }} id="{{ . }}"{{- end -}}
+  {{- with $rootStyle }} style="{{ . | safeCSS }}"{{- end }} data-theme-swap="class">
+  {{- range $t := $trees -}}
+  {{- partial "images/picture.html" (merge $t (dict "root" false)) -}}
+  {{- end -}}
+</span>
+{{- else -}}
+  {{- range $t := $trees -}}
+  {{- partial "images/picture.html" (merge $t (dict
+      "root" $treesAreRoot
+      "rootClass" $rootClass
+      "rootData" $rootData
+      "rootId" $rootId
+      "rootStyle" $rootStyle)) -}}
+  {{- end -}}
+{{- end -}}

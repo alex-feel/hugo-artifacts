@@ -19,6 +19,10 @@
 //     long file-path links overflow header column widths; MD060 would flag
 //     these legitimately but the test fixture documentation MUST NOT be
 //     restyled to preserve the regression-free Phase 7 status.
+//   - modules/images/test/fixture/content/ is deliberately hostile Markdown
+//     test DATA (paralleling the .prettierignore exclusion): bare URLs inside
+//     shortcode arguments, javascript: destinations, and attribute blocks
+//     whose line structure is semantically load-bearing.
 {
   "config": {
     "default": true,
@@ -36,6 +40,7 @@
     ".code-review-graph/**",
     "modules/pwa/test/README.md",
     "modules/pwa/test/IOS_MANUAL_MATRIX.md",
+    "modules/images/test/fixture/content/**",
     "modules/pwa/test/test-results/**",
     "modules/pwa/test/playwright-report/**",
   ],

@@ -1,0 +1,82 @@
+{{/*
+  images/picture.html -- INTERNAL (markup tier).
+
+  Purpose: renders exactly ONE <picture> or bare <img> tree from a resolved
+  plan. A <picture> is emitted if and only if at least one <source> element
+  exists; single-chain renders and passthrough paths emit a bare <img> and
+  never pay the wrapper. The central renderer calls this once per render, or
+  twice for the class theme strategy (one tree per theme).
+
+  Root rule: when no wrapper element (figure, lightbox anchor, theme swap
+  span) exists above this tree, the <picture> -- or, single-chain case, the
+  <img> itself -- is the module root and carries the block class plus
+  modifiers, the id, the data-* attributes, and the placeholder style, IN
+  ADDITION to its element class. `.image` therefore always selects the root
+  and `.image__img` always selects the img, on every variant.
+
+  Context (dict):
+  - .sources (slice) Source descriptors in emission order, each
+    {srcset, type (may be ""), media (may be ""), sizes (may be ""),
+    width/height (0 = omit), variant (data-theme-variant value or "")}.
+  - .img (dict) The fallback image: {src, srcset (may be ""), sizes,
+    width/height (0 = omit), alt, loading, decoding (may be ""),
+    fetchpriority (may be ""), class (consumer extra classes), attrs (map of
+    verbatim pass-through attributes), variant, datauri (bool: src is a
+    module-classified data:image/ URI and bypasses the URL filter)}.
+  - .root (bool) This tree's outermost element is the module root.
+  - .rootClass (string) Block class plus modifiers (root only).
+  - .rootData (dict) data-* attribute names to values (root only).
+  - .rootId (string) id attribute (root only).
+  - .rootStyle (string) style declarations, safeCSS-piped (root only).
+  - .pictureClass (string) Extra element-modifier classes on the <picture>
+    (class-strategy tree identity).
+  - .pictureVariant (string) data-theme-variant on the tree root under the
+    class strategy ("" = none).
+
+  Renders markup; no return value.
+*/}}
+
+{{- $p := . -}}
+{{- $img := $p.img -}}
+{{- if $p.sources -}}
+<picture class="{{ if $p.root }}{{ $p.rootClass }} {{ end }}image__picture{{ with $p.pictureClass }} {{ . }}{{ end }}"
+  {{- if $p.root -}}
+    {{- range $k, $v := $p.rootData }} {{ printf "%s=%q" $k $v | safeHTMLAttr }}{{- end -}}
+    {{- with $p.rootId }} id="{{ . }}"{{- end -}}
+    {{- with $p.rootStyle }} style="{{ . | safeCSS }}"{{- end -}}
+  {{- end -}}
+  {{- with $p.pictureVariant }} data-theme-variant="{{ . }}"{{- end -}}>
+  {{- range $s := $p.sources }}
+  <source
+    {{- with $s.type }} type="{{ . }}"{{- end -}}
+    {{- with $s.media }} media="{{ . }}"{{- end }} srcset="{{ $s.srcset }}"
+    {{- with $s.sizes }} sizes="{{ . }}"{{- end -}}
+    {{- if and (gt ($s.width | default 0) 0) (gt ($s.height | default 0) 0) }} width="{{ $s.width }}" height="{{ $s.height }}"{{- end -}}
+    {{- with $s.variant }} data-theme-variant="{{ . }}"{{- end -}}>
+  {{- end }}
+  <img class="image__img{{ with $img.class }} {{ . }}{{ end }}"
+    {{- if $img.datauri }} src="{{ $img.src | safeURL }}"{{ else }} src="{{ $img.src }}"{{ end }}
+    {{- with $img.srcset }} srcset="{{ . }}"{{- end -}}
+    {{- with $img.sizes }} sizes="{{ . }}"{{- end -}}
+    {{- if and (gt ($img.width | default 0) 0) (gt ($img.height | default 0) 0) }} width="{{ $img.width }}" height="{{ $img.height }}"{{- end }} alt="{{ $img.alt }}" loading="{{ $img.loading }}"
+    {{- with $img.decoding }} decoding="{{ . }}"{{- end -}}
+    {{- with $img.fetchpriority }} fetchpriority="{{ . }}"{{- end -}}
+    {{- with $img.variant }} data-theme-variant="{{ . }}"{{- end -}}
+    {{- range $k, $v := $img.attrs }} {{ printf "%s=\"%s\"" $k (htmlEscape $v) | safeHTMLAttr }}{{- end -}}>
+</picture>
+{{- else -}}
+<img class="{{ if $p.root }}{{ $p.rootClass }} {{ end }}image__img{{ with $img.class }} {{ . }}{{ end }}"
+  {{- if $p.root -}}
+    {{- range $k, $v := $p.rootData }} {{ printf "%s=%q" $k $v | safeHTMLAttr }}{{- end -}}
+    {{- with $p.rootId }} id="{{ . }}"{{- end -}}
+    {{- with $p.rootStyle }} style="{{ . | safeCSS }}"{{- end -}}
+  {{- end -}}
+  {{- if $img.datauri }} src="{{ $img.src | safeURL }}"{{ else }} src="{{ $img.src }}"{{ end }}
+  {{- with $img.srcset }} srcset="{{ . }}"{{- end -}}
+  {{- with $img.sizes }} sizes="{{ . }}"{{- end -}}
+  {{- if and (gt ($img.width | default 0) 0) (gt ($img.height | default 0) 0) }} width="{{ $img.width }}" height="{{ $img.height }}"{{- end }} alt="{{ $img.alt }}" loading="{{ $img.loading }}"
+  {{- with $img.decoding }} decoding="{{ . }}"{{- end -}}
+  {{- with $img.fetchpriority }} fetchpriority="{{ . }}"{{- end -}}
+  {{- with $img.variant }} data-theme-variant="{{ . }}"{{- end -}}
+  {{- range $k, $v := $img.attrs }} {{ printf "%s=\"%s\"" $k (htmlEscape $v) | safeHTMLAttr }}{{- end -}}>
+{{- end -}}

@@ -1,0 +1,140 @@
+{{/*
+  images/image.html -- PUBLIC ENTRY (renderer tier).
+
+  Purpose: the module's primary programmatic API. A consumer places one call
+  in a layout (or dispatches here from the image shortcode):
+
+      {{ partial "images/image.html" (dict
+        "page" .
+        "src" "photo.jpg"
+        "alt" "A described scene"
+      ) }}
+
+  and receives one build-time optimized, responsive, accessible image:
+  style-agnostic BEM <picture>/<img> markup with width-descriptor srcsets
+  that never upscale, WebP plus original-format fallback (AVIF opt-in on
+  Hugo 0.163.0+), guaranteed width/height for zero layout shift, figure/
+  caption/credit/license surfaces, JS-free placeholders, dark-mode variant
+  pairs, art direction, and a lightbox enablement contract. The module ships
+  ZERO CSS and ZERO JavaScript -- the consuming site owns all presentation.
+
+  Expected context: a dict carrying at least "page" (the current Page) and
+  "src" (the image source), plus any option keys documented in the README
+  Parameters table. Anything else is the module's build-failing errorf: a
+  mis-wired public entry is an authoring mistake, not a content problem.
+
+  Validation (this partial and the shortcode ONLY; the render hook demotes
+  every contradiction to a warning): missing page/src, missing alt without
+  decorative=true, decorative combined with a non-empty alt, decorative
+  combined with lightbox=true, layout=fixed without width, and
+  process=fit/fill/crop without height all errorf. Everything environmental
+  (missing files, remote failures, unknown tokens, unprocessable sources)
+  degrades with one deduplicated warnf and a safe rendering.
+
+  The `variants` parameter (art direction) is a slice of dicts and therefore
+  exists on this partial surface only: each variant carries "src" and
+  "media" (required) plus optional "dark", "process", "width", "height",
+  and "widths" overrides.
+
+  Return value: none. This partial renders.
+*/}}
+
+{{- $args := . -}}
+{{- $page := "" -}}
+{{- if reflect.IsMap $args -}}
+  {{- $page = $args.page -}}
+{{- end -}}
+
+{{- if or (not (reflect.IsPage $page)) (not $args.src) -}}
+  {{- errorf "[images] images/image.html must be called with an options dict carrying at least the current Page and a source: {{ partial \"images/image.html\" (dict \"page\" . \"src\" \"photo.jpg\" \"alt\" \"...\") }}." -}}
+{{- else -}}
+
+{{- $opts := partial "images/config.html" (dict "page" $page "args" $args) -}}
+{{- $where := $opts.where -}}
+{{- $surface := $args.surface | default "partial" -}}
+
+{{/* ---- Parameter-shape validation (build-failing on this surface) ---- */}}
+{{- $fatal := false -}}
+{{- if and (not $opts.alt) (not $opts.decorative) -}}
+  {{- errorf "[images] alt is required: describe the image for assistive technology, or set decorative=true to emit the explicit empty alt of a purely decorative image. See %s" $where -}}
+  {{- $fatal = true -}}
+{{- end -}}
+{{- if and $opts.decorative $opts.alt -}}
+  {{- errorf "[images] decorative=true contradicts a non-empty alt: a decorative image is skipped by assistive technology, so its alt must be empty. Drop one of the two. See %s" $where -}}
+  {{- $fatal = true -}}
+{{- end -}}
+{{- if and $opts.decorative $opts.lightbox -}}
+  {{- errorf "[images] decorative=true contradicts lightbox=true: an anchor whose accessible name is the empty alt fails WCAG 2.4.4/4.1.2. Drop one of the two. See %s" $where -}}
+  {{- $fatal = true -}}
+{{- end -}}
+{{- if and (eq $opts.layout "fixed") (eq $opts.width 0) -}}
+  {{- errorf "[images] layout=fixed requires an explicit width (the x-descriptor srcset is built from it). See %s" $where -}}
+  {{- $fatal = true -}}
+{{- end -}}
+{{- if and (in (slice "fit" "fill" "crop") $opts.process) (or (eq $opts.width 0) (eq $opts.height 0)) -}}
+  {{- errorf "[images] process=%q requires BOTH width and height. See %s" $opts.process $where -}}
+  {{- $fatal = true -}}
+{{- end -}}
+
+{{- if not $fatal -}}
+  {{- $source := partial "images/resolve/source.html" (dict "page" $page "src" $args.src) -}}
+
+  {{- $dark := "" -}}
+  {{- with $opts.dark -}}
+    {{- $dark = partial "images/resolve/source.html" (dict "page" $page "src" .) -}}
+    {{- $dark = partial "images/resolve/remote.html" (dict "page" $page "source" $dark "opts" $opts) -}}
+  {{- end -}}
+
+  {{/* ---- Art-direction variants (partial surface only) ---- */}}
+  {{- $variants := slice -}}
+  {{- if reflect.IsSlice $args.variants -}}
+    {{- range $v := $args.variants -}}
+      {{- if not (reflect.IsMap $v) -}}
+        {{- partial "images/lib/warn.html" (dict
+            "key" (printf "images:warn:bad-variant:%s" $where)
+            "message" (printf "[images] Dropping a variants entry that is not a dict (each variant needs at least src and media). See %s" $where)) -}}
+      {{- else if not $v.media -}}
+        {{- partial "images/lib/warn.html" (dict
+            "key" (printf "images:warn:variant-media:%s" $where)
+            "message" (printf "[images] Dropping a variant without a media query: art-directed sources are selected by their media attribute. See %s" $where)) -}}
+      {{- else -}}
+        {{- $vsrc := partial "images/resolve/source.html" (dict "page" $page "src" ($v.src | default "")) -}}
+        {{- $vsrc = partial "images/resolve/remote.html" (dict "page" $page "source" $vsrc "opts" $opts) -}}
+        {{- if not $vsrc.processable -}}
+          {{- partial "images/lib/warn.html" (dict
+              "key" (printf "images:warn:variant-unresolvable:%s:%s" $where (printf "%v" $v.src))
+              "message" (printf "[images] Dropping the variant with media %q: its source %q could not be resolved or processed. See %s" $v.media (printf "%v" $v.src) $where)) -}}
+        {{- else -}}
+          {{- $vdims := partial "images/resolve/dims.html" (dict "width" $v.width "height" $v.height) -}}
+          {{- $variant := dict "source" $vsrc "media" (printf "%v" $v.media) "darkSource" "" -}}
+          {{- if gt $vdims.width 0 -}}{{- $variant = merge $variant (dict "width" $vdims.width) -}}{{- end -}}
+          {{- if gt $vdims.height 0 -}}{{- $variant = merge $variant (dict "height" $vdims.height) -}}{{- end -}}
+          {{- if reflect.IsSlice $v.widths -}}{{- $variant = merge $variant (dict "widths" $v.widths) -}}{{- end -}}
+          {{- with $v.process -}}{{- $variant = merge $variant (dict "process" (printf "%v" .)) -}}{{- end -}}
+          {{- with $v.dark -}}
+            {{- $vdark := partial "images/resolve/source.html" (dict "page" $page "src" .) -}}
+            {{- $vdark = partial "images/resolve/remote.html" (dict "page" $page "source" $vdark "opts" $opts) -}}
+            {{- $variant = merge $variant (dict "darkSource" $vdark) -}}
+          {{- end -}}
+          {{- $variants = $variants | append $variant -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- partial "images/render.html" (dict
+      "page" $page
+      "surface" $surface
+      "block" true
+      "opts" $opts
+      "source" $source
+      "darkSource" $dark
+      "variants" $variants
+      "neutral" false
+      "suppressAnchor" false
+      "ratio" 0.0
+      "attrs" dict
+      "requested" $args) -}}
+{{- end -}}
+
+{{- end -}}

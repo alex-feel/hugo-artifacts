@@ -1,0 +1,289 @@
+{{/*
+  images/resolve/plan.html -- PURE (resolver tier).
+
+  Purpose: turns a resolved, processable source plus the cascaded options
+  into a derivative plan: post-orientation source dimensions, the effective
+  candidate list (no-upscale clamp, dedupe, density cap), the gated format
+  chain list with per-chain spec suffixes, the sizes attribute value, and the
+  lightbox cap geometry. resolve/srcset.html executes this plan; nothing in
+  this partial touches the image pipeline, so the plan itself is free.
+
+  Width-candidate rules (constrained/full layouts, w-descriptors):
+  1. Start from the configured ladder, sorted ascending, deduplicated.
+  2. Drop every entry STRICTLY GREATER than min(srcW, cap) -- never upscale,
+     never exceed the density cap; an entry exactly EQUAL to the limit stays.
+  3. Append min(srcW, cap) itself as the top candidate when it is BOTH
+     smaller than the configured ladder's largest entry AND not yet present.
+  4. cap = max_density * width for an explicit width in constrained layout
+     (2x fidelity cap by default); unlimited otherwise.
+  responsive=false collapses the plan to one candidate:
+  min(srcW, width or ladder top).
+
+  Fixed layout (x-descriptors): the effective density list is the configured
+  densities filtered to entries <= max_density, with max_density appended
+  when it exceeds the list maximum; each density d is emitted only when
+  width*d <= srcW. When even 1x exceeds the source width the plan degrades
+  to the bare source width and sets fixedOverflow (the caller warns once).
+
+  Post-orientation dimensions: when the resource supports metadata, EXIF
+  orientation values 5-8 swap the raw .Width/.Height (raw dimensions are
+  pre-orientation truth); every derivative chains images.AutoOrient, so
+  derivative dimensions are post-orientation by construction.
+
+  AVIF gate: avif chains require Hugo 0.163.0+ (per-image AVIF quality in
+  spec strings landed there); below the gate the token is dropped and
+  avifGated is set (the caller warns once). Probing avif with try is
+  forbidden: a failed avif .Process poisons the warm cache with a 0-byte
+  entry.
+
+  Context (dict):
+  - .source    (dict) resolve/source.html result (processable).
+  - .opts      (dict) The cascaded options from images/config.html.
+  - .overrides (dict, optional) Per-call plan overrides: width, height,
+               widths, process, ratio (h/w float, e.g. from a gallery crop).
+  - .eager     (bool) Eager/priority loading (suppresses the sizes auto
+               prefix).
+
+  Return value: dict
+  - srcW, srcH     (int)    Post-orientation source dimensions.
+  - fixed          (bool)   layout == "fixed".
+  - candidates     (slice)  Ascending {w (int), desc (string "640w"/"2x")}.
+  - top            (int)    The largest candidate width.
+  - chains         (slice)  Ordered {format, mime, suffix, fallback (bool)};
+                            modern chains first (avif before webp), the
+                            original-format fallback chain last.
+  - hasModern      (bool)   At least one modern chain differs from the
+                            fallback.
+  - process        (string) resize | fit | fill | crop.
+  - ratio          (float)  Height/width ratio for two-dimension specs, 0
+                            for width-only specs.
+  - sizes          (string) Final sizes attribute value ("" for fixed).
+  - width, height  (int)    The effective explicit dimensions (0 = unset).
+  - avifGated      (bool)   avif was requested but dropped below the gate.
+  - fixedOverflow  (bool)   Fixed width exceeded the source width.
+  - hintDropped    (bool)   hint was set but a non-WebP chain exists.
+  - compressionDropped (bool) compression was set but a non-WebP chain
+                            exists.
+  - lightboxW      (int)    min(srcW, lightbox width cap).
+  - lightboxSuffix (string) Spec suffix for the capped lightbox derivative
+                            (fallback format, resize geometry).
+
+  One terminal return.
+*/}}
+
+{{- $source := .source -}}
+{{- $opts := .opts -}}
+{{- $ov := .overrides | default dict -}}
+{{- $eager := .eager | default false -}}
+{{- $r := $source.resource -}}
+
+{{/* ---- Post-orientation source dimensions ---- */}}
+{{- $srcW := $r.Width -}}
+{{- $srcH := $r.Height -}}
+{{- if $source.withMeta -}}
+  {{- with $r.Meta -}}
+    {{- if in (slice 5 6 7 8) .Orientation -}}
+      {{- $srcW = $r.Height -}}
+      {{- $srcH = $r.Width -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---- Effective geometry ---- */}}
+{{- $width := $opts.width -}}
+{{- $height := $opts.height -}}
+{{- $process := $opts.process -}}
+{{- $ratio := 0.0 -}}
+{{- if isset $ov "width" -}}{{- $width = $ov.width -}}{{- end -}}
+{{- if isset $ov "height" -}}{{- $height = $ov.height -}}{{- end -}}
+{{- if isset $ov "process" -}}{{- $process = $ov.process -}}{{- end -}}
+{{- if and (eq $process "resize") (gt $height 0) (eq $width 0) -}}
+  {{/* Height-only resize: proportional by definition, so convert to the
+       equivalent width and keep the single width-driven pipeline. */}}
+  {{- $width = int (math.Round (div (mul $height $srcW) (float $srcH))) -}}
+  {{- $height = 0 -}}
+{{- end -}}
+{{- if and (gt $width 0) (gt $height 0) -}}
+  {{- $ratio = div (float $height) $width -}}
+{{- end -}}
+{{- if isset $ov "ratio" -}}{{- $ratio = $ov.ratio -}}{{- end -}}
+{{/* Defense in depth: fit/fill/crop need a two-dimension spec, so they can
+     only execute when a ratio is set (both dims, or a gallery crop ratio).
+     The calling surfaces already errorf (partial/shortcode) or warn-and-
+     degrade (hook) the missing-dimension case; if any path still reaches
+     here width-only, degrade to resize rather than emit a Filter-crashing
+     one-dimension fit/fill/crop spec. */}}
+{{- if and (in (slice "fit" "fill" "crop") $process) (le $ratio 0.0) -}}
+  {{- $process = "resize" -}}
+{{- end -}}
+
+{{/* ---- Candidate widths ---- */}}
+{{- $layout := $opts.layout -}}
+{{- $fixed := eq $layout "fixed" -}}
+{{- $candidates := slice -}}
+{{- $fixedOverflow := false -}}
+{{- $top := 0 -}}
+{{- if $fixed -}}
+  {{- $maxd := $opts.max_density -}}
+  {{- $dens := slice -}}
+  {{- $densMax := 0 -}}
+  {{- range $d := $opts.densities -}}
+    {{- if le $d $maxd -}}{{- $dens = $dens | append $d -}}{{- end -}}
+    {{- if gt $d $densMax -}}{{- $densMax = $d -}}{{- end -}}
+  {{- end -}}
+  {{- if gt $maxd $densMax -}}{{- $dens = $dens | append $maxd -}}{{- end -}}
+  {{- $dens = sort (uniq $dens) -}}
+  {{- range $d := $dens -}}
+    {{- $w := mul $width $d -}}
+    {{- if le $w $srcW -}}
+      {{- $candidates = $candidates | append (dict "w" $w "desc" (printf "%dx" $d)) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if not $candidates -}}
+    {{- $fixedOverflow = true -}}
+    {{- $candidates = slice (dict "w" $srcW "desc" "1x") -}}
+  {{- end -}}
+  {{- $top = (index $candidates (sub (len $candidates) 1)).w -}}
+{{- else -}}
+  {{- $ladder := $opts.widths -}}
+  {{- if isset $ov "widths" -}}{{- $ladder = $ov.widths -}}{{- end -}}
+  {{- $ladder = sort (uniq $ladder) -}}
+  {{- $ladderTop := 0 -}}
+  {{- if $ladder -}}{{- $ladderTop = index $ladder (sub (len $ladder) 1) -}}{{- end -}}
+  {{- $limit := $srcW -}}
+  {{- if and (eq $layout "constrained") (gt $width 0) -}}
+    {{- $cap := mul $opts.max_density $width -}}
+    {{- if lt $cap $limit -}}{{- $limit = $cap -}}{{- end -}}
+  {{- end -}}
+  {{- $widths := slice -}}
+  {{- if $opts.responsive -}}
+    {{- range $w := $ladder -}}
+      {{- if le $w $limit -}}{{- $widths = $widths | append $w -}}{{- end -}}
+    {{- end -}}
+    {{- if and (lt $limit $ladderTop) (not (in $widths $limit)) -}}
+      {{- $widths = sort ($widths | append $limit) -}}
+    {{- end -}}
+    {{- if not $widths -}}{{- $widths = slice $limit -}}{{- end -}}
+  {{- else -}}
+    {{- $single := $ladderTop -}}
+    {{- if gt $width 0 -}}{{- $single = $width -}}{{- end -}}
+    {{- if gt $single $srcW -}}{{- $single = $srcW -}}{{- end -}}
+    {{- $widths = slice $single -}}
+  {{- end -}}
+  {{- range $w := $widths -}}
+    {{- $candidates = $candidates | append (dict "w" $w "desc" (printf "%dw" $w)) -}}
+  {{- end -}}
+  {{- $top = index $widths (sub (len $widths) 1) -}}
+{{- end -}}
+
+{{/* Defense in depth: no candidate may carry a non-positive width, because
+     resolve/srcset.html turns it into a Filter-crashing "resize 0x" spec.
+     The config layer already rejects non-positive widths/densities/
+     max_density tokens, so this is a belt-and-suspenders clamp: drop any
+     that slip through, and fall back to the source width if all are lost. */}}
+{{- $safe := slice -}}
+{{- range $c := $candidates -}}
+  {{- if gt $c.w 0 -}}{{- $safe = $safe | append $c -}}{{- end -}}
+{{- end -}}
+{{- if not $safe -}}
+  {{- $safe = slice (dict "w" $srcW "desc" (cond $fixed "1x" (printf "%dw" $srcW))) -}}
+{{- end -}}
+{{- $candidates = $safe -}}
+{{- $top = (index $candidates (sub (len $candidates) 1)).w -}}
+
+{{/* ---- Format chains ---- */}}
+{{- $mimes := dict "webp" "image/webp" "avif" "image/avif" "jpeg" "image/jpeg" "png" "image/png" "tiff" "image/tiff" "bmp" "image/bmp" -}}
+{{- $fbFormat := $source.subtype -}}
+{{- if in (slice "tiff" "bmp") $fbFormat -}}{{- $fbFormat = "jpeg" -}}{{- end -}}
+{{- $avifGated := false -}}
+{{- $modern := slice -}}
+{{- range $f := slice "avif" "webp" -}}
+  {{- if and (in $opts.formats $f) (ne $f $fbFormat) -}}
+    {{- if and (eq $f "avif") (lt hugo.Version "0.163.0") -}}
+      {{- $avifGated = true -}}
+    {{- else -}}
+      {{- $modern = $modern | append $f -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Per-chain spec suffix: [anchor] format [qN] [resample] [hint]
+     [compression] [#RRGGBB]. The anchor applies to fill/crop only, the
+     resampling filter to scaling operations only (not crop), and the WebP
+     hint/compression tokens to WebP chains only. */}}
+{{- $anchorPart := "" -}}
+{{- if in (slice "fill" "crop") $process -}}{{- $anchorPart = $opts.anchor -}}{{- end -}}
+{{- $resamplePart := "" -}}
+{{- if ne $process "crop" -}}{{- $resamplePart = $opts.resample -}}{{- end -}}
+{{- $qo := $opts.quality_override -}}
+{{- $hintDropped := false -}}
+{{- $compressionDropped := false -}}
+{{- $chains := slice -}}
+{{- $formats := $modern | append $fbFormat -}}
+{{- range $i, $f := $formats -}}
+  {{- $isFallback := eq $i (sub (len $formats) 1) -}}
+  {{- $tokens := slice -}}
+  {{- with $anchorPart -}}{{- $tokens = $tokens | append . -}}{{- end -}}
+  {{- $tokens = $tokens | append $f -}}
+  {{- $lossless := and (eq $f "webp") (eq $opts.compression "lossless") -}}
+  {{- if and (in (slice "webp" "avif" "jpeg") $f) (not $lossless) -}}
+    {{- $q := index $opts.quality $f -}}
+    {{- if gt $qo 0 -}}{{- $q = $qo -}}{{- end -}}
+    {{- $tokens = $tokens | append (printf "q%d" $q) -}}
+  {{- end -}}
+  {{- with $resamplePart -}}{{- $tokens = $tokens | append . -}}{{- end -}}
+  {{- if eq $f "webp" -}}
+    {{- with $opts.hint -}}{{- $tokens = $tokens | append . -}}{{- end -}}
+    {{- with $opts.compression -}}{{- $tokens = $tokens | append . -}}{{- end -}}
+  {{- else -}}
+    {{- if $opts.hint -}}{{- $hintDropped = true -}}{{- end -}}
+    {{- if $opts.compression -}}{{- $compressionDropped = true -}}{{- end -}}
+  {{- end -}}
+  {{- with $opts.bg -}}{{- $tokens = $tokens | append . -}}{{- end -}}
+  {{- $chains = $chains | append (dict
+      "format" $f
+      "mime" (index $mimes $f | default (printf "image/%s" $f))
+      "suffix" (delimit $tokens " ")
+      "fallback" $isFallback) -}}
+{{- end -}}
+
+{{/* ---- Sizes ---- */}}
+{{- $sizes := partial "images/resolve/sizes.html" (dict
+    "layout" $layout
+    "width" $width
+    "top" $top
+    "sizes" $opts.sizes
+    "sizes_auto" $opts.sizes_auto
+    "eager" $eager) -}}
+
+{{/* ---- Lightbox cap geometry ---- */}}
+{{- $lightboxW := $opts.lightbox_width -}}
+{{- if gt $lightboxW $srcW -}}{{- $lightboxW = $srcW -}}{{- end -}}
+{{- $lbTokens := slice $fbFormat -}}
+{{- if in (slice "webp" "avif" "jpeg") $fbFormat -}}
+  {{- $q := index $opts.quality $fbFormat -}}
+  {{- if gt $qo 0 -}}{{- $q = $qo -}}{{- end -}}
+  {{- $lbTokens = $lbTokens | append (printf "q%d" $q) -}}
+{{- end -}}
+{{- $lbTokens = $lbTokens | append $opts.resample -}}
+{{- with $opts.bg -}}{{- $lbTokens = $lbTokens | append . -}}{{- end -}}
+
+{{- return (dict
+    "srcW" $srcW
+    "srcH" $srcH
+    "fixed" $fixed
+    "candidates" $candidates
+    "top" $top
+    "chains" $chains
+    "hasModern" (gt (len $modern) 0)
+    "process" $process
+    "ratio" $ratio
+    "sizes" $sizes
+    "width" $width
+    "height" $height
+    "avifGated" $avifGated
+    "fixedOverflow" $fixedOverflow
+    "hintDropped" $hintDropped
+    "compressionDropped" $compressionDropped
+    "lightboxW" $lightboxW
+    "lightboxSuffix" (delimit $lbTokens " ")) -}}

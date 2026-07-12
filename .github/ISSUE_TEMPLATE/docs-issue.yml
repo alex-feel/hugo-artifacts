@@ -17,6 +17,7 @@ body:
         - LICENSE
         - modules/seo/README.md
         - modules/social-share/README.md
+        - modules/images/README.md
         - modules/pwa/README.md
         - modules/workbox/README.md
         - modules/idb/README.md
