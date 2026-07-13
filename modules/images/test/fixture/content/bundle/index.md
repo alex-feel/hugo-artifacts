@@ -13,6 +13,9 @@ resources:
       alt: Blue rectangle two
   - src: gallery/g3.png
     title: Gallery three
+  - src: padgallery/*.png
+    params:
+      alt: Padded gallery item
 ---
 
 ## Shortcode scenarios
@@ -59,17 +62,29 @@ resources:
 
 {{< image src="credited-400.jpg" alt="An IPTC-credited photo" credit_from_meta="true" id="sc-iptc-credit" >}}
 
+{{< image src="photo-1600.png" alt="A root-classed scene" root_class="hero-frame" id="sc-root-class" >}}
+
+{{< image src="tiny-500.png" alt="A framed root-classed figure" caption="Framed" root_class="frame highlight" id="sc-root-class-figure" >}}
+
+{{< image src="avatar-512.png" alt="A height-only fixed avatar" layout="fixed" height="128" id="sc-fixed-height" >}}
+
 ## Non-positive and out-of-range token degradations (must never break the build)
 
 {{< image src="photo-1600.png" alt="Zero widths degrade" widths="0" id="sc-zero-widths" >}}
 
 {{< image src="photo-1600.png" alt="Out-of-range quality degrades" quality="150" id="sc-quality-bomb" >}}
 
+{{< image src="tiny-500.png" alt="A typo probe" captoin="oops" id="sc-typo-param" >}}
+
 ## Galleries
 
 {{< image-gallery match="gallery/*.png" id="gallery-plain" >}}
 
 {{< image-gallery match="gallery/*.png" crop="1x1" id="gallery-crop" >}}
+
+{{< image-gallery match="padgallery/*.png" lightbox="false" id="gallery-pad" >}}
+
+{{< image-gallery match="gallery/*.png" cropp="1x1" id="gallery-typo" >}}
 
 ## Markdown render hook scenarios
 

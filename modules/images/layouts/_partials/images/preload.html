@@ -28,8 +28,12 @@
   per page.
 
   Expected context: a dict carrying at least "page" and "src" (errorf
-  otherwise), plus the standard option keys. Unprocessable or missing
-  sources emit nothing after one deduplicated warning.
+  otherwise), plus the standard option keys. Passthrough sources that
+  resolve to a URL (SVG, GIF, static/ paths, remote URLs) preload via a
+  plain href -- there is no derivative ladder to describe, so no
+  imagesrcset/imagesizes/type. Missing sources emit nothing after one
+  deduplicated warning; a data: URI emits nothing silently (it is already
+  inline, so there is nothing to preload).
 
   Return value: none. This partial renders (possibly nothing).
 */}}
@@ -57,9 +61,16 @@
     {{- $source := partial "images/resolve/source.html" (dict "page" $page "src" $args.src) -}}
     {{- $source = partial "images/resolve/remote.html" (dict "page" $page "source" $source "opts" $opts) -}}
     {{- if not $source.processable -}}
-      {{- partial "images/lib/warn.html" (dict
-          "key" (printf "images:warn:preload-unprocessable:%s" $source.url)
-          "message" (printf "[images] images/preload.html emits nothing for %q: the source could not be resolved or processed. See %s" $source.url $where)) -}}
+      {{- if $source.missing -}}
+        {{- partial "images/lib/warn.html" (dict
+            "key" (printf "images:warn:preload-unprocessable:%s" $source.url)
+            "message" (printf "[images] images/preload.html emits nothing for %q: the source could not be resolved. See %s" $source.url $where)) -}}
+      {{- else if ne $source.kind "data" -}}
+        {{/* A resolvable passthrough source (SVG, GIF, static/ path, remote
+             URL) has no derivative ladder, so the preload is a plain href;
+             a data: URI is already inline and needs no preload. */}}
+<link rel="preload" as="image" href="{{ $source.url }}" fetchpriority="high">
+      {{- end -}}
     {{- else -}}
       {{- $plan := partial "images/resolve/plan.html" (dict "source" $source "opts" $opts "overrides" (dict) "eager" true) -}}
       {{- $chain := index $plan.chains 0 -}}

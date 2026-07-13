@@ -46,8 +46,8 @@
   blur_sigma, lightbox, lightbox_width, theme_strategy, remote_fetch,
   remote_key, gallery_lightbox, gallery_crop, credit_from_meta, width,
   height, max_density, priority, fetchpriority, decorative, alt, caption,
-  credit, license, license_url, class, id, dark, and where (the diagnostics
-  origin: the call position when available, else the page path).
+  credit, license, license_url, class, root_class, id, dark, and where (the
+  diagnostics origin: the call position when available, else the page path).
 
   One terminal return.
 */}}
@@ -366,7 +366,7 @@
 {{- $opts = merge $opts (dict "width" $dims.width "height" $dims.height) -}}
 
 {{/* ---- Call-only strings ---- */}}
-{{- range $k := slice "alt" "caption" "credit" "license" "license_url" "class" "id" "dark" -}}
+{{- range $k := slice "alt" "caption" "credit" "license" "license_url" "class" "root_class" "id" "dark" -}}
   {{- $v := "" -}}
   {{- if isset $args $k -}}
     {{- $v = trim (printf "%v" (index $args $k)) " \t\n\r" -}}

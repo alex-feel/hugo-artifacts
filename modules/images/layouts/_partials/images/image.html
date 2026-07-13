@@ -26,10 +26,11 @@
   Validation (this partial and the shortcode ONLY; the render hook demotes
   every contradiction to a warning): missing page/src, missing alt without
   decorative=true, decorative combined with a non-empty alt, decorative
-  combined with lightbox=true, layout=fixed without width, and
-  process=fit/fill/crop without height all errorf. Everything environmental
-  (missing files, remote failures, unknown tokens, unprocessable sources)
-  degrades with one deduplicated warnf and a safe rendering.
+  combined with lightbox=true, layout=fixed without a width or height, and
+  process=fit/fill/crop without BOTH width and height all errorf. Everything
+  environmental (missing files, remote failures, unknown tokens,
+  unprocessable sources) degrades with one deduplicated warnf and a safe
+  rendering.
 
   The `variants` parameter (art direction) is a slice of dicts and therefore
   exists on this partial surface only: each variant carries "src" and
@@ -67,8 +68,8 @@
   {{- errorf "[images] decorative=true contradicts lightbox=true: an anchor whose accessible name is the empty alt fails WCAG 2.4.4/4.1.2. Drop one of the two. See %s" $where -}}
   {{- $fatal = true -}}
 {{- end -}}
-{{- if and (eq $opts.layout "fixed") (eq $opts.width 0) -}}
-  {{- errorf "[images] layout=fixed requires an explicit width (the x-descriptor srcset is built from it). See %s" $where -}}
+{{- if and (eq $opts.layout "fixed") (eq $opts.width 0) (eq $opts.height 0) -}}
+  {{- errorf "[images] layout=fixed requires an explicit width or height (the x-descriptor srcset is built from the width; a height alone derives the width proportionally from the source). See %s" $where -}}
   {{- $fatal = true -}}
 {{- end -}}
 {{- if and (in (slice "fit" "fill" "crop") $opts.process) (or (eq $opts.width 0) (eq $opts.height 0)) -}}

@@ -6,6 +6,7 @@
     <title>{{ .Title }} | {{ site.Title }}</title>
     {{ if .Params.exercise_partials }}
       {{ partial "images/preload.html" (dict "page" . "src" "photo-1600.png" "dark" "photo-dark.png" "priority" true) }}
+      {{ partial "images/preload.html" (dict "page" . "src" "diagram.svg") }}
     {{ end }}
   </head>
   <body>

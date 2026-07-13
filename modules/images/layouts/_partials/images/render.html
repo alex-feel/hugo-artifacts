@@ -367,8 +367,7 @@
 {{- if $classStrategy -}}{{- $rootClass = printf "%s image--theme-class" $rootClass -}}{{- end -}}
 {{- if $lbHref -}}{{- $rootClass = printf "%s image--lightbox" $rootClass -}}{{- end -}}
 {{- if not $canProcess -}}{{- $rootClass = printf "%s image--static" $rootClass -}}{{- end -}}
-{{- $rootData := dict "data-kind" $src.kind -}}
-{{- if $canProcess -}}{{- $rootData = merge $rootData (dict "data-layout" $opts.layout) -}}{{- end -}}
+{{- $rootData := dict "data-kind" $src.kind "data-layout" $opts.layout -}}
 {{- if $phActive -}}{{- $rootData = merge $rootData $ph.attrs -}}{{- end -}}
 {{- $rootStyle := "" -}}
 {{- if $phActive -}}{{- $rootStyle = $ph.style -}}{{- end -}}
@@ -581,6 +580,11 @@
 {{- $swapOnWrapper := and $classStrategy (or $useFigure $lbHref) -}}
 {{- $useSwapSpan := and $classStrategy (not $swapOnWrapper) -}}
 {{- $treesAreRoot := and (not $useFigure) (not $lbHref) (not $useSwapSpan) -}}
+{{/* The bare swap span is otherwise indistinguishable from its block/inline
+     context in CSS, so it carries an explicit context modifier; user extra
+     classes (root_class) close the class list on EVERY root form. */}}
+{{- if $useSwapSpan -}}{{- $rootClass = printf "%s image--swap-%s" $rootClass (cond $block "block" "inline") -}}{{- end -}}
+{{- with $opts.root_class -}}{{- $rootClass = printf "%s %s" $rootClass . -}}{{- end -}}
 
 {{- if $useFigure -}}
 <figure class="{{ $rootClass }}"
@@ -601,13 +605,18 @@
   {{- end }}
   <figcaption class="image__caption-area">
     {{- with $caption }}<span class="image__caption">{{ $page.RenderString (dict "display" "inline") . }}</span>{{ end -}}
-    {{- with $credit }}<span class="image__credit">{{ $page.RenderString (dict "display" "inline") . }}</span>{{ end -}}
-    {{- with $license -}}
-      {{- if $licenseUrl -}}
-        <a class="image__license" href="{{ $licenseUrl }}" rel="license">{{ . }}</a>
-      {{- else -}}
-        <span class="image__license">{{ . }}</span>
+    {{- if or $credit $license -}}
+    <span class="image__meta">
+      {{- with $credit }}<span class="image__credit">{{ $page.RenderString (dict "display" "inline") . }}</span>{{ end -}}
+      {{- if and $credit $license }}<span class="image__meta-separator" aria-hidden="true"></span>{{ end -}}
+      {{- with $license -}}
+        {{- if $licenseUrl -}}
+          <a class="image__license" href="{{ $licenseUrl }}" rel="license">{{ . }}</a>
+        {{- else -}}
+          <span class="image__license">{{ . }}</span>
+        {{- end -}}
       {{- end -}}
+    </span>
     {{- end -}}
   </figcaption>
 </figure>

@@ -38,13 +38,17 @@
   - fetch, remote_key: build-time remote fetch opt-in.
   - enable: per-call kill switch.
   - class: extra class(es) appended to the <img> element.
+  - root_class: extra class(es) appended to the ROOT element (the figure,
+    anchor, swap span, picture, or img -- whichever the render makes root).
   - id: id attribute on the root element.
 
   Validation: missing src or alt (without decorative), decorative combined
-  with a non-empty alt or with lightbox, layout=fixed without width, and
-  process=fit/fill/crop without height are build-failing authoring mistakes
-  (errorf with this call's position). Everything environmental degrades with
-  one deduplicated warning.
+  with a non-empty alt or with lightbox, layout=fixed without a width or
+  height, and process=fit/fill/crop without BOTH width and height are
+  build-failing authoring mistakes (errorf with this call's position). A
+  named parameter outside the vocabulary above (a typo such as captoin=)
+  warns once and is ignored -- Hugo would otherwise drop it silently.
+  Everything environmental degrades with one deduplicated warning.
 
   A single call uses EITHER positional arguments (src, then optional alt) OR
   named arguments -- Hugo forbids mixing the two conventions in one call.
@@ -52,10 +56,18 @@
 
 {{- $args := dict "page" .Page "position" (printf "%s" .Position) "surface" "shortcode" -}}
 
+{{- $vocab := slice "src" "alt" "decorative" "dark" "caption" "credit" "credit_from_meta" "license" "license_url" "width" "height" "process" "quality" "anchor" "resample" "bg" "hint" "compression" "layout" "widths" "max_density" "sizes" "sizes_auto" "formats" "loading" "priority" "fetchpriority" "placeholder" "lightbox" "theme_strategy" "fetch" "remote_key" "responsive" "enable" "class" "root_class" "id" -}}
 {{- if .IsNamedParams -}}
-  {{- range $k := slice "src" "alt" "decorative" "dark" "caption" "credit" "credit_from_meta" "license" "license_url" "width" "height" "process" "quality" "anchor" "resample" "bg" "hint" "compression" "layout" "widths" "max_density" "sizes" "sizes_auto" "formats" "loading" "priority" "fetchpriority" "placeholder" "lightbox" "theme_strategy" "fetch" "remote_key" "responsive" "enable" "class" "id" -}}
+  {{- range $k := $vocab -}}
     {{- if isset $.Params $k -}}
       {{- $args = merge $args (dict $k ($.Get $k)) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- range $k, $_ := .Params -}}
+    {{- if not (in $vocab $k) -}}
+      {{- partial "images/lib/warn.html" (dict
+          "key" (printf "images:warn:unknown-param:image:%s:%s" $k (printf "%s" $.Position))
+          "message" (printf "[images] Ignoring the unknown image shortcode parameter %q (see the README Parameters table for the accepted names). See %s" $k $.Position)) -}}
     {{- end -}}
   {{- end -}}
 {{- else if gt (len .Params) 0 -}}

@@ -8,8 +8,11 @@
   emitting <ol class="image-gallery" data-count="N"> with one
   <li class="image-gallery__item" data-index="i"> per matched resource, each
   containing a complete standard render (a full `image` block: srcset,
-  dimensions, lazy loading, lightbox). Layout is 100 percent consumer CSS.
-  The in-content equivalent is the image-gallery shortcode.
+  dimensions, lazy loading, lightbox). data-index is 1-based and zero-padded
+  to the item count's digit width ("01".."10" in a ten-item gallery), so
+  CSS attr() counters and lexicographic attribute selectors both order
+  correctly. Layout is 100 percent consumer CSS. The in-content equivalent
+  is the image-gallery shortcode.
 
   Per-item alt/caption/credit come from the page's front-matter `resources:`
   metadata: `title` maps to the caption (only when it differs from the
@@ -90,6 +93,7 @@
   {{- end -}}
 {{- end -}}
 
+{{- $pad := len (printf "%d" (len $items)) -}}
 <ol class="image-gallery{{ with $opts.class }} {{ . }}{{ end }}"{{ with $opts.id }} id="{{ . }}"{{ end }} data-count="{{ len $items }}">
   {{- range $i, $r := $items }}
   {{- $alt := trim (printf "%v" ($r.Params.alt | default "")) " \t\n\r" -}}
@@ -115,7 +119,7 @@
       "subtype" $subtype
       "missing" false
       "raw" false -}}
-  <li class="image-gallery__item" data-index="{{ add $i 1 }}">
+  <li class="image-gallery__item" data-index="{{ printf "%0*d" $pad (add $i 1) }}">
     {{- partial "images/render.html" (dict
         "page" $page
         "surface" "gallery"

@@ -60,7 +60,7 @@ Only when you enable build-time remote fetching (`remote.fetch = true`), allow-l
 ) }}
 ```
 
-`src` resolves in this order: page-bundle resource, global resource under `assets/`, a leading-slash `static/` path (passthrough), or a URL (passthrough by default). `page` and `src` are required; `alt` is required unless `decorative` is true.
+`src` resolves in this order: a `data:` URI or a URL-shaped value is classified first and passes through by default (it is never matched against resources), then a page-bundle resource (exact name, then glob), then a global resource under `assets/` (a leading-slash path is tried against `assets/` first, with the slash stripped), then a leading-slash path that matched no resource resolves as a `static/` path (passthrough); anything else is a missing source (one warning, raw-src `<img>` fallback). `page` and `src` are required; `alt` is required unless `decorative` is true.
 
 ### Shortcode (content)
 
@@ -91,7 +91,7 @@ The attribute block goes on its OWN LINE directly BELOW a standalone image. A sa
 {{</* image src="photo.jpg" alt="..." caption="A *fine* view" credit="Photo: **Jane** Doe" license="CC BY 4.0" license_url="https://creativecommons.org/licenses/by/4.0/" */>}}
 ```
 
-Caption and credit render as inline Markdown. Any of the three surfaces turns the render into a `<figure>` with a `<figcaption>` (block contexts only).
+Caption and credit render as inline Markdown. Any of the three surfaces turns the render into a `<figure>` with a `<figcaption>` (block contexts only). Inside the `<figcaption>` the caption sits in its own `image__caption` span while credit and license group inside one `image__meta` span, with an empty `image__meta-separator` span between them when both are present -- your CSS owns the separator glyph (see the Styling section).
 
 ### Fixed-layout assets (logos, avatars, badges)
 
@@ -99,7 +99,7 @@ Caption and credit render as inline Markdown. Any of the three surfaces turns th
 {{</* image src="avatar.png" alt="..." layout="fixed" width="96" */>}}
 ```
 
-Fixed layout emits density descriptors (`1x`, `2x`) instead of width descriptors and requires an explicit `width`.
+Fixed layout emits density descriptors (`1x`, `2x`) instead of width descriptors and requires an explicit `width` or `height` -- a height alone derives the width proportionally from the source's aspect ratio.
 
 ### Art direction (partial only)
 
@@ -195,15 +195,16 @@ The `Tiers` column states where each option may be set: `all four` cascades thro
 | `enable` | bool | no | all four | `true` | Per-call kill switch (neutral fallback) |
 | `credit_from_meta` | bool | no | all four (via `[credit_from_meta]`) | `false` | Fall back to the original image's IPTC credit/byline when `credit` is empty (see Accessibility) |
 | `class` | string | no | call only | -- | Extra class(es) appended to the `<img>` element |
+| `root_class` | string | no | call only | -- | Extra class(es) appended to the ROOT element -- the figure, anchor, swap span, picture, or img, whichever the render makes root (see Root element by combination) |
 | `id` | string | no | call only | -- | `id` attribute on the root element |
 
 ### Validation
 
-Build-failing `errorf` -- ON THE PARTIAL AND SHORTCODE SURFACES ONLY -- covers exactly the parameter-shape authoring mistakes: missing `page`/`src`, missing `alt` without `decorative=true`, `decorative=true` combined with a non-empty `alt`, `decorative=true` combined with `lightbox=true`, `layout=fixed` without `width`, and `process` of `fit`/`fill`/`crop` without BOTH `width` and `height` (either dimension missing fails, because these operations need a two-dimension target).
+Build-failing `errorf` -- ON THE PARTIAL AND SHORTCODE SURFACES ONLY -- covers exactly the parameter-shape authoring mistakes: missing `page`/`src`, missing `alt` without `decorative=true`, `decorative=true` combined with a non-empty `alt`, `decorative=true` combined with `lightbox=true`, `layout=fixed` without a `width` or `height`, and `process` of `fit`/`fill`/`crop` without BOTH `width` and `height` (either dimension missing fails, because these operations need a two-dimension target).
 
-Everything environmental degrades with ONE deduplicated build warning and a safe rendering: missing files (raw-src `<img>` fallback), remote failures (URL passthrough), unknown enum tokens (feature default), AVIF below the version gate (WebP plus original), and feature requests on unprocessable sources (feature skipped).
+Everything environmental degrades with ONE deduplicated build warning and a safe rendering: missing files (raw-src `<img>` fallback), remote failures (URL passthrough), unknown enum tokens (feature default), AVIF below the version gate (WebP plus original), unknown named shortcode parameters (a typo such as `captoin=` is ignored after one warning naming it), and feature requests on unprocessable sources (feature skipped).
 
-The render hook NEVER calls `errorf` and demotes every listed contradiction to a warning plus a defined degradation (empty alt renders `alt=""`, fixed-without-width falls back to `constrained`, fit/fill/crop missing either dimension falls back to `resize`, decorative wins over Markdown alt, decorative suppresses the lightbox anchor) -- Markdown content can never break the build.
+The render hook NEVER calls `errorf` and demotes every listed contradiction to a warning plus a defined degradation (empty alt renders `alt=""`, fixed without a width or height falls back to `constrained`, fit/fill/crop missing either dimension falls back to `resize`, decorative wins over Markdown alt, decorative suppresses the lightbox anchor) -- Markdown content can never break the build.
 
 ## Configuration cascade
 
@@ -233,6 +234,8 @@ mode = 'dominant'
 
 Shortcode parameters and Markdown attributes deliver strings; the module normalizes every typed key at one place (bools accept `true`/`1`/`yes`/`on`, dimensions accept `"640"` and `"640px"`, slices accept `"480,800"` comma strings, unknown tokens warn once and fall back), so every surface lands on identical typed values.
 
+When verifying the resolved configuration with `hugo config`, note that the command omits keys whose value is `false`, so an absent key in its output does not prove the option is unset -- verify boolean keys by their rendered effect instead.
+
 ## Formats and AVIF
 
 The default chain is a WebP `<source>` plus an original-format fallback `<img>`, both carrying full srcsets; browsers pick by `type`. A `<picture>` wrapper is emitted only when at least one `<source>` exists -- an already-WebP source with the default `formats = ['webp']` collapses to a single bare `<img>` chain. BMP and TIFF sources fall back to JPEG (no browser-appropriate original format; transparent regions fill with the effective background color). GIF is ALWAYS passthrough: animation survives only when the target stays GIF, and templates cannot distinguish animated from static GIFs -- re-encode a static GIF as PNG to opt into the pipeline.
@@ -243,13 +246,13 @@ Default qualities (explicit in every processing spec, so output is deterministic
 
 ## Responsive behavior
 
-The default width ladder is `[640, 960, 1280, 1920]` (configurable site-wide via `widths` or per call). The effective candidates never upscale: entries strictly greater than the source width are dropped (an entry exactly equal stays), and the capped source width joins as the top candidate when it is smaller than the ladder top. With an explicit `width` in `constrained` layout, candidates are additionally capped at `max_density * width` (2x by default: fidelity beyond 2x DPR is not perceivable and roughly doubles bytes; pass `max_density=3` for a genuine 3x need).
+The default width ladder is `[640, 960, 1280, 1920]` (configurable site-wide via `widths` or per call). The effective candidates never upscale: entries strictly greater than the source width are dropped (an entry exactly equal stays), and the capped source width joins as the top candidate when it is smaller than the ladder top. With an explicit `width` in `constrained` layout, candidates are additionally capped at `max_density * width` (2x by default: fidelity beyond 2x DPR is not perceivable and roughly doubles bytes; pass `max_density=3` for a genuine 3x need). A height-only call (`height` set, `width` unset, under the default `process=resize`) derives the equivalent width from the source's aspect ratio before planning, so it behaves exactly like the equivalent explicit width -- on every layout, `fixed` included.
 
 | `layout` | srcset | Generated `sizes` | Use |
 | --- | --- | --- | --- |
 | `constrained` (default) | w-descriptors | `(min-width: {W}px) {W}px, 100vw` | Content images in a max-width column (`W` = `width`, else the top candidate) |
 | `full` | w-descriptors | `100vw` | Full-bleed heroes |
-| `fixed` | x-descriptors | none (x-descriptors do not use `sizes`) | Logos, avatars, badges; `width` required |
+| `fixed` | x-descriptors | none (x-descriptors do not use `sizes`) | Logos, avatars, badges; `width` or `height` required |
 
 An explicit `sizes` parameter always wins verbatim. When `sizes_auto` is true (the default) AND the image is lazy-loaded, the emitted value is `auto, <fallback>`: browsers with `sizes=auto` support (Chromium 126+, Firefox 150+) size from the layout, and all others (Safari included) skip the invalid first entry and use the fallback list -- zero regression. The prefix is never emitted on eager/priority images (invalid there).
 
@@ -288,7 +291,7 @@ Opt-in and JS-free (`placeholder` parameter or `[params.img.placeholder] mode`);
 - `dominant`: samples the image's most dominant color from a downscaled probe and emits `data-placeholder="dominant"`, `data-dominant-color="#rrggbb"`, `data-dominant-luminance="0.NN"` (so your CSS/JS can pick contrasting overlays), and `--image-dominant-color` in the root `style`.
 - `blur`: generates one tiny blurred WebP (width `placeholder.blur_width`, default 20; sigma `placeholder.blur_sigma`, default 3), inlined as a base64 data URI in `--image-placeholder` on the root `style`.
 
-The values crossing into `style` are objective MEASURED data about the image (a sampled color, the image's own pixels), never design decisions; presentation stays 100 percent consumer CSS (for example `.image { background-image: var(--image-placeholder); background-size: cover; }`), and with no consumer CSS the placeholders are inert attributes. Both modes compose with native `loading="lazy"`; no-JS visitors always receive the real image, and the alt text is never touched by placeholder machinery.
+The values crossing into `style` are objective MEASURED data about the image (a sampled color, the image's own pixels), never design decisions; presentation stays 100 percent consumer CSS (see the Styling Recipes for the selector pair that paints only the image box), and with no consumer CSS the placeholders are inert attributes. Both modes compose with native `loading="lazy"`; no-JS visitors always receive the real image, and the alt text is never touched by placeholder machinery.
 
 CSP note: the root `style` attribute requires your Content-Security-Policy to permit inline style attributes (`style-src-attr` -- or a `style-src` that covers attributes), and the blur data URI requires `img-src data:` only if your CSS loads it via `background-image`. Without those permissions the placeholders degrade to inert attributes while `data-dominant-color` still carries the value for JavaScript consumers. Client-side BlurHash/ThumbHash renderers remain possible on top of the emitted data attributes as a consumer-owned enhancement.
 
@@ -351,26 +354,43 @@ The module ships no CSS at all -- these hooks are yours.
 | `image__link` | element | the lightbox `<a>` | Lightbox anchor |
 | `image__caption-area` | element | `<figcaption>` | Caption container |
 | `image__caption` | element | `<span>` in the figcaption | Author caption |
-| `image__credit` | element | `<span>` in the figcaption | Credit line |
-| `image__license` | element | `<a>`/`<span>` in the figcaption | License name/link |
+| `image__meta` | element | `<span>` in the figcaption | Groups the credit and license lines (present when either exists) |
+| `image__credit` | element | `<span>` inside `image__meta` | Credit line |
+| `image__meta-separator` | element | empty `<span>` inside `image__meta` | Separator hook between credit and license (present only when both exist; supply the glyph via CSS `content`) |
+| `image__license` | element | `<a>`/`<span>` inside `image__meta` | License name/link |
 | `image--decorative` | modifier | root | `decorative=true` |
 | `image--priority` | modifier | root | `priority=true` (style the hero distinctly) |
 | `image--placeholder-dominant`, `image--placeholder-blur` | modifiers | root | Active placeholder mode |
 | `image--theme-class` | modifier | root | Class theme strategy (dual trees) |
+| `image--swap-block`, `image--swap-inline` | modifiers | the bare class-strategy swap `<span>` root | Block versus inline render context (the bare span is otherwise indistinguishable from its context in CSS) |
 | `image__picture--light`, `image__picture--dark` | element modifiers | each tree under the class strategy | Theme tree identity |
 | `image--lightbox` | modifier | root | Lightbox enabled |
 | `image--static` | modifier | root | Passthrough render (unprocessed source) |
 | `image-gallery` | block | `<ol>` | Gallery list |
 | `image-gallery__item` | element | `<li>` | Gallery item (contains a full `image` block) |
 
-All class names are STATIC strings in the templates, so Tailwind-style scanners and `hugo_stats.json` tree-shaking see every hook. The outermost element always carries the block class `image` plus the applicable modifiers, the `id`, and the placeholder style; when nothing wraps, the `<picture>` -- or, single-chain case, the `<img>` itself -- is the root and carries BOTH its element class and the block class (`class="image image__img ..."`). Consequence: `.image` always selects the root and `.image__img` always selects the img, on every variant.
+All class names are STATIC strings in the templates, so Tailwind-style scanners and `hugo_stats.json` tree-shaking see every hook; when nothing wraps, the `<picture>` -- or, single-chain case, the `<img>` itself -- is the root and carries BOTH its element class and the block class (`class="image image__img ..."`).
+
+### Root element by combination
+
+Which element is root follows one fixed precedence -- figure, else lightbox anchor, else class-strategy swap span, else the picture/img tree itself -- so the FIRST matching row below is the root:
+
+| Combination (first match wins) | Root element | Root-only classes beyond `image` |
+| --- | --- | --- |
+| Block context with any figcaption surface (`caption`, `credit`, or `license`) | `<figure>` | -- |
+| Lightbox, no figure | `<a>` | `image__link` |
+| Class theme strategy, no figure and no lightbox | `<span>` | `image--swap-block` or `image--swap-inline` |
+| Bare render with at least one `<source>` | `<picture>` | `image__picture` |
+| Bare render, single chain or passthrough | `<img>` | `image__img` |
+
+On every one of these forms the root carries the block class `image`, the applicable modifiers from the inventory above, your `root_class` value (appended last), the `id`, the `data-kind`/`data-layout` pair, and the placeholder style. Consequence: `.image` always selects the root and `.image__img` always selects the img, on every variant.
 
 ### data-\* attributes
 
 | Attribute | On | Value |
 | --- | --- | --- |
 | `data-kind` | root | `page`, `global`, `static`, `remote`, or `data` (resolution origin) |
-| `data-layout` | root (processed renders) | `constrained`, `full`, or `fixed` |
+| `data-layout` | root | `constrained`, `full`, or `fixed` |
 | `data-placeholder` | root | `dominant` or `blur` (only when active) |
 | `data-dominant-color` | root | `#rrggbb` (dominant mode) |
 | `data-dominant-luminance` | root | `0.00`-`1.00` (dominant mode) |
@@ -378,7 +398,7 @@ All class names are STATIC strings in the templates, so Tailwind-style scanners 
 | `data-theme-swap` | swap wrapper | `class` (class strategy only) |
 | `data-theme-variant` | `media` strategy: every `<source>` and the `<img>`; `class` strategy: the two tree roots only | `light` or `dark` |
 | `data-count` | gallery `<ol>` | Item count |
-| `data-index` | gallery `<li>` | 1-based position |
+| `data-index` | gallery `<li>` | 1-based position, zero-padded to the item count's digit width (`01`..`10` in a ten-item gallery), so lexicographic attribute selectors order correctly |
 
 CSS custom properties (set via the root `style`; you define all presentation): `--image-dominant-color: #rrggbb` (dominant mode) and `--image-placeholder: url('data:image/webp;base64,...')` (blur mode). These are the ONLY style attributes the module can ever emit, and both carry measured image data, never design decisions. The same CSP note as the Placeholders section applies: inline style attributes need `style-src-attr` (or a covering `style-src`), and loading the blur URI from CSS needs `img-src data:`.
 
@@ -393,7 +413,7 @@ img {
 }
 ```
 
-The emitted `width`/`height` attributes reserve the layout box only while CSS keeps the aspect ratio derivable -- `height: auto` with a constrained width does exactly that, while CSS `width: auto` silently breaks the reservation. Tailwind v4 Preflight already applies `img { display: block }`, which composes fine with this contract; pass your utility classes through the `class` parameter (they land on `image__img`).
+The emitted `width`/`height` attributes reserve the layout box only while CSS keeps the aspect ratio derivable -- `height: auto` with a constrained width does exactly that, while CSS `width: auto` silently breaks the reservation. Tailwind v4 Preflight already applies `img { display: block }`, which composes fine with this contract; pass your img-level utility classes through the `class` parameter (they land on `image__img`) and root-level ones through `root_class` (they land on the root element, whatever form it takes).
 
 **Hero LCP image:** mark exactly one above-the-fold image per page `priority="true"` and pair it with the head-side preload emitter:
 
@@ -404,7 +424,7 @@ The emitted `width`/`height` attributes reserve the layout box only while CSS ke
 {{ partial "images/image.html" (dict "page" . "src" "hero.jpg" "alt" "..." "priority" true "layout" "full") }}
 ```
 
-The preload carries the first modern chain's `imagesrcset`/`imagesizes`/`type` (so non-supporting browsers skip it), emits a media-qualified light/dark PAIR when a `dark` source rides the media strategy, preloads only the light tree under the class strategy, and emits nothing (with one warning) for art-directed images -- hand-author media-qualified preloads for those. One preloaded hero per page.
+The preload carries the first modern chain's `imagesrcset`/`imagesizes`/`type` (so non-supporting browsers skip it), emits a media-qualified light/dark PAIR when a `dark` source rides the media strategy, preloads only the light tree under the class strategy, and emits nothing (with one warning) for art-directed images -- hand-author media-qualified preloads for those. A passthrough source that still resolves to a URL (SVG, GIF, a `static/` path, an unfetched remote URL) preloads via a plain `href` with no `imagesrcset`/`imagesizes`/`type`, because there is no derivative ladder to describe; a source that cannot be resolved emits nothing after one warning, and a `data:` URI emits nothing silently (it is already inline). One preloaded hero per page.
 
 **Hero background image (consumer-owned styling):**
 
@@ -455,14 +475,18 @@ lightbox.init();
 **Placeholder styling:**
 
 ```css
-.image--placeholder-blur {
+.image--placeholder-blur .image__img,
+.image__img.image--placeholder-blur {
   background-image: var(--image-placeholder);
   background-size: cover;
 }
-.image--placeholder-dominant {
+.image--placeholder-dominant .image__img,
+.image__img.image--placeholder-dominant {
   background-color: var(--image-dominant-color);
 }
 ```
+
+The modifier classes and custom properties live on the ROOT and custom properties inherit, so this selector pair paints only the image box on every root form (the descendant selector covers wrapper roots, the compound selector covers the bare `<img>` root). Styling the root element directly would bleed the placeholder under the `<figcaption>` on captioned figures.
 
 ## Validation
 

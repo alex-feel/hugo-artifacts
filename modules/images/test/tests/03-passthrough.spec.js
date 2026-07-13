@@ -1,7 +1,8 @@
 // Passthrough matrix: SVG and GIF sources, static/ paths, and remote URLs
 // never enter the pipeline -- they render as plain <img> elements with the
-// image--static modifier, the true resolution origin in data-kind, correct
-// dimension policy, and no srcset/picture machinery.
+// image--static modifier, the true resolution origin in data-kind, the
+// cascaded layout in data-layout (the same root pair processed renders
+// carry), correct dimension policy, and no srcset/picture machinery.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {dom, warnCount} from './helpers.js';
@@ -17,6 +18,7 @@ test('SVG renders as a bare passthrough img without invented dimensions', () => 
   assert.equal(img.getAttribute('height'), undefined);
   assert.equal(img.getAttribute('srcset'), undefined);
   assert.equal(img.getAttribute('data-kind'), 'page');
+  assert.equal(img.getAttribute('data-layout'), 'constrained');
 });
 
 test('GIF renders as passthrough WITH intrinsic dimensions and no srcset', () => {
@@ -28,6 +30,7 @@ test('GIF renders as passthrough WITH intrinsic dimensions and no srcset', () =>
   assert.equal(img.getAttribute('height'), '10');
   assert.equal(img.getAttribute('srcset'), undefined);
   assert.equal(img.getAttribute('data-kind'), 'page');
+  assert.equal(img.getAttribute('data-layout'), 'constrained');
 });
 
 test('a /static path renders as a warning-free passthrough', () => {
@@ -35,6 +38,7 @@ test('a /static path renders as a warning-free passthrough', () => {
   assert.ok(img, 'expected the static-icon hook image');
   assert.equal(img.getAttribute('src'), '/static-icon.png');
   assert.equal(img.getAttribute('data-kind'), 'static');
+  assert.equal(img.getAttribute('data-layout'), 'constrained');
   assert.match(img.getAttribute('class'), /\bimage--static\b/);
   assert.equal(warnCount(/static-icon/), 0, 'static passthrough must not warn');
 });
@@ -43,10 +47,12 @@ test('a remote URL is emitted untouched (shortcode and hook)', () => {
   const sc = page.querySelector('#sc-remote');
   assert.equal(sc.getAttribute('src'), 'https://example.com/r.jpg');
   assert.equal(sc.getAttribute('data-kind'), 'remote');
+  assert.equal(sc.getAttribute('data-layout'), 'constrained');
   assert.equal(sc.getAttribute('srcset'), undefined);
   const hook = page
     .querySelectorAll('img')
     .find((i) => i.getAttribute('alt') === 'Remote hook image');
   assert.equal(hook.getAttribute('src'), 'https://example.com/r.jpg');
   assert.equal(hook.getAttribute('data-kind'), 'remote');
+  assert.equal(hook.getAttribute('data-layout'), 'constrained');
 });

@@ -27,15 +27,25 @@
 
   Degradation: a glob that matches nothing, a malformed crop token, and an
   item without alt metadata all warn once (deduplicated) and degrade; item
-  problems never break the build.
+  problems never break the build. A named parameter outside the vocabulary
+  above (a typo such as cropp=) warns once and is ignored -- Hugo would
+  otherwise drop it silently.
 */}}
 
 {{- $args := dict "page" .Page "position" (printf "%s" .Position) -}}
 
+{{- $vocab := slice "match" "crop" "lightbox" "id" "class" "widths" "sizes" "sizes_auto" "formats" "loading" "placeholder" "responsive" "enable" "quality" "anchor" "resample" "bg" "hint" "compression" "layout" "max_density" -}}
 {{- if .IsNamedParams -}}
-  {{- range $k := slice "match" "crop" "lightbox" "id" "class" "widths" "sizes" "sizes_auto" "formats" "loading" "placeholder" "responsive" "enable" "quality" "anchor" "resample" "bg" "hint" "compression" "layout" "max_density" -}}
+  {{- range $k := $vocab -}}
     {{- if isset $.Params $k -}}
       {{- $args = merge $args (dict $k ($.Get $k)) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- range $k, $_ := .Params -}}
+    {{- if not (in $vocab $k) -}}
+      {{- partial "images/lib/warn.html" (dict
+          "key" (printf "images:warn:unknown-param:image-gallery:%s:%s" $k (printf "%s" $.Position))
+          "message" (printf "[images] Ignoring the unknown image-gallery shortcode parameter %q (see the README Parameters table for the accepted names). See %s" $k $.Position)) -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}

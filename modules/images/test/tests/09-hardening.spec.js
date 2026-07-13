@@ -2,10 +2,13 @@
 // attribute VALUES are entity-escaped so no event handler can break out of
 // the attribute (stored-XSS fix); non-positive and out-of-range numeric
 // tokens (widths="0", quality="150", process=fill without both dimensions)
-// degrade with a warning instead of crashing the build; a width-only
-// passthrough never fabricates height="0"; the two-positional shortcode
-// shorthand renders; the priority / eager / full loading rows emit their
-// exact attribute sets; and credit_from_meta surfaces the IPTC credit.
+// degrade with a warning instead of crashing the build; unknown named
+// shortcode parameters warn once and are ignored instead of vanishing
+// silently; layout=fixed with only a height derives its width from the
+// aspect ratio; a width-only passthrough never fabricates height="0"; the
+// two-positional shortcode shorthand renders; the priority / eager / full
+// loading rows emit their exact attribute sets; and credit_from_meta
+// surfaces the IPTC credit.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {dom, rawHtml, warnCount} from './helpers.js';
@@ -43,6 +46,33 @@ test('an out-of-range quality degrades to the per-format default with one warnin
   assert.ok(picture, 'the build did not fail on quality="150"');
   assert.ok(picture.querySelector('img').getAttribute('srcset'));
   assert.equal(warnCount(/Ignoring quality value "150"/), 1);
+});
+
+test('an unknown named shortcode parameter warns once and never derails the render', () => {
+  const picture = page.querySelector('#sc-typo-param');
+  assert.ok(picture, 'the typo call still renders');
+  assert.ok(picture.querySelector('img').getAttribute('srcset'), 'the pipeline runs normally');
+  assert.equal(warnCount(/Ignoring the unknown image shortcode parameter "captoin"/), 1);
+  assert.equal(warnCount(/Ignoring the unknown image-gallery shortcode parameter "cropp"/), 1);
+  const typoGallery = page.querySelector('#gallery-typo');
+  assert.equal(typoGallery.getAttribute('data-count'), '3', 'the gallery renders all items');
+  const img = typoGallery.querySelector('img');
+  assert.notEqual(
+    img.getAttribute('width'),
+    img.getAttribute('height'),
+    'cropp= is dropped, so tiles stay uncropped',
+  );
+});
+
+test('layout=fixed with only a height derives the width from the aspect ratio', () => {
+  const picture = page.querySelector('#sc-fixed-height');
+  assert.ok(picture, 'the height-only fixed call renders');
+  assert.equal(picture.getAttribute('data-layout'), 'fixed');
+  const img = picture.querySelector('img');
+  assert.equal(img.getAttribute('width'), '128', 'the square 512px source derives width=128');
+  assert.equal(img.getAttribute('height'), '128');
+  assert.match(img.getAttribute('srcset'), / 1x,.* 2x$/, 'density descriptors within the source');
+  assert.equal(img.getAttribute('sizes'), undefined, 'fixed layout emits no sizes');
 });
 
 test('fit/fill/crop without both dimensions degrades to resize on the hook', () => {
