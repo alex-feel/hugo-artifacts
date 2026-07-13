@@ -22,8 +22,12 @@
   Fixed layout (x-descriptors): the effective density list is the configured
   densities filtered to entries <= max_density, with max_density appended
   when it exceeds the list maximum; each density d is emitted only when
-  width*d <= srcW. When even 1x exceeds the source width the plan degrades
-  to the bare source width and sets fixedOverflow (the caller warns once).
+  width*d <= srcW. A height-only fixed call works: the height-only resize
+  conversion below runs BEFORE the density build, deriving the equivalent
+  width from the source aspect ratio (the calling surfaces reject only the
+  no-width-AND-no-height case). When even 1x exceeds the source width the
+  plan degrades to the bare source width and sets fixedOverflow (the caller
+  warns once).
 
   Post-orientation dimensions: when the resource supports metadata, EXIF
   orientation values 5-8 swap the raw .Width/.Height (raw dimensions are
@@ -99,7 +103,9 @@
 {{- if isset $ov "process" -}}{{- $process = $ov.process -}}{{- end -}}
 {{- if and (eq $process "resize") (gt $height 0) (eq $width 0) -}}
   {{/* Height-only resize: proportional by definition, so convert to the
-       equivalent width and keep the single width-driven pipeline. */}}
+       equivalent width and keep the single width-driven pipeline. This
+       also serves layout=fixed with only a height: the derived width feeds
+       the density build below exactly as an explicit width would. */}}
   {{- $width = int (math.Round (div (mul $height $srcW) (float $srcH))) -}}
   {{- $height = 0 -}}
 {{- end -}}

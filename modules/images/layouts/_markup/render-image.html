@@ -33,9 +33,10 @@
   Non-destructive duty: this hook NEVER calls errorf -- Markdown content can
   never break the build. Every contradiction that fails the partial and
   shortcode surfaces demotes here to one deduplicated warning plus a defined
-  degradation: empty alt renders alt=""; layout=fixed without width falls
-  back to constrained; process=fit/fill/crop without height falls back to
-  resize; decorative with non-empty Markdown alt prefers decorative
+  degradation: empty alt renders alt=""; layout=fixed without a width or
+  height falls back to constrained; process=fit/fill/crop without BOTH width
+  and height falls back to resize; decorative with non-empty Markdown alt
+  prefers decorative
   (alt=""); decorative with an effective lightbox suppresses the anchor.
 
   Context (Hugo image render hook): .Destination, .PlainText (alt), .Title
@@ -50,7 +51,7 @@
 
 {{/* ---- Split Markdown attributes into parameter overrides and verbatim
      pass-through ---- */}}
-{{- $vocab := slice "decorative" "dark" "caption" "credit" "credit_from_meta" "license" "license_url" "width" "height" "process" "quality" "anchor" "resample" "bg" "hint" "compression" "layout" "widths" "max_density" "sizes" "sizes_auto" "formats" "loading" "priority" "fetchpriority" "placeholder" "lightbox" "theme_strategy" "fetch" "remote_key" "responsive" "enable" "class" "id" -}}
+{{- $vocab := slice "decorative" "dark" "caption" "credit" "credit_from_meta" "license" "license_url" "width" "height" "process" "quality" "anchor" "resample" "bg" "hint" "compression" "layout" "widths" "max_density" "sizes" "sizes_auto" "formats" "loading" "priority" "fetchpriority" "placeholder" "lightbox" "theme_strategy" "fetch" "remote_key" "responsive" "enable" "class" "root_class" "id" -}}
 {{- $deny := slice "src" "srcset" "sizes" "alt" "width" "height" "loading" "decoding" "fetchpriority" "class" "style" "data-kind" "data-layout" "data-placeholder" "data-dominant-color" "data-dominant-luminance" "data-full-src" "data-full-width" "data-full-height" "data-theme-swap" "data-theme-variant" "data-count" "data-index" -}}
 {{- $args := dict "page" $page "position" $position "surface" "hook" -}}
 {{- $passthrough := dict -}}
@@ -93,10 +94,10 @@
 {{- $opts := partial "images/config.html" (dict "page" $page "args" $args) -}}
 
 {{/* ---- Demote the partial/shortcode errorf contradictions ---- */}}
-{{- if and (eq $opts.layout "fixed") (eq $opts.width 0) -}}
+{{- if and (eq $opts.layout "fixed") (eq $opts.width 0) (eq $opts.height 0) -}}
   {{- partial "images/lib/warn.html" (dict
       "key" (printf "images:warn:hook-fixed:%s:%v" $page.RelPermalink $ordinal)
-      "message" (printf "[images] layout=\"fixed\" requires an explicit width; falling back to \"constrained\". See %s" $position)) -}}
+      "message" (printf "[images] layout=\"fixed\" requires an explicit width or height; falling back to \"constrained\". See %s" $position)) -}}
   {{- $opts = merge $opts (dict "layout" "constrained") -}}
 {{- end -}}
 {{- if and (in (slice "fit" "fill" "crop") $opts.process) (or (eq $opts.width 0) (eq $opts.height 0)) -}}
