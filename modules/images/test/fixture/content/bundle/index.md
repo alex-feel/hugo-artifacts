@@ -1,6 +1,9 @@
 ---
 title: Bundle Scenarios
 exercise_partials: true
+img:
+  gallery:
+    index_pad: nope
 resources:
   - src: gallery/g1.png
     title: Gallery one
@@ -66,6 +69,12 @@ resources:
 
 {{< image src="tiny-500.png" alt="A framed root-classed figure" caption="Framed" root_class="frame highlight" id="sc-root-class-figure" >}}
 
+{{< image src="tiny-500.png" alt="An anchored root-classed scene" lightbox="true" root_class="ring" id="sc-root-class-anchor" >}}
+
+{{< image src="photo-1600.png" alt="A swapped root-classed scene" dark="photo-dark.png" theme_strategy="class" root_class="swapper" id="sc-root-class-swap" >}}
+
+{{< image src="diagram.svg" alt="A root-classed vector" class="w-full" root_class="chart" id="sc-root-class-img" >}}
+
 {{< image src="avatar-512.png" alt="A height-only fixed avatar" layout="fixed" height="128" id="sc-fixed-height" >}}
 
 ## Non-positive and out-of-range token degradations (must never break the build)
@@ -76,6 +85,8 @@ resources:
 
 {{< image src="tiny-500.png" alt="A typo probe" captoin="oops" id="sc-typo-param" >}}
 
+{{< image src="photo-1600.png" alt="A leading-zero widths scene" widths="0640,0960" id="sc-leadzero-widths" >}}
+
 ## Galleries
 
 {{< image-gallery match="gallery/*.png" id="gallery-plain" >}}
@@ -85,6 +96,14 @@ resources:
 {{< image-gallery match="padgallery/*.png" lightbox="false" id="gallery-pad" >}}
 
 {{< image-gallery match="gallery/*.png" cropp="1x1" id="gallery-typo" >}}
+
+{{< image-gallery match="gallery/*.png" lightbox="false" index_pad="2" id="gallery-minpad" >}}
+
+{{< image-gallery match="gallery/*.png" lightbox="false" index_pad="zero" id="gallery-badpad" >}}
+
+{{< image-gallery match="gallery/*.png" lightbox="false" index_pad="zero" id="gallery-badpad-2" >}}
+
+{{< image-gallery match="gallery/*.png" lightbox="false" index_pad="08" id="gallery-leadzero" >}}
 
 ## Markdown render hook scenarios
 

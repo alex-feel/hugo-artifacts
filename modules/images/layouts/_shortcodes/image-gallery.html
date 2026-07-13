@@ -20,6 +20,9 @@
     every tile is fill-cropped to that exact ratio while lightbox anchors
     still target the uncropped capped derivative.
   - lightbox: per-gallery override of the gallery.lightbox default (true).
+  - index_pad: minimum data-index digit width, per-gallery override of the
+    gallery.index_pad default (1); the item count's own digit width still
+    wins when larger.
   - id, class: attributes on the <ol> element.
   - widths, sizes, sizes_auto, formats, loading, placeholder, responsive,
     enable, quality, anchor, resample, bg, hint, compression, layout,
@@ -34,7 +37,7 @@
 
 {{- $args := dict "page" .Page "position" (printf "%s" .Position) -}}
 
-{{- $vocab := slice "match" "crop" "lightbox" "id" "class" "widths" "sizes" "sizes_auto" "formats" "loading" "placeholder" "responsive" "enable" "quality" "anchor" "resample" "bg" "hint" "compression" "layout" "max_density" -}}
+{{- $vocab := slice "match" "crop" "lightbox" "index_pad" "id" "class" "widths" "sizes" "sizes_auto" "formats" "loading" "placeholder" "responsive" "enable" "quality" "anchor" "resample" "bg" "hint" "compression" "layout" "max_density" -}}
 {{- if .IsNamedParams -}}
   {{- range $k := $vocab -}}
     {{- if isset $.Params $k -}}

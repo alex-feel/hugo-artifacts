@@ -4,11 +4,13 @@
 // tokens (widths="0", quality="150", process=fill without both dimensions)
 // degrade with a warning instead of crashing the build; unknown named
 // shortcode parameters warn once and are ignored instead of vanishing
-// silently; layout=fixed with only a height derives its width from the
-// aspect ratio; a width-only passthrough never fabricates height="0"; the
-// two-positional shortcode shorthand renders; the priority / eager / full
-// loading rows emit their exact attribute sets; and credit_from_meta
-// surfaces the IPTC credit.
+// silently; invalid gallery index_pad values warn once per value and tier
+// and keep the fallback width; leading-zero integers parse as decimal
+// instead of octal-crashing the cast; layout=fixed with only a height
+// derives its width from the aspect ratio; a width-only passthrough never
+// fabricates height="0"; the two-positional shortcode shorthand renders;
+// the priority / eager / full loading rows emit their exact attribute
+// sets; and credit_from_meta surfaces the IPTC credit.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {dom, rawHtml, warnCount} from './helpers.js';
@@ -61,6 +63,41 @@ test('an unknown named shortcode parameter warns once and never derails the rend
     img.getAttribute('width'),
     img.getAttribute('height'),
     'cropp= is dropped, so tiles stay uncropped',
+  );
+});
+
+test('invalid index_pad values warn once per value and keep the fallback width', () => {
+  const badpad = page.querySelector('#gallery-badpad');
+  assert.ok(badpad, 'the gallery still renders');
+  assert.equal(
+    badpad.querySelector('li.image-gallery__item').getAttribute('data-index'),
+    '1',
+    'the pad falls back to the three-item count width',
+  );
+  assert.ok(page.querySelector('#gallery-badpad-2'), 'the twin bad call renders too');
+  assert.equal(
+    warnCount(/Ignoring index_pad value "zero"/),
+    1,
+    'deduplicated across both bad calls',
+  );
+  assert.equal(
+    warnCount(/Ignoring gallery.index_pad value "nope"/),
+    1,
+    'the invalid page-tier value warns once for the whole page',
+  );
+});
+
+test('leading-zero integers parse as decimal and never break the build', () => {
+  const picture = page.querySelector('#sc-leadzero-widths');
+  assert.ok(picture, 'widths="0640,0960" builds');
+  const srcset = picture.querySelector('img').getAttribute('srcset');
+  assert.ok(srcset.includes(' 640w'), '0640 parses as decimal 640');
+  assert.ok(srcset.includes(' 960w'), '0960 parses as decimal 960, not as an invalid octal');
+  const leadzero = page.querySelector('#gallery-leadzero');
+  assert.equal(
+    leadzero.querySelector('li.image-gallery__item').getAttribute('data-index'),
+    '00000001',
+    'index_pad="08" is decimal 8, not an octal parse error',
   );
 });
 

@@ -59,6 +59,34 @@ test('crop="1x1" emits square tiles while anchors target uncropped derivatives',
   assert.equal(anchor.getAttribute('data-full-height'), '200', 'the lightbox stays uncropped');
 });
 
+test('index_pad raises the data-index width to a fixed minimum', () => {
+  const minpad = page.querySelector('#gallery-minpad');
+  assert.equal(minpad.getAttribute('data-count'), '3');
+  const items = minpad.querySelectorAll('li.image-gallery__item');
+  assert.equal(items.length, 3);
+  items.forEach((li, i) => {
+    assert.equal(
+      li.getAttribute('data-index'),
+      String(i + 1).padStart(2, '0'),
+      'index_pad="2" pads a three-item gallery to two digits',
+    );
+  });
+});
+
+test('a page-tier gallery.index_pad cascades without a call argument', () => {
+  const padded = dom('padded/index.html');
+  const cascade = padded.querySelector('#gallery-cascade');
+  assert.equal(cascade.getAttribute('data-count'), '2');
+  const items = cascade.querySelectorAll('li.image-gallery__item');
+  items.forEach((li, i) => {
+    assert.equal(
+      li.getAttribute('data-index'),
+      String(i + 1).padStart(2, '0'),
+      'the front-matter img.gallery.index_pad value pads a two-item gallery',
+    );
+  });
+});
+
 test('a ten-item gallery zero-pads data-index to the count digit width', () => {
   const pad = page.querySelector('#gallery-pad');
   assert.equal(pad.getAttribute('data-count'), '10');

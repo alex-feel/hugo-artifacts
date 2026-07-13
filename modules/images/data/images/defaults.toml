@@ -108,3 +108,8 @@ enable = true
 lightbox = true
 # Optional uniform thumbnail ratio 'WxH' (e.g. '1x1'); empty = no crop.
 crop = ''
+# Minimum data-index digit width; the item count's own digit width still
+# wins when larger (a ten-item gallery stays '01'..'10' either way). Set 2
+# to guarantee two-digit indexes ('01'..'03') in small galleries, so
+# attr(data-index)-driven chips keep one fixed width.
+index_pad = 1
