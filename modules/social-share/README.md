@@ -124,7 +124,7 @@ Facebook Messenger requires a registered Meta `app_id`; Instagram, TikTok, Snapc
 
 ## Configuration
 
-Every key lives in [`data/social-share/defaults.toml`](data/social-share/defaults.toml) and can be overridden at three higher tiers. Precedence, highest first: call-site dict args > page front matter (`social_share` map) > site `[params.social_share]` > module defaults. Presence wins at every tier, so an explicit `false` or empty value overrides the tier below it.
+Every key lives in [`data/social-share/defaults.toml`](data/social-share/defaults.toml) and can be overridden at three higher tiers. Precedence, highest first: call-site dict args > page front matter (`social_share` map) > site `[params.social_share]` > module defaults. Presence wins at every tier, so an explicit `false` or empty value overrides the tier below it -- except for `image`, which resolves through the fall-through chain described below this table, where an empty value simply yields to the next candidate.
 
 ```toml
 [params.social_share]
@@ -151,11 +151,11 @@ lemmy_instance = ""
 | `mastodon_instance` | string | `""` | Bare hostname (for example `mastodon.social`); switches Mastodon from the official fragment sharer to that instance's `/share`. |
 | `lemmy_instance` | string | `""` | Bare hostname; required for the `lemmy` target. |
 
-Share data (`url`, `title`, `description`) defaults to the page's `.Permalink`, `.Title`, and `.Description` and can be overridden per page (`social_share.url` and so on) or per call. The share image resolves in this order: explicit `image` value (page resource, then global `assets/` resource, then literal URL) > first entry of the page's `images` front matter > a page-bundle image resource matching `*feature*` / `*cover*` / `*thumbnail*` > site-tier `image`.
+Share data (`url`, `title`, `description`) defaults to the page's `.Permalink`, `.Title`, and `.Description` and can be overridden per page (`social_share.url` and so on) or per call. The share image resolves in this order: explicit `image` value > first entry of the page's `images` front matter, used only when it is a plain path/URL string (a map-shaped entry such as `images: [{src: cover.png}]` falls through) > a page-bundle image resource matching `*feature*` / `*cover*` / `*thumbnail*` > site-tier `image`. Every raw value resolves the same way: page resource, then global `assets/` resource, then literal URL (the site-tier value skips the page-resource step).
 
 ### Custom networks (`networks_extra`)
 
-Add a target the registry lacks -- or patch a built-in (the merge is per-field) -- without forking the module:
+Add a target the registry lacks -- or patch a built-in -- without forking the module:
 
 ```toml
 [params.social_share.networks_extra.myservice]
@@ -165,6 +165,8 @@ take = ["u=url", "t=title"]
 ```
 
 `take` maps query-parameter names to value tokens: `url`, `title`, `titleurl` (title + space + URL), `description`, `description_or_title`, `image`, `via`, `hashtags`, `site` (your hostname). `fixed` sets literal parameters the same way. Both accept a map, but use the `"param=token"` string-list form shown above: Hugo lowercases map keys in site params, which would corrupt case-sensitive parameter names such as `canonicalUrl`. Optional fields: `label_key` / `label_default` (accessible-name i18n), `icon` (a built-in icon name; for an own glyph override `layouts/_partials/social-share/icon.html`), `mode = "fragment"` (join parameters with `#` instead of `?`).
+
+Patching a built-in follows Hugo's `merge` semantics, which deep-merge maps only. When both the built-in field and yours are maps, the patch is per key: a map-form `take`/`fixed` adds or overrides individual entries and never deletes a key -- though overriding a `take` token to an empty or unknown value drops that parameter from the rendered href, because parameters whose token resolves to no value are omitted. The string-list form is not a map, so it replaces the built-in field wholesale: list exactly the parameters you want. The same wholesale replacement applies against the two built-ins that store `take` as a list themselves (`tumblr`, `odnoklassniki`) and to every scalar field (`label`, `endpoint`, `mode`). For a clean slate, define your own fresh slug instead of patching a built-in: a full redefinition inherits nothing.
 
 Endpoint schemes are allowlisted: anything other than `https`, `mailto`, `sms`, or `viber` (including plain `http` and `javascript:`) is skipped with a one-time build warning. Instance hostnames (`mastodon_instance`, `lemmy_instance`) must be bare hostnames -- values with slashes, `@`, `?`, or `#` are rejected the same way, so front-matter-tier input cannot redirect shares to an attacker-chosen host.
 
@@ -207,7 +209,7 @@ document.addEventListener('social-share:share', (event) => {
 
 A closed Web Share sheet is a user decision, not a failure: it dispatches nothing and announces nothing (the same applies to a second click while a share sheet is already open).
 
-The script wires the bars present at initial page load. If your site inserts bars later (PJAX/Turbo navigation, AJAX-loaded content), dispatch `document.dispatchEvent(new Event('social-share:rescan'))` after inserting them -- wiring is idempotent, so already-enhanced bars are never double-wired.
+The script wires the bars present at initial page load. If your site inserts or restores bars later (PJAX/Turbo navigation, AJAX-loaded content), dispatch `document.dispatchEvent(new Event('social-share:rescan'))` after the DOM update -- with Turbo Drive, on every `turbo:load`. Rescanning is safe and idempotent: a bar whose listeners are live is never double-wired, while a bar restored from a page-cache snapshot (it still looks enhanced, but `cloneNode` dropped its listeners) is rewired and any stale copy feedback it carried is cleared.
 
 ## Accessibility
 
@@ -311,6 +313,7 @@ modules/social-share/
 │           ├── item.html                  One list item (link or action button)
 │           ├── icon.html                  Inline SVG glyphs (brand marks + action line art)
 │           └── lib/
+│               ├── resolve-image.html     Shared share-image value resolver (resource lookup, then URL)
 │               └── warn.html              Build-deduplicated warnf funnel
 └── test/                                  Fixture site + Playwright validation suite (see test/README.md)
 ```

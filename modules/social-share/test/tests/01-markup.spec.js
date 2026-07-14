@@ -146,6 +146,38 @@ test.describe('encoding matrix post', () => {
   });
 });
 
+test.describe('images-map post (map-shaped images front matter)', () => {
+  const pageUrl = `${BASE}/blog/post-images-map/`;
+  const encUrl = encodeURIComponent(pageUrl);
+
+  test('a map-shaped images entry falls through to the site-tier image', async ({page}) => {
+    await page.goto('/blog/post-images-map/');
+    const encDescription = encodeURIComponent('Map images post.');
+    const encMedia = encodeURIComponent(`${BASE}/img/site-fallback.png`);
+    await expect(page.locator('a[data-share-network="pinterest"]')).toHaveAttribute(
+      'href',
+      `https://www.pinterest.com/pin/create/button/?description=${encDescription}&media=${encMedia}&url=${encUrl}`,
+    );
+  });
+});
+
+test.describe('images-glob post (glob metacharacters in an images entry)', () => {
+  const pageUrl = `${BASE}/blog/post-images-glob/`;
+  const encUrl = encodeURIComponent(pageUrl);
+
+  test('a literal filename with an unbalanced bracket resolves as a plain URL', async ({page}) => {
+    await page.goto('/blog/post-images-glob/');
+    const encDescription = encodeURIComponent('Glob images post.');
+    // absURL percent-encodes the bracket in the path, and querify then
+    // encodes that escape's own percent sign.
+    const encMedia = encodeURIComponent(`${BASE}/shot%5B.png`);
+    await expect(page.locator('a[data-share-network="pinterest"]')).toHaveAttribute(
+      'href',
+      `https://www.pinterest.com/pin/create/button/?description=${encDescription}&media=${encMedia}&url=${encUrl}`,
+    );
+  });
+});
+
 test.describe('networks post (front matter overrides plus shortcode)', () => {
   test('renders two distinctly labeled bars', async ({page}) => {
     await page.goto('/blog/post-networks/');
