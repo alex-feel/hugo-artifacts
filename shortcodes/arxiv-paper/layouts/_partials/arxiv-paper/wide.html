@@ -25,7 +25,7 @@
    {{- with .primaryCategory }} data-arxiv-category="{{ . }}"{{ end }}
    {{- with .primaryArchive }} data-arxiv-archive="{{ . }}"{{ end }}
    {{- with .primaryGroup }} data-arxiv-group="{{ . }}"{{ end }}>
-  <div class="arxiv-paper__tile arxiv-paper__tile--subject" data-arxiv-archive="{{ .primaryArchive }}">
+  <div class="arxiv-paper__tile arxiv-paper__tile--subject"{{ with .primaryArchive }} data-arxiv-archive="{{ . }}"{{ end }}{{ with .primaryGroup }} data-arxiv-group="{{ . }}"{{ end }}>
     <span class="arxiv-paper__tile-code">{{ or .primaryCategory "arXiv" }}</span>
     {{- with .primaryGroup }}<span class="arxiv-paper__tile-group">{{ . }}</span>{{ end }}
   </div>

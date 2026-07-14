@@ -44,11 +44,17 @@
 {{- $waitHintSeconds := 0 -}}
 {{- $errorMessage := "" -}}
 
-{{/* Retry-After (numeric seconds) when present. */}}
+{{/* Retry-After when present. The header legally carries either delay-seconds
+     or an HTTP-date; only the numeric form is usable as a wait hint, so the
+     cast is wrapped in try and the date form falls back to the 60s default. */}}
 {{- $retryAfter := 0 -}}
 {{- with index $headers "Retry-After" -}}
   {{- with index . 0 -}}
-    {{- $retryAfter = int . -}}
+    {{- with try (int .) -}}
+      {{- with .Value -}}
+        {{- $retryAfter = . -}}
+      {{- end -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 

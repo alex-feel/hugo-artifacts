@@ -69,7 +69,7 @@ A minimal `<a>` element showing the "arXiv" brand, the identifier, the title, an
 {{< arxiv-paper id="2512.24601" variant="card" >}}
 ```
 
-A vertical card with an "arXiv / <subject>" eyebrow, title, truncated author list, abstract (or the TLDR when enriched), and a footer with the identifier, submitted year, venue, page/figure comment, and citation count (when enriched).
+A vertical card with an "arXiv / <subject>" eyebrow, title, truncated author list, abstract (or the TLDR when enriched), and a footer with the identifier, submitted year, venue, page/figure comment, and citation count (when enrichment supplied a nonzero count).
 
 #### wide -- Subject-tile horizontal card
 
@@ -85,7 +85,7 @@ A two-column card with a subject tile on the left (primary category code and bro
 {{< arxiv-paper id="2512.24601" variant="stats" >}}
 ```
 
-A card with the header, abstract/TLDR, and a metrics strip. The strip leads with durable facts (submitted year, primary subject, author count, version) and appends the slow-drift counts -- citations, HF upvotes -- only when enrichment supplied them.
+A card with the header, abstract/TLDR, and a metrics strip. The strip leads with durable facts (submitted year, primary subject, author count, version) and appends the slow-drift counts -- citations, HF upvotes -- only when enrichment supplied a nonzero count.
 
 #### hero -- Featured hero with banner
 

@@ -5,8 +5,8 @@
 
   Context expectations:
   - . (dict) - Normalized paper data from fetch.html.
-  - .id, .version, .title, .absURL, .primaryCategory, .primaryCategoryLabel,
-    .primaryArchive, .primaryGroup, .apiOk, .extraClass
+  - .id, .version, .title, .absURL, .pdfURL, .primaryCategory,
+    .primaryCategoryLabel, .primaryArchive, .primaryGroup, .apiOk, .extraClass
   - .variant (string, optional) - Originating variant for data-variant
     (default: "inline").
 
@@ -22,6 +22,7 @@
    data-arxiv-id="{{ .id }}"
    data-variant="{{ $variant }}"
    data-api-ok="{{ .apiOk }}"
+   data-arxiv-pdf="{{ .pdfURL }}"
    {{- with .primaryCategory }} data-arxiv-category="{{ . }}"{{ end }}
    {{- with .primaryArchive }} data-arxiv-archive="{{ . }}"{{ end }}
    {{- with .primaryGroup }} data-arxiv-group="{{ . }}"{{ end }}>

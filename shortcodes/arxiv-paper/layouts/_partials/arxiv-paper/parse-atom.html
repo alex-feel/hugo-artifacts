@@ -92,7 +92,7 @@
       {{/* Primary category + full category list, resolved to labels and groups. */}}
       {{- $primaryCategory := "" -}}
       {{- with $entry.primary_category -}}
-        {{- $primaryCategory = index . "-term" -}}
+        {{- $primaryCategory = or (index . "-term") "" -}}
       {{- end -}}
       {{- $primaryArchive := index (split $primaryCategory ".") 0 -}}
       {{- $primaryCategoryLabel := or (index hugo.Data.arxiv_categories $primaryCategory) $primaryCategory -}}
