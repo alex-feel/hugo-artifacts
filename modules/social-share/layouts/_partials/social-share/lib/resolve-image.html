@@ -1,0 +1,46 @@
+{{/*
+  social-share/lib/resolve-image.html -- INTERNAL (lib tier).
+
+  Purpose: resolves one raw share-image value to an absolute URL, one way
+  for every cascade tier in config.html. URL-shaped values go straight to
+  absURL; anything else is tried as a page-bundle resource by exact path
+  (when a page is given), then as a global assets/ resource, then falls
+  back to absURL of the raw value.
+
+  Expected context (dict):
+  - .value (string) - The raw image value (non-empty).
+  - .page  (Page, optional) - Enables the page-bundle resource lookup;
+    omitted for site-tier values, which are not page-scoped.
+
+  Return value: the absolute share-image URL string. One terminal return.
+*/}}
+
+{{- $value := printf "%v" .value -}}
+{{- $image := "" -}}
+
+{{/* URL-shaped values must never reach the resource lookups: on Windows,
+     resources.Get treats them as filesystem paths and errors out instead
+     of returning nil. */}}
+{{- if or (in $value "://") (hasPrefix $value "//") -}}
+  {{- $image = $value | absURL -}}
+{{- else -}}
+  {{- with .page -}}
+    {{/* Exact-path lookup, deliberately not GetMatch: GetMatch compiles its
+         argument as a glob, so a literal filename carrying glob
+         metacharacters would abort the build (unbalanced bracket) or match
+         the wrong resource (balanced bracket read as a character class). */}}
+    {{- with .Resources.Get $value -}}
+      {{- $image = .Permalink -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if not $image -}}
+    {{- with resources.Get $value -}}
+      {{- $image = .Permalink -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if not $image -}}
+    {{- $image = $value | absURL -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $image -}}

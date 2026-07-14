@@ -282,9 +282,15 @@
 
 {{- $entries := merge $social $messengers $communities $fediverse $actions -}}
 
-{{/* Consumer extension entries win over built-ins. merge is recursive, so an
-     entry can patch a single field (for example just the endpoint) without
-     restating the rest. */}}
+{{/* Consumer extension entries win over built-ins. merge is recursive for
+     maps only: an entry can patch a single field (for example just the
+     endpoint) without restating the rest, and when both the built-in and
+     the consumer value of take/fixed are maps the patch is per key -- keys
+     are added or overridden, never deleted, though a take token overridden
+     to an empty or unknown value drops that parameter from the href
+     (url.html omits parameters whose token resolves to no value). A
+     slice-form take/fixed -- or any other non-map value -- replaces the
+     built-in field wholesale. */}}
 {{- with $cfg.networks_extra -}}
   {{- $entries = merge $entries . -}}
 {{- end -}}

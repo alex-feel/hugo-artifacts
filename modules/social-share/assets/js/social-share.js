@@ -108,6 +108,18 @@
     });
   }
 
+  function resetCopyFeedback(root) {
+    // A bar restored from a DOM snapshot (Turbo/PJAX page caches restore
+    // via cloneNode) can carry copy feedback frozen mid-reset with no timer
+    // running; wiring starts from a clean state.
+    root.classList.remove('social-share--copied');
+    var copied = root.querySelectorAll('.social-share__button--copied');
+    for (var i = 0; i < copied.length; i++) {
+      copied[i].classList.remove('social-share__button--copied');
+    }
+    announce(root, '');
+  }
+
   function wirePrint(root, button, url) {
     revealItem(button);
     button.addEventListener('click', function () {
@@ -131,6 +143,8 @@
   }
 
   function wire(root) {
+    resetCopyFeedback(root);
+
     var url = root.getAttribute('data-share-url') || window.location.href;
     var title = root.getAttribute('data-share-title') || document.title;
     var text = root.getAttribute('data-share-text') || '';
@@ -150,18 +164,24 @@
       }
     }
 
+    // The wired-guard is a property on the element, not the class below: a
+    // bar restored from a DOM snapshot (Turbo/PJAX page caches restore via
+    // cloneNode) keeps its class attributes but loses its listeners AND its
+    // expando properties, so a restored clone is correctly seen as unwired.
+    // The class is purely the CSS state hook.
+    root.__socialShareWired = true;
     root.classList.add('social-share--enhanced');
   }
 
   function init() {
     // Idempotent: a page can legitimately carry this script more than once
     // (a list layout embedding the rendered .Content of several posts), and
-    // consumers may re-run it for late-inserted bars; already-wired roots
-    // carry the --enhanced marker and are skipped, so no bar ever gets
-    // duplicate listeners.
+    // consumers may re-run it for late-inserted or snapshot-restored bars;
+    // the wired-guard property lives on the element object itself, so every
+    // script instance sees it and no bar ever gets duplicate listeners.
     var roots = document.querySelectorAll('.social-share');
     for (var i = 0; i < roots.length; i++) {
-      if (!roots[i].classList.contains('social-share--enhanced')) {
+      if (!roots[i].__socialShareWired) {
         wire(roots[i]);
       }
     }
@@ -173,8 +193,15 @@
     init();
   }
 
-  // Bars inserted after the initial load (PJAX/Turbo swaps, AJAX-loaded
-  // content) are not wired automatically; the host page opts in by
-  // dispatching this event after inserting them.
-  document.addEventListener('social-share:rescan', init);
+  // Bars inserted or restored after the initial load (PJAX/Turbo swaps and
+  // cache restores, AJAX-loaded content) are not wired automatically; the
+  // host page opts in by dispatching this event after inserting them (for
+  // Turbo Drive, on turbo:load). One listener serves every script instance:
+  // init reads no per-instance state, and under Turbo Drive the document
+  // survives navigations while body scripts re-execute on every visit, so
+  // an unguarded registration would accumulate one listener per visit.
+  if (!document.__socialShareRescanWired) {
+    document.__socialShareRescanWired = true;
+    document.addEventListener('social-share:rescan', init);
+  }
 })();

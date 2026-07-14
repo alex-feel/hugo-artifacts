@@ -4,8 +4,8 @@ Playwright tests that validate the social-share module end to end against the mi
 
 ## What is covered
 
-- `tests/01-markup.spec.js` -- server-rendered markup with JavaScript disabled: exact intent hrefs for the default list, the full encoding matrix (ampersand, percent, literal plus, emoji, quotes, angle brackets, a newline, a right-to-left override), the Mastodon fragment-only sharer, `safeURL` survival of `viber:`/`sms:` schemes, image-aware and instance-backed targets, a `networks_extra` endpoint that already carries a query, per-scheme `rel`/`target` policy, front matter overrides, the shortcode bar, and the pre-enhancement hidden state of the action buttons.
-- `tests/02-enhancement.spec.js` -- progressive enhancement: capability-gated reveal of the copy and Web Share buttons, the `--enhanced` state class, the copy flow (clipboard content, live-region announcement, timed reset), and status-region emission rules.
+- `tests/01-markup.spec.js` -- server-rendered markup with JavaScript disabled: exact intent hrefs for the default list, the full encoding matrix (ampersand, percent, literal plus, emoji, quotes, angle brackets, a newline, a right-to-left override), the Mastodon fragment-only sharer, `safeURL` survival of `viber:`/`sms:` schemes, image-aware and instance-backed targets, the `images` front matter edge shapes (a map-shaped first entry falls through to the site-tier image; a literal filename carrying glob metacharacters resolves as a plain URL), a `networks_extra` endpoint that already carries a query, per-scheme `rel`/`target` policy, front matter overrides, the shortcode bar, and the pre-enhancement hidden state of the action buttons.
+- `tests/02-enhancement.spec.js` -- progressive enhancement: capability-gated reveal of the copy and Web Share buttons, the `--enhanced` state class, the copy flow (clipboard content, live-region announcement, timed reset), rewiring of a bar restored from a DOM snapshot (Turbo/PJAX cache), and status-region emission rules.
 - `tests/03-events.spec.js` -- the `social-share:share` and `social-share:action` CustomEvent surface, including that `detail.url` is the canonical page URL.
 
 ## Running

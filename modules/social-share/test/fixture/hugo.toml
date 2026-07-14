@@ -16,6 +16,8 @@ lemmy_instance = "lemmy.world"
 # Leading @ and # must be stripped by the module.
 via = "@example"
 hashtags = ["#hugo", "sharing"]
+# Site-tier fallback image: the last tier of the share-image cascade.
+image = "/img/site-fallback.png"
 
 # Consumer extension target with an endpoint that already carries a query
 # (the module must join further parameters with "&"). The slice forms keep

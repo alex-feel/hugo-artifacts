@@ -7,7 +7,9 @@
   call-site args > page front matter (social_share map) > site params
   ([params.social_share]) > data/social-share/defaults.toml. Presence wins at
   every tier (isset, not truthiness), so an explicit false or empty string
-  overrides the tier below it.
+  overrides the tier below it. The share image is the exception: it resolves
+  through a fall-through chain (see the image bullet below), so an empty
+  value at one tier simply yields to the next candidate.
 
   Expected context (dict):
   - .page (Page) - The current page (already validated by share.html).
@@ -25,9 +27,11 @@
     RFC 6068 header-injection guard that also satisfies intent composers
     that reject control characters).
   - image (string) - Absolute share-image URL or "" (resolution chain:
-    explicit value as page resource, then global resource, then URL; then
-    the page's images front matter; then a page-bundle image resource
-    matching *feature* / *cover* / *thumbnail*; then the site-tier value).
+    explicit value; then the first entry of the page's images front matter
+    when it is a plain path or URL string; then a page-bundle image resource
+    matching *feature* / *cover* / *thumbnail*; then the site-tier value.
+    Raw values resolve via lib/resolve-image.html: page resource where
+    page-scoped, then global resource, then literal URL).
   - site_host (string) - The consuming site's hostname (Nextdoor "source").
   - networks_extra (map) - Consumer extension entries (site params only).
   - class, id (strings) - Root element extras (call-site only).
@@ -126,37 +130,30 @@
 {{- end -}}
 {{- $description = trim (replaceRE `\s+` " " $description) " " -}}
 
-{{/* Share image: explicit values resolve as page resource, then global
-     resource, then literal URL; page-derived fallbacks follow; the site-tier
-     value (site params, then defaults.toml) comes last. */}}
+{{/* Share image: every tier's raw value resolves through
+     lib/resolve-image.html (page resource where page-scoped, then global
+     resource, then literal URL). Explicit values first, page-derived
+     fallbacks next, the site-tier value (site params, then defaults.toml)
+     last. */}}
 {{- $image := "" -}}
 {{- $explicitImage := "" -}}
 {{- if isset $args "image" -}}{{- $explicitImage = printf "%v" (index $args "image") -}}
 {{- else if isset $pagep "image" -}}{{- $explicitImage = printf "%v" (index $pagep "image") -}}
 {{- end -}}
 {{- with $explicitImage -}}
-  {{/* URL-shaped values must never reach the resource lookups: on Windows,
-       resources.Get treats them as filesystem paths and errors out instead
-       of returning nil. */}}
-  {{- if or (in . "://") (hasPrefix . "//") -}}
-    {{- $image = . | absURL -}}
-  {{- else -}}
-    {{- with $page.Resources.GetMatch . -}}
-      {{- $image = .Permalink -}}
-    {{- else -}}
-      {{- with resources.Get . -}}
-        {{- $image = .Permalink -}}
-      {{- else -}}
-        {{- $image = . | absURL -}}
-      {{- end -}}
-    {{- end -}}
-  {{- end -}}
+  {{- $image = partial "social-share/lib/resolve-image.html" (dict "value" . "page" $page) -}}
 {{- end -}}
 {{- if not $image -}}
   {{- with $page.Params.images -}}
     {{- $first := . -}}
     {{- if reflect.IsSlice . -}}{{- $first = index . 0 -}}{{- end -}}
-    {{- with $first -}}{{- $image = printf "%v" . | absURL -}}{{- end -}}
+    {{/* Only a plain path or URL string is usable here: any other shape (a
+         map like images: [{src: cover.png}], a slice, a typed scalar such
+         as an unquoted date) would stringify to garbage AND mask the better
+         fallbacks below, so non-strings fall through. */}}
+    {{- if and $first (eq (printf "%T" $first) "string") -}}
+      {{- $image = partial "social-share/lib/resolve-image.html" (dict "value" $first "page" $page) -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 {{- if not $image -}}
@@ -168,15 +165,7 @@
   {{- $siteImage := printf "%v" ($defaults.image | default "") -}}
   {{- if isset $sitep "image" -}}{{- $siteImage = printf "%v" (index $sitep "image") -}}{{- end -}}
   {{- with $siteImage -}}
-    {{- if or (in . "://") (hasPrefix . "//") -}}
-      {{- $image = . | absURL -}}
-    {{- else -}}
-      {{- with resources.Get . -}}
-        {{- $image = .Permalink -}}
-      {{- else -}}
-        {{- $image = . | absURL -}}
-      {{- end -}}
-    {{- end -}}
+    {{- $image = partial "social-share/lib/resolve-image.html" (dict "value" .) -}}
   {{- end -}}
 {{- end -}}
 

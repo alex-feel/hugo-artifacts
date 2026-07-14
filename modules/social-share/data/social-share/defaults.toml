@@ -6,7 +6,8 @@
 #   3. page front matter: social_share: (map)
 #   4. call-site args:    {{ partial "social-share/share.html" (dict "page" . "<key>" <value>) }}
 # Presence wins at every tier, so an explicit false or empty value overrides
-# the tier below it.
+# the tier below it. The image key is the exception: it resolves through a
+# fall-through chain, so an empty value simply yields to the next candidate.
 
 # Sharing targets rendered, in list order. Accepts any canonical slug or alias
 # from the README Networks table plus consumer-defined
