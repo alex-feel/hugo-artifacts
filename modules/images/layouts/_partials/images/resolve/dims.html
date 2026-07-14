@@ -6,7 +6,9 @@
   ints or floats, and authors write "1920px"-style values by hand; this
   partial accepts all of those shapes at ONE place so no caller ever feeds a
   non-numeric string into an integer cast (a build-crash class this module
-  designs out).
+  designs out). Digit strings parse through images/lib/int.html, so a
+  leading zero reads as decimal (never octal) and an oversized digit string
+  degrades to unparseable instead of overflowing the cast.
 
   Context (dict):
   - .width  (any, optional) Raw width value: int, float, "1920", "1920px".
@@ -28,8 +30,12 @@
   {{- if ne $raw nil -}}
     {{- $s := lower (trim (printf "%v" $raw) " \t\n\r") -}}
     {{- $s = strings.TrimSuffix "px" $s -}}
+    {{- $n := -1 -}}
     {{- if findRE `^\d+$` $s -}}
-      {{- $out = merge $out (dict $k (int $s)) -}}
+      {{- $n = partial "images/lib/int.html" $s -}}
+    {{- end -}}
+    {{- if ge $n 0 -}}
+      {{- $out = merge $out (dict $k $n) -}}
     {{- else if findRE `^\d+\.\d+$` $s -}}
       {{- $out = merge $out (dict $k (int (float $s))) -}}
     {{- else if ne $s "" -}}

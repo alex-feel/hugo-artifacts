@@ -1,0 +1,30 @@
+{{/*
+  images/lib/int.html -- INTERNAL (lib tier).
+
+  Purpose: parses ONE stringified value as a non-negative DECIMAL integer,
+  returning -1 when the value is not a plain digit string of at most nine
+  digits. Hugo's `int` casts strings with base-0 (strconv) semantics: a
+  leading zero makes the value octal, so "010" silently becomes 8, while
+  "08"/"09" (invalid octal digits) and int64-overflowing digit strings
+  RAISE A TEMPLATE ERROR that breaks the build. Every user-supplied integer
+  in this module therefore parses through this partial: leading zeros are
+  stripped (author intent is always decimal), the digit count is capped at
+  nine (no overflow), and anything else returns -1 so the caller can warn
+  and degrade instead of crashing.
+
+  Context: the raw value (any type; stringified and trimmed here).
+
+  Return value: int -- the parsed non-negative decimal integer, or -1 when
+  the value is not an unsigned decimal number of at most nine digits.
+
+  One terminal return.
+*/}}
+
+{{- $raw := trim (printf "%v" .) " \t\n\r" -}}
+{{- $result := -1 -}}
+{{- if findRE `^\d{1,9}$` $raw -}}
+  {{- $norm := strings.TrimLeft "0" $raw -}}
+  {{- if eq $norm "" -}}{{- $norm = "0" -}}{{- end -}}
+  {{- $result = int $norm -}}
+{{- end -}}
+{{- return $result -}}

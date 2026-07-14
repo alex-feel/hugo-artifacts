@@ -581,13 +581,16 @@
 {{- $useSwapSpan := and $classStrategy (not $swapOnWrapper) -}}
 {{- $treesAreRoot := and (not $useFigure) (not $lbHref) (not $useSwapSpan) -}}
 {{/* The bare swap span is otherwise indistinguishable from its block/inline
-     context in CSS, so it carries an explicit context modifier; user extra
-     classes (root_class) close the class list on EVERY root form. */}}
+     context in CSS, so it carries an explicit context modifier. The
+     consumer's root_class stays OUT of $rootClass: each root form emits it
+     after its own element class (picture.html receives it as rootUserClass
+     for the tree roots), so consumer classes close the class list on EVERY
+     root form. */}}
 {{- if $useSwapSpan -}}{{- $rootClass = printf "%s image--swap-%s" $rootClass (cond $block "block" "inline") -}}{{- end -}}
-{{- with $opts.root_class -}}{{- $rootClass = printf "%s %s" $rootClass . -}}{{- end -}}
+{{- $userClass := $opts.root_class -}}
 
 {{- if $useFigure -}}
-<figure class="{{ $rootClass }}"
+<figure class="{{ $rootClass }}{{ with $userClass }} {{ . }}{{ end }}"
   {{- range $k, $v := $rootData }} {{ printf "%s=%q" $k $v | safeHTMLAttr }}{{- end -}}
   {{- with $rootId }} id="{{ . }}"{{- end -}}
   {{- with $rootStyle }} style="{{ . | safeCSS }}"{{- end -}}
@@ -621,7 +624,7 @@
   </figcaption>
 </figure>
 {{- else if $lbHref -}}
-<a class="{{ $rootClass }} image__link"
+<a class="{{ $rootClass }} image__link{{ with $userClass }} {{ . }}{{ end }}"
   {{- range $k, $v := $rootData }} {{ printf "%s=%q" $k $v | safeHTMLAttr }}{{- end -}}
   {{- with $rootId }} id="{{ . }}"{{- end -}}
   {{- with $rootStyle }} style="{{ . | safeCSS }}"{{- end -}}
@@ -631,7 +634,7 @@
   {{- end -}}
 </a>
 {{- else if $useSwapSpan -}}
-<span class="{{ $rootClass }}"
+<span class="{{ $rootClass }}{{ with $userClass }} {{ . }}{{ end }}"
   {{- range $k, $v := $rootData }} {{ printf "%s=%q" $k $v | safeHTMLAttr }}{{- end -}}
   {{- with $rootId }} id="{{ . }}"{{- end -}}
   {{- with $rootStyle }} style="{{ . | safeCSS }}"{{- end }} data-theme-swap="class">
@@ -644,6 +647,7 @@
   {{- partial "images/picture.html" (merge $t (dict
       "root" $treesAreRoot
       "rootClass" $rootClass
+      "rootUserClass" $userClass
       "rootData" $rootData
       "rootId" $rootId
       "rootStyle" $rootStyle)) -}}

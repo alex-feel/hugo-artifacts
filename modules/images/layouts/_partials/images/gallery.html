@@ -9,10 +9,11 @@
   <li class="image-gallery__item" data-index="i"> per matched resource, each
   containing a complete standard render (a full `image` block: srcset,
   dimensions, lazy loading, lightbox). data-index is 1-based and zero-padded
-  to the item count's digit width ("01".."10" in a ten-item gallery), so
-  CSS attr() counters and lexicographic attribute selectors both order
-  correctly. Layout is 100 percent consumer CSS. The in-content equivalent
-  is the image-gallery shortcode.
+  to the item count's digit width ("01".."10" in a ten-item gallery) or to
+  the index_pad minimum, whichever is wider, so CSS attr() counters and
+  lexicographic attribute selectors both order correctly and attribute-driven
+  chips can rely on one fixed width. Layout is 100 percent consumer CSS. The
+  in-content equivalent is the image-gallery shortcode.
 
   Per-item alt/caption/credit come from the page's front-matter `resources:`
   metadata: `title` maps to the caption (only when it differs from the
@@ -34,6 +35,10 @@
                    anchor still targets the UNCROPPED capped derivative.
                    A malformed token warns once and degrades to no crop.
   - lightbox (bool) Default true for galleries (config gallery.lightbox).
+  - index_pad (int) Minimum data-index digit width (default 1, config
+                   gallery.index_pad); the item count's own digit width
+                   still wins when larger. An invalid value warns once and
+                   keeps the configured value.
   - id    (string) id attribute on the <ol>.
   - class (string) Extra class(es) appended to the <ol>.
   - plus the standard cascade keys (widths, sizes, formats, loading,
@@ -69,10 +74,17 @@
 {{- end -}}
 {{- $ratio := 0.0 -}}
 {{- if $cropTok -}}
+  {{- $cropOk := false -}}
   {{- if findRE `^[1-9]\d*x[1-9]\d*$` $cropTok -}}
     {{- $parts := split $cropTok "x" -}}
-    {{- $ratio = div (float (index $parts 1)) (int (index $parts 0)) -}}
-  {{- else -}}
+    {{- $cw := partial "images/lib/int.html" (index $parts 0) -}}
+    {{- $ch := partial "images/lib/int.html" (index $parts 1) -}}
+    {{- if and (gt $cw 0) (gt $ch 0) -}}
+      {{- $ratio = div (float $ch) $cw -}}
+      {{- $cropOk = true -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if not $cropOk -}}
     {{- partial "images/lib/warn.html" (dict
         "key" (printf "images:warn:bad-crop:%s" $cropTok)
         "message" (printf "[images] Ignoring malformed gallery crop token %q: expected a 'WxH' ratio such as '1x1' or '4x3'. See %s" $cropTok $where)) -}}
@@ -93,7 +105,23 @@
   {{- end -}}
 {{- end -}}
 
+{{/* ---- data-index pad width: the count's digit width, raised to the
+     configured minimum so attribute-driven styling can rely on one fixed
+     width regardless of the item count ---- */}}
+{{- $minPad := $opts.gallery_index_pad -}}
+{{- if isset $args "index_pad" -}}
+  {{- $mpv := trim (printf "%v" (index $args "index_pad")) " \t\n\r" -}}
+  {{- $mpn := partial "images/lib/int.html" $mpv -}}
+  {{- if gt $mpn 0 -}}
+    {{- $minPad = $mpn -}}
+  {{- else -}}
+    {{- partial "images/lib/warn.html" (dict
+        "key" (printf "images:warn:bad-int:index_pad:%s" $mpv)
+        "message" (printf "[images] Ignoring index_pad value %q (must be a positive integer); using %d. See %s" $mpv $minPad $where)) -}}
+  {{- end -}}
+{{- end -}}
 {{- $pad := len (printf "%d" (len $items)) -}}
+{{- if gt $minPad $pad -}}{{- $pad = $minPad -}}{{- end -}}
 <ol class="image-gallery{{ with $opts.class }} {{ . }}{{ end }}"{{ with $opts.id }} id="{{ . }}"{{ end }} data-count="{{ len $items }}">
   {{- range $i, $r := $items }}
   {{- $alt := trim (printf "%v" ($r.Params.alt | default "")) " \t\n\r" -}}

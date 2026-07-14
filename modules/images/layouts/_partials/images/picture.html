@@ -11,8 +11,11 @@
   span) exists above this tree, the <picture> -- or, single-chain case, the
   <img> itself -- is the module root and carries the block class plus
   modifiers, the id, the data-* attributes, and the placeholder style, IN
-  ADDITION to its element class. `.image` therefore always selects the root
-  and `.image__img` always selects the img, on every variant.
+  ADDITION to its element class; the consumer's root_class value
+  (rootUserClass) is emitted after the element class, so consumer classes
+  close the root's class list on every root form. `.image` therefore always
+  selects the root and `.image__img` always selects the img, on every
+  variant.
 
   Context (dict):
   - .sources (slice) Source descriptors in emission order, each
@@ -25,6 +28,8 @@
     module-classified data:image/ URI and bypasses the URL filter)}.
   - .root (bool) This tree's outermost element is the module root.
   - .rootClass (string) Block class plus modifiers (root only).
+  - .rootUserClass (string) The consumer's root_class value, emitted after
+    the element class so it closes the class list (root only, may be "").
   - .rootData (dict) data-* attribute names to values (root only).
   - .rootId (string) id attribute (root only).
   - .rootStyle (string) style declarations, safeCSS-piped (root only).
@@ -39,7 +44,7 @@
 {{- $p := . -}}
 {{- $img := $p.img -}}
 {{- if $p.sources -}}
-<picture class="{{ if $p.root }}{{ $p.rootClass }} {{ end }}image__picture{{ with $p.pictureClass }} {{ . }}{{ end }}"
+<picture class="{{ if $p.root }}{{ $p.rootClass }} {{ end }}image__picture{{ with $p.pictureClass }} {{ . }}{{ end }}{{ if $p.root }}{{ with $p.rootUserClass }} {{ . }}{{ end }}{{ end }}"
   {{- if $p.root -}}
     {{- range $k, $v := $p.rootData }} {{ printf "%s=%q" $k $v | safeHTMLAttr }}{{- end -}}
     {{- with $p.rootId }} id="{{ . }}"{{- end -}}
@@ -65,7 +70,7 @@
     {{- range $k, $v := $img.attrs }} {{ printf "%s=\"%s\"" $k (htmlEscape $v) | safeHTMLAttr }}{{- end -}}>
 </picture>
 {{- else -}}
-<img class="{{ if $p.root }}{{ $p.rootClass }} {{ end }}image__img{{ with $img.class }} {{ . }}{{ end }}"
+<img class="{{ if $p.root }}{{ $p.rootClass }} {{ end }}image__img{{ with $img.class }} {{ . }}{{ end }}{{ if $p.root }}{{ with $p.rootUserClass }} {{ . }}{{ end }}{{ end }}"
   {{- if $p.root -}}
     {{- range $k, $v := $p.rootData }} {{ printf "%s=%q" $k $v | safeHTMLAttr }}{{- end -}}
     {{- with $p.rootId }} id="{{ . }}"{{- end -}}

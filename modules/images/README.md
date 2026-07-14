@@ -91,7 +91,7 @@ The attribute block goes on its OWN LINE directly BELOW a standalone image. A sa
 {{</* image src="photo.jpg" alt="..." caption="A *fine* view" credit="Photo: **Jane** Doe" license="CC BY 4.0" license_url="https://creativecommons.org/licenses/by/4.0/" */>}}
 ```
 
-Caption and credit render as inline Markdown. Any of the three surfaces turns the render into a `<figure>` with a `<figcaption>` (block contexts only). Inside the `<figcaption>` the caption sits in its own `image__caption` span while credit and license group inside one `image__meta` span, with an empty `image__meta-separator` span between them when both are present -- your CSS owns the separator glyph (see the Styling section).
+Caption and credit render as inline Markdown. Any of the three surfaces turns the render into a `<figure>` with a `<figcaption>` (block contexts only). Inside the `<figcaption>` the caption sits in its own `image__caption` span while credit and license group inside one `image__meta` span, with an empty `image__meta-separator` span between them when both are present. The separator carries `aria-hidden="true"`, so the glyph you supply is guaranteed to stay out of the accessibility tree; your CSS owns the glyph via a `::before` pseudo-element (see the Styling section).
 
 ### Fixed-layout assets (logos, avatars, badges)
 
@@ -123,7 +123,7 @@ Each variant needs `src` and `media` (a complete media query) and may override `
 {{</* image-gallery match="photos/*" lightbox="false" id="grid" class="tight" */>}}
 ```
 
-Beyond `match` (required) and `crop`, the gallery accepts `lightbox` (per-gallery override of the `true` default), `id` and `class` on the `<ol>`, and the standard cascade keys `widths`, `sizes`, `sizes_auto`, `formats`, `loading`, `placeholder`, `responsive`, `enable`, `quality`, `anchor`, `resample`, `bg`, `hint`, `compression`, `layout`, and `max_density`, forwarded to every item.
+Beyond `match` (required) and `crop`, the gallery accepts `lightbox` (per-gallery override of the `true` default), `index_pad` (minimum `data-index` digit width -- see the data-\* attributes section), `id` and `class` on the `<ol>`, and the standard cascade keys `widths`, `sizes`, `sizes_auto`, `formats`, `loading`, `placeholder`, `responsive`, `enable`, `quality`, `anchor`, `resample`, `bg`, `hint`, `compression`, `layout`, and `max_density`, forwarded to every item.
 
 Per-item alt, caption, and credit come from the page's front-matter `resources:` metadata (`params.alt`, `title`, `params.credit`). The caption uses `title` only when it is explicitly set: Hugo defaults an untitled resource's `title` to its file name, and the gallery suppresses that default so a file name never leaks into a caption -- a resource with no `title` renders caption-free.
 
@@ -188,6 +188,7 @@ The `Tiers` column states where each option may be set: `all four` cascades thro
 | `fetchpriority` | string | no | call only | -- | `high`, `low`, or `auto`; deliberately excluded from the site/page tiers |
 | `placeholder` | string | no | all four (via `[placeholder] mode`) | `none` | `none`, `dominant`, or `blur` (see Placeholders) |
 | `lightbox` | bool | no | call only (gallery: `[gallery] lightbox`) | `false` (gallery: `true`) | Wrap in an anchor to a capped full-size derivative |
+| `index_pad` | int | no | gallery call (`[gallery] index_pad` for the default) | `1` | Minimum `data-index` digit width on gallery items; the item count's own digit width still wins when larger |
 | `theme_strategy` | string | no | all four (via `[theme] strategy`) | `media` | `media` (OS preference) or `class` (class togglers) |
 | `fetch` | bool | no | all four (via `[remote] fetch`) | `false` | Build-time remote fetch opt-in |
 | `remote_key` | string | no | call only | -- | Remote fetch cache key |
@@ -232,7 +233,7 @@ webp = 80
 mode = 'dominant'
 ```
 
-Shortcode parameters and Markdown attributes deliver strings; the module normalizes every typed key at one place (bools accept `true`/`1`/`yes`/`on`, dimensions accept `"640"` and `"640px"`, slices accept `"480,800"` comma strings, unknown tokens warn once and fall back), so every surface lands on identical typed values.
+Shortcode parameters and Markdown attributes deliver strings; the module normalizes every typed key at one place (bools accept `true`/`1`/`yes`/`on`, dimensions accept `"640"` and `"640px"`, integers parse as decimal -- a leading zero never turns a value octal, and an absurdly long digit string is garbage rather than an overflow -- slices accept `"480,800"` comma strings, unknown tokens warn once and fall back), so every surface lands on identical typed values.
 
 When verifying the resolved configuration with `hugo config`, note that the command omits keys whose value is `false`, so an absent key in its output does not prove the option is unset -- verify boolean keys by their rendered effect instead.
 
@@ -335,7 +336,7 @@ With `remote.fetch = true`, remote images are fetched once at BUILD time and rep
 ## Accessibility
 
 - `alt` is required on the partial and shortcode surfaces; a missing alt is a build error, not a silent gap. `decorative=true` emits exactly `alt=""` (assistive technology skips the image) and contradicts both a non-empty `alt` and `lightbox=true` (an anchor whose accessible name is the empty alt is announced as a bare "link" -- a WCAG 2.4.4/4.1.2 failure), so those combinations fail the build on the strict surfaces and degrade with a warning on the hook and gallery surfaces.
-- Caption association is native `<figure>`/`<figcaption>` semantics -- the module emits no ARIA anywhere and builds no ids from text; semantic HTML carries the entire accessibility surface. The lightbox anchor's accessible name is the contained image's alt (native behavior).
+- Caption association is native `<figure>`/`<figcaption>` semantics -- the module fabricates no ARIA roles, relationships, or ids from text; its only ARIA output is the separator hook's `aria-hidden="true"`, which keeps the decorative glyph out of the accessibility tree, and semantic HTML carries everything else. The lightbox anchor's accessible name is the contained image's alt (native behavior).
 - Dark variant trees carry the SAME alt; under the class strategy the hiding CSS (`display: none`) removes the hidden tree from the accessibility tree, so exactly one image is announced.
 - Captions and credits are Markdown rendered under YOUR site's goldmark security settings: with the default `unsafe = false` raw HTML is stripped; a site that enables `unsafe = true` owns that consequence.
 - `credit_from_meta = true` (default `false`, cascades all four tiers) fills the credit line from the ORIGINAL image's embedded IPTC metadata when no explicit `credit` is supplied: the module reads the IPTC `Credit` field, falling back to `By-line`, via `.Meta.IPTC` on the unprocessed resource (metadata is stripped from every derivative, so the read always targets the original). A source without those IPTC fields degrades silently to no credit line.
@@ -356,7 +357,7 @@ The module ships no CSS at all -- these hooks are yours.
 | `image__caption` | element | `<span>` in the figcaption | Author caption |
 | `image__meta` | element | `<span>` in the figcaption | Groups the credit and license lines (present when either exists) |
 | `image__credit` | element | `<span>` inside `image__meta` | Credit line |
-| `image__meta-separator` | element | empty `<span>` inside `image__meta` | Separator hook between credit and license (present only when both exist; supply the glyph via CSS `content`) |
+| `image__meta-separator` | element | empty `<span>` inside `image__meta` | Separator hook between credit and license (present only when both exist; carries `aria-hidden="true"`; supply the glyph via a CSS `::before` pseudo-element -- `content` is inert on the element itself) |
 | `image__license` | element | `<a>`/`<span>` inside `image__meta` | License name/link |
 | `image--decorative` | modifier | root | `decorative=true` |
 | `image--priority` | modifier | root | `priority=true` (style the hero distinctly) |
@@ -383,7 +384,7 @@ Which element is root follows one fixed precedence -- figure, else lightbox anch
 | Bare render with at least one `<source>` | `<picture>` | `image__picture` |
 | Bare render, single chain or passthrough | `<img>` | `image__img` |
 
-On every one of these forms the root carries the block class `image`, the applicable modifiers from the inventory above, your `root_class` value (appended last), the `id`, the `data-kind`/`data-layout` pair, and the placeholder style. Consequence: `.image` always selects the root and `.image__img` always selects the img, on every variant.
+On every one of these forms the root carries the block class `image`, the applicable modifiers from the inventory above, your `root_class` value (always the final entry in the class list, emitted after the root-only element class), the `id`, the `data-kind`/`data-layout` pair, and the placeholder style. Consequence: `.image` always selects the root, `.image__img` always selects the img, and your `root_class` classes always close the root's `class` attribute, on every variant.
 
 ### data-\* attributes
 
@@ -398,7 +399,7 @@ On every one of these forms the root carries the block class `image`, the applic
 | `data-theme-swap` | swap wrapper | `class` (class strategy only) |
 | `data-theme-variant` | `media` strategy: every `<source>` and the `<img>`; `class` strategy: the two tree roots only | `light` or `dark` |
 | `data-count` | gallery `<ol>` | Item count |
-| `data-index` | gallery `<li>` | 1-based position, zero-padded to the item count's digit width (`01`..`10` in a ten-item gallery), so lexicographic attribute selectors order correctly |
+| `data-index` | gallery `<li>` | 1-based position, zero-padded to the item count's digit width or to `index_pad`, whichever is wider (`01`..`10` in a ten-item gallery; `index_pad="2"` guarantees `01`..`03` in a three-item one), so lexicographic attribute selectors order correctly and `attr(data-index)`-driven chips keep one fixed width |
 
 CSS custom properties (set via the root `style`; you define all presentation): `--image-dominant-color: #rrggbb` (dominant mode) and `--image-placeholder: url('data:image/webp;base64,...')` (blur mode). These are the ONLY style attributes the module can ever emit, and both carry measured image data, never design decisions. The same CSP note as the Placeholders section applies: inline style attributes need `style-src-attr` (or a covering `style-src`), and loading the blur URI from CSS needs `img-src data:`.
 
@@ -436,6 +437,14 @@ The preload carries the first modern chain's `imagesrcset`/`imagesizes`/`type` (
 `images/src.html` returns `{url, width, height, type}` for the top fallback derivative through the identical pipeline; you own everything visual.
 
 **Dark-mode pair:** the `media` strategy needs zero CSS. For class togglers set `theme_strategy="class"` and ship the three-line CSS block from the Dark-mode variants section.
+
+**Credit/license separator glyph:** `image__meta-separator` is an empty `aria-hidden` hook, and CSS `content` renders only on pseudo-elements (it is inert on the span itself), so supply the glyph via `::before`:
+
+```css
+.image__meta-separator::before {
+  content: '·';
+}
+```
 
 **Gallery grid:**
 
@@ -523,6 +532,7 @@ modules/images/
 │   │       │   ├── srcset.html             Chain executor (the ladder/lightbox processing site)
 │   │       │   └── placeholder.html        Placeholder data generator (probe/blur processing site)
 │   │       └── lib/
+│   │           ├── int.html                Guarded decimal-integer parser (never octal, never overflow)
 │   │           └── warn.html               Single deduplicated-warning helper
 │   └── _shortcodes/
 │       ├── image.html                      image shortcode (thin forwarding wrapper)

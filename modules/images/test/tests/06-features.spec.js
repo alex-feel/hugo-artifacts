@@ -86,29 +86,42 @@ test('class-strategy dark pair: two trees, both lazy, same alt, roots tagged onl
   }
 });
 
-test('root_class lands on the root element only, after the module classes', () => {
+test('root_class lands on the root element only and closes its class list', () => {
   const picture = page.querySelector('#sc-root-class');
   assert.equal(picture.tagName, 'PICTURE', 'the default render roots on the picture');
-  assert.match(
-    picture.getAttribute('class'),
-    /\bimage\b.*\bhero-frame\b/,
-    'the block class precedes the consumer class',
-  );
+  assert.equal(picture.getAttribute('class'), 'image image__picture hero-frame');
   assert.ok(
     !picture.querySelector('img').getAttribute('class').includes('hero-frame'),
     'root_class never leaks onto the img',
   );
   const figure = page.querySelector('#sc-root-class-figure');
   assert.equal(figure.tagName, 'FIGURE', 'a caption promotes the figure to root');
-  assert.match(
+  assert.equal(
     figure.getAttribute('class'),
-    /\bimage\b.*\bframe highlight$/,
+    'image frame highlight',
     'multiple classes append verbatim and close the class list',
   );
   assert.equal(
     figure.querySelector('picture').getAttribute('class'),
     'image__picture',
     'the inner tree stays clean',
+  );
+  const anchor = page.querySelector('#sc-root-class-anchor');
+  assert.equal(anchor.tagName, 'A', 'a lightbox without a caption roots on the anchor');
+  assert.equal(
+    anchor.getAttribute('class'),
+    'image image--lightbox image__link ring',
+    'the consumer class follows the anchor element class',
+  );
+  const swap = page.querySelector('#sc-root-class-swap');
+  assert.equal(swap.tagName, 'SPAN', 'the bare class-strategy render roots on the swap span');
+  assert.equal(swap.getAttribute('class'), 'image image--theme-class image--swap-block swapper');
+  const img = page.querySelector('#sc-root-class-img');
+  assert.equal(img.tagName, 'IMG', 'a passthrough render roots on the bare img');
+  assert.equal(
+    img.getAttribute('class'),
+    'image image--static image__img w-full chart',
+    'root_class closes the list even after the img-level class',
   );
 });
 
