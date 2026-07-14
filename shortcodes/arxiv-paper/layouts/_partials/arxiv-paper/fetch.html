@@ -227,12 +227,13 @@
     {{- with $s2.publicationVenue -}}{{ with .name -}}{{ $venue = trim . " \t\n\r" }}{{- end -}}{{- end -}}
     {{- $fos := slice -}}
     {{- with $s2.fieldsOfStudy -}}{{ if reflect.IsSlice . -}}{{ $fos = . }}{{- end -}}{{- end -}}
+    {{- $citationCount := int (or $s2.citationCount 0) -}}
     {{- $data = merge $data (dict
       "tldr" $tldr
       "venue" $venue
       "fieldsOfStudy" $fos
-      "citationCount" (int (or $s2.citationCount 0))
-      "hasCitations" true
+      "citationCount" $citationCount
+      "hasCitations" (gt $citationCount 0)
       "s2Ok" true
     ) -}}
   {{- else -}}
@@ -269,10 +270,11 @@
     {{- $hf := $hfres.value -}}
     {{- $aiKeywords := slice -}}
     {{- with $hf.ai_keywords -}}{{ if reflect.IsSlice . -}}{{ $aiKeywords = . }}{{- end -}}{{- end -}}
+    {{- $upvotes := int (or $hf.upvotes 0) -}}
     {{- $codeStars := int (or $hf.githubStars 0) -}}
     {{- $data = merge $data (dict
-      "upvotes" (int (or $hf.upvotes 0))
-      "hasUpvotes" true
+      "upvotes" $upvotes
+      "hasUpvotes" (gt $upvotes 0)
       "aiSummary" (replaceRE "\\s+" " " (trim (or $hf.ai_summary "") " \t\n\r"))
       "aiKeywords" $aiKeywords
       "codeRepo" (or $hf.githubRepo "")

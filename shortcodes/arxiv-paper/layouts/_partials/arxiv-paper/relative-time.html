@@ -3,7 +3,9 @@
 
   Context: an ISO 8601 date string (e.g., "2026-04-21T10:30:00Z")
 
-  Returns a string like "3 days ago", "2 months ago", "just now".
+  Returns a string like "3 days ago", "2 months ago", "just now". A future
+  timestamp (negative difference, from clock skew or a pre-dated revision)
+  deliberately maps to "just now" via the first branch.
 */}}
 
 {{- $parsed := time.AsTime . -}}

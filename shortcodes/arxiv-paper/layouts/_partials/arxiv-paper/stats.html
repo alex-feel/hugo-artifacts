@@ -2,7 +2,8 @@
   Renders V4 stats card variant of the arxiv-paper shortcode: an editorial header
   over a metrics strip. The strip leads with durable facts (submitted year,
   primary subject, author count, version) that age gracefully, and appends the
-  slow-drift counts (citations, upvotes) only when enrichment supplied them --
+  slow-drift counts (citations, upvotes) only when enrichment supplied a
+  nonzero count --
   each stamped with data-arxiv-metrics-asof so an infrequently-rebuilt site can
   show honest freshness.
 
@@ -53,15 +54,15 @@
     </span>
     <span class="arxiv-paper__stat">
       <span class="arxiv-paper__stat-label">Subject</span>
-      <span class="arxiv-paper__stat-value" data-arxiv-category="{{ .primaryCategory }}">{{ or .primaryCategory "—" }}</span>
+      <span class="arxiv-paper__stat-value"{{ with .primaryCategory }} data-arxiv-category="{{ . }}"{{ end }}>{{ or .primaryCategory "—" }}</span>
     </span>
     <span class="arxiv-paper__stat">
       <span class="arxiv-paper__stat-label">Authors</span>
-      <span class="arxiv-paper__stat-value">{{ .authorCount }}</span>
+      <span class="arxiv-paper__stat-value">{{ or .authorCount "—" }}</span>
     </span>
     <span class="arxiv-paper__stat">
       <span class="arxiv-paper__stat-label">Version</span>
-      <span class="arxiv-paper__stat-value">v{{ .version }}</span>
+      <span class="arxiv-paper__stat-value">{{ with .version }}v{{ . }}{{ else }}—{{ end }}</span>
     </span>
     {{- if .hasCitations }}
     <span class="arxiv-paper__stat arxiv-paper__stat--citations" data-arxiv-metrics-asof="{{ .metricsAsOf }}">

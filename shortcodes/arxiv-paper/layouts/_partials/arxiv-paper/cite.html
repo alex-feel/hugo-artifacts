@@ -21,7 +21,8 @@
      data-arxiv-doi="{{ .dataciteDOI }}"
      data-arxiv-pdf="{{ .pdfURL }}"
      {{- with .primaryCategory }} data-arxiv-category="{{ . }}"{{ end }}
-     {{- with .primaryArchive }} data-arxiv-archive="{{ . }}"{{ end }}>
+     {{- with .primaryArchive }} data-arxiv-archive="{{ . }}"{{ end }}
+     {{- with .primaryGroup }} data-arxiv-group="{{ . }}"{{ end }}>
   <div class="arxiv-paper__cite-head">
     {{ partial "arxiv-paper/icon.html" (dict "name" "quote" "class" "arxiv-paper__icon") }}
     <span class="arxiv-paper__cite-label">Cite this paper</span>
