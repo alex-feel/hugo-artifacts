@@ -144,9 +144,10 @@ Hugo templates have no sleep primitive, so true backoff between outer attempts i
 | --- | --- | --- |
 | `auth` | HTTP 401 or 403 | Early break -- a missing/private Space or token/permission issue cannot be fixed by retrying. The Hub returns **401** (not 404) to anonymous clients for both missing and private Spaces, so the message names all three causes. |
 | `not-found` | HTTP 404 (typically only when authenticated) | Early break -- resource genuinely missing. |
-| `rate-limit` | HTTP 429 | Early break -- a rate-limit window cannot reset between immediate attempts. The wait hint is taken from `Retry-After`, else the `t` reset delta in the IETF `RateLimit` header, else a 60-second default, and surfaced for a later CI-level rebuild. |
+| `rate-limit` | HTTP 429 | Early break -- a rate-limit window cannot reset between immediate attempts. The wait hint is taken from a numeric `Retry-After`, else the `t` reset delta in the IETF `RateLimit` header, else a 60-second default, and surfaced for a later CI-level rebuild. An HTTP-date `Retry-After` (the other form RFC 9110 permits) is treated as absent and falls through to the next hint source. |
 | `server` | HTTP 5xx | Retry up to `attempts` or `overallBudgetSec`, whichever comes first. |
 | `network` | No HTTP response (DNS failure, connection refused, host timeout) | Retry up to `attempts` or `overallBudgetSec`. |
+| `parse` | 2xx response without a usable JSON payload (undecodable, empty, or null body) | Retry up to `attempts` or `overallBudgetSec`. |
 | `other` | Anything else | Retry up to `attempts` or `overallBudgetSec`. |
 
 On retry exhaustion the module emits a single structured `warnf` per failed Space (with `errorClass`, `statusCode`, the Hub's error `message` when present, and a wait hint for rate limits) and falls through to graceful degradation. The build is never broken by an API failure.
@@ -263,7 +264,7 @@ shortcodes/hf-space/
         fetch.html                # API fetch, retry loop, data normalization
         fetch-once.html           # Single-attempt fetch (normalized result dict)
         classify-error.html       # HTTP error -> (errorClass, waitHintSeconds, errorMessage)
-        compact-number.html       # Number formatting (e.g., 1500 -> "1.5k")
+        compact-number.html       # Number formatting (1500 -> "1.5k"; no tier promotion: 999950-999999 -> "1000k")
         relative-time.html        # Timestamp formatting (e.g., "3 days ago")
         icon.html                 # Centralized inline SVG icon rendering
         inline.html               # V1 inline chip (also the degraded fallback)

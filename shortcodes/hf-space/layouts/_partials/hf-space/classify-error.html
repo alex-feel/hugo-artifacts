@@ -57,16 +57,22 @@
 
 {{/* Case-insensitive header lookup. Hugo's responseHeaders map may key the
      entries under canonicalized casing that differs from the requested casing,
-     so we match on the lower-cased key and read the first value. */}}
+     so we match on the lower-cased key and read the first value. Retry-After
+     legally carries either delay-seconds or an HTTP-date (RFC 9110); only the
+     numeric form is usable as a wait hint, so the cast is wrapped in try and
+     the date form falls through to the RateLimit `t` delta or the 60-second
+     default. */}}
 {{- $retryAfter := 0 -}}
-{{- $retryAfterPresent := false -}}
 {{- $rateLimitRaw := "" -}}
 {{- range $k, $v := $headers -}}
   {{- $lk := lower $k -}}
   {{- if eq $lk "retry-after" -}}
     {{- with index $v 0 -}}
-      {{- $retryAfter = int . -}}
-      {{- $retryAfterPresent = true -}}
+      {{- with try (int .) -}}
+        {{- with .Value -}}
+          {{- $retryAfter = . -}}
+        {{- end -}}
+      {{- end -}}
     {{- end -}}
   {{- else if eq $lk "ratelimit" -}}
     {{- with index $v 0 -}}
@@ -76,17 +82,20 @@
 {{- end -}}
 
 {{/* Extract the `t=<seconds>` reset delta from the RateLimit header value,
-     e.g. `"api";r=0;t=42` -> 42. Absent or unparseable -> 0. */}}
+     e.g. `"api";r=0;t=42` -> 42. Absent or unparseable -> 0. The pattern is
+     anchored to a field boundary (start, whitespace, quote, `;`, or `,`) so
+     a `limit=100`-style field is never misread as t=100. */}}
 {{- $rateLimitReset := 0 -}}
 {{- with $rateLimitRaw -}}
-  {{- $m := findRE `t=(\d+)` . 1 -}}
-  {{- with $m -}}
-    {{- $token := index . 0 -}}
-    {{/* Strip leading zeros before the int cast: Hugo's `int` parses a
-         leading-zero string as octal (int "011" -> 9, int "08" -> 0), which
-         would corrupt a `t=08`-style reset hint. TrimLeft "0" "0" yields "" and
-         int "" yields 0, correctly falling through to the 60-second default. */}}
-    {{- $rateLimitReset = int (strings.TrimLeft "0" (replaceRE `\D` "" $token)) -}}
+  {{- with findRESubmatch `(?:^|[\s";,])t=(\d+)` . 1 -}}
+    {{- $digits := index (index . 0) 1 -}}
+    {{/* Strip leading zeros before the int cast: Hugo's `int` uses base-0
+         parsing, so a leading-zero string is read as octal (int "011" -> 9)
+         and an invalid octal digit is a FATAL cast (int "08" errors). TrimLeft
+         protects against both, and its all-zero edge case is safe: TrimLeft
+         "0" "0" yields "" and int "" yields 0, correctly falling through to
+         the 60-second default. */}}
+    {{- $rateLimitReset = int (strings.TrimLeft "0" $digits) -}}
   {{- end -}}
 {{- end -}}
 
@@ -112,7 +121,7 @@
   {{- $errorMessage = "HTTP 429 (Hub rate limit reached)" -}}
   {{/* Wait-hint preference order: explicit Retry-After header, then the
        RateLimit `t` reset delta, then a 60-second default. */}}
-  {{- if and $retryAfterPresent (gt $retryAfter 0) -}}
+  {{- if gt $retryAfter 0 -}}
     {{- $waitHintSeconds = $retryAfter -}}
   {{- else if gt $rateLimitReset 0 -}}
     {{- $waitHintSeconds = $rateLimitReset -}}
@@ -130,9 +139,9 @@
      on most failures. Unmarshal failures are swallowed via try so a malformed
      body cannot break the build. */}}
 {{- with $body -}}
-  {{- $trimmed := . -}}
+  {{- $trimmed := trim . " \t\n\r" -}}
   {{- if hasPrefix $trimmed "{" -}}
-    {{- with try (transform.Unmarshal $trimmed) -}}
+    {{- with try (transform.Unmarshal (dict "format" "json") $trimmed) -}}
       {{- with .Value -}}
         {{- with .error -}}
           {{- $errorMessage = printf "%s: %s" $errorMessage . -}}
