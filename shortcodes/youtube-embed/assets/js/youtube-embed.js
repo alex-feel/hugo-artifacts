@@ -42,15 +42,13 @@
     iframe.setAttribute('allow', ALLOW);
     iframe.setAttribute('allowfullscreen', '');
 
-    // Carry the accessible title from the button label onto the iframe so the
-    // embedded player has a meaningful accessible name.
-    var button = root.querySelector('.youtube-embed__button');
-    var label = button && button.getAttribute('aria-label');
-    if (label) {
-      // The button label is "Play video: TITLE"; strip the action prefix.
-      iframe.setAttribute('title', label.replace(/^Play video:\s*/, ''));
-    } else {
-      iframe.setAttribute('title', 'YouTube video player');
+    // The server-rendered data-title attribute carries the iframe title (the
+    // video title, or a localized generic player label when untitled), so the
+    // embedded player gets a meaningful accessible name in the site's own
+    // language.
+    var title = root.getAttribute('data-title');
+    if (title) {
+      iframe.setAttribute('title', title);
     }
 
     // Replace the facade interior with the player. Clearing the body removes the

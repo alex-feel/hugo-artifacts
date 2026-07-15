@@ -35,8 +35,13 @@
     block      youtube-embed
     modifiers  youtube-embed--has-poster | youtube-embed--no-poster
                youtube-embed--playlist (when a playlist embed)
+               youtube-embed--enhanced (added client-side on wire-up)
                youtube-embed--activated (added client-side after Play)
-    elements   __body __poster __picture __image __button __icon __title __link __iframe
+    elements   __body __picture __source __image __button __icon __title __link __iframe
+  The root carries data-title with the iframe title the client script applies
+  on activation (the raw title, or a localized generic player label when no
+  title is given). UI strings resolve through the shipped youtube_embed_*
+  i18n keys with English defaults.
 */}}
 
 {{- $id := .id -}}
@@ -99,8 +104,21 @@
   {{- end -}}
 {{- end -}}
 
-{{/* Accessible label. Falls back to a generic phrase when no title is given. */}}
-{{- $label := cond (ne $title "") (printf "Play video: %s" $title) "Play video" -}}
+{{/* Accessible UI strings, localizable via the shipped youtube_embed_* i18n
+     keys. Every lookup pipes through an English default so a site language
+     without the keys never yields an empty label. data-title carries the
+     iframe title for the client script: the raw title when one is given, or
+     the localized generic player label otherwise. */}}
+{{- $label := "" -}}
+{{- if ne $title "" -}}
+  {{- $label = T "youtube_embed_play_video" $title | default (printf "Play video: %s" $title) -}}
+{{- else -}}
+  {{- $label = T "youtube_embed_play_video_untitled" | default "Play video" -}}
+{{- end -}}
+{{- $iframeTitle := $title -}}
+{{- if eq $iframeTitle "" -}}
+  {{- $iframeTitle = T "youtube_embed_player_title" | default "YouTube video player" -}}
+{{- end -}}
 
 {{- $rootClass := "youtube-embed" -}}
 {{- $rootClass = printf "%s %s" $rootClass (cond $poster.posterOk "youtube-embed--has-poster" "youtube-embed--no-poster") -}}
@@ -116,6 +134,7 @@
   {{- with $id }} data-video-id="{{ . }}"{{ end }}
   {{- with $list }} data-playlist-id="{{ . }}"{{ end }}
   data-embed-url="{{ $embedUrl }}"
+  data-title="{{ $iframeTitle }}"
   data-poster-tier="{{ $poster.tier }}">
   <div class="youtube-embed__body">
     {{- if $poster.posterOk }}
@@ -138,10 +157,13 @@
       {{- partial "youtube-embed/icon.html" (dict "name" "play" "class" "youtube-embed__icon") -}}
     </button>
     {{- if and $showTitle (ne $title "") }}
-    <span class="youtube-embed__title">{{ $title }}</span>
+    {{- /* aria-hidden: the button's aria-label already carries the title, so
+         the visible span is hidden from assistive tech to avoid a double
+         announcement. */}}
+    <span class="youtube-embed__title" aria-hidden="true">{{ $title }}</span>
     {{- end }}
     <a class="youtube-embed__link" href="{{ $watchUrl }}" rel="noopener noreferrer nofollow">
-      {{- with $title }}{{ . }}{{ else }}Watch on YouTube{{ end -}}
+      {{- with $title }}{{ . }}{{ else }}{{ T "youtube_embed_watch_on_youtube" | default "Watch on YouTube" }}{{ end -}}
     </a>
   </div>
 </div>

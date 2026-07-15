@@ -1,0 +1,6 @@
+# Hugo youtube-embed module -- Russian UI strings.
+
+youtube_embed_play_video = "Воспроизвести видео: {{ . }}"
+youtube_embed_play_video_untitled = "Воспроизвести видео"
+youtube_embed_watch_on_youtube = "Смотреть на YouTube"
+youtube_embed_player_title = "Проигрыватель видео YouTube"
