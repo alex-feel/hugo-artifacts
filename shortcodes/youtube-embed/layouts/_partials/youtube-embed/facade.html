@@ -111,7 +111,7 @@
      the localized generic player label otherwise. */}}
 {{- $label := "" -}}
 {{- if ne $title "" -}}
-  {{- $label = T "youtube_embed_play_video" $title | default (printf "Play video: %s" $title) -}}
+  {{- $label = T "youtube_embed_play_video" (dict "Title" $title) | default (printf "Play video: %s" $title) -}}
 {{- else -}}
   {{- $label = T "youtube_embed_play_video_untitled" | default "Play video" -}}
 {{- end -}}

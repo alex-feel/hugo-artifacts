@@ -14,15 +14,19 @@
                         `url` is still honored, and a DIFFERENT video id in
                         `url` is dropped with a warning. An invalid raw id
                         fails the build even when `url` supplies a playlist.
-                        A pasted URL in `id` replaces `url` entirely.
+                        A pasted URL in `id` replaces `url` entirely, with a
+                        warning when a url was supplied alongside.
   - url       (string)  Full YouTube URL: youtu.be/, watch?v=, embed/, v/,
                         shorts/, youtube-nocookie.com/embed/, m.youtube.com, with
-                        optional &list= and an optional ?t= / ?start= offset. The
-                        11-char id is extracted and validated.
+                        optional &list= and an optional ?t= / ?start= offset
+                        (the legacy #t= fragment form also works). The 11-char
+                        id is extracted and validated.
   - title     (string)  Accessible button label, iframe title, and -- when
                         `show-title` is true -- a visible title element.
-  - start     (int)     Start offset in seconds (emits start=N). Falls back to a
-                        ?t= / ?start= in `url` when this parameter is unset.
+  - start     (int)     Start offset in seconds (emits start=N). Falls back to
+                        a ?t= / ?start= in `url` when this parameter is unset
+                        or invalid (a non-numeric value is warned and treated
+                        as unset).
   - end       (int)     End offset in seconds (emits end=N).
   - list      (string)  Playlist id. With no id/video, embeds the playlist
                         (/embed/videoseries?list=...); with a video, appends list=.
@@ -69,11 +73,20 @@
 {{- $id := $parsed.id -}}
 {{- $list := or $listParam $parsed.list -}}
 
+{{/* A URL pasted into id= is demoted by parse-id to the url slot and REPLACES
+     a url= supplied alongside it; surface that replacement so the discarded
+     url (including its t=/list=) does not vanish silently. Only an explicit
+     http:// or https:// scheme marks a pasted URL. */}}
+{{- $idParamIsUrl := or (hasPrefix (lower $idParam) "http://") (hasPrefix (lower $idParam) "https://") -}}
+{{- if and $idParamIsUrl $url -}}
+  {{- warnf "The %q shortcode received a URL in id=%q together with url=%q; the id URL wins and url is ignored entirely, including its t=/list=. See %s" .Name $idParam $url .Position -}}
+{{- end -}}
+
 {{/* A supplied raw id (not a pasted URL, which parse-id demotes to the url
      branch) must itself validate -- a playlist id mined from url= cannot
      rescue a bad raw id, or a typo would silently render a playlist-only
      embed instead of failing loudly. */}}
-{{- $rawIdRejected := and $idParam (not (hasPrefix (lower $idParam) "http")) (ne $parsed.id $idParam) -}}
+{{- $rawIdRejected := and $idParam (not $idParamIsUrl) (ne $parsed.id $idParam) -}}
 {{- if $rawIdRejected -}}
   {{- errorf "The %q shortcode received an invalid id=%q. YouTube ids are exactly 11 characters of [A-Za-z0-9_-]. See %s" .Name $idParam .Position -}}
 {{- end -}}
@@ -100,11 +113,26 @@
 {{/* Normalize start/end to non-negative integer seconds HERE, so the facade
      receives clean ints and never risks an `int "abc"` build break. A
      non-numeric or negative value is ignored (treated as unset) with a single
-     warning -- an optional timing hint must not fail the build. */}}
+     warning -- an optional timing hint must not fail the build. Leading zeros
+     are stripped so the base-0 cast cannot read a zero-padded value as octal
+     (int "011" -> 9) or die on an invalid octal digit (int "08" is fatal);
+     an all-zero value trims to empty and keeps the 0 default, and the try
+     absorbs an overflowing digit run. $startSet tracks whether a VALID
+     explicit start was supplied, so an invalid value stays "treated as
+     unset" and the url-carried offset below still applies. */}}
 {{- $start := 0 -}}
+{{- $startSet := false -}}
 {{- with $startRaw -}}
   {{- if findRE `^[0-9]+$` . 1 -}}
-    {{- $start = int . -}}
+    {{- $startSet = true -}}
+    {{- $s := strings.TrimLeft "0" . -}}
+    {{- if $s -}}
+      {{- with try (int $s) -}}
+        {{- with .Value -}}
+          {{- $start = . -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
   {{- else -}}
     {{- warnf "The %q shortcode ignored a non-numeric start=%q (expected whole seconds). See %s" $.Name . $.Position -}}
   {{- end -}}
@@ -112,16 +140,24 @@
 {{- $end := 0 -}}
 {{- with $endRaw -}}
   {{- if findRE `^[0-9]+$` . 1 -}}
-    {{- $end = int . -}}
+    {{- $e := strings.TrimLeft "0" . -}}
+    {{- if $e -}}
+      {{- with try (int $e) -}}
+        {{- with .Value -}}
+          {{- $end = . -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
   {{- else -}}
     {{- warnf "The %q shortcode ignored a non-numeric end=%q (expected whole seconds). See %s" $.Name . $.Position -}}
   {{- end -}}
 {{- end -}}
 
 {{/* A start offset carried in the URL (?t= / ?start=, e.g. youtu.be/ID?t=42)
-     is honored only when no explicit `start` parameter was supplied; the
-     explicit parameter always wins. */}}
-{{- if and (not $startRaw) (gt $parsed.start 0) -}}
+     is honored only when no VALID explicit `start` parameter was supplied;
+     the valid explicit parameter always wins, and an invalid one counts as
+     unset. */}}
+{{- if and (not $startSet) (gt $parsed.start 0) -}}
   {{- $start = $parsed.start -}}
 {{- end -}}
 

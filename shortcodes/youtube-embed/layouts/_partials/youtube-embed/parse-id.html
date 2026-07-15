@@ -39,8 +39,9 @@
   - .id    (string) The 11-char video id, or "" when only a playlist was found.
   - .list  (string) The playlist id, or "" when none was supplied.
   - .start (int)    Start offset in seconds parsed from a `t=`/`start=` in `url`
-                    (0 when none). The caller uses it only when the explicit
-                    `start` parameter is unset.
+                    (query parameter or legacy `#t=` fragment; 0 when none).
+                    The caller uses it only when no valid explicit `start`
+                    parameter is set.
   - .urlId (string) The video id extracted from `url`, or "" when none. Equals
                     .id when the url supplied the winning id; differs when an
                     explicit raw id superseded it.
@@ -60,8 +61,10 @@
 {{- $start := 0 -}}
 
 {{/* A raw id that is itself a URL (defensive: callers sometimes paste a URL
-     into id=) is demoted to the url branch so the same extraction logic runs. */}}
-{{- if and $rawId (hasPrefix (lower $rawId) "http") -}}
+     into id=) is demoted to the url branch so the same extraction logic runs.
+     Only an explicit http:// or https:// scheme triggers the demotion -- a
+     hypothetical valid 11-char id starting with "http" stays a raw id. */}}
+{{- if and $rawId (or (hasPrefix (lower $rawId) "http://") (hasPrefix (lower $rawId) "https://")) -}}
   {{- $url = $rawId -}}
   {{- $rawId = "" -}}
 {{- end -}}
@@ -85,21 +88,28 @@
     {{- $list = index (index . 0) 1 -}}
   {{- end -}}
 
-  {{/* Start offset from a `t=` or `start=` query parameter. Supports plain
-       seconds ("90", "90s") and the colon-less h/m/s forms YouTube accepts
-       ("1m30s", "1h2m3s"). Surfaced as `start`; the caller uses it only when no
-       explicit `start` parameter was set (the explicit parameter wins). */}}
-  {{- with findRESubmatch `[?&](?:t|start)=([0-9hms]+)` $u 1 -}}
+  {{/* Start offset from a `t=` or `start=` parameter, carried as a query
+       parameter or as YouTube's legacy `#t=` fragment. Supports plain seconds
+       ("90", "90s") and the colon-less h/m/s forms YouTube accepts ("1m30s",
+       "1h2m3s"). Surfaced as `start`; the caller uses it only when no valid
+       explicit `start` parameter was set (the explicit parameter wins).
+       Every numeric component is stripped of leading zeros before the base-0
+       cast, so a zero-padded value is not read as octal (int "011" -> 9) and
+       an invalid octal digit (int "08" is a fatal cast) cannot break the
+       build; an all-zero component trims to empty and keeps its 0 default,
+       and the try absorbs an overflowing digit run. */}}
+  {{- with findRESubmatch `[?&#](?:t|start)=([0-9hms]+)` $u 1 -}}
     {{- $tval := index (index . 0) 1 -}}
     {{- if findRE `^[0-9]+s?$` $tval 1 -}}
-      {{- $start = int (replaceRE `s$` "" $tval) -}}
+      {{- $sec := strings.TrimLeft "0" (replaceRE `s$` "" $tval) -}}
+      {{- if $sec -}}{{- with try (int $sec) -}}{{- with .Value -}}{{- $start = . -}}{{- end -}}{{- end -}}{{- end -}}
     {{- else -}}
       {{- $h := 0 -}}
       {{- $m := 0 -}}
       {{- $s := 0 -}}
-      {{- with findRESubmatch `([0-9]+)h` $tval 1 -}}{{- $h = int (index (index . 0) 1) -}}{{- end -}}
-      {{- with findRESubmatch `([0-9]+)m` $tval 1 -}}{{- $m = int (index (index . 0) 1) -}}{{- end -}}
-      {{- with findRESubmatch `([0-9]+)s` $tval 1 -}}{{- $s = int (index (index . 0) 1) -}}{{- end -}}
+      {{- with findRESubmatch `([0-9]+)h` $tval 1 -}}{{- $d := strings.TrimLeft "0" (index (index . 0) 1) -}}{{- if $d -}}{{- with try (int $d) -}}{{- with .Value -}}{{- $h = . -}}{{- end -}}{{- end -}}{{- end -}}{{- end -}}
+      {{- with findRESubmatch `([0-9]+)m` $tval 1 -}}{{- $d := strings.TrimLeft "0" (index (index . 0) 1) -}}{{- if $d -}}{{- with try (int $d) -}}{{- with .Value -}}{{- $m = . -}}{{- end -}}{{- end -}}{{- end -}}{{- end -}}
+      {{- with findRESubmatch `([0-9]+)s` $tval 1 -}}{{- $d := strings.TrimLeft "0" (index (index . 0) 1) -}}{{- if $d -}}{{- with try (int $d) -}}{{- with .Value -}}{{- $s = . -}}{{- end -}}{{- end -}}{{- end -}}{{- end -}}
       {{- $start = add (add (mul $h 3600) (mul $m 60)) $s -}}
     {{- end -}}
   {{- end -}}

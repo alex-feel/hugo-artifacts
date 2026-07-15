@@ -2,7 +2,7 @@
 # The module ships its full i18n surface from this directory. Every template lookup pipes
 # through `| default "<English>"`, so a site language without these keys still renders.
 
-youtube_embed_play_video = "Play video: {{ . }}"
+youtube_embed_play_video = "Play video: {{ .Title }}"
 youtube_embed_play_video_untitled = "Play video"
 youtube_embed_watch_on_youtube = "Watch on YouTube"
 youtube_embed_player_title = "YouTube video player"
