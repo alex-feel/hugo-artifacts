@@ -30,7 +30,12 @@
     {{- $whole = math.Add $whole 1 -}}
     {{- $frac = 0.0 -}}
   {{- end -}}
-  {{- if eq $frac 0.0 -}}
+  {{/* A carry that reaches 1000 crossed the tier boundary (values
+       999950-999999): promote to the M tier instead of rendering "1000k".
+       The M branch above needs no such promotion -- M is the top tier. */}}
+  {{- if ge $whole 1000.0 -}}
+    {{- $result = "1M" -}}
+  {{- else if eq $frac 0.0 -}}
     {{- $result = printf "%.0fk" $whole -}}
   {{- else -}}
     {{- $result = printf "%.0f.%.0fk" $whole $frac -}}
