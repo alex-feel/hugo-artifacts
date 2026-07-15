@@ -101,10 +101,10 @@ An unknown type emits one deduplicated build warning (so a typo surfaces once) a
 | --- | --- | --- | --- | --- |
 | `type` | string | no | `note` | Positional `0` or `type=`. First-class type, alias, or any custom slug. |
 | `title` | string | no | type label | Positional `1` or `title=`. Verbatim when supplied; the type's label when omitted; `title=""` suppresses the head. |
-| `collapsible` | bool | no | `false` | Render as a native `<details>`/`<summary>` disclosure. |
-| `open` | bool | no | `false` | When `collapsible`, start expanded (adds the `open` attribute). |
+| `collapsible` | bool | no | `false` | Render as a native `<details>`/`<summary>` disclosure. Truthy tokens: `true`/`1`/`yes`/`on`, any casing. |
+| `open` | bool | no | `false` | When `collapsible`, start expanded (adds the `open` attribute). Same tokens as `collapsible`. |
 | `role` | string | no | passive | ARIA override: `note`, `alert`, `status`, or `none`. See [Accessibility](#accessibility). |
-| `icon` | string/bool | no | type default | Icon override: a built-in icon name, a single emoji, or a resource path/URL. `icon=false` suppresses the icon. |
+| `icon` | string/bool | no | type default | Icon override: a built-in icon name, a single emoji, or an image reference (local path or `http(s)://` URL). `icon=false` suppresses the icon. See [Icons](#icons). |
 | `id` | string | no | -- | `id` attribute on the root element, for anchoring/linking. |
 | `class` | string | no | -- | Additional CSS class(es) appended to the root element. |
 
@@ -115,7 +115,8 @@ The shortcode never fails the build. It is intentionally permissive:
 - An unknown `type` is valid and passes through literally (one deduplicated warning per unknown type).
 - An empty body is valid (the body element is rendered empty).
 - An unrecognized `role` value is ignored, falling back to the passive default (one deduplicated warning).
-- An `icon` resource path that cannot be resolved renders without an icon (one deduplicated warning).
+- An unrecognized `collapsible`/`open` token is treated as `false` (one deduplicated warning).
+- An `icon` image reference that cannot be resolved or fetched, or an `icon` name that is not a built-in glyph, renders without an icon (one deduplicated warning).
 
 All warnings are emitted via `warnf` and deduplicated through `hugo.Store`, so repeated invocations do not multiply them.
 
@@ -248,7 +249,10 @@ Override the icon per call with the `icon` parameter:
 - `icon="tip"` -- render a different built-in glyph by name.
 - `icon="🎉"` -- emit a single emoji (rendered as text inside `callout__icon--emoji`).
 - `icon="/images/brand.svg"` -- resolve a page resource, then a global resource, and emit an `<img class="callout__icon--image">`.
+- `icon="https://example.com/brand.svg"` -- fetch the image at build time, republish it under the site's own origin, and emit the same `<img>`. A failed fetch renders without an icon (one deduplicated warning); the build never breaks. Remote fetching works out of the box for the media types Hugo recognizes (`svg`, `png`, `jpg`, `jpeg`, `gif`, `webp`, `avif`); a remote `.ico` needs a custom `ico` media type defined in the consuming site's configuration, because Hugo ships none -- prefer `svg`/`png` for remote icons.
 - `icon=false` -- suppress the icon.
+
+A value counts as an image reference only when it contains `/`, starts with `http://` or `https://`, or ends in a known image extension (`svg`, `png`, `jpg`, `jpeg`, `gif`, `webp`, `avif`, `ico`); any other value -- including a dotted name such as `brand.v2` -- is treated as a glyph name.
 
 Custom (unknown) types have no default icon; supply one with `icon=` if you want a glyph.
 

@@ -24,17 +24,26 @@
         "iOS quirks".
       * title="" -> suppresses the head entirely (icon + title row omitted).
   - collapsible (bool): render as a native <details>/<summary> disclosure.
-  - open (bool): when collapsible, start expanded (adds the `open` attribute).
+    Truthy tokens are true/1/yes/on in any casing; falsy tokens are
+    false/0/no/off or omission. An unrecognized token is treated as false
+    with a one-shot warning.
+  - open (bool): when collapsible, start expanded (adds the `open`
+    attribute). Same token rules as collapsible.
   - role (string): opt-in ARIA override. One of "note", "alert", "status",
     "none". Default is the passive role from resolve-type.html ("note"). Use
     "alert"/"status" ONLY for genuinely dynamic, client-updated notices --
     they are live regions and would make assistive tech announce static prose.
     "none" emits no role attribute.
   - icon: icon override. A first-class icon NAME (rendered via icon.html), a
-    single emoji (emitted as text), or a path/URL to an image resource
-    (page resource first, then global resource -> <img>). icon=false suppresses
-    the icon. When omitted, first-class types use their default glyph and
-    custom/unknown types render no icon.
+    single emoji (emitted as text), or an image reference rendered as <img>.
+    A value counts as an image reference only when it contains "/", starts
+    with http:// or https://, or ends in a known image extension (svg, png,
+    jpg, jpeg, gif, webp, avif, ico); any other value -- including a dotted
+    name like "brand.v2" -- is a glyph name. Local references resolve as a
+    page resource first, then a global resource; remote URLs are fetched at
+    build time and republished under the site's own origin. icon=false
+    suppresses the icon. When omitted, first-class types use their default
+    glyph and custom/unknown types render no icon.
   - id (string): id attribute on the root element (for anchoring/linking).
   - class (string): extra class(es) appended to the root element.
 
@@ -74,8 +83,31 @@
   {{- $title = .Get 1 -}}
 {{- end -}}
 
-{{- $collapsible := in (slice true "true" "1" "yes" "on") (.Get "collapsible" | default false) -}}
-{{- $open := in (slice true "true" "1" "yes" "on") (.Get "open" | default false) -}}
+{{/* Boolean parameters accept true/1/yes/on in any casing (string or bare
+     bool -- printf "%v" folds both into one comparable string form), and
+     false/0/no/off or omission for false. An unrecognized token coerces to
+     false with a one-shot deduplicated warning, matching the module's
+     warn-on-bad-input convention for type, role, and icon. */}}
+{{- $truthyTokens := slice "true" "1" "yes" "on" -}}
+{{- $falsyTokens := slice "false" "0" "no" "off" "" -}}
+{{- $collapsibleRaw := lower (printf "%v" (.Get "collapsible" | default false)) -}}
+{{- $collapsible := in $truthyTokens $collapsibleRaw -}}
+{{- if and (not $collapsible) (not (in $falsyTokens $collapsibleRaw)) -}}
+  {{- $warnKey := printf "callout:warned-bool:collapsible:%s" $collapsibleRaw -}}
+  {{- if not (hugo.Store.Get $warnKey) -}}
+    {{- hugo.Store.Set $warnKey true -}}
+    {{- warnf "[callout] Ignoring unrecognized collapsible=%q (use true/1/yes/on or false/0/no/off, any casing). Treating it as false. See %s" $collapsibleRaw .Position -}}
+  {{- end -}}
+{{- end -}}
+{{- $openRaw := lower (printf "%v" (.Get "open" | default false)) -}}
+{{- $open := in $truthyTokens $openRaw -}}
+{{- if and (not $open) (not (in $falsyTokens $openRaw)) -}}
+  {{- $warnKey := printf "callout:warned-bool:open:%s" $openRaw -}}
+  {{- if not (hugo.Store.Get $warnKey) -}}
+    {{- hugo.Store.Set $warnKey true -}}
+    {{- warnf "[callout] Ignoring unrecognized open=%q (use true/1/yes/on or false/0/no/off, any casing). Treating it as false. See %s" $openRaw .Position -}}
+  {{- end -}}
+{{- end -}}
 {{- $roleParam := lower (.Get "role" | default "") -}}
 {{/* Icon is a named-only parameter. Detect its presence with isset on the named
      params map (a missing named arg is not reliably nil from `.Get`), so an
@@ -152,8 +184,14 @@
 {{/* Icon strategy:
      - icon=false / "false" / "none" -> suppress.
      - icon is a single emoji (one grapheme, non-ASCII) -> emit as text.
-     - icon looks like a path/URL (has "/" or "." or "http") -> resolve to an
-       <img> via page resources then global resources; fall back silently.
+     - icon is an image reference -> resolve to an <img>. A value counts as an
+       image reference ONLY when it contains "/", starts with http:// or
+       https://, or ends in a known image extension (svg, png, jpg, jpeg, gif,
+       webp, avif, ico) -- a bare dotted name such as "brand.v2" is a glyph
+       name, not a path. Remote URLs are fetched at build time and republished
+       under the site's own origin; local values resolve via page resources
+       then global resources. A failed fetch or lookup degrades to no icon
+       with a one-shot warning -- the build never breaks.
      - icon is a bare name -> render via icon.html (works for first-class
        names and lets a custom type borrow a built-in glyph).
      - icon omitted -> default glyph for first-class types, nothing otherwise. */}}
@@ -163,14 +201,30 @@
 {{- $iconResource := "" -}}
 {{- if $iconPresent -}}
   {{- $iconStr := trim (printf "%v" $iconParam) " \t\n\r" -}}
-  {{- if or (in (slice "false" "none" "no" "off") (lower $iconStr)) (eq $iconParam false) -}}
+  {{- $iconLower := lower $iconStr -}}
+  {{- $iconIsRemote := or (hasPrefix $iconLower "http://") (hasPrefix $iconLower "https://") -}}
+  {{- $iconHasImageExt := gt (len (findRE `\.(svg|png|jpe?g|gif|webp|avif|ico)$` $iconLower 1)) 0 -}}
+  {{- if or (in (slice "false" "none" "no" "off") $iconLower) (eq $iconParam false) -}}
     {{- $iconMode = "none" -}}
-  {{- else if or (in $iconStr "/") (in $iconStr ".") (hasPrefix (lower $iconStr) "http") -}}
+  {{- else if or $iconIsRemote (in $iconStr "/") $iconHasImageExt -}}
     {{- $iconMode = "resource" -}}
     {{- $res := "" -}}
-    {{- with .Page.Resources.Get $iconStr -}}{{ $res = . }}{{ end -}}
-    {{- if not $res -}}
-      {{- with resources.Get $iconStr -}}{{ $res = . }}{{ end -}}
+    {{- if $iconIsRemote -}}
+      {{- $remote := try (resources.GetRemote $iconStr (dict "timeout" "30s")) -}}
+      {{- with $remote.Err -}}
+        {{- $warnKey := printf "callout:warned-icon:%s" $iconStr -}}
+        {{- if not (hugo.Store.Get $warnKey) -}}
+          {{- hugo.Store.Set $warnKey true -}}
+          {{- warnf "[callout] Remote icon %q could not be fetched (%s). Rendering without an icon. See %s" $iconStr . $.Position -}}
+        {{- end -}}
+      {{- else -}}
+        {{- with $remote.Value -}}{{ $res = . }}{{ end -}}
+      {{- end -}}
+    {{- else -}}
+      {{- with .Page.Resources.Get $iconStr -}}{{ $res = . }}{{ end -}}
+      {{- if not $res -}}
+        {{- with resources.Get $iconStr -}}{{ $res = . }}{{ end -}}
+      {{- end -}}
     {{- end -}}
     {{- if $res -}}
       {{- $iconResource = $res.RelPermalink -}}
@@ -179,7 +233,7 @@
       {{- $warnKey := printf "callout:warned-icon:%s" $iconStr -}}
       {{- if not (hugo.Store.Get $warnKey) -}}
         {{- hugo.Store.Set $warnKey true -}}
-        {{- warnf "[callout] Icon resource %q not found (looked in page resources then assets/). Rendering without an icon. See %s" $iconStr .Position -}}
+        {{- warnf "[callout] Icon %q could not be resolved (page resources, assets/, or remote fetch). Rendering without an icon. See %s" $iconStr .Position -}}
       {{- end -}}
     {{- end -}}
   {{- else if and $iconStr (not (findRE `^[\x00-\x7F]+$` $iconStr)) -}}
@@ -189,9 +243,20 @@
     {{- $iconMode = "emoji" -}}
     {{- $iconEmoji = $iconStr -}}
   {{- else -}}
-    {{/* A bare ASCII name -> render the named built-in glyph. */}}
+    {{/* A bare ASCII name -> render the named built-in glyph. The glyph set
+         lives in icon.html alone, so membership is probed by rendering: an
+         unknown name yields empty output and degrades to no icon with a
+         one-shot warning, keeping an explicit typo visible. */}}
     {{- $iconMode = "name" -}}
     {{- $iconName = $iconStr -}}
+    {{- if eq (trim (partial "callout/icon.html" (dict "name" $iconStr)) " \t\n\r") "" -}}
+      {{- $iconMode = "none" -}}
+      {{- $warnKey := printf "callout:warned-icon:%s" $iconStr -}}
+      {{- if not (hugo.Store.Get $warnKey) -}}
+        {{- hugo.Store.Set $warnKey true -}}
+        {{- warnf "[callout] Unknown icon name %q (not a built-in glyph). Rendering without an icon. See %s" $iconStr .Position -}}
+      {{- end -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 {{- $showIcon := and (ne $iconMode "none") (or (ne $iconName "") (eq $iconMode "emoji") (eq $iconMode "resource")) -}}
