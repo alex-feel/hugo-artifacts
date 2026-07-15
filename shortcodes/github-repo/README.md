@@ -42,7 +42,7 @@ The `variant` parameter selects one of five display modes. Default is `card`.
 {{</* github-repo url="https://github.com/gohugoio/hugo" variant="inline" */>}}
 ```
 
-A minimal `<a>` element showing the GitHub icon, owner/repo name, and an external-link icon. Suitable for embedding within paragraphs. Works without API data (only the URL is required).
+A minimal `<a>` element showing the GitHub icon, the owner/name pair (the `name` override is honored), and an external-link icon. Suitable for embedding within paragraphs. Renders entirely from the URL and makes **no API request**, so it never spends rate-limit budget and never degrades.
 
 #### card -- Editorial card (default)
 
@@ -108,7 +108,7 @@ hugo
 
 The variable **must** be prefixed with `HUGO_`. Hugo's default security policy restricts `os.Getenv` to variables matching `^HUGO_` and `^CI$`. A variable named `GITHUB_TOKEN` (without the `HUGO_` prefix) will silently return an empty string.
 
-When `HUGO_GITHUB_TOKEN` is unset, the module emits a single warn-only preflight message per build (deduplicated via `hugo.Store`, so repeated shortcode invocations do not multiply the warning). The build always continues.
+When `HUGO_GITHUB_TOKEN` is unset and an API-using variant renders (any variant except `inline`, which makes no API request), the module emits a single warn-only preflight message per build (deduplicated via `hugo.Store`, so repeated shortcode invocations do not multiply the warning). The build always continues.
 
 ### Rate limits
 
@@ -117,11 +117,11 @@ When `HUGO_GITHUB_TOKEN` is unset, the module emits a single warn-only preflight
 | Unauthenticated | 60 requests/hour    |
 | With token      | 5,000 requests/hour |
 
-Each shortcode invocation makes 1-2 API calls per unique repository depending on the variant:
+Each shortcode invocation makes 0-2 API calls per unique repository depending on the variant:
 
 | Variant  | API calls                                   |
 | -------- | ------------------------------------------- |
-| `inline` | 1 (base repo data)                          |
+| `inline` | 0 (renders entirely from the URL)           |
 | `card`   | 1 (base repo data)                          |
 | `stats`  | 1 (base repo data)                          |
 | `lang`   | 2 (base repo data + `/languages`)           |
@@ -155,11 +155,12 @@ Hugo templates have no sleep primitive, so true backoff between outer attempts i
 | `errorClass` | Trigger | Retry behavior |
 | --- | --- | --- |
 | `primary-rate-limit` | HTTP 403 with `X-RateLimit-Remaining: 0` | Early break -- subsequent attempts cannot succeed within the same build. Wait hint computed from `X-RateLimit-Reset`. |
-| `secondary-rate-limit` | HTTP 429 | Retry while the wait hint fits in the remaining wall-clock budget. Wait hint preference: `Retry-After`, then `X-RateLimit-Reset` delta, then `60s`. |
+| `secondary-rate-limit` | HTTP 429 | Retry while the wait hint fits in the remaining wall-clock budget. Wait hint preference: numeric `Retry-After`, then `X-RateLimit-Reset` delta, then `60s`. An HTTP-date `Retry-After` (the other form RFC 9110 permits) is treated as absent and falls through to the next hint source. |
 | `auth` | HTTP 401, or HTTP 403 without rate-limit headers | Early break -- token / permissions issue cannot be fixed by retrying. |
 | `not-found` | HTTP 404 (Hugo's `nil` branch from `resources.GetRemote`) | Early break -- resource is genuinely missing. |
 | `server` | HTTP 5xx | Retry up to `attempts` or `overallBudgetSec`, whichever comes first. |
 | `network` | No HTTP response (DNS failure, connection refused, host timeout) | Retry up to `attempts` or `overallBudgetSec`, whichever comes first. |
+| `parse` | 2xx response without a usable JSON payload -- an undecodable, empty, or null body (notably the HTTP 202 "statistics are being computed" answer from `/stats/participation`) | Retry up to `attempts` or `overallBudgetSec` -- the statistics computation often completes between attempts. |
 | `other` | Anything else | Retry up to `attempts` or `overallBudgetSec`, whichever comes first. |
 
 The first attempt always runs regardless of the initial classification (the early-break check is gated on attempt > 1). On retry exhaustion -- whether by `attempts` count, `overallBudgetSec` cap, or early break -- the widget falls through to the graceful degradation path described below.
@@ -182,13 +183,13 @@ Under the constants above, the per-call worst case is bounded as follows:
 
 | Variant  | Endpoints fetched                  | Worst-case wall clock |
 | -------- | ---------------------------------- | --------------------: |
-| `inline` | base repo                          |              **120s** |
+| `inline` | none                               |                **0s** |
 | `card`   | base repo                          |              **120s** |
 | `stats`  | base repo                          |              **120s** |
 | `lang`   | base repo + `/languages`           |              **240s** |
 | `hero`   | base repo + `/stats/participation` |              **240s** |
 
-These caps apply only when every endpoint exhausts retries against `server`, `secondary-rate-limit` (with a short reset window), `network`, or `other` failures. The most common observed failure -- `primary-rate-limit` from an exhausted unauthenticated 60 req/h budget -- triggers an early break on attempt 2, so the realistic per-call cost is approximately one HTTP round-trip plus one classification.
+These caps apply only when every endpoint exhausts retries against `server`, `secondary-rate-limit` (with a short reset window), `network`, `parse`, or `other` failures. The most common observed failure -- `primary-rate-limit` from an exhausted unauthenticated 60 req/h budget -- triggers an early break on attempt 2, so the realistic per-call cost is approximately one HTTP round-trip plus one classification.
 
 When the API is healthy, the retry layer adds **zero** measurable overhead: the first attempt succeeds and the loop short-circuits.
 
@@ -208,24 +209,38 @@ Setting `HUGO_GITHUB_TOKEN` reduces the likelihood of hitting the primary rate l
 
 When all retries for an endpoint exhaust, the module does not break the build. It logs the structured warning described above and degrades:
 
-- **`inline` variant:** Unaffected -- it only needs the owner/repo parsed from the URL.
+- **`inline` variant:** Unaffected -- it performs no API call and renders entirely from the URL.
 - **`card`, `stats`, `lang`, `hero` variants:** Fall back to the inline chip layout.
 - **`lang` variant, languages endpoint failure:** The language bar and legend are omitted; the rest of the card renders normally.
 - **`hero` variant, participation endpoint failure or HTTP 202:** The sparkline is omitted; the rest of the card renders normally.
 
 ## Language Colors
 
-The module ships with `data/github_lang_colors.json`, a mapping of 58 programming language names to their hex color values sourced from [GitHub Linguist](https://github.com/github-linguist/linguist/blob/main/lib/linguist/languages.yml). These colors appear as the language dot in card, stats, and hero variants, and as bar/legend colors in the lang variant.
+The module ships with `data/github_repo_lang_colors.json`, a mapping of 58 programming language names to their hex color values sourced from [GitHub Linguist](https://github.com/github-linguist/linguist/blob/main/lib/linguist/languages.yml). These colors appear as the language dot in card, stats, and hero variants, and as bar/legend colors in the lang variant. The filename is module-prefixed so it cannot collide by accident with another module's or the site's own data files.
 
 Languages not present in this file receive no color value. The consuming site's CSS can provide a fallback (e.g., via a default value for `--github-repo-lang-color`).
 
-**Updating:** To refresh colors or add new languages, update `data/github_lang_colors.json` with values from the [Linguist languages.yml](https://github.com/github-linguist/linguist/blob/main/lib/linguist/languages.yml) `color` field. Keys must match the exact language names returned by the GitHub API (case-sensitive).
+**Updating:** To refresh colors or add new languages, update `data/github_repo_lang_colors.json` with values from the [Linguist languages.yml](https://github.com/github-linguist/linguist/blob/main/lib/linguist/languages.yml) `color` field. Keys must match the exact language names returned by the GitHub API (case-sensitive).
 
-**Data merging caveat:** Hugo merges data files from all modules. If the consuming site has its own `data/github_lang_colors.json`, the site's file takes precedence, which may silently override the module's color mappings.
+**Overriding:** Hugo merges data files from all modules, and the consuming site's files take precedence. A site can therefore replace the shipped color mappings deliberately by defining its own `data/github_repo_lang_colors.json`.
 
 ## Styling
 
 The module outputs unstyled semantic HTML. All visual presentation is the consuming site's responsibility.
+
+### The inline chip in flex and grid parents
+
+The root element is an unstyled `<a>`. As a flex or grid item it is stretched by the container's default alignment (`align-items: stretch` in a flex column; stretch on both axes in a grid cell), so the chip silently grows to fill the available space instead of hugging its content. If you place the chip inside such a container, size it to its content:
+
+```css
+.github-repo--inline {
+  width: fit-content;
+  align-self: start;
+  justify-self: start;
+}
+```
+
+Everything else -- colors, spacing, hover and focus states -- is yours to design.
 
 ### CSS hooks
 
@@ -263,7 +278,7 @@ shortcodes/github-repo/
   go.mod
   hugo.toml
   data/
-    github_lang_colors.json
+    github_repo_lang_colors.json
   layouts/
     _shortcodes/
       github-repo.html              # Main shortcode (parameter validation + dispatch)
@@ -272,7 +287,7 @@ shortcodes/github-repo/
         fetch.html                  # API fetching, retry loop, data normalization
         fetch-once.html             # Single-attempt fetch (normalized result dict)
         classify-error.html         # HTTP error -> (errorClass, waitHintSeconds, errorMessage)
-        compact-number.html         # Number formatting (e.g., 1500 -> "1.5k")
+        compact-number.html         # Number formatting (1500 -> "1.5k"; no tier promotion: 999950-999999 -> "1000k")
         relative-time.html          # Timestamp formatting (e.g., "3 days ago")
         icon.html                   # Centralized SVG icon rendering
         inline.html                 # V1 inline chip

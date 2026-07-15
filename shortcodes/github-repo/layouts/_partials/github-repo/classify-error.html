@@ -28,8 +28,6 @@
                                  "server"               5xx server error.
                                  "network"              No HTTP response (status 0).
                                  "not-found"            Resource missing (404).
-                                 "media-type"           Unsupported media type
-                                                        (rarely surfaced here).
                                  "other"                Anything else.
   - .waitHintSeconds (int)    Suggested wait until the rate-limit window resets:
                                  - primary-rate-limit:   X-RateLimit-Reset - now.Unix
@@ -64,22 +62,34 @@
   {{- end -}}
 {{- end -}}
 
+{{/* X-RateLimit-Reset carries UTC epoch seconds. The cast is wrapped in try so
+     a malformed value degrades to an absent hint instead of failing the build. */}}
 {{- $rateLimitReset := 0 -}}
 {{- with $headers -}}
   {{- with index . "X-RateLimit-Reset" -}}
     {{- with index . 0 -}}
-      {{- $rateLimitReset = int . -}}
+      {{- with try (int .) -}}
+        {{- with .Value -}}
+          {{- $rateLimitReset = . -}}
+        {{- end -}}
+      {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
 
+{{/* Retry-After legally carries either delay-seconds or an HTTP-date (RFC
+     9110); only the numeric form is usable as a wait hint, so the cast is
+     wrapped in try and the date form falls through to the X-RateLimit-Reset
+     delta or the 60-second default. */}}
 {{- $retryAfter := 0 -}}
-{{- $retryAfterPresent := false -}}
 {{- with $headers -}}
   {{- with index . "Retry-After" -}}
     {{- with index . 0 -}}
-      {{- $retryAfter = int . -}}
-      {{- $retryAfterPresent = true -}}
+      {{- with try (int .) -}}
+        {{- with .Value -}}
+          {{- $retryAfter = . -}}
+        {{- end -}}
+      {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
@@ -116,7 +126,7 @@
   {{- $errorMessage = "HTTP 429 (secondary rate limit reached)" -}}
   {{/* Wait-hint preference order: explicit Retry-After header, then
        X-RateLimit-Reset delta, then a 60-second default. */}}
-  {{- if and $retryAfterPresent (gt $retryAfter 0) -}}
+  {{- if gt $retryAfter 0 -}}
     {{- $waitHintSeconds = $retryAfter -}}
   {{- else if gt $rateLimitReset 0 -}}
     {{- $delta := sub $rateLimitReset (int now.Unix) -}}
@@ -139,9 +149,9 @@
      "message" field, surface it. Unmarshal failures are swallowed via try
      so a malformed body cannot break the build. */}}
 {{- with $body -}}
-  {{- $trimmed := . -}}
+  {{- $trimmed := trim . " \t\n\r" -}}
   {{- if hasPrefix $trimmed "{" -}}
-    {{- with try (transform.Unmarshal $trimmed) -}}
+    {{- with try (transform.Unmarshal (dict "format" "json") $trimmed) -}}
       {{- with .Value -}}
         {{- with .message -}}
           {{- $errorMessage = printf "%s: %s" $errorMessage . -}}

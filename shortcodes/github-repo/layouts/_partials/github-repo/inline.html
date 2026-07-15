@@ -7,6 +7,7 @@
   - .url (string) - Full GitHub repository URL
   - .owner (string) - Repository owner
   - .repo (string) - Repository name
+  - .name (string) - Display name (the name override when supplied, else the repository name)
   - .fullName (string) - "owner/repo"
   - .extraClass (string) - Additional CSS classes
   - .variant (string, optional) - Originating variant name for data-variant attribute (default: "inline")
@@ -25,7 +26,7 @@
   <span class="github-repo__name">
     <span class="github-repo__owner">{{ .owner }}</span>
     <span class="github-repo__separator">/</span>
-    {{ .repo -}}
+    {{ or .name .repo -}}
   </span>
   {{- partial "github-repo/icon.html" (dict "name" "external" "class" "github-repo__external") -}}
 </a>
