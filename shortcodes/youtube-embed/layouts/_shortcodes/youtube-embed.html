@@ -9,7 +9,12 @@
   shape). A playlist embed is also supported via `list` (or a `list=` in `url`).
 
   Parameters:
-  - id        (string)  Raw 11-char video id. Wins over `url` when both are set.
+  - id        (string)  Raw 11-char video id. Wins the video-id slot over `url`
+                        when both are set; a list= / t= / start= carried in
+                        `url` is still honored, and a DIFFERENT video id in
+                        `url` is dropped with a warning. An invalid raw id
+                        fails the build even when `url` supplies a playlist.
+                        A pasted URL in `id` replaces `url` entirely.
   - url       (string)  Full YouTube URL: youtu.be/, watch?v=, embed/, v/,
                         shorts/, youtube-nocookie.com/embed/, m.youtube.com, with
                         optional &list= and an optional ?t= / ?start= offset. The
@@ -57,11 +62,28 @@
      tokens so show-title="false" actually suppresses the visible title. */}}
 {{- $showTitle := in (slice "true" "1" "yes" "on") (lower (.Get "show-title" | default "")) -}}
 
-{{/* Parse and validate the locator. A raw id wins; otherwise the URL is parsed.
-     A `list` parameter is honored even when `url` carries its own list. */}}
+{{/* Parse and validate the locator. A raw id wins the video-id slot; a url
+     supplied alongside still contributes its list= and t=/start= values. The
+     explicit `list` parameter wins over a url-carried list. */}}
 {{- $parsed := partial "youtube-embed/parse-id.html" (dict "id" $idParam "url" $url) -}}
 {{- $id := $parsed.id -}}
 {{- $list := or $listParam $parsed.list -}}
+
+{{/* A supplied raw id (not a pasted URL, which parse-id demotes to the url
+     branch) must itself validate -- a playlist id mined from url= cannot
+     rescue a bad raw id, or a typo would silently render a playlist-only
+     embed instead of failing loudly. */}}
+{{- $rawIdRejected := and $idParam (not (hasPrefix (lower $idParam) "http")) (ne $parsed.id $idParam) -}}
+{{- if $rawIdRejected -}}
+  {{- errorf "The %q shortcode received an invalid id=%q. YouTube ids are exactly 11 characters of [A-Za-z0-9_-]. See %s" .Name $idParam .Position -}}
+{{- end -}}
+
+{{/* Surface a conflicting double locator: when id= wins over a url= carrying
+     a DIFFERENT video id, the drop is warned so a copy-paste mistake does not
+     go unnoticed. The url's list= and t=/start= are honored either way. */}}
+{{- if and $idParam (not $rawIdRejected) $parsed.urlId (ne $parsed.urlId $parsed.id) -}}
+  {{- warnf "The %q shortcode received id=%q and a url carrying a different video id %q; id wins and the url video id is ignored (the url's t=/list= are still honored). See %s" .Name $idParam $parsed.urlId .Position -}}
+{{- end -}}
 
 {{/* The embed is valid when parse-id resolved a usable id/list from id=/url=,
      OR a standalone list= parameter was supplied (a playlist-only embed). */}}

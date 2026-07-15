@@ -2,8 +2,10 @@
   Fetches and normalizes GitHub repository data via the REST API with
   retry-and-classify resilience in front of the existing graceful
   degradation. When all attempts fail, the partial returns a fallback dict
-  with `apiOk: false` and the variant partials degrade to the inline chip
-  -- the same final outcome as before this resilience layer was added.
+  with `apiOk: false` and the variant partials degrade to the inline chip.
+  The inline variant performs no fetch at all: it renders only URL-derived
+  fields, so the partial returns the fallback dict directly and spends no
+  API request budget.
 
   Why retries (and only this much):
   - resources.GetRemote in Hugo v0.160.1 has NO template-passed retry knobs
@@ -92,18 +94,6 @@
      env vars matching ^HUGO_ or ^CI$, so the prefix is mandatory. */}}
 {{- $token := os.Getenv "HUGO_GITHUB_TOKEN" -}}
 
-{{/* Token preflight: emit one warning per build when the token is missing.
-     Deduplication uses hugo.Store (build-scoped scratch) -- the first call
-     observes nil for the sentinel key and warns; subsequent calls observe
-     the sentinel and stay silent. */}}
-{{- if not $token -}}
-  {{- $warnedKey := "github-repo:warned-no-token" -}}
-  {{- if not (hugo.Store.Get $warnedKey) -}}
-    {{- hugo.Store.Set $warnedKey true -}}
-    {{- warnf "[github-repo] HUGO_GITHUB_TOKEN is not set. Unauthenticated GitHub API requests are limited to 60 per hour, which can cause shortcode renders to degrade to the inline chip during a build. Set HUGO_GITHUB_TOKEN to a personal access token (no scopes required for public repositories) to raise the limit to 5,000 per hour. See %s" $position -}}
-  {{- end -}}
-{{- end -}}
-
 {{/* Retry constants. Aggressive defaults per user-approved plan. */}}
 {{- $attempts := 5 -}}
 {{- $perAttemptTimeout := "30s" -}}
@@ -115,6 +105,27 @@
 
 {{/* API base URL. */}}
 {{- $apiBase := printf "https://api.github.com/repos/%s/%s" $owner $repo -}}
+
+{{/* Normalized data dict; starts as the fallback and is replaced on a
+     successful fetch. The inline chip renders only URL-derived fields
+     (owner, repo, and the name override), so it skips the GitHub API
+     entirely -- no request budget is spent and a missing token is
+     irrelevant -- and returns the fallback dict as-is. */}}
+{{- $data := $fallback -}}
+
+{{- if ne $variant "inline" -}}
+
+{{/* Token preflight: emit one warning per build when the token is missing.
+     Deduplication uses hugo.Store (build-scoped scratch) -- the first call
+     observes nil for the sentinel key and warns; subsequent calls observe
+     the sentinel and stay silent. */}}
+{{- if not $token -}}
+  {{- $warnedKey := "github-repo:warned-no-token" -}}
+  {{- if not (hugo.Store.Get $warnedKey) -}}
+    {{- hugo.Store.Set $warnedKey true -}}
+    {{- warnf "[github-repo] HUGO_GITHUB_TOKEN is not set. Unauthenticated GitHub API requests are limited to 60 per hour, which can cause shortcode renders to degrade to the inline chip during a build. Set HUGO_GITHUB_TOKEN to a personal access token (no scopes required for public repositories) to raise the limit to 5,000 per hour. See %s" $position -}}
+  {{- end -}}
+{{- end -}}
 
 {{/* ---------- Endpoint 1 of up to 3: base repo ---------- */}}
 {{- $startSec := int now.Unix -}}
@@ -153,10 +164,9 @@
   {{- end -}}
 {{- end -}}
 
-{{/* Build the normalized data dict. On success, populate from the JSON
-     response; on failure, keep the fallback and emit a single structured
-     warning so operators can act. */}}
-{{- $data := $fallback -}}
+{{/* On success, populate the normalized data dict from the JSON response;
+     on failure, keep the fallback and emit a single structured warning so
+     operators can act. */}}
 {{- if $repoResult.ok -}}
   {{- $json := $repoResult.value -}}
 
@@ -177,7 +187,7 @@
   {{- $lang := or $json.language "" -}}
   {{- $langColor := "" -}}
   {{- with $lang -}}
-    {{- with index hugo.Data.github_lang_colors . -}}
+    {{- with index hugo.Data.github_repo_lang_colors . -}}
       {{- $langColor = . -}}
     {{- end -}}
   {{- end -}}
@@ -227,6 +237,9 @@
     {{- $guidanceHint = "see warning context for guidance" -}}
   {{- end -}}
   {{- warnf "[github-repo] Failed to fetch %s/%s after %d attempt(s) (errorClass=%s, statusCode=%d, message=%q). Hint: %s. See %s" $owner $repo $repoAttemptsUsed $repoResult.errorClass $repoResult.statusCode $repoResult.errorMessage $guidanceHint $position -}}
+{{- end -}}
+
+{{/* Closes the non-inline guard around the token preflight and endpoint 1. */}}
 {{- end -}}
 
 {{/* ---------- Endpoint 2: language composition (variant=lang only) ---------- */}}
@@ -279,7 +292,7 @@
       {{- range $lang, $bytes := $langMap -}}
         {{- $pct := math.Round (math.Mul (math.Div (float $bytes) $total) 100) -}}
         {{- $color := "#858585" -}}
-        {{- with index hugo.Data.github_lang_colors $lang -}}
+        {{- with index hugo.Data.github_repo_lang_colors $lang -}}
           {{- $color = . -}}
         {{- end -}}
         {{- $langSlice = $langSlice | append (dict "name" $lang "pct" $pct "color" $color) -}}

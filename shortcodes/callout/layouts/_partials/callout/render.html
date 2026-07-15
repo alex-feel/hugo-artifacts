@@ -56,7 +56,7 @@
 
 {{- if .collapsible -}}
 <details class="{{ $rootClass }}" data-callout-type="{{ $type }}"{{ with .id }} id="{{ . }}"{{ end }}{{ if .open }} open{{ end }} style="{{ $tone | safeCSS }}">
-  {{/* A <details> is invalid/inaccessible without a <summary>, so the collapsible
+  {{- /* A <details> is invalid/inaccessible without a <summary>, so the collapsible
        form ALWAYS renders one (head.html supplies the disclosure trigger's
        accessible name from the title/label). The caller guarantees a non-empty
        headTitle in this form. */}}

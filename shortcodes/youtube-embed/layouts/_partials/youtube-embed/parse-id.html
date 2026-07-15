@@ -27,12 +27,23 @@
   - youtube.com/playlist?list={LIST}     (playlist; no video id)
   - youtube.com/embed/videoseries?list={LIST}
 
+  When BOTH a raw id and a url are supplied, the raw id wins the video-id slot,
+  and the url is still mined for its `list=` and `t=`/`start=` values so the
+  timing/playlist context it carries is not silently dropped. The url's own
+  video id is surfaced as .urlId so the caller can warn about a conflict.
+  Exception: an id that is itself a pasted URL is demoted to the url slot and
+  REPLACES the url parameter entirely, so a url supplied alongside it is not
+  mined.
+
   Returns: a dict with
   - .id    (string) The 11-char video id, or "" when only a playlist was found.
   - .list  (string) The playlist id, or "" when none was supplied.
   - .start (int)    Start offset in seconds parsed from a `t=`/`start=` in `url`
                     (0 when none). The caller uses it only when the explicit
                     `start` parameter is unset.
+  - .urlId (string) The video id extracted from `url`, or "" when none. Equals
+                    .id when the url supplied the winning id; differs when an
+                    explicit raw id superseded it.
   - .valid (bool)   true when EITHER a syntactically valid 11-char id OR a
                     non-empty playlist id was resolved. The entry shortcode
                     errorf's on .valid=false.
@@ -55,11 +66,12 @@
   {{- $rawId = "" -}}
 {{- end -}}
 
-{{- if $rawId -}}
-  {{/* Explicit raw id wins. It is validated below alongside the URL-derived
-       case, so an out-of-alphabet raw id is reported rather than silently used. */}}
-  {{- $id = $rawId -}}
-{{- else if $url -}}
+{{/* The URL (when present) is ALWAYS mined for its playlist id and start
+     offset, even when an explicit raw id wins the video-id slot -- a t=/list=
+     carried in the url would otherwise be silently dropped. Only the video id
+     extraction is superseded by the raw id. */}}
+{{- $urlId := "" -}}
+{{- if $url -}}
   {{/* Normalize the URL: drop the scheme and any leading www./m. so a single
        set of host-relative patterns matches every subdomain variant. */}}
   {{- $u := $url -}}
@@ -102,13 +114,18 @@
     `/shorts/([A-Za-z0-9_-]{11})`
     `/v/([A-Za-z0-9_-]{11})`
   -}}
-    {{- if not $id -}}
+    {{- if not $urlId -}}
       {{- with findRESubmatch $pattern $u 1 -}}
-        {{- $id = index (index . 0) 1 -}}
+        {{- $urlId = index (index . 0) 1 -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
+
+{{/* Explicit raw id wins the video-id slot; it is validated below alongside
+     the URL-derived case, so an out-of-alphabet raw id is reported rather
+     than silently used. */}}
+{{- $id = or $rawId $urlId -}}
 
 {{/* Final validity: a syntactically valid 11-char id, OR a playlist-only embed.
      findRE returns an empty (falsy) slice when the anchored pattern fails, so a
@@ -119,4 +136,4 @@
 {{- end -}}
 {{- $valid := or $idValid (ne $list "") -}}
 
-{{- return (dict "id" $id "list" $list "start" $start "valid" $valid) -}}
+{{- return (dict "id" $id "list" $list "start" $start "urlId" $urlId "valid" $valid) -}}

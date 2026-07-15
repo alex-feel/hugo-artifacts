@@ -95,8 +95,8 @@ Supply your own poster from the page bundle or the `assets/` directory. It is pr
 
 | Parameter | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `id` | string | one of `id`/`url`/`list` | -- | Raw 11-character video id. Wins over `url` when both are set. |
-| `url` | string | one of `id`/`url`/`list` | -- | Full YouTube URL. Recognized shapes: `youtu.be/`, `watch?v=` (including `&v=`), `embed/`, `v/`, `shorts/`, `youtube-nocookie.com/embed/`, `m.youtube.com`. A `&list=` and a `?t=`/`?start=` offset (`90`, `90s`, `1m30s`, `1h2m3s`) are honored. |
+| `id` | string | one of `id`/`url`/`list` | -- | Raw 11-character video id. Wins the video-id slot over `url` when both are set; the URL's `list=` and `t=`/`start=` are still honored, and a **different** video id carried in `url` is dropped with a build warning. An invalid raw id fails the build even when `url` supplies a playlist. A pasted URL in `id` replaces `url` entirely. |
+| `url` | string | one of `id`/`url`/`list` | -- | Full YouTube URL. Recognized shapes: `youtu.be/`, `watch?v=` (including `&v=`), `embed/`, `v/`, `shorts/`, `youtube-nocookie.com/embed/`, `m.youtube.com`. A `&list=` and a `?t=`/`?start=` offset (`90`, `90s`, `1m30s`, `1h2m3s`) are honored -- also when `id` supplies the video id. |
 | `list` | string | one of `id`/`url`/`list` | -- | Playlist id. Without a video id, embeds the playlist; with a video id, appends `list=`. |
 | `title` | string | no | -- | Accessible button label, injected iframe title, and (with `show-title`) a visible title element. |
 | `start` | int | no | -- | Start offset in seconds. Emits `start=N` (and `t=Ns` on the fallback link). Falls back to a `?t=`/`?start=` carried in `url` when unset; the explicit parameter always wins. |
@@ -146,6 +146,17 @@ The module degrades safely along several independent axes:
 - **Missing remote thumbnail:** a neutral 16:9 box is rendered and the play button still works; the build is never broken.
 - **Network failure during build:** thumbnail fetch failures fall through the tier chain and ultimately to the neutral box, with a single deduplicated `warnf`.
 
+## Localization
+
+All UI strings resolve through i18n keys shipped in the module's `i18n/` directory (English and Russian included). Every lookup falls back to the English string, so a site language without translations still renders correctly. Override any key in the consuming site's own `i18n/<lang>.toml` to translate or reword:
+
+| Key | English value | Used for |
+| --- | --- | --- |
+| `youtube_embed_play_video` | `Play video: {{ . }}` | Play-button `aria-label` when a `title` is given (`{{ . }}` is the title) |
+| `youtube_embed_play_video_untitled` | `Play video` | Play-button `aria-label` without a `title` |
+| `youtube_embed_watch_on_youtube` | `Watch on YouTube` | JS-off fallback link text without a `title` |
+| `youtube_embed_player_title` | `YouTube video player` | Injected iframe `title` without a `title` (carried via `data-title`) |
+
 ## Styling
 
 The module outputs unstyled semantic HTML. All visual presentation is the consuming site's responsibility.
@@ -168,6 +179,18 @@ The facade needs an aspect box so the poster and the injected iframe fill a stab
 
 Everything else -- the play button's appearance, hover and focus states, the poster fit, the optional visible title, the fallback link's visibility -- is yours to design.
 
+### Typography wrappers
+
+When the shortcode renders inside a prose/typography container (for example Tailwind Typography, whose `:where(picture)`/`:where(img)` defaults add vertical margins), those element defaults hit `youtube-embed__picture`, `youtube-embed__image`, and the injected `youtube-embed__iframe`, which can break the 16:9 box with stray bands or offsets. Reset the margins inside the facade:
+
+```css
+.youtube-embed__picture,
+.youtube-embed__image,
+.youtube-embed__iframe {
+  margin: 0;
+}
+```
+
 ### CSS hooks
 
 Every element uses BEM naming under the `youtube-embed` block:
@@ -183,6 +206,7 @@ Every element uses BEM naming under the `youtube-embed` block:
 | `data-video-id` | 11-char id | Video identification (absent for a playlist-only embed) |
 | `data-playlist-id` | playlist id | Present when a playlist is embedded or appended |
 | `data-embed-url` | full nocookie embed URL | The exact URL the script uses to build the iframe on click |
+| `data-title` | iframe title | The `title` the script applies to the injected iframe (the video title, or the localized generic player label when untitled) |
 | `data-poster-tier` | `local`/`maxres`/`hq`/`default`/`none` | Which poster tier was resolved (useful for diagnostics or styling the no-poster state) |
 
 ### Icons
@@ -198,6 +222,9 @@ shortcodes/youtube-embed/
   assets/
     js/
       youtube-embed.js              # Light-DOM click-to-load enhancement (bundled by js.Build)
+  i18n/
+    en.toml                         # English UI strings (the fallback defaults)
+    ru.toml                         # Russian UI strings
   layouts/
     _shortcodes/
       youtube-embed.html            # Entry: param extraction, id parse/validate, dispatch

@@ -25,15 +25,21 @@
                           (e.g., "30s"). Defaults to "30s" when empty.
 
   Output (returned dict):
-  - .ok (bool)              true when the response was 2xx; false otherwise.
-  - .value (any)             Unmarshaled JSON when .ok; nil otherwise.
-  - .statusCode (int)        HTTP status code. 200 for success; 0 for network
+  - .ok (bool)              true when the response was 2xx and its body
+                             decoded to a usable (non-empty, non-null) JSON
+                             payload; false otherwise.
+  - .value (any)             The decoded JSON payload when .ok; nil otherwise.
+  - .statusCode (int)        HTTP status code. The actual 2xx status (202 for
+                             a still-computing /stats/participation answer)
+                             on the success and parse paths; 0 for network
                              failure (no response received); 404 for the nil
                              branch of resources.GetRemote.
   - .headers (map)           Selected response headers when responseHeaders
                              was honored by Hugo. Empty dict on the nil-branch
                              404 path (no .Data is exposed there).
-  - .errorClass (string)     Empty when .ok; otherwise as set by
+  - .errorClass (string)     Empty when .ok; "parse" for a 2xx response
+                             without a usable JSON payload (undecodable,
+                             empty, or null body); otherwise as set by
                              github-repo/classify-error.html.
   - .errorMessage (string)   Short diagnostic when not .ok; empty on success.
   - .waitHintSeconds (int)   Wait-until-reset hint for rate-limit classes; 0
@@ -127,25 +133,53 @@
       "waitHintSeconds" $cls.waitHintSeconds
     -}}
   {{- else with .Value -}}
-    {{/* Success path. A 2xx response that returns invalid JSON is treated
-         as a hard error -- such a condition indicates a server/Hugo bug,
-         not a transient failure worth retrying. */}}
-    {{- $json := . | transform.Unmarshal -}}
+    {{/* Success path. The raw body is decoded with an explicit JSON format
+         (no media-type inference). A 2xx response without a usable JSON
+         payload -- an undecodable, empty, or null body; notably the HTTP 202
+         "statistics are being computed" answer of /stats/participation --
+         degrades to a failed "parse" attempt that the outer loop may retry,
+         instead of failing the build or masquerading as data. The blank-body
+         pre-check matters because an empty string decodes to nil WITHOUT an
+         error, which a bare try-wrap would misreport as success. */}}
+    {{- $raw := .Content -}}
+    {{- $sc := 200 -}}
     {{- $sucHdrs := dict -}}
     {{- with .Data -}}
+      {{- with .StatusCode -}}
+        {{- $sc = . -}}
+      {{- end -}}
       {{- with .Headers -}}
         {{- $sucHdrs = . -}}
       {{- end -}}
     {{- end -}}
-    {{- $result = dict
-      "ok" true
-      "value" $json
-      "statusCode" 200
-      "headers" $sucHdrs
-      "errorClass" ""
-      "errorMessage" ""
-      "waitHintSeconds" 0
-    -}}
+    {{- $decoded := "" -}}
+    {{- if ne (trim $raw " \t\n\r") "" -}}
+      {{- $parsed := try (transform.Unmarshal (dict "format" "json") $raw) -}}
+      {{- if not $parsed.Err -}}
+        {{- $decoded = $parsed.Value -}}
+      {{- end -}}
+    {{- end -}}
+    {{- if $decoded -}}
+      {{- $result = dict
+        "ok" true
+        "value" $decoded
+        "statusCode" $sc
+        "headers" $sucHdrs
+        "errorClass" ""
+        "errorMessage" ""
+        "waitHintSeconds" 0
+      -}}
+    {{- else -}}
+      {{- $result = dict
+        "ok" false
+        "value" nil
+        "statusCode" $sc
+        "headers" $sucHdrs
+        "errorClass" "parse"
+        "errorMessage" (printf "HTTP %d without a usable JSON payload" $sc)
+        "waitHintSeconds" 0
+      -}}
+    {{- end -}}
   {{- else -}}
     {{/* Nil branch: HTTP 404 (resources.GetRemote returns nil). */}}
     {{- $result = dict
