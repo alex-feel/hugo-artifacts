@@ -59,18 +59,24 @@
      entries under canonicalized casing that differs from the requested casing,
      so we match on the lower-cased key and read the first value. Retry-After
      legally carries either delay-seconds or an HTTP-date (RFC 9110); only the
-     numeric form is usable as a wait hint, so the cast is wrapped in try and
-     the date form falls through to the RateLimit `t` delta or the 60-second
-     default. */}}
+     numeric form is usable as a wait hint. Leading zeros are stripped first
+     so the base-0 cast cannot read a zero-padded value as octal (int "011"
+     -> 9) or die on an invalid octal digit (int "08" is a fatal cast); an
+     all-zero value trims to the empty string and is skipped. The try absorbs
+     the HTTP-date form and any other residual unparseable value, falling
+     through to the RateLimit `t` delta or the 60-second default. */}}
 {{- $retryAfter := 0 -}}
 {{- $rateLimitRaw := "" -}}
 {{- range $k, $v := $headers -}}
   {{- $lk := lower $k -}}
   {{- if eq $lk "retry-after" -}}
     {{- with index $v 0 -}}
-      {{- with try (int .) -}}
-        {{- with .Value -}}
-          {{- $retryAfter = . -}}
+      {{- $val := strings.TrimLeft "0" (trim . " \t") -}}
+      {{- if $val -}}
+        {{- with try (int $val) -}}
+          {{- with .Value -}}
+            {{- $retryAfter = . -}}
+          {{- end -}}
         {{- end -}}
       {{- end -}}
     {{- end -}}
@@ -88,14 +94,20 @@
 {{- $rateLimitReset := 0 -}}
 {{- with $rateLimitRaw -}}
   {{- with findRESubmatch `(?:^|[\s";,])t=(\d+)` . 1 -}}
-    {{- $digits := index (index . 0) 1 -}}
     {{/* Strip leading zeros before the int cast: Hugo's `int` uses base-0
          parsing, so a leading-zero string is read as octal (int "011" -> 9)
-         and an invalid octal digit is a FATAL cast (int "08" errors). TrimLeft
-         protects against both, and its all-zero edge case is safe: TrimLeft
-         "0" "0" yields "" and int "" yields 0, correctly falling through to
-         the 60-second default. */}}
-    {{- $rateLimitReset = int (strings.TrimLeft "0" $digits) -}}
+         and an invalid octal digit is a FATAL cast (int "08" errors). An
+         all-zero value (t=0) trims to the empty string and is skipped,
+         falling through to the 60-second default. The try absorbs any
+         residual unparseable value (e.g. an overflowing digit run). */}}
+    {{- $digits := strings.TrimLeft "0" (index (index . 0) 1) -}}
+    {{- if $digits -}}
+      {{- with try (int $digits) -}}
+        {{- with .Value -}}
+          {{- $rateLimitReset = . -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 
