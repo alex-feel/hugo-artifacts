@@ -160,7 +160,7 @@ Hugo templates have no sleep primitive, so true backoff between outer attempts i
 | `not-found` | HTTP 404 (Hugo's `nil` branch from `resources.GetRemote`) | Early break -- resource is genuinely missing. |
 | `server` | HTTP 5xx | Retry up to `attempts` or `overallBudgetSec`, whichever comes first. |
 | `network` | No HTTP response (DNS failure, connection refused, host timeout) | Retry up to `attempts` or `overallBudgetSec`, whichever comes first. |
-| `parse` | 2xx response without a usable JSON payload -- an undecodable, empty, or null body (notably the HTTP 202 "statistics are being computed" answer from `/stats/participation`) | Retry up to `attempts` or `overallBudgetSec` -- the statistics computation often completes between attempts. |
+| `parse` | 2xx response whose body is not a decodable JSON object or array -- blank, undecodable, null, or scalar (notably the empty-body HTTP 202 "statistics are being computed" answer from `/stats/participation`); `{}` and `[]` are valid payloads | Retry up to `attempts` or `overallBudgetSec` -- the statistics computation often completes between attempts. |
 | `other` | Anything else | Retry up to `attempts` or `overallBudgetSec`, whichever comes first. |
 
 The first attempt always runs regardless of the initial classification (the early-break check is gated on attempt > 1). On retry exhaustion -- whether by `attempts` count, `overallBudgetSec` cap, or early break -- the widget falls through to the graceful degradation path described below.
@@ -287,7 +287,7 @@ shortcodes/github-repo/
         fetch.html                  # API fetching, retry loop, data normalization
         fetch-once.html             # Single-attempt fetch (normalized result dict)
         classify-error.html         # HTTP error -> (errorClass, waitHintSeconds, errorMessage)
-        compact-number.html         # Number formatting (1500 -> "1.5k"; no tier promotion: 999950-999999 -> "1000k")
+        compact-number.html         # Number formatting (1500 -> "1.5k"; a rounding carry promotes tiers: 999950 -> "1M")
         relative-time.html          # Timestamp formatting (e.g., "3 days ago")
         icon.html                   # Centralized SVG icon rendering
         inline.html                 # V1 inline chip

@@ -21,7 +21,8 @@
       * Omitted  -> the canonical type label (i18n-able), passed through `title`
         casing, e.g. "warning" -> "Warning".
       * Supplied -> emitted VERBATIM (never re-cased), so "iOS quirks" stays
-        "iOS quirks".
+        "iOS quirks". A non-string value is stringified (title=123 renders
+        "123").
       * title="" -> suppresses the head entirely (icon + title row omitted).
   - collapsible (bool): render as a native <details>/<summary> disclosure.
     Truthy tokens are true/1/yes/on in any casing; falsy tokens are
@@ -34,16 +35,18 @@
     "alert"/"status" ONLY for genuinely dynamic, client-updated notices --
     they are live regions and would make assistive tech announce static prose.
     "none" emits no role attribute.
-  - icon: icon override. A first-class icon NAME (rendered via icon.html), a
-    single emoji (emitted as text), or an image reference rendered as <img>.
-    A value counts as an image reference only when it contains "/", starts
-    with http:// or https://, or ends in a known image extension (svg, png,
-    jpg, jpeg, gif, webp, avif, ico); any other value -- including a dotted
-    name like "brand.v2" -- is a glyph name. Local references resolve as a
-    page resource first, then a global resource; remote URLs are fetched at
-    build time and republished under the site's own origin. icon=false
-    suppresses the icon. When omitted, first-class types use their default
-    glyph and custom/unknown types render no icon.
+  - icon: icon override. A first-class icon NAME (rendered via icon.html,
+    matched case-insensitively), a single emoji (emitted as text), or an
+    image reference rendered as <img>. A value counts as an image reference
+    only when it contains "/", starts with http:// or https://, or ends in a
+    known image extension (svg, png, jpg, jpeg, jpe, jif, jfif, gif, webp,
+    avif, ico, bmp, tif, tiff, heic, heif -- the extensions Hugo's image
+    media types cover, plus ico); any other value -- including a dotted name
+    like "brand.v2" -- is a glyph name. Local references resolve as a page
+    resource first, then a global resource; remote URLs are fetched at build
+    time and republished under the site's own origin. icon=false suppresses
+    the icon. When omitted, first-class types use their default glyph and
+    custom/unknown types render no icon.
   - id (string): id attribute on the root element (for anchoring/linking).
   - class (string): extra class(es) appended to the root element.
 
@@ -76,36 +79,39 @@
 {{- if .IsNamedParams -}}
   {{- if isset .Params "title" -}}
     {{- $titlePresent = true -}}
-    {{- $title = .Get "title" -}}
+    {{- $title = printf "%v" (.Get "title") -}}
   {{- end -}}
 {{- else if ge (len .Params) 2 -}}
   {{- $titlePresent = true -}}
-  {{- $title = .Get 1 -}}
+  {{- $title = printf "%v" (.Get 1) -}}
 {{- end -}}
 
 {{/* Boolean parameters accept true/1/yes/on in any casing (string or bare
-     bool -- printf "%v" folds both into one comparable string form), and
-     false/0/no/off or omission for false. An unrecognized token coerces to
-     false with a one-shot deduplicated warning, matching the module's
-     warn-on-bad-input convention for type, role, and icon. */}}
+     bool -- printf "%v" folds both into one comparable string form), with
+     surrounding whitespace trimmed, and false/0/no/off or omission for
+     false. An unrecognized token coerces to false with a one-shot
+     deduplicated warning that echoes the author's original value, matching
+     the module's warn-on-bad-input convention for type, role, and icon. */}}
 {{- $truthyTokens := slice "true" "1" "yes" "on" -}}
 {{- $falsyTokens := slice "false" "0" "no" "off" "" -}}
-{{- $collapsibleRaw := lower (printf "%v" (.Get "collapsible" | default false)) -}}
-{{- $collapsible := in $truthyTokens $collapsibleRaw -}}
-{{- if and (not $collapsible) (not (in $falsyTokens $collapsibleRaw)) -}}
-  {{- $warnKey := printf "callout:warned-bool:collapsible:%s" $collapsibleRaw -}}
+{{- $collapsibleInput := printf "%v" (.Get "collapsible" | default false) -}}
+{{- $collapsibleTok := lower (trim $collapsibleInput " \t\n\r") -}}
+{{- $collapsible := in $truthyTokens $collapsibleTok -}}
+{{- if and (not $collapsible) (not (in $falsyTokens $collapsibleTok)) -}}
+  {{- $warnKey := printf "callout:warned-bool:collapsible:%s" $collapsibleTok -}}
   {{- if not (hugo.Store.Get $warnKey) -}}
     {{- hugo.Store.Set $warnKey true -}}
-    {{- warnf "[callout] Ignoring unrecognized collapsible=%q (use true/1/yes/on or false/0/no/off, any casing). Treating it as false. See %s" $collapsibleRaw .Position -}}
+    {{- warnf "[callout] Ignoring unrecognized collapsible=%q (use true/1/yes/on or false/0/no/off, any casing). Treating it as false. See %s" $collapsibleInput .Position -}}
   {{- end -}}
 {{- end -}}
-{{- $openRaw := lower (printf "%v" (.Get "open" | default false)) -}}
-{{- $open := in $truthyTokens $openRaw -}}
-{{- if and (not $open) (not (in $falsyTokens $openRaw)) -}}
-  {{- $warnKey := printf "callout:warned-bool:open:%s" $openRaw -}}
+{{- $openInput := printf "%v" (.Get "open" | default false) -}}
+{{- $openTok := lower (trim $openInput " \t\n\r") -}}
+{{- $open := in $truthyTokens $openTok -}}
+{{- if and (not $open) (not (in $falsyTokens $openTok)) -}}
+  {{- $warnKey := printf "callout:warned-bool:open:%s" $openTok -}}
   {{- if not (hugo.Store.Get $warnKey) -}}
     {{- hugo.Store.Set $warnKey true -}}
-    {{- warnf "[callout] Ignoring unrecognized open=%q (use true/1/yes/on or false/0/no/off, any casing). Treating it as false. See %s" $openRaw .Position -}}
+    {{- warnf "[callout] Ignoring unrecognized open=%q (use true/1/yes/on or false/0/no/off, any casing). Treating it as false. See %s" $openInput .Position -}}
   {{- end -}}
 {{- end -}}
 {{- $roleParam := lower (.Get "role" | default "") -}}
@@ -186,14 +192,16 @@
      - icon is a single emoji (one grapheme, non-ASCII) -> emit as text.
      - icon is an image reference -> resolve to an <img>. A value counts as an
        image reference ONLY when it contains "/", starts with http:// or
-       https://, or ends in a known image extension (svg, png, jpg, jpeg, gif,
-       webp, avif, ico) -- a bare dotted name such as "brand.v2" is a glyph
-       name, not a path. Remote URLs are fetched at build time and republished
-       under the site's own origin; local values resolve via page resources
-       then global resources. A failed fetch or lookup degrades to no icon
-       with a one-shot warning -- the build never breaks.
-     - icon is a bare name -> render via icon.html (works for first-class
-       names and lets a custom type borrow a built-in glyph).
+       https://, or ends in a known image extension (svg, png, jpg, jpeg,
+       jpe, jif, jfif, gif, webp, avif, ico, bmp, tif, tiff, heic, heif) --
+       a bare dotted name such as "brand.v2" is a glyph name, not a path.
+       Remote URLs are fetched at build time and republished under the site's
+       own origin; local values resolve via page resources then global
+       resources. A failed fetch or lookup degrades to no icon with a
+       one-shot warning -- the build never breaks.
+     - icon is a bare name -> render via icon.html (matched
+       case-insensitively; works for first-class names and lets a custom
+       type borrow a built-in glyph).
      - icon omitted -> default glyph for first-class types, nothing otherwise. */}}
 {{- $iconMode := "default" -}}
 {{- $iconName := $r.iconName -}}
@@ -203,7 +211,7 @@
   {{- $iconStr := trim (printf "%v" $iconParam) " \t\n\r" -}}
   {{- $iconLower := lower $iconStr -}}
   {{- $iconIsRemote := or (hasPrefix $iconLower "http://") (hasPrefix $iconLower "https://") -}}
-  {{- $iconHasImageExt := gt (len (findRE `\.(svg|png|jpe?g|gif|webp|avif|ico)$` $iconLower 1)) 0 -}}
+  {{- $iconHasImageExt := gt (len (findRE `\.(svg|png|jpe?g|jpe|jif|jfif|gif|webp|avif|ico|bmp|tiff?|heic|heif)$` $iconLower 1)) 0 -}}
   {{- if or (in (slice "false" "none" "no" "off") $iconLower) (eq $iconParam false) -}}
     {{- $iconMode = "none" -}}
   {{- else if or $iconIsRemote (in $iconStr "/") $iconHasImageExt -}}
@@ -243,15 +251,16 @@
     {{- $iconMode = "emoji" -}}
     {{- $iconEmoji = $iconStr -}}
   {{- else -}}
-    {{/* A bare ASCII name -> render the named built-in glyph. The glyph set
+    {{/* A bare ASCII name -> render the named built-in glyph, matched
+         case-insensitively like every other token surface. The glyph set
          lives in icon.html alone, so membership is probed by rendering: an
          unknown name yields empty output and degrades to no icon with a
          one-shot warning, keeping an explicit typo visible. */}}
     {{- $iconMode = "name" -}}
-    {{- $iconName = $iconStr -}}
-    {{- if eq (trim (partial "callout/icon.html" (dict "name" $iconStr)) " \t\n\r") "" -}}
+    {{- $iconName = $iconLower -}}
+    {{- if eq (trim (partial "callout/icon.html" (dict "name" $iconLower)) " \t\n\r") "" -}}
       {{- $iconMode = "none" -}}
-      {{- $warnKey := printf "callout:warned-icon:%s" $iconStr -}}
+      {{- $warnKey := printf "callout:warned-icon:%s" $iconLower -}}
       {{- if not (hugo.Store.Get $warnKey) -}}
         {{- hugo.Store.Set $warnKey true -}}
         {{- warnf "[callout] Unknown icon name %q (not a built-in glyph). Rendering without an icon. See %s" $iconStr .Position -}}
