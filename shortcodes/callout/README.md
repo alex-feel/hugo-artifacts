@@ -249,10 +249,10 @@ Override the icon per call with the `icon` parameter:
 - `icon="tip"` -- render a different built-in glyph by name.
 - `icon="🎉"` -- emit a single emoji (rendered as text inside `callout__icon--emoji`).
 - `icon="/images/brand.svg"` -- resolve a page resource, then a global resource, and emit an `<img class="callout__icon--image">`.
-- `icon="https://example.com/brand.svg"` -- fetch the image at build time, republish it under the site's own origin, and emit the same `<img>`. A failed fetch renders without an icon (one deduplicated warning); the build never breaks. Remote fetching works out of the box for the media types Hugo recognizes (`svg`, `png`, `jpg`, `jpeg`, `gif`, `webp`, `avif`); a remote `.ico` needs a custom `ico` media type defined in the consuming site's configuration, because Hugo ships none -- prefer `svg`/`png` for remote icons.
+- `icon="https://example.com/brand.svg"` -- fetch the image at build time, republish it under the site's own origin, and emit the same `<img>`. A failed fetch renders without an icon (one deduplicated warning); the build never breaks. Remote fetching works out of the box for every media type Hugo recognizes (`svg`, `png`, `jpg`, `jpeg`, `jpe`, `jif`, `jfif`, `gif`, `webp`, `avif`, `bmp`, `tif`, `tiff`, `heic`, `heif`); a remote `.ico` needs a custom `ico` media type defined in the consuming site's configuration, because Hugo ships none -- prefer `svg`/`png` for remote icons.
 - `icon=false` -- suppress the icon.
 
-A value counts as an image reference only when it contains `/`, starts with `http://` or `https://`, or ends in a known image extension (`svg`, `png`, `jpg`, `jpeg`, `gif`, `webp`, `avif`, `ico`); any other value -- including a dotted name such as `brand.v2` -- is treated as a glyph name.
+A value counts as an image reference only when it contains `/`, starts with `http://` or `https://`, or ends in a known image extension (`svg`, `png`, `jpg`, `jpeg`, `jpe`, `jif`, `jfif`, `gif`, `webp`, `avif`, `ico`, `bmp`, `tif`, `tiff`, `heic`, `heif`); any other value -- including a dotted name such as `brand.v2` -- is treated as a glyph name, matched case-insensitively.
 
 Custom (unknown) types have no default icon; supply one with `icon=` if you want a glyph.
 
