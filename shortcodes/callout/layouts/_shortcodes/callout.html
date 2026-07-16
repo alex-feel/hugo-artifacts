@@ -45,7 +45,8 @@
     media types cover, plus ico); any other value -- including a dotted name
     like "brand.v2" -- is a glyph name. Local references resolve as a page
     resource first, then a global resource; remote URLs are fetched at build
-    time and republished under the site's own origin. icon=false suppresses
+    time and republished under the site's own origin. icon=false (or any of
+    the tokens "false", "none", "no", "off", "0", "", any casing) suppresses
     the icon. When omitted, first-class types use their default glyph and
     custom/unknown types render no icon.
   - id (string): id attribute on the root element (for anchoring/linking).

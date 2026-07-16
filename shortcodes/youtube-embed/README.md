@@ -99,8 +99,8 @@ Supply your own poster from the page bundle or the `assets/` directory. It is pr
 | `url` | string | one of `id`/`url`/`list` | -- | Full YouTube URL. Recognized shapes: `youtu.be/`, `watch?v=` (including `&v=`), `embed/`, `v/`, `shorts/`, `youtube-nocookie.com/embed/`, `m.youtube.com`. A `&list=` and a `?t=`/`?start=` offset (`90`, `90s`, `1m30s`, `1h2m3s`; the legacy `#t=` fragment form also works) are honored -- also when `id` supplies the video id. |
 | `list` | string | one of `id`/`url`/`list` | -- | Playlist id. Without a video id, embeds the playlist; with a video id, appends `list=`. |
 | `title` | string | no | -- | Accessible button label, injected iframe title, and (with `show-title`) a visible title element. |
-| `start` | int | no | -- | Start offset in seconds. Emits `start=N` (and `t=Ns` on the fallback link). Falls back to a `?t=`/`?start=` carried in `url` when unset or invalid; a valid explicit parameter always wins (a non-numeric or out-of-range value is warned and treated as unset). |
-| `end` | int | no | -- | End offset in seconds. Emits `end=N`. |
+| `start` | int | no | -- | Start offset in seconds. Emits `start=N` (and `t=Ns` on the fallback link). An explicit `0` (quoted or unquoted) counts as set and suppresses a url-carried offset. Values cap at nine digits, matching url-carried components. Falls back to a `?t=`/`?start=` carried in `url` when unset or invalid; a valid explicit parameter always wins (a non-numeric or out-of-range value is warned and treated as unset). |
+| `end` | int | no | -- | End offset in seconds. Emits `end=N`. Values cap at nine digits. |
 | `poster` | string | no | auto | Local poster override (page-resource name or `assets/` path). Highest poster priority. |
 | `params` | string | no | -- | Arbitrary extra player query string appended to the embed URL (e.g. `cc_load_policy=1&hl=fr`). |
 | `loading` | string | no | `lazy` | Poster `<img>` loading attribute (`lazy` or `eager`). |

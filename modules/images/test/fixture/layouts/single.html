@@ -14,6 +14,17 @@
             "dark" "photo-dark.png")))
       }}
     </section>
+    <section id="variants-bad-dims">
+      {{ partial "images/image.html" (dict
+          "page" .
+          "src" "photo-1600.png"
+          "alt" "Art directed scene with an unparseable variant size"
+          "variants" (slice (dict
+            "src" "avatar-512.png"
+            "media" "(max-width: 480px)"
+            "width" "abc")))
+      }}
+    </section>
     {{ $bg := partial "images/src.html" (dict "page" . "src" "photo-1600.png" "width" 800) }}
     <section id="src-demo" data-hero-src="{{ $bg.url }}" data-hero-width="{{ $bg.width }}" data-hero-height="{{ $bg.height }}" data-hero-type="{{ $bg.type }}"></section>
   {{ end }}

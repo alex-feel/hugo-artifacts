@@ -236,6 +236,7 @@ All UI strings resolve through i18n keys shipped in the module's `i18n/` directo
 | `github_repo_type_repository` | `REPOSITORY` | Lang-card eyebrow and hero breadcrumb |
 | `github_repo_updated` | `updated {{ . }}` | Card and hero updated line (`{{ . }}` is the relative time) |
 | `github_repo_view_on_github` | `View on GitHub` | Hero call-to-action |
+| `github_repo_sparkline_title` | `Last 52 weeks of commits` | Hero sparkline tooltip |
 | `github_repo_stat_language` / `_stars` / `_forks` / `_license` | `Language` / `Stars` / `Forks` / `License` | Stats-card labels |
 | `github_repo_stars_word` / `github_repo_forks_word` | `star`/`stars` / `fork`/`forks` (plural forms) | Hero and lang-card count words (raw counts below 1000 select their own plural form; a compact-formatted display such as `1.2k` selects the form of 1000) |
 | `github_repo_just_now` / `github_repo_yesterday` | `just now` / `yesterday` | Relative time |

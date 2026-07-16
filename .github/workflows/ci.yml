@@ -125,6 +125,15 @@ jobs:
           strict: true
 
       - name: EditorConfig conformance
-        uses: editorconfig-checker/action-editorconfig-checker@v2.2.0
-        with:
-          version: 'v3.0.3'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The checker is compiled from the Go module proxy (no dependency on
+          # the GitHub releases API at run time) and executed directly, so
+          # this step both installs AND runs the conformance check. It reads
+          # .ecrc at the repo root, which disables the indent-size dimension:
+          # indentation is governed by Prettier and the template docstring
+          # style, while this check enforces the line endings, charset, final
+          # newline, and trailing whitespace rules from .editorconfig.
+          go install github.com/editorconfig-checker/editorconfig-checker/v3/cmd/editorconfig-checker@v3.0.3
+          "$(go env GOPATH)/bin/editorconfig-checker"
