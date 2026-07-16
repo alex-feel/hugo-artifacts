@@ -42,6 +42,10 @@
                     (query parameter or legacy `#t=` fragment; 0 when none).
                     The caller uses it only when no valid explicit `start`
                     parameter is set.
+  - .startInvalid (bool) true when a url-carried offset was present but had to
+                    be discarded (a component above nine digits or otherwise
+                    out of range); the caller holds .Name/.Position and emits
+                    the warning.
   - .urlId (string) The video id extracted from `url`, or "" when none. Equals
                     .id when the url supplied the winning id; differs when an
                     explicit raw id superseded it.
@@ -59,6 +63,7 @@
 {{- $id := "" -}}
 {{- $list := "" -}}
 {{- $start := 0 -}}
+{{- $startInvalid := false -}}
 
 {{/* A raw id that is itself a URL (defensive: callers sometimes paste a URL
      into id=) is demoted to the url branch so the same extraction logic runs.
@@ -96,21 +101,34 @@
        Every numeric component is stripped of leading zeros before the base-0
        cast, so a zero-padded value is not read as octal (int "011" -> 9) and
        an invalid octal digit (int "08" is a fatal cast) cannot break the
-       build; an all-zero component trims to empty and keeps its 0 default,
-       and the try absorbs an overflowing digit run. */}}
+       build; an all-zero component trims to empty and keeps its 0 default.
+       Every component is capped at nine digits (no real YouTube offset comes
+       close, and the cap keeps the h/m/s sum far inside int64, where an
+       unchecked multiplication would silently wrap); an oversized or
+       unparseable component invalidates the WHOLE offset (a partial sum such
+       as "1h<overflowing>m3s" -> 3603 would be a wrong-but-plausible value)
+       and is surfaced as .startInvalid so the caller can warn -- diagnostics
+       belong to the caller per this partial's contract. */}}
   {{- with findRESubmatch `[?&#](?:t|start)=([0-9hms]+)` $u 1 -}}
     {{- $tval := index (index . 0) 1 -}}
     {{- if findRE `^[0-9]+s?$` $tval 1 -}}
       {{- $sec := strings.TrimLeft "0" (replaceRE `s$` "" $tval) -}}
-      {{- if $sec -}}{{- with try (int $sec) -}}{{- with .Value -}}{{- $start = . -}}{{- end -}}{{- end -}}{{- end -}}
+      {{- if gt (len $sec) 9 -}}
+        {{- $startInvalid = true -}}
+      {{- else if $sec -}}
+        {{- $t := try (int $sec) -}}
+        {{- if $t.Err -}}{{- $startInvalid = true -}}{{- else -}}{{- with $t.Value -}}{{- $start = . -}}{{- end -}}{{- end -}}
+      {{- end -}}
     {{- else -}}
       {{- $h := 0 -}}
       {{- $m := 0 -}}
       {{- $s := 0 -}}
-      {{- with findRESubmatch `([0-9]+)h` $tval 1 -}}{{- $d := strings.TrimLeft "0" (index (index . 0) 1) -}}{{- if $d -}}{{- with try (int $d) -}}{{- with .Value -}}{{- $h = . -}}{{- end -}}{{- end -}}{{- end -}}{{- end -}}
-      {{- with findRESubmatch `([0-9]+)m` $tval 1 -}}{{- $d := strings.TrimLeft "0" (index (index . 0) 1) -}}{{- if $d -}}{{- with try (int $d) -}}{{- with .Value -}}{{- $m = . -}}{{- end -}}{{- end -}}{{- end -}}{{- end -}}
-      {{- with findRESubmatch `([0-9]+)s` $tval 1 -}}{{- $d := strings.TrimLeft "0" (index (index . 0) 1) -}}{{- if $d -}}{{- with try (int $d) -}}{{- with .Value -}}{{- $s = . -}}{{- end -}}{{- end -}}{{- end -}}{{- end -}}
-      {{- $start = add (add (mul $h 3600) (mul $m 60)) $s -}}
+      {{- with findRESubmatch `([0-9]+)h` $tval 1 -}}{{- $d := strings.TrimLeft "0" (index (index . 0) 1) -}}{{- if gt (len $d) 9 -}}{{- $startInvalid = true -}}{{- else if $d -}}{{- $t := try (int $d) -}}{{- if $t.Err -}}{{- $startInvalid = true -}}{{- else -}}{{- with $t.Value -}}{{- $h = . -}}{{- end -}}{{- end -}}{{- end -}}{{- end -}}
+      {{- with findRESubmatch `([0-9]+)m` $tval 1 -}}{{- $d := strings.TrimLeft "0" (index (index . 0) 1) -}}{{- if gt (len $d) 9 -}}{{- $startInvalid = true -}}{{- else if $d -}}{{- $t := try (int $d) -}}{{- if $t.Err -}}{{- $startInvalid = true -}}{{- else -}}{{- with $t.Value -}}{{- $m = . -}}{{- end -}}{{- end -}}{{- end -}}{{- end -}}
+      {{- with findRESubmatch `([0-9]+)s` $tval 1 -}}{{- $d := strings.TrimLeft "0" (index (index . 0) 1) -}}{{- if gt (len $d) 9 -}}{{- $startInvalid = true -}}{{- else if $d -}}{{- $t := try (int $d) -}}{{- if $t.Err -}}{{- $startInvalid = true -}}{{- else -}}{{- with $t.Value -}}{{- $s = . -}}{{- end -}}{{- end -}}{{- end -}}{{- end -}}
+      {{- if not $startInvalid -}}
+        {{- $start = add (add (mul $h 3600) (mul $m 60)) $s -}}
+      {{- end -}}
     {{- end -}}
   {{- end -}}
 
@@ -146,4 +164,4 @@
 {{- end -}}
 {{- $valid := or $idValid (ne $list "") -}}
 
-{{- return (dict "id" $id "list" $list "start" $start "urlId" $urlId "valid" $valid) -}}
+{{- return (dict "id" $id "list" $list "start" $start "startInvalid" $startInvalid "urlId" $urlId "valid" $valid) -}}
