@@ -160,7 +160,7 @@ Hugo templates have no sleep primitive, so true backoff between outer attempts i
 | `not-found` | HTTP 404 (Hugo's `nil` branch from `resources.GetRemote`) | Early break -- resource is genuinely missing. |
 | `server` | HTTP 5xx | Retry up to `attempts` or `overallBudgetSec`, whichever comes first. |
 | `network` | No HTTP response (DNS failure, connection refused, host timeout) | Retry up to `attempts` or `overallBudgetSec`, whichever comes first. |
-| `parse` | 2xx response whose body is not a decodable JSON object or array -- blank, undecodable, null, or scalar (notably the empty-body HTTP 202 "statistics are being computed" answer from `/stats/participation`); `{}` and `[]` are valid payloads | Retry up to `attempts` or `overallBudgetSec` -- the statistics computation often completes between attempts. |
+| `parse` | 2xx response that is not a data-bearing JSON object -- an array, blank, undecodable, null, or scalar body, or any HTTP 202 (the "statistics are being computed" answer from `/stats/participation` carries no data yet); `{}` is a valid payload | Retry up to `attempts` or `overallBudgetSec` -- the statistics computation often completes between attempts. |
 | `other` | Anything else | Retry up to `attempts` or `overallBudgetSec`, whichever comes first. |
 
 The first attempt always runs regardless of the initial classification (the early-break check is gated on attempt > 1). On retry exhaustion -- whether by `attempts` count, `overallBudgetSec` cap, or early break -- the widget falls through to the graceful degradation path described below.
