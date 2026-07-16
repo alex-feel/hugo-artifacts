@@ -6,16 +6,24 @@
 
   Context: an ISO 8601 date string (e.g., "2026-04-21T10:30:00Z")
 
-  Returns a string like "3 days ago", "2 months ago", "just now".
+  Returns a string like "3 days ago", "2 months ago", "just now", or "" when
+  the timestamp is unparseable -- the input is remote-derived, so a malformed
+  value degrades to an empty string instead of failing the build.
 */}}
 
-{{- $parsed := time.AsTime . -}}
-{{- $now := now -}}
-{{- $diff := $now.Sub $parsed -}}
-{{- $hours := $diff.Hours -}}
-
 {{- $result := "" -}}
-{{- if lt $hours 1.0 -}}
+{{- $t := try (time.AsTime .) -}}
+{{- $hours := 0.0 -}}
+{{- $parsedOk := false -}}
+{{- if not $t.Err -}}
+  {{- with $t.Value -}}
+    {{- $hours = (now.Sub .).Hours -}}
+    {{- $parsedOk = true -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if not $parsedOk -}}
+{{- else if lt $hours 1.0 -}}
   {{- $result = "just now" -}}
 {{- else if lt $hours 24.0 -}}
   {{- $h := math.Floor $hours -}}
