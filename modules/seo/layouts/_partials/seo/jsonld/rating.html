@@ -11,108 +11,137 @@
                      best_rating, worst_rating }
         review:    { author, rating_value, best_rating, worst_rating,
                      date_published, body, positive_notes[], negative_notes[] }
-  - .page (Page)    the current page (for numeric coercion context only).
+  - .page (Page)    the current page, whose RelPermalink identifies the page
+                    in numeric-parse warn messages.
 
-  Rules: numbers emit as numbers (float/int coercion). A review author name is
-  truncated to fewer than 100 characters (Google limit). positiveNotes /
-  negativeNotes become ItemList of ListItem.
+  Rules: numbers emit as numbers, each parsed through lib/num.html.
+  rating_value is REQUIRED in both kinds (Google rejects an AggregateRating
+  or a Review rating without it): when it is missing or unparseable the WHOLE
+  fragment is dropped (empty dict; lib/num.html warns once), so the callers'
+  presence gates degrade instead of emitting a schema-invalid node. The
+  optional numerics (review_count, rating_count, best_rating, worst_rating)
+  drop only that single property with a deduped warn while the fragment still
+  emits. A review author name is truncated to fewer than 100 characters
+  (Google limit). positiveNotes / negativeNotes become ItemList of ListItem.
 
   Return value: the fragment dict WITHOUT @context, or an EMPTY dict (dict)
-  when the required data is missing. One terminal return.
+  when the required data is missing or unparseable. One terminal return.
 */}}
 
 {{- $ctx := . -}}
 {{- $kind := $ctx.kind -}}
 {{- $data := $ctx.data | default dict -}}
+{{- $page := $ctx.page -}}
 {{- $result := dict -}}
 
 {{- if eq $kind "aggregate" -}}
-  {{/* AggregateRating: ratingValue plus a count (reviewCount preferred, else
+  {{/* AggregateRating: ratingValue (REQUIRED; an unparseable value drops the
+       whole fragment) plus a count (reviewCount preferred, else
        ratingCount). */}}
   {{- $ratingValue := $data.rating_value | default $data.value -}}
   {{- $reviewCount := $data.review_count -}}
   {{- $ratingCount := $data.rating_count -}}
   {{- if $ratingValue -}}
-    {{- $node := dict
-      "@type" "AggregateRating"
-      "ratingValue" (float $ratingValue)
-    -}}
-    {{- with $reviewCount -}}
-      {{- $node = merge $node (dict "reviewCount" (int .)) -}}
-    {{- end -}}
-    {{- if not $reviewCount -}}
-      {{- with $ratingCount -}}
-        {{- $node = merge $node (dict "ratingCount" (int .)) -}}
+    {{- $v := partial "seo/lib/num.html" (dict "value" $ratingValue "mode" "float" "field" "aggregate_rating.rating_value" "page" $page) -}}
+    {{- if ne (printf "%v" $v) "" -}}
+      {{- $node := dict "@type" "AggregateRating" "ratingValue" $v -}}
+      {{- with $reviewCount -}}
+        {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "int" "field" "aggregate_rating.review_count" "page" $page) -}}
+        {{- if ne (printf "%v" $v) "" -}}
+          {{- $node = merge $node (dict "reviewCount" $v) -}}
+        {{- end -}}
       {{- end -}}
+      {{- if not $reviewCount -}}
+        {{- with $ratingCount -}}
+          {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "int" "field" "aggregate_rating.rating_count" "page" $page) -}}
+          {{- if ne (printf "%v" $v) "" -}}
+            {{- $node = merge $node (dict "ratingCount" $v) -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+      {{- with $data.best_rating -}}
+        {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "float" "field" "aggregate_rating.best_rating" "page" $page) -}}
+        {{- if ne (printf "%v" $v) "" -}}
+          {{- $node = merge $node (dict "bestRating" $v) -}}
+        {{- end -}}
+      {{- end -}}
+      {{- with $data.worst_rating -}}
+        {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "float" "field" "aggregate_rating.worst_rating" "page" $page) -}}
+        {{- if ne (printf "%v" $v) "" -}}
+          {{- $node = merge $node (dict "worstRating" $v) -}}
+        {{- end -}}
+      {{- end -}}
+      {{- $result = $node -}}
     {{- end -}}
-    {{- with $data.best_rating -}}
-      {{- $node = merge $node (dict "bestRating" (float .)) -}}
-    {{- end -}}
-    {{- with $data.worst_rating -}}
-      {{- $node = merge $node (dict "worstRating" (float .)) -}}
-    {{- end -}}
-    {{- $result = $node -}}
   {{- end -}}
 {{- else if eq $kind "review" -}}
-  {{/* Review: reviewRating.ratingValue required; author name < 100 chars. */}}
+  {{/* Review: reviewRating.ratingValue is REQUIRED, so an unparseable
+       rating_value skips the whole Review fragment; author name < 100
+       chars. */}}
   {{- $ratingValue := $data.rating_value -}}
   {{- if $ratingValue -}}
-    {{- $node := dict "@type" "Review" -}}
+    {{- $v := partial "seo/lib/num.html" (dict "value" $ratingValue "mode" "float" "field" "review.rating_value" "page" $page) -}}
+    {{- if ne (printf "%v" $v) "" -}}
+      {{- $node := dict "@type" "Review" -}}
 
-    {{/* reviewRating (Rating) with numeric ratingValue. */}}
-    {{- $rr := dict
-      "@type" "Rating"
-      "ratingValue" (float $ratingValue)
-    -}}
-    {{- with $data.best_rating -}}
-      {{- $rr = merge $rr (dict "bestRating" (float .)) -}}
-    {{- end -}}
-    {{- with $data.worst_rating -}}
-      {{- $rr = merge $rr (dict "worstRating" (float .)) -}}
-    {{- end -}}
-    {{- $node = merge $node (dict "reviewRating" $rr) -}}
+      {{/* reviewRating (Rating) with the numeric ratingValue. */}}
+      {{- $rr := dict "@type" "Rating" "ratingValue" $v -}}
+      {{- with $data.best_rating -}}
+        {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "float" "field" "review.best_rating" "page" $page) -}}
+        {{- if ne (printf "%v" $v) "" -}}
+          {{- $rr = merge $rr (dict "bestRating" $v) -}}
+        {{- end -}}
+      {{- end -}}
+      {{- with $data.worst_rating -}}
+        {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "float" "field" "review.worst_rating" "page" $page) -}}
+        {{- if ne (printf "%v" $v) "" -}}
+          {{- $rr = merge $rr (dict "worstRating" $v) -}}
+        {{- end -}}
+      {{- end -}}
+      {{- $node = merge $node (dict "reviewRating" $rr) -}}
 
-    {{/* author (Person) with name truncated to fewer than 100 characters. */}}
-    {{- with $data.author -}}
-      {{- $authorName := . -}}
-      {{- if gt (len $authorName) 99 -}}
-        {{- $authorName = substr $authorName 0 99 -}}
+      {{/* author (Person) with name truncated to fewer than 100 characters. */}}
+      {{- with $data.author -}}
+        {{- $authorName := . -}}
+        {{- if gt (len $authorName) 99 -}}
+          {{- $authorName = substr $authorName 0 99 -}}
+        {{- end -}}
+        {{- $node = merge $node (dict "author" (dict "@type" "Person" "name" $authorName)) -}}
       {{- end -}}
-      {{- $node = merge $node (dict "author" (dict "@type" "Person" "name" $authorName)) -}}
-    {{- end -}}
 
-    {{- with $data.date_published -}}
-      {{- $node = merge $node (dict "datePublished" .) -}}
-    {{- end -}}
-    {{- with $data.body -}}
-      {{- $node = merge $node (dict "reviewBody" .) -}}
-    {{- end -}}
+      {{- with $data.date_published -}}
+        {{- $node = merge $node (dict "datePublished" .) -}}
+      {{- end -}}
+      {{- with $data.body -}}
+        {{- $node = merge $node (dict "reviewBody" .) -}}
+      {{- end -}}
 
-    {{/* positiveNotes / negativeNotes as ItemList of ListItem. */}}
-    {{- with $data.positive_notes -}}
-      {{- $items := slice -}}
-      {{- $pos := 0 -}}
-      {{- range . -}}
-        {{- $pos = add $pos 1 -}}
-        {{- $items = $items | append (dict "@type" "ListItem" "position" $pos "name" .) -}}
+      {{/* positiveNotes / negativeNotes as ItemList of ListItem. */}}
+      {{- with $data.positive_notes -}}
+        {{- $items := slice -}}
+        {{- $pos := 0 -}}
+        {{- range . -}}
+          {{- $pos = add $pos 1 -}}
+          {{- $items = $items | append (dict "@type" "ListItem" "position" $pos "name" .) -}}
+        {{- end -}}
+        {{- with $items -}}
+          {{- $node = merge $node (dict "positiveNotes" (dict "@type" "ItemList" "itemListElement" .)) -}}
+        {{- end -}}
       {{- end -}}
-      {{- with $items -}}
-        {{- $node = merge $node (dict "positiveNotes" (dict "@type" "ItemList" "itemListElement" .)) -}}
+      {{- with $data.negative_notes -}}
+        {{- $items := slice -}}
+        {{- $pos := 0 -}}
+        {{- range . -}}
+          {{- $pos = add $pos 1 -}}
+          {{- $items = $items | append (dict "@type" "ListItem" "position" $pos "name" .) -}}
+        {{- end -}}
+        {{- with $items -}}
+          {{- $node = merge $node (dict "negativeNotes" (dict "@type" "ItemList" "itemListElement" .)) -}}
+        {{- end -}}
       {{- end -}}
-    {{- end -}}
-    {{- with $data.negative_notes -}}
-      {{- $items := slice -}}
-      {{- $pos := 0 -}}
-      {{- range . -}}
-        {{- $pos = add $pos 1 -}}
-        {{- $items = $items | append (dict "@type" "ListItem" "position" $pos "name" .) -}}
-      {{- end -}}
-      {{- with $items -}}
-        {{- $node = merge $node (dict "negativeNotes" (dict "@type" "ItemList" "itemListElement" .)) -}}
-      {{- end -}}
-    {{- end -}}
 
-    {{- $result = $node -}}
+      {{- $result = $node -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 

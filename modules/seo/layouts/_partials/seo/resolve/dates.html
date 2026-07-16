@@ -1,7 +1,8 @@
 {{/*
   Resolves the page's dates once for every surface, formatted through
-  lib/time.html (the single RFC 3339 authority). Pure value chooser: no HTML,
-  no side effects.
+  lib/time.html (the single RFC 3339 authority). Pure value chooser: no HTML;
+  the only side effects are the deduplicated warns lib/time.html emits when
+  an override date value is unparseable.
 
   Context: the current Page, passed as the dot.
 
@@ -28,7 +29,7 @@
 {{- with $page.Param "seo.date_published" -}}
   {{- $publishedRaw = . -}}
 {{- end -}}
-{{- $published := partial "seo/lib/time.html" $publishedRaw -}}
+{{- $published := partial "seo/lib/time.html" (dict "value" $publishedRaw "field" "seo.date_published" "page" $page) -}}
 
 {{/* modified: explicit override, else native .Lastmod; dropped when it equals
      the published time. */}}
@@ -36,7 +37,7 @@
 {{- with $page.Param "seo.date_modified" -}}
   {{- $modifiedRaw = . -}}
 {{- end -}}
-{{- $modified := partial "seo/lib/time.html" $modifiedRaw -}}
+{{- $modified := partial "seo/lib/time.html" (dict "value" $modifiedRaw "field" "seo.date_modified" "page" $page) -}}
 {{- if eq $modified $published -}}
   {{- $modified = "" -}}
 {{- end -}}
@@ -46,7 +47,7 @@
 {{- with $page.Param "seo.profile.date_created" -}}
   {{- $createdRaw = . -}}
 {{- end -}}
-{{- $created := partial "seo/lib/time.html" $createdRaw -}}
+{{- $created := partial "seo/lib/time.html" (dict "value" $createdRaw "field" "seo.profile.date_created" "page" $page) -}}
 
 {{- return dict
   "published" $published

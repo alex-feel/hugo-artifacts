@@ -1,0 +1,161 @@
+{{/*
+  seo/lib/num.html -- guarded numeric parser (lib tier).
+
+  Purpose: parses ONE author-supplied value as a DECIMAL number, returning ""
+  when the value does not resolve to a plain decimal number so the caller can
+  drop the property (or token) instead of crashing.
+
+  NATIVE numbers (int/uint/float values -- unquoted front-matter numbers; ALL
+  JSON front-matter numbers arrive as float64) take a fast path: the value is
+  cast directly via `try` (`int` in int mode, truncating fractional floats
+  toward zero; `float` in float mode) and only the sign policy applies to the
+  cast result. The fast path exists because Go's %v stringification renders
+  float64 values >= 1e6 and < 1e-4 in exponent notation ("2.5e+06"), a
+  spelling the string pipeline's decimal regex would wrongly reject; native
+  numbers carry no octal or overflow-string hazard, which is the only reason
+  that regex exists. A non-finite float (NaN, +Inf, -Inf), an int-mode float
+  outside int64 range, and a failed cast all take the warn+"" failure path.
+
+  STRING values go through the guarded pipeline. Hugo's `int` casts strings
+  with base-0 (strconv) semantics: a leading zero makes the value octal, so
+  "010" silently becomes 8, while "08"/"09" (invalid octal digits) and
+  int64-overflowing digit strings RAISE A TEMPLATE ERROR that breaks the
+  build. String values are therefore validated against a strict decimal regex
+  BEFORE any cast, leading zeros are stripped from the integer part (author
+  intent is always decimal), and the digit count is capped (no overflow).
+
+  Context (dict):
+  - .value (any)     The raw value; native numbers cast directly, all other
+                     values are stringified with printf "%v" and trimmed of
+                     surrounding whitespace here.
+  - .mode  (string)  "int" (default) accepts ^\d{1,15}$ for strings and
+                     truncates fractional native floats; "float" accepts
+                     ^\d{1,15}(\.\d{1,10})?$ and returns a float64.
+  - .sign  (bool)    Default false. When true a negative result is accepted:
+                     a native negative number passes through, and ONE leading
+                     "-" or "+" is accepted before a string's digits ("+" is
+                     normalized away, "-" is preserved). When false any
+                     negative value fails.
+  - .field (string)  The front-matter key name, used in the warn message and
+                     the dedup key.
+  - .page  (page)    The current page, whose RelPermalink identifies the page
+                     in the deduplicated warn message; optional and
+                     empty-safe.
+  - .what  (string)  The noun the warn reports as dropped; defaults to
+                     "property" (the robots token call sites pass "token").
+
+  Returns: the parsed NUMBER (int or float64) on success -- 0 and -1 are
+  VALID successes -- or the empty string "" on failure. Because 0 is falsy,
+  callers never gate the result with a bare `with` or a truthiness check; the
+  failure test is `eq (printf "%v" $v) ""`.
+
+  On an invalid value it emits a deduplicated warn via lib/warn.html, keyed
+  by field + raw value. ONE terminal return.
+*/}}
+
+{{- $raw := trim (printf "%v" .value) " \t\n\r" -}}
+{{- $mode := .mode | default "int" -}}
+{{- $sign := .sign | default false -}}
+{{- $field := .field -}}
+{{- $page := .page -}}
+{{- $what := .what | default "property" -}}
+
+{{- $result := "" -}}
+{{- $valid := false -}}
+
+{{- $typ := printf "%T" .value -}}
+{{- if findRE `^(u?int\d*|float\d+)$` $typ -}}
+  {{/* Native-number fast path. Non-finite floats fail up front: jsonify
+       cannot serialize NaN or an infinity, and int-casting one yields
+       garbage. */}}
+  {{- if not (in (slice "NaN" "+Inf" "-Inf") $raw) -}}
+    {{- if eq $mode "float" -}}
+      {{- $attempt := try (float .value) -}}
+      {{- if not $attempt.Err -}}
+        {{- $result = $attempt.Value -}}
+        {{- $valid = true -}}
+      {{- end -}}
+    {{- else -}}
+      {{/* int mode. Go's float-to-int conversion saturates an out-of-range
+           value instead of erroring (so `try` cannot catch it); float
+           sources are range-checked first, against a bound conservatively
+           inside int64 range. In-range fractional floats truncate toward
+           zero. */}}
+      {{- $inRange := true -}}
+      {{- if hasPrefix $typ "float" -}}
+        {{- if or (ge .value 9.2e18) (le .value -9.2e18) -}}
+          {{- $inRange = false -}}
+        {{- end -}}
+      {{- end -}}
+      {{- if $inRange -}}
+        {{- $attempt := try (int .value) -}}
+        {{- if not $attempt.Err -}}
+          {{- $result = $attempt.Value -}}
+          {{- $valid = true -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{/* Sign policy: a negative result fails unless .sign is true. */}}
+  {{- if and $valid (not $sign) (lt $result 0) -}}
+    {{- $result = "" -}}
+    {{- $valid = false -}}
+  {{- end -}}
+{{- else -}}
+  {{/* String pipeline. Detach ONE optional leading sign when .sign is true;
+       the regex below requires a non-empty digit remainder. */}}
+  {{- $neg := false -}}
+  {{- $body := $raw -}}
+  {{- if $sign -}}
+    {{- if hasPrefix $body "-" -}}
+      {{- $neg = true -}}
+      {{- $body = strings.TrimPrefix "-" $body -}}
+    {{- else if hasPrefix $body "+" -}}
+      {{- $body = strings.TrimPrefix "+" $body -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- $pattern := `^\d{1,15}$` -}}
+  {{- if eq $mode "float" -}}
+    {{- $pattern = `^\d{1,15}(\.\d{1,10})?$` -}}
+  {{- end -}}
+
+  {{- if findRE $pattern $body -}}
+    {{/* Strip leading zeros from the integer part, restoring "0" when the
+         strip empties it, so the int cast below reads decimal, never octal
+         ("010" -> 10, not 8). `float` parses strings decimally regardless, so
+         the shared strip is value-neutral in float mode. */}}
+    {{- $parts := split $body "." -}}
+    {{- $norm := strings.TrimLeft "0" (index $parts 0) -}}
+    {{- if eq $norm "" -}}{{- $norm = "0" -}}{{- end -}}
+    {{- if gt (len $parts) 1 -}}
+      {{- $norm = printf "%s.%s" $norm (index $parts 1) -}}
+    {{- end -}}
+    {{- if $neg -}}
+      {{- $norm = printf "-%s" $norm -}}
+    {{- end -}}
+    {{/* The casts cannot throw here: the regex admits only decimal digit runs
+         short enough to fit, and the strip removes the octal trigger. */}}
+    {{- if eq $mode "float" -}}
+      {{- $result = float $norm -}}
+    {{- else -}}
+      {{- $result = int $norm -}}
+    {{- end -}}
+    {{- $valid = true -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if not $valid -}}
+  {{/* Invalid value: return "" so the caller drops the property (or token),
+       and warn once, keyed by field+value; the page is identified by its
+       RelPermalink. */}}
+  {{- $rel := "" -}}
+  {{- with $page -}}
+    {{- $rel = .RelPermalink -}}
+  {{- end -}}
+  {{- partial "seo/lib/warn.html" (dict
+    "key" (printf "seo:warn:num:%s:%s" $field $raw)
+    "message" (printf "[seo] Page %q has %s %q, not a parseable decimal number; %s omitted." $rel $field $raw $what)
+  ) -}}
+{{- end -}}
+{{- return $result -}}

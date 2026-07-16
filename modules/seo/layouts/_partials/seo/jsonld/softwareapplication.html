@@ -28,10 +28,6 @@
 
 {{- $sw := $page.Param "seo.software" | default dict -}}
 {{- $offerData := $page.Param "seo.offer" | default dict -}}
-{{/* Trailing warnf %s placeholder: pages expose no .Position (shortcode-only
-     method), so it stays empty and the page is identified by RelPermalink --
-     the module-wide convention shared with the resolver tier. */}}
-{{- $pos := "" -}}
 
 {{- if eq $page.Kind "page" -}}
   {{- $name := $seo.title -}}
@@ -46,7 +42,7 @@
   {{- if and (eq (len $appType) 1) (eq (index $appType 0) "VideoGame") -}}
     {{- partial "seo/lib/warn.html" (dict
       "key" (printf "seo:warn:videogame:%s" $page.RelPermalink)
-      "message" (printf "[seo] SoftwareApplication on %q sets app_type VideoGame alone, which Google does not support; co-typing with MobileApplication. %s" $page.RelPermalink $pos)
+      "message" (printf "[seo] SoftwareApplication on %q sets app_type VideoGame alone, which Google does not support; co-typing with MobileApplication." $page.RelPermalink)
     ) -}}
     {{- $appType = slice "VideoGame" "MobileApplication" -}}
   {{- end -}}
@@ -57,11 +53,19 @@
     {{- $typeOut = index $appType 0 -}}
   {{- end -}}
 
-  {{/* Required: offer.price set (0 allowed). */}}
+  {{/* Required: offer.price set (0 allowed) AND parseable. An unparseable
+       price (guarded via lib/num.html, which warns once) counts as missing so
+       the price gate below suppresses the node; the app is never emitted as
+       free by accident. */}}
   {{- $hasPrice := isset $offerData "price" -}}
   {{- $price := 0.0 -}}
   {{- if $hasPrice -}}
-    {{- $price = float $offerData.price -}}
+    {{- $parsed := partial "seo/lib/num.html" (dict "value" $offerData.price "mode" "float" "field" "seo.offer.price" "page" $page) -}}
+    {{- if eq (printf "%v" $parsed) "" -}}
+      {{- $hasPrice = false -}}
+    {{- else -}}
+      {{- $price = $parsed -}}
+    {{- end -}}
   {{- end -}}
   {{- $currency := $offerData.price_currency | default "" -}}
 
@@ -85,19 +89,19 @@
     {{- $suppress = true -}}
     {{- partial "seo/lib/warn.html" (dict
       "key" (printf "seo:warn:sw-price:%s" $page.RelPermalink)
-      "message" (printf "[seo] SoftwareApplication on %q is missing offers.price; set seo.offer.price (use 0 for free apps). Node not emitted. %s" $page.RelPermalink $pos)
+      "message" (printf "[seo] SoftwareApplication on %q is missing offers.price; set seo.offer.price (use 0 for free apps). Node not emitted." $page.RelPermalink)
     ) -}}
   {{- else if not (or $hasAgg $hasReview) -}}
     {{- $suppress = true -}}
     {{- partial "seo/lib/warn.html" (dict
       "key" (printf "seo:warn:sw-rating:%s" $page.RelPermalink)
-      "message" (printf "[seo] SoftwareApplication on %q has neither aggregateRating nor review; Google requires one for the rich result. Node not emitted. %s" $page.RelPermalink $pos)
+      "message" (printf "[seo] SoftwareApplication on %q has neither aggregateRating nor review; Google requires one for the rich result. Node not emitted." $page.RelPermalink)
     ) -}}
   {{- else if and (gt $price 0.0) (eq $currency "") -}}
     {{- $suppress = true -}}
     {{- partial "seo/lib/warn.html" (dict
       "key" (printf "seo:warn:sw-currency:%s" $page.RelPermalink)
-      "message" (printf "[seo] SoftwareApplication on %q has offers.price > 0 but no offers.priceCurrency; set seo.offer.price_currency (ISO 4217). Node not emitted. %s" $page.RelPermalink $pos)
+      "message" (printf "[seo] SoftwareApplication on %q has offers.price > 0 but no offers.priceCurrency; set seo.offer.price_currency (ISO 4217). Node not emitted." $page.RelPermalink)
     ) -}}
   {{- end -}}
 

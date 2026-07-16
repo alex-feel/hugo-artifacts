@@ -318,7 +318,7 @@ seo:
       rating_value: 4.6
       review_count: 128
   offer: # NEW: the Offer (Merchant Listing track requires price > 0 + currency)
-    price: 149.00 # NUMBER, never a quoted string
+    price: 149.00 # NUMBER preferred; a quoted decimal string also parses (never octal); anything unparseable warns and counts as missing
     price_currency: 'USD' # ISO 4217
     availability: 'InStock' # enum-validated ItemAvailability
     condition: 'NewCondition' # alias location; seo.product.condition wins
@@ -499,7 +499,7 @@ Cross-references wire the graph: WebPage `isPartOf` -> WebSite, `breadcrumb` -> 
 3. **Legacy `noindex: true` alias** folds `noindex, nofollow` into the set (consulted only when `seo.robots` is absent; `noindex: false` is a no-op).
 4. **Structural overrides:** when `hugo.IsProduction` is false, `noindex, nofollow` is force-added so staging and preview builds are never indexed -- overridable only by the explicit page escape hatch `seo.allow_index_nonprod: true`; on `404`-kind pages `noindex` is force-added unconditionally; and, opt-in, when `seo.robots_expiry: true` and `.ExpiryDate` is set and in the future, `unavailable_after: <RFC 3339>` is appended (default off, because many sites use `expiryDate` purely for build filtering).
 
-Merge semantics: on the index axis any `noindex` wins, on the follow axis any `nofollow` wins, `none` expands to `noindex, nofollow`, and for parameterized families the more restrictive value wins (`max-snippet:0` beats `max-snippet:-1`; `max-image-preview:none` beats `standard` beats `large`). When the merged set is empty (production, no directives anywhere) NO robots tag is emitted -- default crawler behavior needs no tag.
+Merge semantics: on the index axis any `noindex` wins, on the follow axis any `nofollow` wins, `none` expands to `noindex, nofollow`, and for parameterized families the more restrictive value wins (`max-snippet:0` beats `max-snippet:-1`; `max-image-preview:none` beats `standard` beats `large`). The `max-snippet:` and `max-video-preview:` values parse as signed DECIMAL integers (`-1` is the valid unlimited sentinel; `max-snippet:010` reads as 10, never octal 8); an unparseable value drops that single token with a deduplicated warn while the rest of the directive keeps merging. When the merged set is empty (production, no directives anywhere) NO robots tag is emitted -- default crawler behavior needs no tag.
 
 **Supported pass-through tokens:** `noindex`, `nofollow`, `none`, `nosnippet`, `noimageindex`, `notranslate`, `indexifembedded` (only meaningful alongside `noindex`), `max-snippet:N`, `max-image-preview:{none|standard|large}`, `max-video-preview:N`, `unavailable_after:DATE`.
 
@@ -538,6 +538,9 @@ Warnings are prefixed `[seo]`, identify the page by its relative permalink, and 
 | --- | --- |
 | A page declares a schema type but a Google-required property is unresolvable | `warnf` + node suppressed by the self-gating builder |
 | Enum value invalid (`applicationCategory`, `availability`, `itemCondition`, gender, interaction type, return-policy category) | `warnf` + that single property dropped; node still emits |
+| Numeric value unparseable (offer prices, `offer_count`, rating values and counts, audience ages, clip offsets, `watch_count`, interaction counts, `number_of_employees`, `merchant_return_days`, shipping `rate`) | `warnf` + that single property dropped; node still emits. Unquoted native numbers are accepted directly at any magnitude (a JSON `2500000` or `0.000001` parses without a warn); quoted strings parse as DECIMAL (a `"010"` reads as 10, never octal 8). Required-value exceptions: an unparseable `seo.offer.price` counts as missing, so SoftwareApplication suppresses its node, Product falls back to the Snippet track gate, and the `product:price:amount` meta is dropped; an unparseable `rating_value` drops the WHOLE AggregateRating/Review fragment (never a hollow rating node), so the node-level gates degrade; an unparseable clip `start_offset` drops that whole clip entry (startOffset is Google-required on Clip) |
+| `max-snippet:`/`max-video-preview:` robots value unparseable | `warnf` + that single token dropped; the rest of the directive keeps merging (`-1` stays the valid unlimited sentinel) |
+| Date value unparseable (`seo.date_published`/`seo.date_modified`, `seo.profile.date_created`, `price_valid_until`, `founding_date`, `upload_date`, `expires`, broadcast dates) | `warnf` naming the page and field, deduplicated per field + value + page (two pages with the same bad date each warn) + that date property omitted |
 | Mutually exclusive fields both set (`regions_allowed`+`ineligible_region`; `clips`+`seek_url_template`; `priceType`+`validForMemberTier`) | `warnf` + documented first-listed-wins tiebreak |
 | Multiple type tables without `seo.type` | `warnf` + fixed priority Product, SoftwareApplication, VideoObject, ProfilePage |
 | Unsupported `seo.type` value | `warnf` (keyed by the bad value) + fall through to auto-detect |
@@ -599,7 +602,8 @@ modules/seo/
         lib/
           warn.html                        # Emits one deduplicated warnf per (warning-key, page) via a hugo.Store sentinel.
           enum.html                        # Returns the validated enum value or "" for applicationCategory, availability, itemCondition, gender, interaction types, return-policy category.
-          time.html                        # Returns an RFC 3339 string for any time.Time value, or "" when zero; the single date-format authority.
+          time.html                        # Returns an RFC 3339 string for any time.Time value, or "" (with a deduplicated warn) when unparseable, or "" silently when zero; the single date-format authority.
+          num.html                         # Returns the parsed decimal number (int or float) for any author-fed numeric value, or "" (with a deduplicated warn) when unparseable; octal-safe, overflow-safe.
         jsonld/
           website.html                     # Returns the WebSite node dict (home only; self-gates). Called via partialCached.
           organization.html                # Returns the Organization/OnlineStore/LocalBusiness/Person publisher node dict. Called via partialCached.

@@ -63,7 +63,7 @@
          to auto-detect. */}}
     {{- partial "seo/lib/warn.html" (dict
       "key" (printf "seo:warn:unknown-type:%s" $explicit)
-      "message" (printf "[seo] page %q sets seo.type %q, which this module does not support (supported: Article, BlogPosting, NewsArticle, Product, ProfilePage, SoftwareApplication, VideoObject); falling through to auto-detect. %s" $page.RelPermalink $explicit "")
+      "message" (printf "[seo] page %q sets seo.type %q, which this module does not support (supported: Article, BlogPosting, NewsArticle, Product, ProfilePage, SoftwareApplication, VideoObject); falling through to auto-detect." $page.RelPermalink $explicit)
     ) -}}
   {{- end -}}
 {{- else if $metaType -}}
@@ -101,7 +101,7 @@
            (the append order above already IS that priority). */}}
       {{- partial "seo/lib/warn.html" (dict
         "key" (printf "seo:warn:type-collision:%s" $page.RelPermalink)
-        "message" (printf "[seo] page %q declares multiple structured-data type tables (%s); set seo.type to disambiguate; using %s. %s" $page.RelPermalink (delimit $present ", ") $type "")
+        "message" (printf "[seo] page %q declares multiple structured-data type tables (%s); set seo.type to disambiguate; using %s." $page.RelPermalink (delimit $present ", ") $type)
       ) -}}
     {{- end -}}
   {{- end -}}

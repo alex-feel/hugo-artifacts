@@ -27,10 +27,6 @@
 {{- $result := dict -}}
 
 {{- $profile := $page.Param "seo.profile" | default dict -}}
-{{/* Trailing warnf %s placeholder: pages expose no .Position (shortcode-only
-     method), so it stays empty and the page is identified by RelPermalink --
-     the module-wide convention shared with the resolver tier. */}}
-{{- $pos := "" -}}
 
 {{- if eq $page.Kind "page" -}}
   {{/* mainEntity.name: given_name + family_name assembled, else the resolved
@@ -48,7 +44,7 @@
   {{- if not $name -}}
     {{- partial "seo/lib/warn.html" (dict
       "key" (printf "seo:warn:profile-name:%s" $page.RelPermalink)
-      "message" (printf "[seo] ProfilePage on %q could not resolve mainEntity.name; a real name (or alternateName) is required. Node not emitted. %s" $page.RelPermalink $pos)
+      "message" (printf "[seo] ProfilePage on %q could not resolve mainEntity.name; a real name (or alternateName) is required. Node not emitted." $page.RelPermalink)
     ) -}}
   {{- else -}}
     {{/* mainEntity: Person (default) or Organization. */}}
@@ -134,11 +130,14 @@
           "page" $page
         ) -}}
         {{- if and $t (isset . "count") -}}
-          {{- $stats = $stats | append (dict
-            "@type" "InteractionCounter"
-            "interactionType" (dict "@type" $t)
-            "userInteractionCount" (int .count)
-          ) -}}
+          {{- $cnt := partial "seo/lib/num.html" (dict "value" .count "mode" "int" "field" "seo.profile.interaction_statistic.count" "page" $page) -}}
+          {{- if ne (printf "%v" $cnt) "" -}}
+            {{- $stats = $stats | append (dict
+              "@type" "InteractionCounter"
+              "interactionType" (dict "@type" $t)
+              "userInteractionCount" $cnt
+            ) -}}
+          {{- end -}}
         {{- end -}}
       {{- end -}}
       {{- with $stats -}}
@@ -158,11 +157,14 @@
           "page" $page
         ) -}}
         {{- if and $t (isset . "count") -}}
-          {{- $stats = $stats | append (dict
-            "@type" "InteractionCounter"
-            "interactionType" (dict "@type" $t)
-            "userInteractionCount" (int .count)
-          ) -}}
+          {{- $cnt := partial "seo/lib/num.html" (dict "value" .count "mode" "int" "field" "seo.profile.agent_interaction_statistic.count" "page" $page) -}}
+          {{- if ne (printf "%v" $cnt) "" -}}
+            {{- $stats = $stats | append (dict
+              "@type" "InteractionCounter"
+              "interactionType" (dict "@type" $t)
+              "userInteractionCount" $cnt
+            ) -}}
+          {{- end -}}
         {{- end -}}
       {{- end -}}
       {{- with $stats -}}

@@ -6,30 +6,43 @@
   in "date" mode, to a schema.org Date (YYYY-MM-DD) for date-typed properties
   such as Organization.foundingDate.
 
-  Used by resolve/dates.html and by node builders that pass through dates
-  (VideoObject.expires, Offer.priceValidUntil, Organization.foundingDate).
+  Used by resolve/dates.html, resolve/robots.html (unavailable_after), and by
+  node builders that pass through dates (VideoObject uploadDate / expires /
+  broadcast dates, Offer.priceValidUntil, Organization.foundingDate).
 
   Context: EITHER a time.Time value (or a string/other value parseable by
   time.AsTime) passed as the dot, OR a dict:
   - .value  the time.Time value or parseable string.
   - .mode   optional; "date" formats as YYYY-MM-DD (schema.org Date), any
             other value (or absence) formats as a full RFC 3339 timestamp.
+  - .field  optional; the front-matter key name, used in the warn message and
+            the dedup key.
+  - .page   optional; the page whose RelPermalink identifies the page in the
+            warn message and the dedup key; empty-safe.
 
   Returns: an RFC 3339 string (format "2006-01-02T15:04:05Z07:00"), or a
   "2006-01-02" Date string in "date" mode, or "" when the value is zero,
-  empty, or unparseable.
+  empty, or unparseable. An unparseable value additionally emits a
+  deduplicated warn via lib/warn.html: when .field or .page is present the
+  warn names the page and field and is keyed by field + value + page; the
+  bare call form warns with the value alone, keyed by the value.
 
   ONE terminal return.
 */}}
 
 {{- $result := "" -}}
 {{- with . -}}
-  {{/* Unwrap the optional {value, mode} dict; a bare value keeps mode "". */}}
+  {{/* Unwrap the optional {value, mode, field, page} dict; a bare value keeps
+       mode "" and carries no field or page. */}}
   {{- $val := . -}}
   {{- $mode := "" -}}
+  {{- $field := "" -}}
+  {{- $page := "" -}}
   {{- if and (reflect.IsMap .) (isset . "value") -}}
     {{- $val = .value -}}
     {{- $mode = .mode | default "" -}}
+    {{- $field = .field | default "" -}}
+    {{- $page = .page -}}
   {{- end -}}
   {{- with $val -}}
     {{- $t := . -}}
@@ -38,13 +51,33 @@
     {{- if reflect.IsMap $t -}}
       {{/* Defensive: a map is never a valid date; leave $result empty. */}}
     {{- else -}}
-      {{- $parsed := time.AsTime $t -}}
-      {{- with $parsed -}}
-        {{- if not .IsZero -}}
-          {{- if eq $mode "date" -}}
-            {{- $result = .Format "2006-01-02" -}}
-          {{- else -}}
-            {{- $result = .Format "2006-01-02T15:04:05Z07:00" -}}
+      {{- $attempt := try (time.AsTime $t) -}}
+      {{- if $attempt.Err -}}
+        {{/* Unparseable date: leave $result "" and warn once. With a field
+             or page in the call, the warn names both and dedups per
+             field+value+page; the bare form dedups per value alone. */}}
+        {{- $rel := "" -}}
+        {{- with $page -}}
+          {{- $rel = .RelPermalink -}}
+        {{- end -}}
+        {{- $key := printf "seo:warn:time:%v" $t -}}
+        {{- $message := printf "[seo] Date value %q is not a parseable date; property omitted." (printf "%v" $t) -}}
+        {{- if or $field $rel -}}
+          {{- $key = printf "seo:warn:time:%s:%v:%s" $field $t $rel -}}
+          {{- $message = printf "[seo] Page %q has %s %q, not a parseable date; property omitted." $rel $field (printf "%v" $t) -}}
+        {{- end -}}
+        {{- partial "seo/lib/warn.html" (dict
+          "key" $key
+          "message" $message
+        ) -}}
+      {{- else -}}
+        {{- with $attempt.Value -}}
+          {{- if not .IsZero -}}
+            {{- if eq $mode "date" -}}
+              {{- $result = .Format "2006-01-02" -}}
+            {{- else -}}
+              {{- $result = .Format "2006-01-02T15:04:05Z07:00" -}}
+            {{- end -}}
           {{- end -}}
         {{- end -}}
       {{- end -}}

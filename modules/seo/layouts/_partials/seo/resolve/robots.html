@@ -1,8 +1,10 @@
 {{/*
   Produces the single all-bots robots directive string and the per-bot map,
   merging four inputs with token union and most-restrictive-wins per axis. Pure
-  value chooser: the only side effect is a deduplicated warn (via lib/warn.html)
-  when a deprecated token is stripped.
+  value chooser: the only side effects are deduplicated warns (via
+  lib/warn.html) when a deprecated token is stripped and (via lib/num.html)
+  when a parameterized token's numeric value is unparseable and the token is
+  dropped.
 
   Context: the current Page, passed as the dot.
 
@@ -20,7 +22,11 @@
   Merge semantics: tokens parsed, deduped, unioned; any noindex wins the index
   axis, any nofollow wins the follow axis, "none" expands to noindex+nofollow;
   for parameterized families the more restrictive value wins
-  (max-snippet:0 > :-1; max-image-preview none > standard > large). Deprecated
+  (max-snippet:0 > :-1; max-image-preview none > standard > large). The
+  max-snippet and max-video-preview values parse as SIGNED DECIMAL integers
+  through lib/num.html ("-1" is the legitimate unlimited sentinel; "010" reads
+  as 10, never octal); an unparseable value drops that one token with a
+  deduped warn while the rest of the directive keeps merging. Deprecated
   tokens (noarchive, nocache, nositelinkssearchbox, noodp) are stripped with a
   deduped warn. When the merged set is empty, "" is returned (no tag emitted).
 
@@ -74,7 +80,7 @@
   {{- with $page.ExpiryDate -}}
     {{- if not .IsZero -}}
       {{- if gt (.Unix) (now.Unix) -}}
-        {{- $rfc := partial "seo/lib/time.html" . -}}
+        {{- $rfc := partial "seo/lib/time.html" (dict "value" . "field" "expiryDate" "page" $page) -}}
         {{- with $rfc -}}
           {{- $sources = $sources | append (printf "unavailable_after:%s" .) -}}
         {{- end -}}
@@ -107,7 +113,7 @@
         {{/* Deprecated: strip with a deduped warn (keyed per page + token). */}}
         {{- partial "seo/lib/warn.html" (dict
           "key" (printf "seo:warn:robots-deprecated:%s:%s" $tok $page.RelPermalink)
-          "message" (printf "[seo] robots directive on %q contains deprecated token %q (unsupported since 2026); token stripped. %s" $page.RelPermalink $tok "")
+          "message" (printf "[seo] robots directive on %q contains deprecated token %q (unsupported since 2026); token stripped." $page.RelPermalink $tok)
         ) -}}
       {{- else if eq $tok "none" -}}
         {{- $hasNoindex = true -}}
@@ -125,26 +131,31 @@
       {{- else if hasPrefix $tok "max-snippet:" -}}
         {{/* Most restrictive wins: -1 means unlimited (least restrictive); 0
              means no snippet (most restrictive); a larger positive N is less
-             restrictive than a smaller one. */}}
-        {{- $v := int (strings.TrimPrefix "max-snippet:" $tok) -}}
-        {{- if not $snippetSet -}}
-          {{- $snippetSet = true -}}
-          {{- $snippetBest = $v -}}
-        {{- else if eq $snippetBest -1 -}}
-          {{- $snippetBest = $v -}}
-        {{- else if and (ne $v -1) (lt $v $snippetBest) -}}
-          {{- $snippetBest = $v -}}
+             restrictive than a smaller one. An unparseable value returns ""
+             from lib/num.html (which warns once) and drops this one token. */}}
+        {{- $v := partial "seo/lib/num.html" (dict "value" (strings.TrimPrefix "max-snippet:" $tok) "mode" "int" "sign" true "field" "robots max-snippet" "page" $page "what" "token") -}}
+        {{- if ne (printf "%v" $v) "" -}}
+          {{- if not $snippetSet -}}
+            {{- $snippetSet = true -}}
+            {{- $snippetBest = $v -}}
+          {{- else if eq $snippetBest -1 -}}
+            {{- $snippetBest = $v -}}
+          {{- else if and (ne $v -1) (lt $v $snippetBest) -}}
+            {{- $snippetBest = $v -}}
+          {{- end -}}
         {{- end -}}
       {{- else if hasPrefix $tok "max-video-preview:" -}}
         {{/* Same restrictiveness rule as max-snippet: -1 is unlimited. */}}
-        {{- $v := int (strings.TrimPrefix "max-video-preview:" $tok) -}}
-        {{- if not $videoSet -}}
-          {{- $videoSet = true -}}
-          {{- $videoBest = $v -}}
-        {{- else if eq $videoBest -1 -}}
-          {{- $videoBest = $v -}}
-        {{- else if and (ne $v -1) (lt $v $videoBest) -}}
-          {{- $videoBest = $v -}}
+        {{- $v := partial "seo/lib/num.html" (dict "value" (strings.TrimPrefix "max-video-preview:" $tok) "mode" "int" "sign" true "field" "robots max-video-preview" "page" $page "what" "token") -}}
+        {{- if ne (printf "%v" $v) "" -}}
+          {{- if not $videoSet -}}
+            {{- $videoSet = true -}}
+            {{- $videoBest = $v -}}
+          {{- else if eq $videoBest -1 -}}
+            {{- $videoBest = $v -}}
+          {{- else if and (ne $v -1) (lt $v $videoBest) -}}
+            {{- $videoBest = $v -}}
+          {{- end -}}
         {{- end -}}
       {{- else if hasPrefix $tok "unavailable_after:" -}}
         {{- $unavailable = strings.TrimPrefix "unavailable_after:" $tok -}}
@@ -221,24 +232,28 @@
               {{- $bPreviewBest = $rank -}}
             {{- end -}}
           {{- else if hasPrefix $tok "max-snippet:" -}}
-            {{- $v := int (strings.TrimPrefix "max-snippet:" $tok) -}}
-            {{- if not $bSnippetSet -}}
-              {{- $bSnippetSet = true -}}
-              {{- $bSnippetBest = $v -}}
-            {{- else if eq $bSnippetBest -1 -}}
-              {{- $bSnippetBest = $v -}}
-            {{- else if and (ne $v -1) (lt $v $bSnippetBest) -}}
-              {{- $bSnippetBest = $v -}}
+            {{- $v := partial "seo/lib/num.html" (dict "value" (strings.TrimPrefix "max-snippet:" $tok) "mode" "int" "sign" true "field" "robots max-snippet" "page" $page "what" "token") -}}
+            {{- if ne (printf "%v" $v) "" -}}
+              {{- if not $bSnippetSet -}}
+                {{- $bSnippetSet = true -}}
+                {{- $bSnippetBest = $v -}}
+              {{- else if eq $bSnippetBest -1 -}}
+                {{- $bSnippetBest = $v -}}
+              {{- else if and (ne $v -1) (lt $v $bSnippetBest) -}}
+                {{- $bSnippetBest = $v -}}
+              {{- end -}}
             {{- end -}}
           {{- else if hasPrefix $tok "max-video-preview:" -}}
-            {{- $v := int (strings.TrimPrefix "max-video-preview:" $tok) -}}
-            {{- if not $bVideoSet -}}
-              {{- $bVideoSet = true -}}
-              {{- $bVideoBest = $v -}}
-            {{- else if eq $bVideoBest -1 -}}
-              {{- $bVideoBest = $v -}}
-            {{- else if and (ne $v -1) (lt $v $bVideoBest) -}}
-              {{- $bVideoBest = $v -}}
+            {{- $v := partial "seo/lib/num.html" (dict "value" (strings.TrimPrefix "max-video-preview:" $tok) "mode" "int" "sign" true "field" "robots max-video-preview" "page" $page "what" "token") -}}
+            {{- if ne (printf "%v" $v) "" -}}
+              {{- if not $bVideoSet -}}
+                {{- $bVideoSet = true -}}
+                {{- $bVideoBest = $v -}}
+              {{- else if eq $bVideoBest -1 -}}
+                {{- $bVideoBest = $v -}}
+              {{- else if and (ne $v -1) (lt $v $bVideoBest) -}}
+                {{- $bVideoBest = $v -}}
+              {{- end -}}
             {{- end -}}
           {{- else if hasPrefix $tok "unavailable_after:" -}}
             {{- $bUnavailable = strings.TrimPrefix "unavailable_after:" $tok -}}
