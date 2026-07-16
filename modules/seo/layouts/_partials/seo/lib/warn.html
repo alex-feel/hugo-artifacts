@@ -9,10 +9,14 @@
   screaming per page-render or per output format.
 
   Context (dict):
-  - .key (string)     Stable dedup key. Page-specific callers key by
-                      printf "seo:warn:%s:%s" $class $page.RelPermalink;
-                      config-class callers key by class (or by the offending
-                      value, e.g. "seo:warn:unknown-type:Recipe").
+  - .key (string)     Stable dedup key. Page-specific callers include the
+                      page's RelPermalink in the key: node builders key by
+                      printf "seo:warn:%s:%s" $class $page.RelPermalink, and
+                      the value-validating lib parsers (num, enum, time) key
+                      by class + field + value + RelPermalink so the same bad
+                      value on two pages warns once per page. Config-class
+                      callers key by class (or by the offending value, e.g.
+                      "seo:warn:unknown-type:Recipe").
   - .message (string) The fully-formatted, [seo]-prefixed warning text.
 
   Side effect: warnf once per key. No return value is used by callers.

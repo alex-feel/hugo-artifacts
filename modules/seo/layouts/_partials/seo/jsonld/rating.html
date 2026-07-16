@@ -7,22 +7,28 @@
   Expected context (dict):
   - .kind (string)  "aggregate" -> AggregateRating; "review" -> Review.
   - .data (dict)    the source sub-table:
-        aggregate: { rating_value, review_count | rating_count,
+        aggregate: { rating_value (alias: value),
+                     review_count | rating_count,
                      best_rating, worst_rating }
         review:    { author, rating_value, best_rating, worst_rating,
                      date_published, body, positive_notes[], negative_notes[] }
   - .page (Page)    the current page, whose RelPermalink identifies the page
                     in numeric-parse warn messages.
 
-  Rules: numbers emit as numbers, each parsed through lib/num.html.
-  rating_value is REQUIRED in both kinds (Google rejects an AggregateRating
-  or a Review rating without it): when it is missing or unparseable the WHOLE
-  fragment is dropped (empty dict; lib/num.html warns once), so the callers'
-  presence gates degrade instead of emitting a schema-invalid node. The
-  optional numerics (review_count, rating_count, best_rating, worst_rating)
-  drop only that single property with a deduped warn while the fragment still
-  emits. A review author name is truncated to fewer than 100 characters
-  (Google limit). positiveNotes / negativeNotes become ItemList of ListItem.
+  Rules: numbers emit as numbers, each parsed through lib/num.html; every
+  numeric field is presence-gated with isset (never truthiness) so a native
+  (unquoted) 0 -- a valid rating_value or worst_rating -- reaches the parser
+  instead of silently vanishing. rating_value is REQUIRED in both kinds
+  (Google rejects an AggregateRating or a Review rating without it): when it
+  is absent or unparseable the WHOLE fragment is dropped (empty dict;
+  lib/num.html warns once), so the callers' presence gates degrade instead of
+  emitting a schema-invalid node. The optional numerics (review_count,
+  rating_count, best_rating, worst_rating) drop only that single property
+  with a deduped warn while the fragment still emits. A review author name is
+  truncated to fewer than 100 characters (Google limit). A review
+  date_published routes through lib/time.html, the single date-format
+  authority; an unparseable value warns once and drops the property.
+  positiveNotes / negativeNotes become ItemList of ListItem.
 
   Return value: the fragment dict WITHOUT @context, or an EMPTY dict (dict)
   when the required data is missing or unparseable. One terminal return.
@@ -36,37 +42,43 @@
 
 {{- if eq $kind "aggregate" -}}
   {{/* AggregateRating: ratingValue (REQUIRED; an unparseable value drops the
-       whole fragment) plus a count (reviewCount preferred, else
-       ratingCount). */}}
-  {{- $ratingValue := $data.rating_value | default $data.value -}}
-  {{- $reviewCount := $data.review_count -}}
-  {{- $ratingCount := $data.rating_count -}}
-  {{- if $ratingValue -}}
+       whole fragment) plus a count (reviewCount preferred, else ratingCount).
+       Every gate is isset-based so a native (unquoted) 0 reaches lib/num.html
+       instead of failing a truthiness test; the rating_value/value alias is
+       likewise presence-resolved (rating_value wins when set). */}}
+  {{- $ratingValue := $data.value -}}
+  {{- if isset $data "rating_value" -}}
+    {{- $ratingValue = $data.rating_value -}}
+  {{- end -}}
+  {{- if or (isset $data "rating_value") (isset $data "value") -}}
     {{- $v := partial "seo/lib/num.html" (dict "value" $ratingValue "mode" "float" "field" "aggregate_rating.rating_value" "page" $page) -}}
     {{- if ne (printf "%v" $v) "" -}}
       {{- $node := dict "@type" "AggregateRating" "ratingValue" $v -}}
-      {{- with $reviewCount -}}
-        {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "int" "field" "aggregate_rating.review_count" "page" $page) -}}
+      {{/* Count preference: reviewCount when review_count parses, else the
+           ratingCount fallback -- also when review_count is present but
+           unparseable, so a bad primary never consumes the count slot. */}}
+      {{- $countSet := false -}}
+      {{- if isset $data "review_count" -}}
+        {{- $v := partial "seo/lib/num.html" (dict "value" $data.review_count "mode" "int" "field" "aggregate_rating.review_count" "page" $page) -}}
         {{- if ne (printf "%v" $v) "" -}}
           {{- $node = merge $node (dict "reviewCount" $v) -}}
+          {{- $countSet = true -}}
         {{- end -}}
       {{- end -}}
-      {{- if not $reviewCount -}}
-        {{- with $ratingCount -}}
-          {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "int" "field" "aggregate_rating.rating_count" "page" $page) -}}
-          {{- if ne (printf "%v" $v) "" -}}
-            {{- $node = merge $node (dict "ratingCount" $v) -}}
-          {{- end -}}
+      {{- if and (not $countSet) (isset $data "rating_count") -}}
+        {{- $v := partial "seo/lib/num.html" (dict "value" $data.rating_count "mode" "int" "field" "aggregate_rating.rating_count" "page" $page) -}}
+        {{- if ne (printf "%v" $v) "" -}}
+          {{- $node = merge $node (dict "ratingCount" $v) -}}
         {{- end -}}
       {{- end -}}
-      {{- with $data.best_rating -}}
-        {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "float" "field" "aggregate_rating.best_rating" "page" $page) -}}
+      {{- if isset $data "best_rating" -}}
+        {{- $v := partial "seo/lib/num.html" (dict "value" $data.best_rating "mode" "float" "field" "aggregate_rating.best_rating" "page" $page) -}}
         {{- if ne (printf "%v" $v) "" -}}
           {{- $node = merge $node (dict "bestRating" $v) -}}
         {{- end -}}
       {{- end -}}
-      {{- with $data.worst_rating -}}
-        {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "float" "field" "aggregate_rating.worst_rating" "page" $page) -}}
+      {{- if isset $data "worst_rating" -}}
+        {{- $v := partial "seo/lib/num.html" (dict "value" $data.worst_rating "mode" "float" "field" "aggregate_rating.worst_rating" "page" $page) -}}
         {{- if ne (printf "%v" $v) "" -}}
           {{- $node = merge $node (dict "worstRating" $v) -}}
         {{- end -}}
@@ -75,25 +87,25 @@
     {{- end -}}
   {{- end -}}
 {{- else if eq $kind "review" -}}
-  {{/* Review: reviewRating.ratingValue is REQUIRED, so an unparseable
-       rating_value skips the whole Review fragment; author name < 100
-       chars. */}}
-  {{- $ratingValue := $data.rating_value -}}
-  {{- if $ratingValue -}}
-    {{- $v := partial "seo/lib/num.html" (dict "value" $ratingValue "mode" "float" "field" "review.rating_value" "page" $page) -}}
+  {{/* Review: reviewRating.ratingValue is REQUIRED, so an absent or
+       unparseable rating_value skips the whole Review fragment; author name
+       < 100 chars. Numeric gates are isset-based so a native (unquoted) 0
+       reaches lib/num.html instead of failing a truthiness test. */}}
+  {{- if isset $data "rating_value" -}}
+    {{- $v := partial "seo/lib/num.html" (dict "value" $data.rating_value "mode" "float" "field" "review.rating_value" "page" $page) -}}
     {{- if ne (printf "%v" $v) "" -}}
       {{- $node := dict "@type" "Review" -}}
 
       {{/* reviewRating (Rating) with the numeric ratingValue. */}}
       {{- $rr := dict "@type" "Rating" "ratingValue" $v -}}
-      {{- with $data.best_rating -}}
-        {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "float" "field" "review.best_rating" "page" $page) -}}
+      {{- if isset $data "best_rating" -}}
+        {{- $v := partial "seo/lib/num.html" (dict "value" $data.best_rating "mode" "float" "field" "review.best_rating" "page" $page) -}}
         {{- if ne (printf "%v" $v) "" -}}
           {{- $rr = merge $rr (dict "bestRating" $v) -}}
         {{- end -}}
       {{- end -}}
-      {{- with $data.worst_rating -}}
-        {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "float" "field" "review.worst_rating" "page" $page) -}}
+      {{- if isset $data "worst_rating" -}}
+        {{- $v := partial "seo/lib/num.html" (dict "value" $data.worst_rating "mode" "float" "field" "review.worst_rating" "page" $page) -}}
         {{- if ne (printf "%v" $v) "" -}}
           {{- $rr = merge $rr (dict "worstRating" $v) -}}
         {{- end -}}
@@ -109,8 +121,13 @@
         {{- $node = merge $node (dict "author" (dict "@type" "Person" "name" $authorName)) -}}
       {{- end -}}
 
+      {{/* datePublished via lib/time.html, the single date-format authority;
+           an unparseable value warns once and drops the property. */}}
       {{- with $data.date_published -}}
-        {{- $node = merge $node (dict "datePublished" .) -}}
+        {{- $dp := partial "seo/lib/time.html" (dict "value" . "field" "review.date_published" "page" $page) -}}
+        {{- with $dp -}}
+          {{- $node = merge $node (dict "datePublished" .) -}}
+        {{- end -}}
       {{- end -}}
       {{- with $data.body -}}
         {{- $node = merge $node (dict "reviewBody" .) -}}

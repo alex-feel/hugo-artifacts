@@ -9,7 +9,9 @@
   expects for availability, itemCondition, and returnPolicyCategory) or to the
   BARE value when .urlForm is false (applicationCategory, suggestedGender, and
   the interaction @type names). On an invalid value it returns "" and emits a
-  deduplicated warn via lib/warn.html.
+  deduplicated warn via lib/warn.html, keyed by field + value + the page's
+  RelPermalink (empty when no page is supplied), so the same bad value on two
+  different pages warns once per page.
 
   Context (dict):
   - .field (string)   The enum field name; one of:
@@ -72,10 +74,11 @@
       {{- $result = $bare -}}
     {{- end -}}
   {{- else -}}
-    {{/* Invalid value: drop the property and warn once, keyed by field+value;
-         the page is identified by its RelPermalink. applicationCategory
-         carries its own message naming Google's 22 supported values; every
-         other field uses the generic enum message. */}}
+    {{/* Invalid value: drop the property and warn once, keyed by
+         field+value+page (RelPermalink, empty-safe), so the same bad value on
+         two pages warns once per page. applicationCategory carries its own
+         message naming Google's 22 supported values; every other field uses
+         the generic enum message. */}}
     {{- $rel := "" -}}
     {{- with $page -}}
       {{- $rel = .RelPermalink -}}
@@ -85,7 +88,7 @@
       {{- $message = printf "[seo] SoftwareApplication on %q has applicationCategory %q, which is not one of Google's 22 supported values; property omitted." $rel $bare -}}
     {{- end -}}
     {{- partial "seo/lib/warn.html" (dict
-      "key" (printf "seo:warn:enum:%s:%s" $field $bare)
+      "key" (printf "seo:warn:enum:%s:%s:%s" $field $bare $rel)
       "message" $message
     ) -}}
   {{- end -}}

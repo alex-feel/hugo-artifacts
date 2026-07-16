@@ -195,15 +195,18 @@
           {{- $hasAud = true -}}
         {{- end -}}
       {{- end -}}
-      {{- with $aud.suggested_min_age -}}
-        {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "float" "field" "seo.product.audience.suggested_min_age" "page" $page) -}}
+      {{/* Age gates are isset-based (not truthiness) so a native (unquoted)
+           0 -- a valid suggestedMinAge for from-birth products -- reaches
+           lib/num.html. */}}
+      {{- if isset $aud "suggested_min_age" -}}
+        {{- $v := partial "seo/lib/num.html" (dict "value" $aud.suggested_min_age "mode" "float" "field" "seo.product.audience.suggested_min_age" "page" $page) -}}
         {{- if ne (printf "%v" $v) "" -}}
           {{- $audNode = merge $audNode (dict "suggestedMinAge" $v) -}}
           {{- $hasAud = true -}}
         {{- end -}}
       {{- end -}}
-      {{- with $aud.suggested_max_age -}}
-        {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "float" "field" "seo.product.audience.suggested_max_age" "page" $page) -}}
+      {{- if isset $aud "suggested_max_age" -}}
+        {{- $v := partial "seo/lib/num.html" (dict "value" $aud.suggested_max_age "mode" "float" "field" "seo.product.audience.suggested_max_age" "page" $page) -}}
         {{- if ne (printf "%v" $v) "" -}}
           {{- $audNode = merge $audNode (dict "suggestedMaxAge" $v) -}}
           {{- $hasAud = true -}}

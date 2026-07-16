@@ -50,7 +50,9 @@
   failure test is `eq (printf "%v" $v) ""`.
 
   On an invalid value it emits a deduplicated warn via lib/warn.html, keyed
-  by field + raw value. ONE terminal return.
+  by field + raw value + the page's RelPermalink (empty when no page is
+  supplied), so the same bad value on two different pages warns once per
+  page. ONE terminal return.
 */}}
 
 {{- $raw := trim (printf "%v" .value) " \t\n\r" -}}
@@ -147,14 +149,14 @@
 
 {{- if not $valid -}}
   {{/* Invalid value: return "" so the caller drops the property (or token),
-       and warn once, keyed by field+value; the page is identified by its
-       RelPermalink. */}}
+       and warn once, keyed by field+value+page (RelPermalink, empty-safe), so
+       the same bad value on two pages warns once per page. */}}
   {{- $rel := "" -}}
   {{- with $page -}}
     {{- $rel = .RelPermalink -}}
   {{- end -}}
   {{- partial "seo/lib/warn.html" (dict
-    "key" (printf "seo:warn:num:%s:%s" $field $raw)
+    "key" (printf "seo:warn:num:%s:%s:%s" $field $raw $rel)
     "message" (printf "[seo] Page %q has %s %q, not a parseable decimal number; %s omitted." $rel $field $raw $what)
   ) -}}
 {{- end -}}

@@ -22,7 +22,10 @@
 
   Returns: an RFC 3339 string (format "2006-01-02T15:04:05Z07:00"), or a
   "2006-01-02" Date string in "date" mode, or "" when the value is zero,
-  empty, or unparseable. An unparseable value additionally emits a
+  empty, or unparseable. A NATIVE NUMBER (an unquoted front-matter value like
+  `price_valid_until = 2026`) is never a valid date here -- time.AsTime would
+  read it as epoch seconds and silently emit a 1970-era timestamp -- so it is
+  rejected as unparseable. An unparseable value additionally emits a
   deduplicated warn via lib/warn.html: when .field or .page is present the
   warn names the page and field and is keyed by field + value + page; the
   bare call form warns with the value alone, keyed by the value.
@@ -48,28 +51,19 @@
     {{- $t := . -}}
     {{/* Coerce strings and other parseable values to time.Time; a genuine
          time.Time passes through time.AsTime unchanged. */}}
+    {{- $unparseable := false -}}
     {{- if reflect.IsMap $t -}}
       {{/* Defensive: a map is never a valid date; leave $result empty. */}}
+    {{- else if findRE `^(u?int\d*|float\d+)$` (printf "%T" $t) -}}
+      {{/* A native number is never a valid date here: time.AsTime would read
+           it as epoch seconds and silently emit a 1970-era timestamp for a
+           value like an unquoted `price_valid_until = 2026`. Reject it via
+           the shared warn path below. */}}
+      {{- $unparseable = true -}}
     {{- else -}}
       {{- $attempt := try (time.AsTime $t) -}}
       {{- if $attempt.Err -}}
-        {{/* Unparseable date: leave $result "" and warn once. With a field
-             or page in the call, the warn names both and dedups per
-             field+value+page; the bare form dedups per value alone. */}}
-        {{- $rel := "" -}}
-        {{- with $page -}}
-          {{- $rel = .RelPermalink -}}
-        {{- end -}}
-        {{- $key := printf "seo:warn:time:%v" $t -}}
-        {{- $message := printf "[seo] Date value %q is not a parseable date; property omitted." (printf "%v" $t) -}}
-        {{- if or $field $rel -}}
-          {{- $key = printf "seo:warn:time:%s:%v:%s" $field $t $rel -}}
-          {{- $message = printf "[seo] Page %q has %s %q, not a parseable date; property omitted." $rel $field (printf "%v" $t) -}}
-        {{- end -}}
-        {{- partial "seo/lib/warn.html" (dict
-          "key" $key
-          "message" $message
-        ) -}}
+        {{- $unparseable = true -}}
       {{- else -}}
         {{- with $attempt.Value -}}
           {{- if not .IsZero -}}
@@ -81,6 +75,25 @@
           {{- end -}}
         {{- end -}}
       {{- end -}}
+    {{- end -}}
+    {{- if $unparseable -}}
+      {{/* Unparseable date: leave $result "" and warn once. With a field or
+           page in the call, the warn names both and dedups per
+           field+value+page; the bare form dedups per value alone. */}}
+      {{- $rel := "" -}}
+      {{- with $page -}}
+        {{- $rel = .RelPermalink -}}
+      {{- end -}}
+      {{- $key := printf "seo:warn:time:%v" $t -}}
+      {{- $message := printf "[seo] Date value %q is not a parseable date; property omitted." (printf "%v" $t) -}}
+      {{- if or $field $rel -}}
+        {{- $key = printf "seo:warn:time:%s:%v:%s" $field $t $rel -}}
+        {{- $message = printf "[seo] Page %q has %s %q, not a parseable date; property omitted." $rel $field (printf "%v" $t) -}}
+      {{- end -}}
+      {{- partial "seo/lib/warn.html" (dict
+        "key" $key
+        "message" $message
+      ) -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}

@@ -167,15 +167,17 @@
         {{- range $video.clips -}}
           {{/* startOffset is Google-required on Clip: an unparseable
                start_offset (lib/num.html warns once) skips this WHOLE clip
-               entry. end_offset stays a property-drop (optional). */}}
+               entry. end_offset stays a property-drop (optional), gated with
+               isset (not truthiness) so a native (unquoted) 0 reaches the
+               parser. */}}
           {{- $so := partial "seo/lib/num.html" (dict "value" (.start_offset | default 0) "mode" "int" "field" "seo.video.clips.start_offset" "page" $page) -}}
           {{- if ne (printf "%v" $so) "" -}}
             {{- $clip := dict "@type" "Clip" "startOffset" $so -}}
             {{- with .name -}}
               {{- $clip = merge $clip (dict "name" .) -}}
             {{- end -}}
-            {{- with .end_offset -}}
-              {{- $eo := partial "seo/lib/num.html" (dict "value" . "mode" "int" "field" "seo.video.clips.end_offset" "page" $page) -}}
+            {{- if isset . "end_offset" -}}
+              {{- $eo := partial "seo/lib/num.html" (dict "value" .end_offset "mode" "int" "field" "seo.video.clips.end_offset" "page" $page) -}}
               {{- if ne (printf "%v" $eo) "" -}}
                 {{- $clip = merge $clip (dict "endOffset" $eo) -}}
               {{- end -}}
@@ -202,11 +204,15 @@
       )) -}}
     {{- end -}}
 
-    {{/* interactionStatistic (WatchAction) from watch_count, parsed once and
-         reused for both the positivity guard and the emission; an unparseable
-         count drops the property (lib/num.html warns once). */}}
-    {{- with $video.watch_count -}}
-      {{- $wc := partial "seo/lib/num.html" (dict "value" . "mode" "int" "field" "seo.video.watch_count" "page" $page) -}}
+    {{/* interactionStatistic (WatchAction) from watch_count, presence-gated
+         with isset (not truthiness) so a native (unquoted) 0 reaches
+         lib/num.html, then parsed once and reused for both the positivity
+         guard and the emission; an unparseable count drops the property
+         (lib/num.html warns once). The post-parse `gt $wc 0` guard is a
+         deliberate semantic choice: a zero count is valid but not worth
+         emitting. */}}
+    {{- if isset $video "watch_count" -}}
+      {{- $wc := partial "seo/lib/num.html" (dict "value" $video.watch_count "mode" "int" "field" "seo.video.watch_count" "page" $page) -}}
       {{- if ne (printf "%v" $wc) "" -}}
         {{- if gt $wc 0 -}}
           {{- $node = merge $node (dict "interactionStatistic" (dict
