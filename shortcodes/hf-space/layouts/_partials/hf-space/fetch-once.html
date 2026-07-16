@@ -139,7 +139,9 @@
          "parse" failure instead of crashing a consumer's field access or
          masquerading as data. The explicit kind check matters because an
          empty string decodes to nil WITHOUT an error and template truthiness
-         would misread a valid {} as a failure. */}}
+         would misread a valid {} as a failure. Unlike the github-repo
+         sibling, no status code is special-cased: the Hub has no 202
+         still-computing answer, so any 2xx with a decoded object is data. */}}
     {{- $raw := .Content -}}
     {{- $sc := 200 -}}
     {{- $sucHdrs := dict -}}

@@ -147,7 +147,7 @@ Hugo templates have no sleep primitive, so true backoff between outer attempts i
 | `rate-limit` | HTTP 429 | Early break -- a rate-limit window cannot reset between immediate attempts. The wait hint is taken from a numeric `Retry-After`, else the `t` reset delta in the IETF `RateLimit` header, else a 60-second default, and surfaced for a later CI-level rebuild. An HTTP-date `Retry-After` (the other form RFC 9110 permits) is treated as absent and falls through to the next hint source. |
 | `server` | HTTP 5xx | Retry up to `attempts` or `overallBudgetSec`, whichever comes first. |
 | `network` | No HTTP response (DNS failure, connection refused, host timeout) | Retry up to `attempts` or `overallBudgetSec`. |
-| `parse` | 2xx response whose body is not a decodable JSON object (an array, blank, undecodable, null, or scalar body; `{}` is a valid payload) | Retry up to `attempts` or `overallBudgetSec`. |
+| `parse` | 2xx response whose body is not a decodable JSON object (an array, blank, undecodable, null, or scalar body; `{}` is a valid payload). Unlike the github-repo sibling, no status code is special-cased: the Hub has no 202 still-computing answer. | Retry up to `attempts` or `overallBudgetSec`. |
 | `other` | Anything else | Retry up to `attempts` or `overallBudgetSec`. |
 
 On retry exhaustion the module emits a single structured `warnf` per failed Space (with `errorClass`, `statusCode`, the Hub's error `message` when present, and a wait hint for rate limits) and falls through to graceful degradation. The build is never broken by an API failure.
@@ -158,6 +158,7 @@ When all retries exhaust, the module does not break the build. It logs the struc
 
 - **`inline` variant:** Renders from the owner/name parsed from the locator; the like count is omitted (it is unknown without the API).
 - **`card`, `wide`, `stats`, `hero` variants:** Fall back to the inline chip layout. The root element carries `data-api-ok="false"` so the consuming site can style the degraded state.
+- **Formatter safety:** an unparseable, non-finite, or implausibly large like count passes through the compact-number formatter verbatim, and an unparseable `lastModified` renders an empty relative time; neither breaks the build.
 
 ## Data Files
 
@@ -182,6 +183,20 @@ The module does **not** surface a Space's runtime stage (Running / Sleeping / Bu
 ## SDK Labels
 
 The Hub's `sdk` value (`gradio`, `streamlit`, `docker`, `static`) is mapped to a display label (`Gradio`, `Streamlit`, `Docker`, `Static`) and exposed as `sdkLabel`, with the raw lowercase value on `data-sdk`. An unknown SDK is title-cased. The SDK version (`sdkVersion`) comes from the Space card's `sdk_version` and is present for Gradio Spaces; Docker and Static Spaces carry none.
+
+## Localization
+
+All UI strings resolve through i18n keys shipped in the module's `i18n/` directory (English and Russian included). Every lookup falls back to the English string, so a site language without translations still renders correctly. Override any key in the consuming site's own `i18n/<lang>.toml` to translate or reword. The `*_ago` and `hf_space_likes_word` keys are plural-form tables: Hugo selects the `one`/`few`/`many`/`other` form from the integer count per the language's CLDR rules.
+
+| Key | English value | Used for |
+| --- | --- | --- |
+| `hf_space_type_space` | `SPACE` | Card/wide eyebrow and hero type label |
+| `hf_space_aria_label` | `{{ .Title }}, a Hugging Face Space by {{ .Owner }}` | Root link accessible label (all variants) |
+| `hf_space_stat_sdk` / `_hardware` / `_likes` | `SDK` / `Hardware` / `Likes` | Stats-card labels |
+| `hf_space_likes_word` | `like` / `likes` (plural forms) | Hero like-count word (raw counts below 1000 select their own plural form; a compact-formatted display such as `1.2k` selects the form of 1000, whose category fits a rounded quantity) |
+| `hf_space_open_in_spaces` | `Open in Spaces` | Hero call-to-action |
+| `hf_space_just_now` / `hf_space_yesterday` | `just now` / `yesterday` | Relative time |
+| `hf_space_hours_ago` / `_days_ago` / `_months_ago` / `_years_ago` | `1 hour ago` / `{{ .Count }} hours ago` (plural forms) | Relative time |
 
 ## Styling
 
@@ -256,6 +271,9 @@ shortcodes/hf-space/
   data/
     hf_space_colors.json          # HF color name -> hex (8 colors)
     hf_space_hardware.json        # hardware flavor id -> display name
+  i18n/
+    en.toml                       # English UI strings (the fallback defaults)
+    ru.toml                       # Russian UI strings
   layouts/
     _shortcodes/
       hf-space.html               # Main shortcode (parameter validation + dispatch)

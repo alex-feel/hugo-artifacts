@@ -91,6 +91,7 @@
   "hardware" ""
   "hardwareLabel" ""
   "likes" 0
+  "likesCount" 0
   "likesFormatted" "0"
   "updated" ""
   "updatedISO" ""
@@ -207,9 +208,14 @@
     {{- $hardwareLabel = or (index hugo.Data.hf_space_hardware .) . -}}
   {{- end -}}
 
-  {{/* Likes. */}}
+  {{/* Likes. The guarded integer count feeds the i18n plural-form
+       selection: the raw value is remote-derived, so the cast is try-wrapped
+       and a bad value degrades to 0 instead of failing the build. */}}
   {{- $likesRaw := or $json.likes 0 -}}
   {{- $likesF := partial "hf-space/compact-number.html" $likesRaw -}}
+  {{- $likesN := 0 -}}
+  {{- $t := try (int $likesRaw) -}}
+  {{- if not $t.Err -}}{{- with $t.Value -}}{{- $likesN = . -}}{{- end -}}{{- end -}}
 
   {{/* The Space's runtime stage (Running/Sleeping/Building/...) is deliberately
        NOT collected. It changes minute to minute, while a static site rebuilds
@@ -273,6 +279,7 @@
     "hardware" $hardware
     "hardwareLabel" $hardwareLabel
     "likes" $likesRaw
+    "likesCount" $likesN
     "likesFormatted" $likesF
     "updated" $updatedStr
     "updatedISO" $updatedISO

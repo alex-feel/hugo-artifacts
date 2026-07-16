@@ -16,7 +16,7 @@
    class="hf-space hf-space--inline{{ with .extraClass }} {{ . }}{{ end }}"
    target="_blank"
    rel="noopener noreferrer"
-   aria-label="{{ or .title .name }}, a Hugging Face Space by {{ .owner }}"
+   aria-label="{{ T "hf_space_aria_label" (dict "Title" (or .title .name) "Owner" .owner) | default (printf "%s, a Hugging Face Space by %s" (or .title .name) .owner) }}"
    data-space="{{ .id }}"
    data-variant="{{ $variant }}"
    data-api-ok="{{ .apiOk }}"

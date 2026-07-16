@@ -1,0 +1,40 @@
+# Hugo hf-space module -- Russian UI strings.
+
+hf_space_type_space = "SPACE"
+hf_space_aria_label = "{{ .Title }} — Space на Hugging Face от {{ .Owner }}"
+hf_space_stat_sdk = "SDK"
+hf_space_stat_hardware = "Оборудование"
+hf_space_stat_likes = "Лайки"
+hf_space_open_in_spaces = "Открыть в Spaces"
+hf_space_just_now = "только что"
+hf_space_yesterday = "вчера"
+
+[hf_space_likes_word]
+one = "лайк"
+few = "лайка"
+many = "лайков"
+other = "лайка"
+
+[hf_space_hours_ago]
+one = "{{ .Count }} час назад"
+few = "{{ .Count }} часа назад"
+many = "{{ .Count }} часов назад"
+other = "{{ .Count }} часа назад"
+
+[hf_space_days_ago]
+one = "{{ .Count }} день назад"
+few = "{{ .Count }} дня назад"
+many = "{{ .Count }} дней назад"
+other = "{{ .Count }} дня назад"
+
+[hf_space_months_ago]
+one = "{{ .Count }} месяц назад"
+few = "{{ .Count }} месяца назад"
+many = "{{ .Count }} месяцев назад"
+other = "{{ .Count }} месяца назад"
+
+[hf_space_years_ago]
+one = "{{ .Count }} год назад"
+few = "{{ .Count }} года назад"
+many = "{{ .Count }} лет назад"
+other = "{{ .Count }} года назад"
