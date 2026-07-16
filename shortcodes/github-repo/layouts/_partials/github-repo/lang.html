@@ -27,10 +27,10 @@
    data-variant="lang">
   <div class="github-repo__top">
     <span class="github-repo__slug">
-      {{- partial "github-repo/icon.html" (dict "name" "github" "class" "github-repo__icon") }} REPOSITORY</span>
+      {{- partial "github-repo/icon.html" (dict "name" "github" "class" "github-repo__icon") }} {{ T "github_repo_type_repository" | default "REPOSITORY" }}</span>
     <span class="github-repo__star-pill">
       {{- partial "github-repo/icon.html" (dict "name" "star") }}
-      {{ .starsFormatted }} · {{ .forksFormatted }} forks
+      {{ .starsFormatted }} · {{ .forksFormatted }} {{ T "github_repo_forks_word" (cond (lt .forksCount 1000) .forksCount 1000) | default "forks" }}
     </span>
   </div>
   <h3 class="github-repo__title">

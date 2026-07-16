@@ -5,7 +5,10 @@
 
   Returns a string like "3 days ago", "2 months ago", "just now", or "" when
   the timestamp is unparseable -- the input is remote-derived, so a malformed
-  value degrades to an empty string instead of failing the build.
+  value degrades to an empty string instead of failing the build. Every phrase
+  resolves through the shipped github_repo_* i18n keys (plural forms selected by
+  CLDR rules from the integer count) with English defaults, so a site language
+  without the keys still renders.
 */}}
 
 {{- $result := "" -}}
@@ -21,33 +24,21 @@
 
 {{- if not $parsedOk -}}
 {{- else if lt $hours 1.0 -}}
-  {{- $result = "just now" -}}
+  {{- $result = T "github_repo_just_now" | default "just now" -}}
 {{- else if lt $hours 24.0 -}}
-  {{- $h := math.Floor $hours -}}
-  {{- if eq $h 1.0 -}}
-    {{- $result = "1 hour ago" -}}
-  {{- else -}}
-    {{- $result = printf "%.0f hours ago" $h -}}
-  {{- end -}}
+  {{- $n := int (math.Floor $hours) -}}
+  {{- $result = T "github_repo_hours_ago" $n | default (cond (eq $n 1) "1 hour ago" (printf "%d hours ago" $n)) -}}
 {{- else if lt $hours 48.0 -}}
-  {{- $result = "yesterday" -}}
+  {{- $result = T "github_repo_yesterday" | default "yesterday" -}}
 {{- else if lt $hours 720.0 -}}
-  {{- $days := math.Floor (math.Div $hours 24.0) -}}
-  {{- $result = printf "%.0f days ago" $days -}}
+  {{- $n := int (math.Floor (math.Div $hours 24.0)) -}}
+  {{- $result = T "github_repo_days_ago" $n | default (cond (eq $n 1) "1 day ago" (printf "%d days ago" $n)) -}}
 {{- else if lt $hours 8760.0 -}}
-  {{- $months := math.Floor (math.Div $hours 720.0) -}}
-  {{- if eq $months 1.0 -}}
-    {{- $result = "1 month ago" -}}
-  {{- else -}}
-    {{- $result = printf "%.0f months ago" $months -}}
-  {{- end -}}
+  {{- $n := int (math.Floor (math.Div $hours 720.0)) -}}
+  {{- $result = T "github_repo_months_ago" $n | default (cond (eq $n 1) "1 month ago" (printf "%d months ago" $n)) -}}
 {{- else -}}
-  {{- $years := math.Floor (math.Div $hours 8760.0) -}}
-  {{- if eq $years 1.0 -}}
-    {{- $result = "1 year ago" -}}
-  {{- else -}}
-    {{- $result = printf "%.0f years ago" $years -}}
-  {{- end -}}
+  {{- $n := int (math.Floor (math.Div $hours 8760.0)) -}}
+  {{- $result = T "github_repo_years_ago" $n | default (cond (eq $n 1) "1 year ago" (printf "%d years ago" $n)) -}}
 {{- end -}}
 
 {{- return $result -}}

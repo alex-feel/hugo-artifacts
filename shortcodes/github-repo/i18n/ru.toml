@@ -1,0 +1,49 @@
+# Hugo github-repo module -- Russian UI strings.
+
+github_repo_eyebrow_card = "GITHUB · РЕПОЗИТОРИЙ"
+github_repo_eyebrow_stats = "GITHUB / {{ . }}"
+github_repo_type_repository = "РЕПОЗИТОРИЙ"
+github_repo_updated = "обновлено {{ . }}"
+github_repo_view_on_github = "Открыть на GitHub"
+github_repo_stat_language = "Язык"
+github_repo_stat_stars = "Звёзды"
+github_repo_stat_forks = "Форки"
+github_repo_stat_license = "Лицензия"
+github_repo_just_now = "только что"
+github_repo_yesterday = "вчера"
+
+[github_repo_stars_word]
+one = "звезда"
+few = "звезды"
+many = "звёзд"
+other = "звезды"
+
+[github_repo_forks_word]
+one = "форк"
+few = "форка"
+many = "форков"
+other = "форка"
+
+[github_repo_hours_ago]
+one = "{{ .Count }} час назад"
+few = "{{ .Count }} часа назад"
+many = "{{ .Count }} часов назад"
+other = "{{ .Count }} часа назад"
+
+[github_repo_days_ago]
+one = "{{ .Count }} день назад"
+few = "{{ .Count }} дня назад"
+many = "{{ .Count }} дней назад"
+other = "{{ .Count }} дня назад"
+
+[github_repo_months_ago]
+one = "{{ .Count }} месяц назад"
+few = "{{ .Count }} месяца назад"
+many = "{{ .Count }} месяцев назад"
+other = "{{ .Count }} месяца назад"
+
+[github_repo_years_ago]
+one = "{{ .Count }} год назад"
+few = "{{ .Count }} года назад"
+many = "{{ .Count }} лет назад"
+other = "{{ .Count }} года назад"

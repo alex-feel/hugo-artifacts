@@ -213,6 +213,7 @@ When all retries for an endpoint exhaust, the module does not break the build. I
 - **`card`, `stats`, `lang`, `hero` variants:** Fall back to the inline chip layout.
 - **`lang` variant, languages endpoint failure:** The language bar and legend are omitted; the rest of the card renders normally.
 - **`hero` variant, participation endpoint failure or HTTP 202:** The sparkline is omitted; the rest of the card renders normally.
+- **Formatter safety:** an unparseable, non-finite, or implausibly large star/fork count passes through the compact-number formatter verbatim, and an unparseable `pushed_at` timestamp renders an empty relative time; neither breaks the build.
 
 ## Language Colors
 
@@ -223,6 +224,22 @@ Languages not present in this file receive no color value. The consuming site's 
 **Updating:** To refresh colors or add new languages, update `data/github_repo_lang_colors.json` with values from the [Linguist languages.yml](https://github.com/github-linguist/linguist/blob/main/lib/linguist/languages.yml) `color` field. Keys must match the exact language names returned by the GitHub API (case-sensitive).
 
 **Overriding:** Hugo merges data files from all modules, and the consuming site's files take precedence. A site can therefore replace the shipped color mappings deliberately by defining its own `data/github_repo_lang_colors.json`.
+
+## Localization
+
+All UI strings resolve through i18n keys shipped in the module's `i18n/` directory (English and Russian included). Every lookup falls back to the English string, so a site language without translations still renders correctly. Override any key in the consuming site's own `i18n/<lang>.toml` to translate or reword. The `*_ago` keys are plural-form tables: Hugo selects the `one`/`few`/`many`/`other` form from the integer count per the language's CLDR rules.
+
+| Key | English value | Used for |
+| --- | --- | --- |
+| `github_repo_eyebrow_card` | `GITHUB · REPOSITORY` | Card eyebrow |
+| `github_repo_eyebrow_stats` | `GITHUB / {{ . }}` | Stats eyebrow (`{{ . }}` is the uppercased owner) |
+| `github_repo_type_repository` | `REPOSITORY` | Lang-card eyebrow and hero breadcrumb |
+| `github_repo_updated` | `updated {{ . }}` | Card and hero updated line (`{{ . }}` is the relative time) |
+| `github_repo_view_on_github` | `View on GitHub` | Hero call-to-action |
+| `github_repo_stat_language` / `_stars` / `_forks` / `_license` | `Language` / `Stars` / `Forks` / `License` | Stats-card labels |
+| `github_repo_stars_word` / `github_repo_forks_word` | `star`/`stars` / `fork`/`forks` (plural forms) | Hero and lang-card count words (raw counts below 1000 select their own plural form; a compact-formatted display such as `1.2k` selects the form of 1000) |
+| `github_repo_just_now` / `github_repo_yesterday` | `just now` / `yesterday` | Relative time |
+| `github_repo_hours_ago` / `_days_ago` / `_months_ago` / `_years_ago` | `1 hour ago` / `{{ .Count }} hours ago` (plural forms) | Relative time |
 
 ## Styling
 
@@ -279,6 +296,9 @@ shortcodes/github-repo/
   hugo.toml
   data/
     github_repo_lang_colors.json
+  i18n/
+    en.toml                           # English UI strings (the fallback defaults)
+    ru.toml                           # Russian UI strings
   layouts/
     _shortcodes/
       github-repo.html              # Main shortcode (parameter validation + dispatch)
