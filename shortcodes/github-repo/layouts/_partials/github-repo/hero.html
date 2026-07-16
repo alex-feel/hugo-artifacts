@@ -42,7 +42,7 @@
       {{- with .sparkline -}}
       {{- $max := math.Max . -}}
       {{- if gt $max 0 }}
-      <span class="github-repo__sparkline" title="Last 52 weeks of commits">
+      <span class="github-repo__sparkline" title="{{ T "github_repo_sparkline_title" | default "Last 52 weeks of commits" }}">
         {{- range . -}}
         {{- $height := math.Max 2 (math.Mul (math.Div (float .) (float $max)) 18) -}}
         {{- $opacity := math.Add 0.35 (math.Mul (math.Div (float .) (float $max)) 0.65) -}}
