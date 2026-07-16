@@ -137,7 +137,9 @@
 {{- with $startRaw -}}
   {{- if findRE `^[0-9]+$` . 1 -}}
     {{- $s := strings.TrimLeft "0" . -}}
-    {{- if $s -}}
+    {{- if gt (len $s) 9 -}}
+      {{- warnf "The %q shortcode ignored an out-of-range start=%q (expected whole seconds of at most nine digits). See %s" $.Name . $.Position -}}
+    {{- else if $s -}}
       {{- $t := try (int $s) -}}
       {{- if $t.Err -}}
         {{- warnf "The %q shortcode ignored an out-of-range start=%q (expected whole seconds within integer range). See %s" $.Name . $.Position -}}
@@ -158,7 +160,9 @@
 {{- with $endRaw -}}
   {{- if findRE `^[0-9]+$` . 1 -}}
     {{- $e := strings.TrimLeft "0" . -}}
-    {{- if $e -}}
+    {{- if gt (len $e) 9 -}}
+      {{- warnf "The %q shortcode ignored an out-of-range end=%q (expected whole seconds of at most nine digits). See %s" $.Name . $.Position -}}
+    {{- else if $e -}}
       {{- $t := try (int $e) -}}
       {{- if $t.Err -}}
         {{- warnf "The %q shortcode ignored an out-of-range end=%q (expected whole seconds within integer range). See %s" $.Name . $.Position -}}
