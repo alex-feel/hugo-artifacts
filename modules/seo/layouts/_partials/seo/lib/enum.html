@@ -72,19 +72,17 @@
       {{- $result = $bare -}}
     {{- end -}}
   {{- else -}}
-    {{/* Invalid value: drop the property and warn once, keyed by field+value.
-         .Position is a shortcode-context field and is not available on a
-         page.Page here, so the trailing position placeholder is left empty; the
-         page is already identified by its RelPermalink. applicationCategory
+    {{/* Invalid value: drop the property and warn once, keyed by field+value;
+         the page is identified by its RelPermalink. applicationCategory
          carries its own message naming Google's 22 supported values; every
          other field uses the generic enum message. */}}
     {{- $rel := "" -}}
     {{- with $page -}}
       {{- $rel = .RelPermalink -}}
     {{- end -}}
-    {{- $message := printf "[seo] Offer on %q has %s %q, not a valid schema.org enum value; property omitted. %s" $rel $field $bare "" -}}
+    {{- $message := printf "[seo] Offer on %q has %s %q, not a valid schema.org enum value; property omitted." $rel $field $bare -}}
     {{- if eq $field "applicationCategory" -}}
-      {{- $message = printf "[seo] SoftwareApplication on %q has applicationCategory %q, which is not one of Google's 22 supported values; property omitted. %s" $rel $bare "" -}}
+      {{- $message = printf "[seo] SoftwareApplication on %q has applicationCategory %q, which is not one of Google's 22 supported values; property omitted." $rel $bare -}}
     {{- end -}}
     {{- partial "seo/lib/warn.html" (dict
       "key" (printf "seo:warn:enum:%s:%s" $field $bare)

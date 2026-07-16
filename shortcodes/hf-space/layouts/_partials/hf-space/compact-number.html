@@ -5,16 +5,32 @@
   integer. Identical formatting contract to the github-repo sibling module so
   the two read as a family.
 
-  Context: a numeric value (int or float)
+  Context: a numeric value (int, float, or numeric string)
 
-  Returns a formatted string.
+  Returns a formatted string. A value Hugo's float cast accepts (numbers,
+  numeric strings, and cast coercions such as nil -> 0 and booleans -> 0/1)
+  formats numerically; any other value is returned stringified as-is -- the
+  input is remote-derived, so an unparseable count degrades to verbatim
+  passthrough instead of failing the build. The single up-front guarded cast
+  covers every downstream tier comparison.
 */}}
 
-{{- $n := . -}}
-{{- $result := printf "%d" (int $n) -}}
+{{- $result := printf "%v" . -}}
+{{- $n := 0.0 -}}
+{{- $ok := false -}}
+{{- with try (float .) -}}
+  {{- if not .Err -}}
+    {{- $n = .Value -}}
+    {{- $ok = true -}}
+  {{- end -}}
+{{- end -}}
 
-{{- if ge (float $n) 1000000.0 -}}
-  {{- $d := math.Div (float $n) 1000000.0 -}}
+{{- if $ok -}}
+  {{- $result = printf "%d" (int $n) -}}
+{{- end -}}
+
+{{- if and $ok (ge $n 1000000.0) -}}
+  {{- $d := math.Div $n 1000000.0 -}}
   {{- $whole := math.Floor $d -}}
   {{- $frac := math.Round (math.Mul (math.Sub $d $whole) 10) -}}
   {{- if eq $frac 10.0 -}}
@@ -26,8 +42,8 @@
   {{- else -}}
     {{- $result = printf "%.0f.%.0fM" $whole $frac -}}
   {{- end -}}
-{{- else if ge (float $n) 1000.0 -}}
-  {{- $d := math.Div (float $n) 1000.0 -}}
+{{- else if and $ok (ge $n 1000.0) -}}
+  {{- $d := math.Div $n 1000.0 -}}
   {{- $whole := math.Floor $d -}}
   {{- $frac := math.Round (math.Mul (math.Sub $d $whole) 10) -}}
   {{- if eq $frac 10.0 -}}

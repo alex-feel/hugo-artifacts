@@ -45,14 +45,21 @@
 {{- $errorMessage := "" -}}
 
 {{/* Retry-After when present. The header legally carries either delay-seconds
-     or an HTTP-date; only the numeric form is usable as a wait hint, so the
-     cast is wrapped in try and the date form falls back to the 60s default. */}}
+     or an HTTP-date; only the numeric form is usable as a wait hint. Leading
+     zeros are stripped first so the base-0 cast cannot read a zero-padded
+     value as octal (int "011" -> 9) or die on an invalid octal digit (int
+     "08" is a fatal cast); an all-zero value trims to the empty string and is
+     skipped. The try absorbs the HTTP-date form and any other residual
+     unparseable value, falling back to the 60s default. */}}
 {{- $retryAfter := 0 -}}
 {{- with index $headers "Retry-After" -}}
   {{- with index . 0 -}}
-    {{- with try (int .) -}}
-      {{- with .Value -}}
-        {{- $retryAfter = . -}}
+    {{- $val := strings.TrimLeft "0" (trim . " \t") -}}
+    {{- if $val -}}
+      {{- with try (int $val) -}}
+        {{- with .Value -}}
+          {{- $retryAfter = . -}}
+        {{- end -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}

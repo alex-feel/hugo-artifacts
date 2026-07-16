@@ -8,7 +8,10 @@
   non-numeric string into an integer cast (a build-crash class this module
   designs out). Digit strings parse through images/lib/int.html, so a
   leading zero reads as decimal (never octal) and an oversized digit string
-  degrades to unparseable instead of overflowing the cast.
+  degrades to unparseable instead of overflowing the cast. Fractional
+  strings carry the same nine-digit cap on their integer part, so an
+  oversized fractional value degrades to unparseable too instead of
+  overflowing the float cast.
 
   Context (dict):
   - .width  (any, optional) Raw width value: int, float, "1920", "1920px".
@@ -36,7 +39,7 @@
     {{- end -}}
     {{- if ge $n 0 -}}
       {{- $out = merge $out (dict $k $n) -}}
-    {{- else if findRE `^\d+\.\d+$` $s -}}
+    {{- else if findRE `^\d{1,9}\.\d+$` $s -}}
       {{- $out = merge $out (dict $k (int (float $s))) -}}
     {{- else if ne $s "" -}}
       {{- $out = merge $out (dict "ok" false) -}}

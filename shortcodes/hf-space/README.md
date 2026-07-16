@@ -147,7 +147,7 @@ Hugo templates have no sleep primitive, so true backoff between outer attempts i
 | `rate-limit` | HTTP 429 | Early break -- a rate-limit window cannot reset between immediate attempts. The wait hint is taken from a numeric `Retry-After`, else the `t` reset delta in the IETF `RateLimit` header, else a 60-second default, and surfaced for a later CI-level rebuild. An HTTP-date `Retry-After` (the other form RFC 9110 permits) is treated as absent and falls through to the next hint source. |
 | `server` | HTTP 5xx | Retry up to `attempts` or `overallBudgetSec`, whichever comes first. |
 | `network` | No HTTP response (DNS failure, connection refused, host timeout) | Retry up to `attempts` or `overallBudgetSec`. |
-| `parse` | 2xx response whose body is not a decodable JSON object or array (blank, undecodable, null, or scalar; `{}` and `[]` are valid payloads) | Retry up to `attempts` or `overallBudgetSec`. |
+| `parse` | 2xx response whose body is not a decodable JSON object (an array, blank, undecodable, null, or scalar body; `{}` is a valid payload) | Retry up to `attempts` or `overallBudgetSec`. |
 | `other` | Anything else | Retry up to `attempts` or `overallBudgetSec`. |
 
 On retry exhaustion the module emits a single structured `warnf` per failed Space (with `errorClass`, `statusCode`, the Hub's error `message` when present, and a wait hint for rate limits) and falls through to graceful degradation. The build is never broken by an API failure.

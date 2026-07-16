@@ -25,8 +25,8 @@
                         `show-title` is true -- a visible title element.
   - start     (int)     Start offset in seconds (emits start=N). Falls back to
                         a ?t= / ?start= in `url` when this parameter is unset
-                        or invalid (a non-numeric value is warned and treated
-                        as unset).
+                        or invalid (a non-numeric or out-of-range value is
+                        warned and treated as unset).
   - end       (int)     End offset in seconds (emits end=N).
   - list      (string)  Playlist id. With no id/video, embeds the playlist
                         (/embed/videoseries?list=...); with a video, appends list=.
@@ -116,22 +116,28 @@
      warning -- an optional timing hint must not fail the build. Leading zeros
      are stripped so the base-0 cast cannot read a zero-padded value as octal
      (int "011" -> 9) or die on an invalid octal digit (int "08" is fatal);
-     an all-zero value trims to empty and keeps the 0 default, and the try
-     absorbs an overflowing digit run. $startSet tracks whether a VALID
-     explicit start was supplied, so an invalid value stays "treated as
-     unset" and the url-carried offset below still applies. */}}
+     an all-zero value trims to empty and counts as an explicit 0, and an
+     overflowing digit run is warned and ignored. $startSet is set ONLY when
+     the explicit start actually parsed, so every invalid value (non-numeric
+     or out of range) stays "treated as unset" and the url-carried offset
+     below still applies. */}}
 {{- $start := 0 -}}
 {{- $startSet := false -}}
 {{- with $startRaw -}}
   {{- if findRE `^[0-9]+$` . 1 -}}
-    {{- $startSet = true -}}
     {{- $s := strings.TrimLeft "0" . -}}
     {{- if $s -}}
-      {{- with try (int $s) -}}
-        {{- with .Value -}}
+      {{- $t := try (int $s) -}}
+      {{- if $t.Err -}}
+        {{- warnf "The %q shortcode ignored an out-of-range start=%q (expected whole seconds within integer range). See %s" $.Name . $.Position -}}
+      {{- else -}}
+        {{- with $t.Value -}}
           {{- $start = . -}}
         {{- end -}}
+        {{- $startSet = true -}}
       {{- end -}}
+    {{- else -}}
+      {{- $startSet = true -}}
     {{- end -}}
   {{- else -}}
     {{- warnf "The %q shortcode ignored a non-numeric start=%q (expected whole seconds). See %s" $.Name . $.Position -}}
@@ -142,8 +148,11 @@
   {{- if findRE `^[0-9]+$` . 1 -}}
     {{- $e := strings.TrimLeft "0" . -}}
     {{- if $e -}}
-      {{- with try (int $e) -}}
-        {{- with .Value -}}
+      {{- $t := try (int $e) -}}
+      {{- if $t.Err -}}
+        {{- warnf "The %q shortcode ignored an out-of-range end=%q (expected whole seconds within integer range). See %s" $.Name . $.Position -}}
+      {{- else -}}
+        {{- with $t.Value -}}
           {{- $end = . -}}
         {{- end -}}
       {{- end -}}

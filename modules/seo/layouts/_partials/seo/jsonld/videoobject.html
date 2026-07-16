@@ -17,6 +17,9 @@
     clips win and a warn fires when both are set.
   - The WHOLE hasPart is dropped (with a warn) when any two clips share a
     start_offset (Key Moments require unique start offsets).
+  - A clip whose start_offset does not parse is skipped WHOLE (startOffset is
+    Google-required on Clip; lib/num.html warns once); when every clip is
+    skipped, hasPart is not emitted.
   - regionsAllowed XOR ineligibleRegion; both set warns and drops
     ineligible_region.
 
@@ -30,10 +33,6 @@
 {{- $result := dict -}}
 
 {{- $video := $page.Param "seo.video" | default dict -}}
-{{/* Trailing warnf %s placeholder: pages expose no .Position (shortcode-only
-     method), so it stays empty and the page is identified by RelPermalink --
-     the module-wide convention shared with the resolver tier. */}}
-{{- $pos := "" -}}
 
 {{- if eq $page.Kind "page" -}}
   {{- $name := $seo.title -}}
@@ -74,7 +73,7 @@
        (which itself falls back to .Date). */}}
   {{- $uploadDate := "" -}}
   {{- with $video.upload_date -}}
-    {{- $uploadDate = partial "seo/lib/time.html" . -}}
+    {{- $uploadDate = partial "seo/lib/time.html" (dict "value" . "field" "seo.video.upload_date" "page" $page) -}}
   {{- end -}}
   {{- if not $uploadDate -}}
     {{- $uploadDate = $seo.datePublished -}}
@@ -89,7 +88,7 @@
   {{- if gt (len $missing) 0 -}}
     {{- partial "seo/lib/warn.html" (dict
       "key" (printf "seo:warn:video-required:%s" $page.RelPermalink)
-      "message" (printf "[seo] VideoObject on %q is missing %s; Google requires name, thumbnailUrl, and uploadDate. Node not emitted. %s" $page.RelPermalink (delimit $missing ", ") $pos)
+      "message" (printf "[seo] VideoObject on %q is missing %s; Google requires name, thumbnailUrl, and uploadDate. Node not emitted." $page.RelPermalink (delimit $missing ", "))
     ) -}}
   {{- else -}}
     {{- $node := dict
@@ -121,7 +120,7 @@
       {{- $node = merge $node (dict "duration" .) -}}
     {{- end -}}
     {{- with $video.expires -}}
-      {{- $expires := partial "seo/lib/time.html" . -}}
+      {{- $expires := partial "seo/lib/time.html" (dict "value" . "field" "seo.video.expires" "page" $page) -}}
       {{- with $expires -}}
         {{- $node = merge $node (dict "expires" .) -}}
       {{- end -}}
@@ -140,42 +139,56 @@
     {{- end -}}
 
     {{- if $hasClips -}}
-      {{/* Detect duplicate start_offsets. */}}
+      {{/* Detect duplicate start_offsets. An unparseable start_offset
+           (guarded via lib/num.html, which warns once) is skipped here: that
+           whole clip entry is skipped below, so it cannot collide. */}}
       {{- $seen := dict -}}
       {{- $dupOffset := -1 -}}
       {{- range $video.clips -}}
-        {{- $so := int (.start_offset | default 0) -}}
-        {{- $k := printf "%d" $so -}}
-        {{- if isset $seen $k -}}
-          {{- if lt $dupOffset 0 -}}
-            {{- $dupOffset = $so -}}
+        {{- $so := partial "seo/lib/num.html" (dict "value" (.start_offset | default 0) "mode" "int" "field" "seo.video.clips.start_offset" "page" $page) -}}
+        {{- if ne (printf "%v" $so) "" -}}
+          {{- $k := printf "%d" $so -}}
+          {{- if isset $seen $k -}}
+            {{- if lt $dupOffset 0 -}}
+              {{- $dupOffset = $so -}}
+            {{- end -}}
+          {{- else -}}
+            {{- $seen = merge $seen (dict $k true) -}}
           {{- end -}}
-        {{- else -}}
-          {{- $seen = merge $seen (dict $k true) -}}
         {{- end -}}
       {{- end -}}
       {{- if ge $dupOffset 0 -}}
         {{- partial "seo/lib/warn.html" (dict
           "key" (printf "seo:warn:video-clip-offset:%s" $page.RelPermalink)
-          "message" (printf "[seo] VideoObject on %q has two clips sharing startOffset %d; Key Moments require unique start offsets. hasPart omitted. %s" $page.RelPermalink $dupOffset $pos)
+          "message" (printf "[seo] VideoObject on %q has two clips sharing startOffset %d; Key Moments require unique start offsets. hasPart omitted." $page.RelPermalink $dupOffset)
         ) -}}
       {{- else -}}
         {{- $clips := slice -}}
         {{- range $video.clips -}}
-          {{- $clip := dict "@type" "Clip" -}}
-          {{- with .name -}}
-            {{- $clip = merge $clip (dict "name" .) -}}
+          {{/* startOffset is Google-required on Clip: an unparseable
+               start_offset (lib/num.html warns once) skips this WHOLE clip
+               entry. end_offset stays a property-drop (optional). */}}
+          {{- $so := partial "seo/lib/num.html" (dict "value" (.start_offset | default 0) "mode" "int" "field" "seo.video.clips.start_offset" "page" $page) -}}
+          {{- if ne (printf "%v" $so) "" -}}
+            {{- $clip := dict "@type" "Clip" "startOffset" $so -}}
+            {{- with .name -}}
+              {{- $clip = merge $clip (dict "name" .) -}}
+            {{- end -}}
+            {{- with .end_offset -}}
+              {{- $eo := partial "seo/lib/num.html" (dict "value" . "mode" "int" "field" "seo.video.clips.end_offset" "page" $page) -}}
+              {{- if ne (printf "%v" $eo) "" -}}
+                {{- $clip = merge $clip (dict "endOffset" $eo) -}}
+              {{- end -}}
+            {{- end -}}
+            {{- with .url -}}
+              {{- $clip = merge $clip (dict "url" .) -}}
+            {{- end -}}
+            {{- $clips = $clips | append $clip -}}
           {{- end -}}
-          {{- $clip = merge $clip (dict "startOffset" (int (.start_offset | default 0))) -}}
-          {{- with .end_offset -}}
-            {{- $clip = merge $clip (dict "endOffset" (int .)) -}}
-          {{- end -}}
-          {{- with .url -}}
-            {{- $clip = merge $clip (dict "url" .) -}}
-          {{- end -}}
-          {{- $clips = $clips | append $clip -}}
         {{- end -}}
-        {{- $node = merge $node (dict "hasPart" $clips) -}}
+        {{- with $clips -}}
+          {{- $node = merge $node (dict "hasPart" .) -}}
+        {{- end -}}
       {{- end -}}
     {{- else if $hasSeek -}}
       {{- $seekTmpl := $video.seek_url_template -}}
@@ -189,14 +202,19 @@
       )) -}}
     {{- end -}}
 
-    {{/* interactionStatistic (WatchAction) from watch_count. */}}
+    {{/* interactionStatistic (WatchAction) from watch_count, parsed once and
+         reused for both the positivity guard and the emission; an unparseable
+         count drops the property (lib/num.html warns once). */}}
     {{- with $video.watch_count -}}
-      {{- if gt (int .) 0 -}}
-        {{- $node = merge $node (dict "interactionStatistic" (dict
-          "@type" "InteractionCounter"
-          "interactionType" (dict "@type" "WatchAction")
-          "userInteractionCount" (int .)
-        )) -}}
+      {{- $wc := partial "seo/lib/num.html" (dict "value" . "mode" "int" "field" "seo.video.watch_count" "page" $page) -}}
+      {{- if ne (printf "%v" $wc) "" -}}
+        {{- if gt $wc 0 -}}
+          {{- $node = merge $node (dict "interactionStatistic" (dict
+            "@type" "InteractionCounter"
+            "interactionType" (dict "@type" "WatchAction")
+            "userInteractionCount" $wc
+          )) -}}
+        {{- end -}}
       {{- end -}}
     {{- end -}}
 
@@ -207,7 +225,7 @@
     {{- if and $hasRegions $hasIneligible -}}
       {{- partial "seo/lib/warn.html" (dict
         "key" (printf "seo:warn:video-regions:%s" $page.RelPermalink)
-        "message" (printf "[seo] VideoObject on %q sets both regionsAllowed and ineligibleRegion; keeping regionsAllowed. %s" $page.RelPermalink $pos)
+        "message" (printf "[seo] VideoObject on %q sets both regionsAllowed and ineligibleRegion; keeping regionsAllowed." $page.RelPermalink)
       ) -}}
     {{- end -}}
     {{- if $hasRegions -}}
@@ -226,14 +244,14 @@
         {{- $hasBcast = true -}}
       {{- end -}}
       {{- with $b.start_date -}}
-        {{- $sd := partial "seo/lib/time.html" . -}}
+        {{- $sd := partial "seo/lib/time.html" (dict "value" . "field" "seo.video.broadcast.start_date" "page" $page) -}}
         {{- with $sd -}}
           {{- $bcast = merge $bcast (dict "startDate" .) -}}
           {{- $hasBcast = true -}}
         {{- end -}}
       {{- end -}}
       {{- with $b.end_date -}}
-        {{- $ed := partial "seo/lib/time.html" . -}}
+        {{- $ed := partial "seo/lib/time.html" (dict "value" . "field" "seo.video.broadcast.end_date" "page" $page) -}}
         {{- with $ed -}}
           {{- $bcast = merge $bcast (dict "endDate" .) -}}
           {{- $hasBcast = true -}}

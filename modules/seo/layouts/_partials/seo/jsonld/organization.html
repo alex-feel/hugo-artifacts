@@ -129,7 +129,7 @@
          authority: schema.org types foundingDate as Date (YYYY-MM-DD), not
          DateTime. */}}
     {{- with $org.founding_date -}}
-      {{- $fd := partial "seo/lib/time.html" (dict "value" . "mode" "date") -}}
+      {{- $fd := partial "seo/lib/time.html" (dict "value" . "mode" "date" "field" "seo.organization.founding_date" "page" $site.Home) -}}
       {{- with $fd -}}
         {{- $node = merge $node (dict "foundingDate" .) -}}
       {{- end -}}
@@ -221,23 +221,34 @@
       {{- $node = merge $node (dict "naics" .) -}}
     {{- end -}}
 
-    {{/* numberOfEmployees (QuantitativeValue): value OR minValue+maxValue. */}}
+    {{/* numberOfEmployees (QuantitativeValue): value OR minValue+maxValue.
+         Each number parses through lib/num.html; an unparseable value drops
+         that single property with a deduped warn. */}}
     {{- with $org.number_of_employees -}}
       {{- $qv := dict "@type" "QuantitativeValue" -}}
       {{- $hasQv := false -}}
       {{- with .value -}}
-        {{- $qv = merge $qv (dict "value" (int .)) -}}
-        {{- $hasQv = true -}}
+        {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "int" "field" "seo.organization.number_of_employees.value" "page" $site.Home) -}}
+        {{- if ne (printf "%v" $v) "" -}}
+          {{- $qv = merge $qv (dict "value" $v) -}}
+          {{- $hasQv = true -}}
+        {{- end -}}
       {{- end -}}
       {{- if not $hasQv -}}
         {{- $hasRange := false -}}
         {{- with .min_value -}}
-          {{- $qv = merge $qv (dict "minValue" (int .)) -}}
-          {{- $hasRange = true -}}
+          {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "int" "field" "seo.organization.number_of_employees.min_value" "page" $site.Home) -}}
+          {{- if ne (printf "%v" $v) "" -}}
+            {{- $qv = merge $qv (dict "minValue" $v) -}}
+            {{- $hasRange = true -}}
+          {{- end -}}
         {{- end -}}
         {{- with .max_value -}}
-          {{- $qv = merge $qv (dict "maxValue" (int .)) -}}
-          {{- $hasRange = true -}}
+          {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "int" "field" "seo.organization.number_of_employees.max_value" "page" $site.Home) -}}
+          {{- if ne (printf "%v" $v) "" -}}
+            {{- $qv = merge $qv (dict "maxValue" $v) -}}
+            {{- $hasRange = true -}}
+          {{- end -}}
         {{- end -}}
         {{- $hasQv = $hasRange -}}
       {{- end -}}
@@ -270,8 +281,11 @@
           {{- end -}}
         {{- end -}}
         {{- with .merchant_return_days -}}
-          {{- $rp = merge $rp (dict "merchantReturnDays" (int .)) -}}
-          {{- $hasRp = true -}}
+          {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "int" "field" "seo.organization.return_policy.merchant_return_days" "page" $site.Home) -}}
+          {{- if ne (printf "%v" $v) "" -}}
+            {{- $rp = merge $rp (dict "merchantReturnDays" $v) -}}
+            {{- $hasRp = true -}}
+          {{- end -}}
         {{- end -}}
         {{- with .return_method -}}
           {{- $rp = merge $rp (dict "returnMethod" .) -}}
@@ -306,8 +320,11 @@
           {{- $hasCond = true -}}
         {{- end -}}
         {{- if isset . "rate" -}}
-          {{- $cond = merge $cond (dict "shippingRate" (dict "@type" "MonetaryAmount" "value" (float .rate))) -}}
-          {{- $hasCond = true -}}
+          {{- $v := partial "seo/lib/num.html" (dict "value" .rate "mode" "float" "field" "seo.organization.shipping.rate" "page" $site.Home) -}}
+          {{- if ne (printf "%v" $v) "" -}}
+            {{- $cond = merge $cond (dict "shippingRate" (dict "@type" "MonetaryAmount" "value" $v)) -}}
+            {{- $hasCond = true -}}
+          {{- end -}}
         {{- end -}}
         {{- if $hasCond -}}
           {{- $sh = merge $sh (dict "shippingConditions" $cond) -}}

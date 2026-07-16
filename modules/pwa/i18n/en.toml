@@ -1,25 +1,18 @@
 # Hugo PWA module -- English UI strings.
-# Keys are CONSUMED by install/push/update banner partials. Defined here so the module ships its
-# full i18n surface from one location. Templates lookup via `{{ T "pwa_install_button" }}`.
+# The offline keys are consumed by layouts/offline/single.html and content/_content.gotmpl. The
+# install/push button keys are the consumer-side contract: install-prompt.html and
+# push-subscribe.html emit no button markup themselves, and their docstrings show the consumer
+# markup that looks these keys up via `{{ T "pwa_install_button" }}`. Update UX ships no module
+# banner -- register.ts dispatches a `pwa:waiting` event and the consumer supplies any UI.
 
-# Install prompt
+# Install prompt (consumer-side button markup)
 pwa_install_button = "Install app"
-pwa_install_dismiss = "Not now"
-pwa_install_installed = "App installed"
 
-# Push subscription
+# Push subscription (consumer-side button markup)
 pwa_push_subscribe_button = "Enable notifications"
 pwa_push_unsubscribe_button = "Disable notifications"
-pwa_push_subscribed = "Notifications enabled"
-pwa_push_unsubscribed = "Notifications disabled"
-pwa_push_permission_denied = "Notifications blocked. Enable in browser settings."
 
-# Update banner
-pwa_update_available = "A new version is available."
-pwa_update_apply = "Update"
-pwa_update_dismiss = "Later"
-
-# Offline message
+# Offline page
 pwa_offline_title = "You are offline"
 pwa_offline_message = "This page is not available offline. Connect to the network and try again."
 pwa_offline_retry = "Retry"

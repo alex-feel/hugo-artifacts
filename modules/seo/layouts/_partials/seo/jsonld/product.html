@@ -29,10 +29,6 @@
 
 {{- $prod := $page.Param "seo.product" | default dict -}}
 {{- $offerData := $page.Param "seo.offer" | default dict -}}
-{{/* Trailing warnf %s placeholder: pages expose no .Position (shortcode-only
-     method), so it stays empty and the page is identified by RelPermalink --
-     the module-wide convention shared with the resolver tier. */}}
-{{- $pos := "" -}}
 
 {{/* Only page-kind pages are eligible; lists/home suppress silently. */}}
 {{- if eq $page.Kind "page" -}}
@@ -41,10 +37,16 @@
     {{- $name = . -}}
   {{- end -}}
 
-  {{/* Track determination: Merchant Listing when price > 0 and currency set. */}}
+  {{/* Track determination: Merchant Listing when price > 0 and currency set.
+       An unparseable price (guarded via lib/num.html, which warns once)
+       counts as absent, so the page falls to the Snippet track and its
+       offers/review/aggregateRating gate. */}}
   {{- $price := 0.0 -}}
   {{- if isset $offerData "price" -}}
-    {{- $price = float $offerData.price -}}
+    {{- $parsed := partial "seo/lib/num.html" (dict "value" $offerData.price "mode" "float" "field" "seo.offer.price" "page" $page) -}}
+    {{- if ne (printf "%v" $parsed) "" -}}
+      {{- $price = $parsed -}}
+    {{- end -}}
   {{- end -}}
   {{- $currency := $offerData.price_currency | default "" -}}
   {{- $isMerchant := and (gt $price 0.0) (ne $currency "") -}}
@@ -95,7 +97,7 @@
       {{- $suppress = true -}}
       {{- partial "seo/lib/warn.html" (dict
         "key" (printf "seo:warn:product-merchant:%s" $page.RelPermalink)
-        "message" (printf "[seo] Product on %q is a merchant listing (offer.price > 0) but is missing %s; Merchant Listing requires name, image, offers.price, offers.priceCurrency. Node not emitted. %s" $page.RelPermalink (delimit $missing ", ") $pos)
+        "message" (printf "[seo] Product on %q is a merchant listing (offer.price > 0) but is missing %s; Merchant Listing requires name, image, offers.price, offers.priceCurrency. Node not emitted." $page.RelPermalink (delimit $missing ", "))
       ) -}}
     {{- end -}}
   {{- else -}}
@@ -104,7 +106,7 @@
       {{- $suppress = true -}}
       {{- partial "seo/lib/warn.html" (dict
         "key" (printf "seo:warn:product-snippet:%s" $page.RelPermalink)
-        "message" (printf "[seo] Product on %q declares Product but has none of offers, review, or aggregateRating; a Product snippet requires at least one. Node not emitted. %s" $page.RelPermalink $pos)
+        "message" (printf "[seo] Product on %q declares Product but has none of offers, review, or aggregateRating; a Product snippet requires at least one. Node not emitted." $page.RelPermalink)
       ) -}}
     {{- end -}}
   {{- end -}}
@@ -194,12 +196,18 @@
         {{- end -}}
       {{- end -}}
       {{- with $aud.suggested_min_age -}}
-        {{- $audNode = merge $audNode (dict "suggestedMinAge" (float .)) -}}
-        {{- $hasAud = true -}}
+        {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "float" "field" "seo.product.audience.suggested_min_age" "page" $page) -}}
+        {{- if ne (printf "%v" $v) "" -}}
+          {{- $audNode = merge $audNode (dict "suggestedMinAge" $v) -}}
+          {{- $hasAud = true -}}
+        {{- end -}}
       {{- end -}}
       {{- with $aud.suggested_max_age -}}
-        {{- $audNode = merge $audNode (dict "suggestedMaxAge" (float .)) -}}
-        {{- $hasAud = true -}}
+        {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "float" "field" "seo.product.audience.suggested_max_age" "page" $page) -}}
+        {{- if ne (printf "%v" $v) "" -}}
+          {{- $audNode = merge $audNode (dict "suggestedMaxAge" $v) -}}
+          {{- $hasAud = true -}}
+        {{- end -}}
       {{- end -}}
       {{- if $hasAud -}}
         {{- $node = merge $node (dict "audience" $audNode) -}}

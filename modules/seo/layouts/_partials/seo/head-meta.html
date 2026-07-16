@@ -161,8 +161,14 @@
   {{- end }}
 {{- else if eq $seo.ogType "product" -}}
   {{- $offer := $page.Param "seo.offer" | default (dict) -}}
-  {{- with (index $offer "price") }}
-<meta property="product:price:amount" content="{{ . }}">
+  {{/* product:price:amount parses through lib/num.html so this meta stays
+       consistent with the JSON-LD Offer price: an explicit 0 emits, an
+       unparseable value drops the meta (lib/num.html warns once). */}}
+  {{- if isset $offer "price" -}}
+    {{- $amount := partial "seo/lib/num.html" (dict "value" (index $offer "price") "mode" "float" "field" "seo.offer.price" "page" $page) -}}
+    {{- if ne (printf "%v" $amount) "" }}
+<meta property="product:price:amount" content="{{ $amount }}">
+    {{- end }}
   {{- end }}
   {{- with (index $offer "price_currency") }}
 <meta property="product:price:currency" content="{{ . }}">

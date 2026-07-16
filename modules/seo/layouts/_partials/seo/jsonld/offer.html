@@ -42,23 +42,39 @@
 {{- $hasContent := false -}}
 
 {{- if $aggregate -}}
-  {{/* AggregateOffer (Snippet track only): lowPrice + priceCurrency. */}}
+  {{/* AggregateOffer (Snippet track only): lowPrice + priceCurrency. Each
+       number parses through lib/num.html; an unparseable value drops that
+       single property with a deduped warn. */}}
   {{- with $offer.low_price -}}
-    {{- $node = merge $node (dict "lowPrice" (float .)) -}}
-    {{- $hasContent = true -}}
+    {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "float" "field" "seo.offer.low_price" "page" $page) -}}
+    {{- if ne (printf "%v" $v) "" -}}
+      {{- $node = merge $node (dict "lowPrice" $v) -}}
+      {{- $hasContent = true -}}
+    {{- end -}}
   {{- end -}}
   {{- with $offer.high_price -}}
-    {{- $node = merge $node (dict "highPrice" (float .)) -}}
+    {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "float" "field" "seo.offer.high_price" "page" $page) -}}
+    {{- if ne (printf "%v" $v) "" -}}
+      {{- $node = merge $node (dict "highPrice" $v) -}}
+    {{- end -}}
   {{- end -}}
   {{- with $offer.offer_count -}}
-    {{- $node = merge $node (dict "offerCount" (int .)) -}}
+    {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "int" "field" "seo.offer.offer_count" "page" $page) -}}
+    {{- if ne (printf "%v" $v) "" -}}
+      {{- $node = merge $node (dict "offerCount" $v) -}}
+    {{- end -}}
   {{- end -}}
 {{- else -}}
   {{/* Single Offer: price (number; 0 explicit for free). isset distinguishes
-       an explicit 0 from an absent key. */}}
+       an explicit 0 from an absent key. An unparseable price drops the price
+       property (lib/num.html warns once); the callers' price gates then
+       decide the node's fate. */}}
   {{- if isset $offer "price" -}}
-    {{- $node = merge $node (dict "price" (float $offer.price)) -}}
-    {{- $hasContent = true -}}
+    {{- $v := partial "seo/lib/num.html" (dict "value" $offer.price "mode" "float" "field" "seo.offer.price" "page" $page) -}}
+    {{- if ne (printf "%v" $v) "" -}}
+      {{- $node = merge $node (dict "price" $v) -}}
+      {{- $hasContent = true -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 
@@ -98,7 +114,7 @@
 
 {{/* priceValidUntil via lib/time.html passthrough (string date accepted). */}}
 {{- with $offer.price_valid_until -}}
-  {{- $formatted := partial "seo/lib/time.html" . -}}
+  {{- $formatted := partial "seo/lib/time.html" (dict "value" . "field" "seo.offer.price_valid_until" "page" $page) -}}
   {{- with $formatted -}}
     {{- $node = merge $node (dict "priceValidUntil" .) -}}
   {{- end -}}
@@ -115,8 +131,11 @@
   {{- $spec := dict "@type" "UnitPriceSpecification" -}}
   {{- $hasSpec := false -}}
   {{- with $ps.price -}}
-    {{- $spec = merge $spec (dict "price" (float .)) -}}
-    {{- $hasSpec = true -}}
+    {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "float" "field" "seo.offer.price_specification.price" "page" $page) -}}
+    {{- if ne (printf "%v" $v) "" -}}
+      {{- $spec = merge $spec (dict "price" $v) -}}
+      {{- $hasSpec = true -}}
+    {{- end -}}
   {{- end -}}
   {{- with $ps.price_currency -}}
     {{- $spec = merge $spec (dict "priceCurrency" .) -}}
@@ -185,8 +204,11 @@
       {{- $hasRp = true -}}
     {{- end -}}
     {{- with $rp.merchant_return_days -}}
-      {{- $rpNode = merge $rpNode (dict "merchantReturnDays" (int .)) -}}
-      {{- $hasRp = true -}}
+      {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "int" "field" "seo.offer.return_policy.merchant_return_days" "page" $page) -}}
+      {{- if ne (printf "%v" $v) "" -}}
+        {{- $rpNode = merge $rpNode (dict "merchantReturnDays" $v) -}}
+        {{- $hasRp = true -}}
+      {{- end -}}
     {{- end -}}
     {{- with $rp.return_method -}}
       {{- $rpNode = merge $rpNode (dict "returnMethod" .) -}}

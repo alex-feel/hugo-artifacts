@@ -25,23 +25,24 @@
                           (e.g., "30s"). Defaults to "30s" when empty.
 
   Output (returned dict):
-  - .ok (bool)              true when the response was 2xx and its body
-                             decoded to a JSON object or array ({} and []
-                             count; a blank, undecodable, null, or scalar
-                             body does not); false otherwise.
-  - .value (any)             The decoded JSON payload when .ok; nil otherwise.
-  - .statusCode (int)        HTTP status code. The actual 2xx status (202 for
-                             a still-computing /stats/participation answer)
-                             on the success and parse paths; 0 for network
-                             failure (no response received); 404 for the nil
-                             branch of resources.GetRemote.
+  - .ok (bool)              true when the response was a non-202 2xx and its
+                             body decoded to a JSON object ({} counts; an
+                             array, blank, undecodable, null, or scalar body
+                             does not); false otherwise.
+  - .value (any)             The decoded JSON object when .ok; nil otherwise.
+  - .statusCode (int)        HTTP status code. The actual 2xx status on the
+                             ok and parse paths (a 202 -- the still-computing
+                             /stats/participation answer -- always classifies
+                             parse); 0 for network failure (no response
+                             received); 404 for the nil branch of
+                             resources.GetRemote.
   - .headers (map)           Selected response headers when responseHeaders
                              was honored by Hugo. Empty dict on the nil-branch
                              404 path (no .Data is exposed there).
-  - .errorClass (string)     Empty when .ok; "parse" for a 2xx response whose
-                             body is not a decodable JSON object or array (a
-                             blank, undecodable, null, or scalar body);
-                             otherwise as set by
+  - .errorClass (string)     Empty when .ok; "parse" for a 2xx response that
+                             is not a data-bearing JSON object (an array,
+                             blank, undecodable, null, or scalar body, or any
+                             HTTP 202); otherwise as set by
                              github-repo/classify-error.html.
   - .errorMessage (string)   Short diagnostic when not .ok; empty on success.
   - .waitHintSeconds (int)   Wait-until-reset hint for rate-limit classes; 0
@@ -136,15 +137,17 @@
     -}}
   {{- else with .Value -}}
     {{/* Success path. The raw body is decoded with an explicit JSON format
-         (no media-type inference). Success requires a decoded JSON object or
-         array: {} and [] are valid payloads (/languages returns {} for a
-         repository with no detected languages), while a blank, undecodable,
-         null, or scalar body -- notably the empty-body HTTP 202 "statistics
-         are being computed" answer of /stats/participation -- degrades to a
-         failed "parse" attempt that the outer loop may retry, instead of
-         failing the build or masquerading as data. The kind check matters
-         because an empty string decodes to nil WITHOUT an error and template
-         truthiness would misread a valid {} as a failure. */}}
+         (no media-type inference). Success requires a decoded JSON OBJECT on
+         a non-202 status: every endpoint this module calls has object
+         semantics ({} is valid -- /languages returns it for a repository
+         with no detected languages), so an array, blank, undecodable, null,
+         or scalar body classifies as a retryable "parse" failure instead of
+         crashing a consumer's field access or masquerading as data. A 202 is
+         the /stats/participation "statistics are being computed" answer:
+         whatever its body, it carries no data yet, so it also classifies
+         "parse" and is retried. The explicit kind check matters because an
+         empty string decodes to nil WITHOUT an error and template truthiness
+         would misread a valid {} as a failure. */}}
     {{- $raw := .Content -}}
     {{- $sc := 200 -}}
     {{- $sucHdrs := dict -}}
@@ -165,7 +168,7 @@
         {{- $decodedOk = true -}}
       {{- end -}}
     {{- end -}}
-    {{- if and $decodedOk (or (reflect.IsMap $decoded) (reflect.IsSlice $decoded)) -}}
+    {{- if and $decodedOk (reflect.IsMap $decoded) (ne $sc 202) -}}
       {{- $result = dict
         "ok" true
         "value" $decoded
