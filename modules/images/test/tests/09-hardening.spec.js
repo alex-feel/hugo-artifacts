@@ -10,7 +10,9 @@
 // derives its width from the aspect ratio; a width-only passthrough never
 // fabricates height="0"; the two-positional shortcode shorthand renders;
 // the priority / eager / full loading rows emit their exact attribute
-// sets; and credit_from_meta surfaces the IPTC credit.
+// sets; credit_from_meta surfaces the IPTC credit; and a variant carrying
+// an unparseable width/height warns once and keeps rendering with the
+// source image's intrinsic dimensions.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {dom, rawHtml, warnCount} from './helpers.js';
@@ -166,4 +168,19 @@ test('credit_from_meta surfaces the original image IPTC Credit field', () => {
   const credit = figure.querySelector('.image__credit');
   assert.ok(credit, 'the IPTC credit renders as a credit element');
   assert.equal(credit.textContent, 'Stock Agency Credit', 'the IPTC Credit field wins');
+});
+
+test('a variant with an unparseable width warns once and keeps rendering', () => {
+  const picture = page.querySelector('#variants-bad-dims picture');
+  assert.ok(picture, 'the build did not fail on a non-numeric variant width');
+  const source = picture.querySelector('source[media="(max-width: 480px)"]');
+  assert.ok(source, 'the variant source still renders');
+  assert.equal(source.getAttribute('width'), '512', 'the intrinsic source width applies');
+  assert.equal(source.getAttribute('height'), '512', 'the intrinsic source height applies');
+  assert.equal(
+    warnCount(
+      /Ignoring a non-numeric width\/height value on the variant with media "\(max-width: 480px\)"/,
+    ),
+    1,
+  );
 });
