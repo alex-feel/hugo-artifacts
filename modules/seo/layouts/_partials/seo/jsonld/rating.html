@@ -52,6 +52,12 @@
   {{- end -}}
   {{- if or (isset $data "rating_value") (isset $data "value") -}}
     {{- $v := partial "seo/lib/num.html" (dict "value" $ratingValue "mode" "float" "field" "aggregate_rating.rating_value" "page" $page) -}}
+    {{/* An unparseable rating_value falls back to the value alias when that
+         is separately set, so a bad primary never shadows a parseable
+         alias. */}}
+    {{- if and (eq (printf "%v" $v) "") (isset $data "rating_value") (isset $data "value") -}}
+      {{- $v = partial "seo/lib/num.html" (dict "value" $data.value "mode" "float" "field" "aggregate_rating.value" "page" $page) -}}
+    {{- end -}}
     {{- if ne (printf "%v" $v) "" -}}
       {{- $node := dict "@type" "AggregateRating" "ratingValue" $v -}}
       {{/* Count preference: reviewCount when review_count parses, else the
