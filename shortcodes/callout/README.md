@@ -48,7 +48,7 @@ DROP DATABASE app;
 {{</* /callout */>}}
 ````
 
-A type with no title falls back to the type's own label (for example `warning` renders the title "Warning"). A user-supplied title is emitted verbatim, so casing such as "iOS quirks" is preserved. Pass `title=""` to suppress the head entirely and render a head-less box:
+A type with no title falls back to the type's own label (for example `warning` renders the title "Warning"). A user-supplied title is emitted verbatim, so casing such as "iOS quirks" is preserved. Pass `title=""` (an empty or whitespace-only title) to suppress the head entirely and render a head-less box:
 
 ```go-html-template
 {{</* callout type="tip" title="" */>}}
@@ -100,7 +100,7 @@ An unknown type emits one deduplicated build warning (so a typo surfaces once) a
 | Parameter | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `type` | string | no | `note` | Positional `0` or `type=`. First-class type, alias, or any custom slug. |
-| `title` | string | no | type label | Positional `1` or `title=`. Verbatim when supplied; the type's label when omitted; `title=""` suppresses the head. |
+| `title` | string | no | type label | Positional `1` or `title=`. Verbatim when supplied; the type's label when omitted; an empty or whitespace-only title suppresses the head. |
 | `collapsible` | bool | no | `false` | Render as a native `<details>`/`<summary>` disclosure. Truthy tokens: `true`/`1`/`yes`/`on`, any casing. |
 | `open` | bool | no | `false` | When `collapsible`, start expanded (adds the `open` attribute). Same tokens as `collapsible`. |
 | `role` | string | no | passive | ARIA override: `note`, `alert`, `status`, or `none`. See [Accessibility](#accessibility). |
