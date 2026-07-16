@@ -26,16 +26,22 @@
   - .format (string)           "xml" or "json" -- the explicit decode format.
   - .headers (map, optional)   Request headers (e.g., Authorization).
   - .timeout (string, optional) Per-request timeout (Go duration). Default "30s".
-  - .responseHeaders (slice, optional) Response header names to expose via .Data.
 
   Output (returned dict):
-  - .ok (bool)             true when the response was 2xx and decoded cleanly.
-  - .value (any)           Decoded map/slice when .ok; nil otherwise.
+  - .ok (bool)             true when the response was 2xx and its body decoded
+                           to a document object ({} counts; an array, blank,
+                           undecodable, null, or scalar body does not).
+  - .value (any)           Decoded map when .ok; nil otherwise.
   - .raw (string)          Raw response body when a response was received.
-  - .statusCode (int)      HTTP status. 200 success; 0 network / media-type; 404
-                           for the nil branch of resources.GetRemote.
-  - .headers (map)         Selected response headers when requested.
-  - .errorClass (string)   Empty when .ok; otherwise from classify-error.html.
+  - .statusCode (int)      HTTP status. The actual 2xx status on the ok and
+                           parse paths; 0 network / media-type; 404 for the
+                           nil branch of resources.GetRemote.
+  - .headers (map)         Selected response headers (Retry-After is requested
+                           on every endpoint so a 429 feeds the classifier's
+                           wait hint).
+  - .errorClass (string)   Empty when .ok; "parse" for a 2xx response whose
+                           body is not a decodable document object; otherwise
+                           from classify-error.html.
   - .errorMessage (string) Short diagnostic when not .ok; empty on success.
   - .waitHintSeconds (int) Rate-limit wait hint; 0 elsewhere.
 
@@ -47,14 +53,18 @@
 {{- $format := .format | default "" -}}
 {{- $headers := .headers | default (dict) -}}
 {{- $timeout := .timeout | default "30s" -}}
-{{- $responseHeaders := .responseHeaders | default (slice) -}}
 
-{{- $opts := dict "method" "GET" "key" $cacheKey "timeout" $timeout -}}
+{{/* Retry-After is requested unconditionally (honored on both success and
+     error paths) so a 429 from any of the three endpoints reaches the
+     classifier's wait-hint computation. */}}
+{{- $opts := dict
+  "method" "GET"
+  "key" $cacheKey
+  "timeout" $timeout
+  "responseHeaders" (slice "Retry-After")
+-}}
 {{- with $headers -}}
   {{- $opts = merge $opts (dict "headers" .) -}}
-{{- end -}}
-{{- with $responseHeaders -}}
-  {{- $opts = merge $opts (dict "responseHeaders" .) -}}
 {{- end -}}
 
 {{/* Default result: a failed attempt with no observable response. */}}
@@ -104,39 +114,57 @@
     -}}
   {{- else with .Value -}}
     {{/* Success path. Decode the raw content with an explicit format so arXiv's
-         application/atom+xml is parsed as XML without media-type inference. A 2xx
-         response that fails to decode is a hard parse error, not a transient. */}}
+         application/atom+xml is parsed as XML without media-type inference.
+         Success requires a decoded document OBJECT (map): both JSON APIs have
+         object semantics and the XML decode of a well-formed feed always
+         yields a map, so an array, null, scalar, blank, or undecodable body
+         classifies as a "parse" failure -- an early-break class in fetch.html,
+         since a non-document body from these endpoints is deterministic --
+         instead of crashing a consumer's field access or masquerading as
+         data. The explicit kind
+         check matters because a blank body decodes to nil WITHOUT an error
+         and a scalar decodes cleanly, yet neither is a usable document. */}}
     {{- $raw := .Content -}}
+    {{- $sc := 200 -}}
     {{- $sucHdrs := dict -}}
     {{- with .Data -}}
+      {{- with .StatusCode }}{{ $sc = . }}{{ end -}}
       {{- with .Headers }}{{ $sucHdrs = . }}{{ end -}}
     {{- end -}}
-    {{- $parsed := "" -}}
-    {{- if $format -}}
-      {{- $parsed = try (transform.Unmarshal (dict "format" $format) $raw) -}}
-    {{- else -}}
-      {{- $parsed = try (transform.Unmarshal $raw) -}}
+    {{- $decoded := "" -}}
+    {{- $decodedOk := false -}}
+    {{- if ne (trim $raw " \t\n\r") "" -}}
+      {{- $parsed := "" -}}
+      {{- if $format -}}
+        {{- $parsed = try (transform.Unmarshal (dict "format" $format) $raw) -}}
+      {{- else -}}
+        {{- $parsed = try (transform.Unmarshal $raw) -}}
+      {{- end -}}
+      {{- if not $parsed.Err -}}
+        {{- $decoded = $parsed.Value -}}
+        {{- $decodedOk = true -}}
+      {{- end -}}
     {{- end -}}
-    {{- with $parsed.Err -}}
+    {{- if and $decodedOk (reflect.IsMap $decoded) -}}
       {{- $result = dict
-        "ok" false
-        "value" nil
+        "ok" true
+        "value" $decoded
         "raw" $raw
-        "statusCode" 200
+        "statusCode" $sc
         "headers" $sucHdrs
-        "errorClass" "parse"
-        "errorMessage" (printf "unmarshal (%s) failed: %s" $format .)
+        "errorClass" ""
+        "errorMessage" ""
         "waitHintSeconds" 0
       -}}
     {{- else -}}
       {{- $result = dict
-        "ok" true
-        "value" $parsed.Value
+        "ok" false
+        "value" nil
         "raw" $raw
-        "statusCode" 200
+        "statusCode" $sc
         "headers" $sucHdrs
-        "errorClass" ""
-        "errorMessage" ""
+        "errorClass" "parse"
+        "errorMessage" (printf "HTTP %d without a usable %s document" $sc (or $format "decoded"))
         "waitHintSeconds" 0
       -}}
     {{- end -}}

@@ -185,7 +185,7 @@ Each attempt uses a fresh cache key (`arxiv-paper:<id>:<endpoint>:attemptN`) so 
 | `rate-limit` | HTTP 429 | Early break -- a rate-limit window cannot reset between immediate attempts. |
 | `server` | HTTP 5xx | Retry up to `attempts` or the wall-clock budget. |
 | `network` | No HTTP response (DNS failure, connection refused, host timeout) | Retry up to `attempts` or the wall-clock budget. |
-| `parse` | 2xx that fails to decode | Early break -- a decode failure is deterministic, not transient. |
+| `parse` | 2xx response whose body is not a decodable document object (an array, blank, undecodable, null, or scalar body) | Early break -- a non-document body from these endpoints is deterministic, not transient. |
 
 arXiv reports "not found" with an HTTP 200 body (an empty feed for a nonexistent id, or an error `entry` for a malformed id), so `parse-atom.html` inspects the feed shape rather than trusting the status code. On retry exhaustion the module emits a single structured `warnf` and falls through to graceful degradation. The build is never broken by an API failure.
 
