@@ -5,10 +5,12 @@
 
   Returns a formatted string. A value Hugo's float cast accepts (numbers,
   numeric strings, and cast coercions such as nil -> 0 and booleans -> 0/1)
-  formats numerically; any other value is returned stringified as-is -- the
-  input is remote-derived, so an unparseable count degrades to verbatim
-  passthrough instead of failing the build. The single up-front guarded cast
-  covers every downstream tier comparison.
+  formats numerically when it is finite and within the plausible count range
+  (|n| < 1e15); any other value -- unparseable, NaN, infinite, or extreme --
+  is returned stringified as-is. The input is remote-derived, so bad data
+  degrades to verbatim passthrough instead of failing the build or rendering
+  garbage, and the single up-front guarded cast covers every downstream tier
+  comparison.
 */}}
 
 {{- $result := printf "%v" . -}}
@@ -19,6 +21,15 @@
     {{- $n = .Value -}}
     {{- $ok = true -}}
   {{- end -}}
+{{- end -}}
+
+{{/* The float cast also accepts NaN, Inf, and exponent-notation extremes;
+     int-casting NaN saturates to MinInt64 and a 1e300 value renders a
+     300-digit string, so anything non-finite (NaN is the one value unequal
+     to itself) or outside the plausible count range falls back to verbatim
+     passthrough. */}}
+{{- if and $ok (or (ne $n $n) (ge (math.Abs $n) 1e15)) -}}
+  {{- $ok = false -}}
 {{- end -}}
 
 {{- if $ok -}}

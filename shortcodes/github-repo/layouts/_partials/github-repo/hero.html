@@ -37,7 +37,7 @@
         {{- partial "github-repo/icon.html" (dict "name" "github" "class" "github-repo__icon") }}
         <span>GITHUB</span>
         <span class="github-repo__breadcrumb-sep">/</span>
-        <span class="github-repo__breadcrumb-type">REPOSITORY</span>
+        <span class="github-repo__breadcrumb-type">{{ T "github_repo_type_repository" | default "REPOSITORY" }}</span>
       </span>
       {{- with .sparkline -}}
       {{- $max := math.Max . -}}
@@ -75,13 +75,13 @@
       {{- if gt .stars 0 }}
       <span class="github-repo__meta-item">
         {{- partial "github-repo/icon.html" (dict "name" "star") }}
-        <strong>{{ .starsFormatted }}</strong> stars
+        <strong>{{ .starsFormatted }}</strong> {{ T "github_repo_stars_word" (cond (lt .starsCount 1000) .starsCount 1000) | default "stars" }}
       </span>
       {{- end }}
       {{- if gt .forks 0 }}
       <span class="github-repo__meta-item">
         {{- partial "github-repo/icon.html" (dict "name" "fork") }}
-        <strong>{{ .forksFormatted }}</strong> forks
+        <strong>{{ .forksFormatted }}</strong> {{ T "github_repo_forks_word" (cond (lt .forksCount 1000) .forksCount 1000) | default "forks" }}
       </span>
       {{- end }}
       {{- with .license }}
@@ -93,11 +93,11 @@
       {{- with .updated }}
       <span class="github-repo__meta-item">
         {{- partial "github-repo/icon.html" (dict "name" "clock") }}
-        updated {{ . }}
+        {{ T "github_repo_updated" . | default (printf "updated %s" .) }}
       </span>
       {{- end }}
       <span class="github-repo__cta">
-        View on GitHub
+        {{ T "github_repo_view_on_github" | default "View on GitHub" }}
         <span class="github-repo__cta-arrow">
           {{- partial "github-repo/icon.html" (dict "name" "external") -}}
         </span>

@@ -15,7 +15,7 @@
    class="hf-space hf-space--stats{{ with .extraClass }} {{ . }}{{ end }}"
    target="_blank"
    rel="noopener noreferrer"
-   aria-label="{{ or .title .name }}, a Hugging Face Space by {{ .owner }}"
+   aria-label="{{ T "hf_space_aria_label" (dict "Title" (or .title .name) "Owner" .owner) | default (printf "%s, a Hugging Face Space by %s" (or .title .name) .owner) }}"
    data-space="{{ .id }}"
    data-variant="stats"
    data-api-ok="{{ .apiOk }}"
@@ -45,7 +45,7 @@
   {{- end }}
   <div class="hf-space__stat-row">
     <div class="hf-space__stat">
-      <span class="hf-space__stat-label">SDK</span>
+      <span class="hf-space__stat-label">{{ T "hf_space_stat_sdk" | default "SDK" }}</span>
       <span class="hf-space__stat-value hf-space__sdk" data-sdk="{{ .sdk }}">
         {{- with .sdkLabel -}}
         <span class="hf-space__sdk-dot"></span>{{ . }}
@@ -53,11 +53,11 @@
       </span>
     </div>
     <div class="hf-space__stat">
-      <span class="hf-space__stat-label">Hardware</span>
+      <span class="hf-space__stat-label">{{ T "hf_space_stat_hardware" | default "Hardware" }}</span>
       <span class="hf-space__stat-value">{{ or .hardwareLabel "--" }}</span>
     </div>
     <div class="hf-space__stat">
-      <span class="hf-space__stat-label">Likes</span>
+      <span class="hf-space__stat-label">{{ T "hf_space_stat_likes" | default "Likes" }}</span>
       <span class="hf-space__stat-value hf-space__likes">
         {{- partial "hf-space/icon.html" (dict "name" "heart" "class" "hf-space__icon hf-space__icon--heart") }}
         {{ .likesFormatted }}

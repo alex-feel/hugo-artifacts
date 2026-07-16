@@ -33,7 +33,7 @@
     <div class="github-repo__head-meta">
       <div class="github-repo__eyebrow">
         {{- partial "github-repo/icon.html" (dict "name" "github" "class" "github-repo__icon") }}
-        GITHUB / {{ upper .owner }}
+        {{ T "github_repo_eyebrow_stats" (upper .owner) | default (printf "GITHUB / %s" (upper .owner)) }}
       </div>
       <h3 class="github-repo__title">
         <span class="github-repo__owner">{{ .owner }} /</span> {{ .name }}
@@ -48,7 +48,7 @@
   {{- end }}
   <div class="github-repo__stat-row">
     <div class="github-repo__stat">
-      <span class="github-repo__stat-label">Language</span>
+      <span class="github-repo__stat-label">{{ T "github_repo_stat_language" | default "Language" }}</span>
       <span class="github-repo__stat-value">
         {{- with $.language -}}
         <span class="github-repo__lang-dot" style="--github-repo-lang-color: {{ $.langColor }}"></span>
@@ -57,21 +57,21 @@
       </span>
     </div>
     <div class="github-repo__stat">
-      <span class="github-repo__stat-label">Stars</span>
+      <span class="github-repo__stat-label">{{ T "github_repo_stat_stars" | default "Stars" }}</span>
       <span class="github-repo__stat-value">
         {{- partial "github-repo/icon.html" (dict "name" "star") }}
         {{ .starsFormatted }}
       </span>
     </div>
     <div class="github-repo__stat">
-      <span class="github-repo__stat-label">Forks</span>
+      <span class="github-repo__stat-label">{{ T "github_repo_stat_forks" | default "Forks" }}</span>
       <span class="github-repo__stat-value">
         {{- partial "github-repo/icon.html" (dict "name" "fork") }}
         {{ .forksFormatted }}
       </span>
     </div>
     <div class="github-repo__stat">
-      <span class="github-repo__stat-label">License</span>
+      <span class="github-repo__stat-label">{{ T "github_repo_stat_license" | default "License" }}</span>
       <span class="github-repo__stat-value">{{ or .license "--" }}</span>
     </div>
   </div>

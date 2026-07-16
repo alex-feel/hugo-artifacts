@@ -52,8 +52,19 @@
 {{- $idParam := .Get "id" | default "" -}}
 {{- $url := .Get "url" | default "" -}}
 {{- $title := .Get "title" | default "" -}}
-{{- $startRaw := .Get "start" | default "" -}}
-{{- $endRaw := .Get "end" | default "" -}}
+{{/* start/end presence is detected with isset, not `default`: Hugo parses an
+     unquoted numeric argument to an int, and int 0 is falsy, so a `default
+     ""` pipe would silently turn an explicit start=0 into "unset" while the
+     quoted form start="0" stayed explicit. The printf normalizes both forms
+     into one string surface for the numeric validation below. */}}
+{{- $startRaw := "" -}}
+{{- if and .IsNamedParams (isset .Params "start") -}}
+  {{- $startRaw = printf "%v" (.Get "start") -}}
+{{- end -}}
+{{- $endRaw := "" -}}
+{{- if and .IsNamedParams (isset .Params "end") -}}
+  {{- $endRaw = printf "%v" (.Get "end") -}}
+{{- end -}}
 {{- $listParam := .Get "list" | default "" -}}
 {{- $poster := .Get "poster" | default "" -}}
 {{- $params := .Get "params" | default "" -}}
@@ -165,7 +176,11 @@
 {{/* A start offset carried in the URL (?t= / ?start=, e.g. youtu.be/ID?t=42)
      is honored only when no VALID explicit `start` parameter was supplied;
      the valid explicit parameter always wins, and an invalid one counts as
-     unset. */}}
+     unset. A url-carried offset parse-id had to discard (an overflowing
+     component) is surfaced here, since this template holds the position. */}}
+{{- if $parsed.startInvalid -}}
+  {{- warnf "The %q shortcode ignored an out-of-range time offset carried in url=%q. See %s" .Name $url .Position -}}
+{{- end -}}
 {{- if and (not $startSet) (gt $parsed.start 0) -}}
   {{- $start = $parsed.start -}}
 {{- end -}}

@@ -250,7 +250,7 @@ Override the icon per call with the `icon` parameter:
 - `icon="🎉"` -- emit a single emoji (rendered as text inside `callout__icon--emoji`).
 - `icon="/images/brand.svg"` -- resolve a page resource, then a global resource, and emit an `<img class="callout__icon--image">`.
 - `icon="https://example.com/brand.svg"` -- fetch the image at build time, republish it under the site's own origin, and emit the same `<img>`. A failed fetch renders without an icon (one deduplicated warning); the build never breaks. Remote fetching works out of the box for every media type Hugo recognizes (`svg`, `png`, `jpg`, `jpeg`, `jpe`, `jif`, `jfif`, `gif`, `webp`, `avif`, `bmp`, `tif`, `tiff`, `heic`, `heif`); a remote `.ico` needs a custom `ico` media type defined in the consuming site's configuration, because Hugo ships none -- prefer `svg`/`png` for remote icons.
-- `icon=false` -- suppress the icon.
+- `icon=false` -- suppress the icon (the tokens `"false"`, `"none"`, `"no"`, `"off"`, `"0"`, and `""` all work, any casing).
 
 A value counts as an image reference only when it contains `/`, starts with `http://` or `https://`, or ends in a known image extension (`svg`, `png`, `jpg`, `jpeg`, `jpe`, `jif`, `jfif`, `gif`, `webp`, `avif`, `ico`, `bmp`, `tif`, `tiff`, `heic`, `heif`); any other value -- including a dotted name such as `brand.v2` -- is treated as a glyph name, matched case-insensitively.
 

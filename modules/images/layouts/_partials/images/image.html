@@ -107,6 +107,11 @@
               "message" (printf "[images] Dropping the variant with media %q: its source %q could not be resolved or processed. See %s" $v.media (printf "%v" $v.src) $where)) -}}
         {{- else -}}
           {{- $vdims := partial "images/resolve/dims.html" (dict "width" $v.width "height" $v.height) -}}
+          {{- if not $vdims.ok -}}
+            {{- partial "images/lib/warn.html" (dict
+                "key" (printf "images:warn:variant-bad-dims:%s:%s:%v:%v" $where (printf "%v" $v.src) $v.width $v.height)
+                "message" (printf "[images] Ignoring a non-numeric width/height value on the variant with media %q (got width=%v height=%v). See %s" $v.media $v.width $v.height $where)) -}}
+          {{- end -}}
           {{- $variant := dict "source" $vsrc "media" (printf "%v" $v.media) "darkSource" "" -}}
           {{- if gt $vdims.width 0 -}}{{- $variant = merge $variant (dict "width" $vdims.width) -}}{{- end -}}
           {{- if gt $vdims.height 0 -}}{{- $variant = merge $variant (dict "height" $vdims.height) -}}{{- end -}}

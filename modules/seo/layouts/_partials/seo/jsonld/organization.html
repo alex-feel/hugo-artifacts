@@ -223,12 +223,14 @@
 
     {{/* numberOfEmployees (QuantitativeValue): value OR minValue+maxValue.
          Each number parses through lib/num.html; an unparseable value drops
-         that single property with a deduped warn. */}}
+         that single property with a deduped warn. Presence is isset-based so
+         a native (unquoted) 0 reaches the parser instead of failing a
+         truthiness test. */}}
     {{- with $org.number_of_employees -}}
       {{- $qv := dict "@type" "QuantitativeValue" -}}
       {{- $hasQv := false -}}
-      {{- with .value -}}
-        {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "int" "field" "seo.organization.number_of_employees.value" "page" $site.Home) -}}
+      {{- if isset . "value" -}}
+        {{- $v := partial "seo/lib/num.html" (dict "value" .value "mode" "int" "field" "seo.organization.number_of_employees.value" "page" $site.Home) -}}
         {{- if ne (printf "%v" $v) "" -}}
           {{- $qv = merge $qv (dict "value" $v) -}}
           {{- $hasQv = true -}}
@@ -236,15 +238,15 @@
       {{- end -}}
       {{- if not $hasQv -}}
         {{- $hasRange := false -}}
-        {{- with .min_value -}}
-          {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "int" "field" "seo.organization.number_of_employees.min_value" "page" $site.Home) -}}
+        {{- if isset . "min_value" -}}
+          {{- $v := partial "seo/lib/num.html" (dict "value" .min_value "mode" "int" "field" "seo.organization.number_of_employees.min_value" "page" $site.Home) -}}
           {{- if ne (printf "%v" $v) "" -}}
             {{- $qv = merge $qv (dict "minValue" $v) -}}
             {{- $hasRange = true -}}
           {{- end -}}
         {{- end -}}
-        {{- with .max_value -}}
-          {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "int" "field" "seo.organization.number_of_employees.max_value" "page" $site.Home) -}}
+        {{- if isset . "max_value" -}}
+          {{- $v := partial "seo/lib/num.html" (dict "value" .max_value "mode" "int" "field" "seo.organization.number_of_employees.max_value" "page" $site.Home) -}}
           {{- if ne (printf "%v" $v) "" -}}
             {{- $qv = merge $qv (dict "maxValue" $v) -}}
             {{- $hasRange = true -}}
@@ -280,8 +282,10 @@
             {{- $hasRp = true -}}
           {{- end -}}
         {{- end -}}
-        {{- with .merchant_return_days -}}
-          {{- $v := partial "seo/lib/num.html" (dict "value" . "mode" "int" "field" "seo.organization.return_policy.merchant_return_days" "page" $site.Home) -}}
+        {{/* isset (not truthiness) so a native (unquoted) 0 -- a valid value
+             for a same-day return window -- reaches the parser. */}}
+        {{- if isset . "merchant_return_days" -}}
+          {{- $v := partial "seo/lib/num.html" (dict "value" .merchant_return_days "mode" "int" "field" "seo.organization.return_policy.merchant_return_days" "page" $site.Home) -}}
           {{- if ne (printf "%v" $v) "" -}}
             {{- $rp = merge $rp (dict "merchantReturnDays" $v) -}}
             {{- $hasRp = true -}}

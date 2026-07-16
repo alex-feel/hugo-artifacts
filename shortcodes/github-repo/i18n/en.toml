@@ -1,0 +1,42 @@
+# Hugo github-repo module -- English UI strings.
+# The module ships its full i18n surface from this directory. Every template lookup pipes
+# through `| default "<English>"`, so a site language without these keys still renders.
+# The *_ago and *_word keys are plural-form tables selected by Hugo's CLDR rules from an
+# integer count. Word forms next to compact-formatted numbers ("1.2k") select the form of
+# 1000, whose category fits a rounded quantity; raw counts below 1000 select their own form.
+
+github_repo_eyebrow_card = "GITHUB · REPOSITORY"
+github_repo_eyebrow_stats = "GITHUB / {{ . }}"
+github_repo_type_repository = "REPOSITORY"
+github_repo_updated = "updated {{ . }}"
+github_repo_view_on_github = "View on GitHub"
+github_repo_stat_language = "Language"
+github_repo_stat_stars = "Stars"
+github_repo_stat_forks = "Forks"
+github_repo_stat_license = "License"
+github_repo_just_now = "just now"
+github_repo_yesterday = "yesterday"
+
+[github_repo_stars_word]
+one = "star"
+other = "stars"
+
+[github_repo_forks_word]
+one = "fork"
+other = "forks"
+
+[github_repo_hours_ago]
+one = "1 hour ago"
+other = "{{ .Count }} hours ago"
+
+[github_repo_days_ago]
+one = "1 day ago"
+other = "{{ .Count }} days ago"
+
+[github_repo_months_ago]
+one = "1 month ago"
+other = "{{ .Count }} months ago"
+
+[github_repo_years_ago]
+one = "1 year ago"
+other = "{{ .Count }} years ago"

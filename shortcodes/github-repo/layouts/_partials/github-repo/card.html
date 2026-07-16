@@ -31,7 +31,7 @@
    data-variant="card">
   <div class="github-repo__top">
     <span class="github-repo__slug">
-      {{- partial "github-repo/icon.html" (dict "name" "github" "class" "github-repo__icon") }} GITHUB · REPOSITORY</span>
+      {{- partial "github-repo/icon.html" (dict "name" "github" "class" "github-repo__icon") }} {{ T "github_repo_eyebrow_card" | default "GITHUB · REPOSITORY" }}</span>
     <span class="github-repo__external-badge">
       {{- partial "github-repo/icon.html" (dict "name" "external") -}}
     </span>
@@ -70,7 +70,7 @@
     {{- with .updated }}
     <span class="github-repo__meta-item github-repo__meta-item--updated">
       {{- partial "github-repo/icon.html" (dict "name" "clock") }}
-      updated {{ . }}
+      {{ T "github_repo_updated" . | default (printf "updated %s" .) }}
     </span>
     {{- end }}
   </div>

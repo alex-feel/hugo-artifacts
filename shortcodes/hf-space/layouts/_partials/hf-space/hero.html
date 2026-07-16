@@ -16,7 +16,7 @@
    class="hf-space hf-space--hero{{ with .extraClass }} {{ . }}{{ end }}"
    target="_blank"
    rel="noopener noreferrer"
-   aria-label="{{ or .title .name }}, a Hugging Face Space by {{ .owner }}"
+   aria-label="{{ T "hf_space_aria_label" (dict "Title" (or .title .name) "Owner" .owner) | default (printf "%s, a Hugging Face Space by %s" (or .title .name) .owner) }}"
    data-space="{{ .id }}"
    data-variant="hero"
    data-api-ok="{{ .apiOk }}"
@@ -33,7 +33,7 @@
     <div class="hf-space__hero-top">
       <span class="hf-space__brand">🤗 Hugging&nbsp;Face</span>
       <span class="hf-space__hero-sep">/</span>
-      <span class="hf-space__hero-type">SPACE</span>
+      <span class="hf-space__hero-type">{{ T "hf_space_type_space" | default "SPACE" }}</span>
     </div>
     <h3 class="hf-space__title hf-space__title--hero">
       <span class="hf-space__owner">{{ .owner }} /</span> {{ .name }}
@@ -64,7 +64,7 @@
       {{- end }}
       <span class="hf-space__meta-item hf-space__likes">
         {{- partial "hf-space/icon.html" (dict "name" "heart" "class" "hf-space__icon hf-space__icon--heart") }}
-        <strong>{{ .likesFormatted }}</strong> likes
+        <strong>{{ .likesFormatted }}</strong> {{ T "hf_space_likes_word" (cond (lt .likesCount 1000) .likesCount 1000) | default "likes" }}
       </span>
       {{- with .updated }}
       <span class="hf-space__meta-item">
@@ -73,7 +73,7 @@
       </span>
       {{- end }}
       <span class="hf-space__cta">
-        Open in Spaces
+        {{ T "hf_space_open_in_spaces" | default "Open in Spaces" }}
         <span class="hf-space__cta-arrow">
           {{- partial "hf-space/icon.html" (dict "name" "external") -}}
         </span>

@@ -76,8 +76,10 @@
   "language" ""
   "langColor" ""
   "stars" 0
+  "starsCount" 0
   "starsFormatted" "0"
   "forks" 0
+  "forksCount" 0
   "forksFormatted" "0"
   "watchers" 0
   "license" ""
@@ -177,6 +179,16 @@
   {{- $starsF := partial "github-repo/compact-number.html" $starsRaw -}}
   {{- $forksF := partial "github-repo/compact-number.html" $forksRaw -}}
 
+  {{/* Guarded integer counts for the i18n plural-form selection: the raw
+       values are remote-derived, so the cast is try-wrapped and a bad value
+       degrades to 0 instead of failing the build. */}}
+  {{- $starsN := 0 -}}
+  {{- $t := try (int $starsRaw) -}}
+  {{- if not $t.Err -}}{{- with $t.Value -}}{{- $starsN = . -}}{{- end -}}{{- end -}}
+  {{- $forksN := 0 -}}
+  {{- $t = try (int $forksRaw) -}}
+  {{- if not $t.Err -}}{{- with $t.Value -}}{{- $forksN = . -}}{{- end -}}{{- end -}}
+
   {{/* Relative time from pushed_at. */}}
   {{- $updatedStr := "" -}}
   {{- with $json.pushed_at -}}
@@ -211,8 +223,10 @@
     "language" $lang
     "langColor" $langColor
     "stars" $starsRaw
+    "starsCount" $starsN
     "starsFormatted" $starsF
     "forks" $forksRaw
+    "forksCount" $forksN
     "forksFormatted" $forksF
     "watchers" (or $json.subscribers_count 0)
     "license" $license

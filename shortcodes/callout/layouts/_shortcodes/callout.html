@@ -189,7 +189,7 @@
 {{- end -}}
 
 {{/* Icon strategy:
-     - icon=false / "false" / "none" / "no" / "off" / "0" -> suppress.
+     - icon=false / "false" / "none" / "no" / "off" / "0" / "" -> suppress.
      - icon is a single emoji (one grapheme, non-ASCII) -> emit as text.
      - icon is an image reference -> resolve to an <img>. A value counts as an
        image reference ONLY when it contains "/", starts with http:// or
@@ -213,7 +213,7 @@
   {{- $iconLower := lower $iconStr -}}
   {{- $iconIsRemote := or (hasPrefix $iconLower "http://") (hasPrefix $iconLower "https://") -}}
   {{- $iconHasImageExt := gt (len (findRE `\.(svg|png|jpe?g|jpe|jif|jfif|gif|webp|avif|ico|bmp|tiff?|heic|heif)$` $iconLower 1)) 0 -}}
-  {{- if or (in (slice "false" "none" "no" "off" "0") $iconLower) (eq $iconParam false) -}}
+  {{- if or (in (slice "false" "none" "no" "off" "0" "") $iconLower) (eq $iconParam false) -}}
     {{- $iconMode = "none" -}}
   {{- else if or $iconIsRemote (in $iconStr "/") $iconHasImageExt -}}
     {{- $iconMode = "resource" -}}

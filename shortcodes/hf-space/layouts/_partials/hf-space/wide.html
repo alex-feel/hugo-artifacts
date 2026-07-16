@@ -16,7 +16,7 @@
    class="hf-space hf-space--wide{{ with .extraClass }} {{ . }}{{ end }}"
    target="_blank"
    rel="noopener noreferrer"
-   aria-label="{{ or .title .name }}, a Hugging Face Space by {{ .owner }}"
+   aria-label="{{ T "hf_space_aria_label" (dict "Title" (or .title .name) "Owner" .owner) | default (printf "%s, a Hugging Face Space by %s" (or .title .name) .owner) }}"
    data-space="{{ .id }}"
    data-variant="wide"
    data-api-ok="{{ .apiOk }}"
@@ -30,7 +30,7 @@
   </span>
   <div class="hf-space__body">
     <div class="hf-space__wide-top">
-      <span><span class="hf-space__brand">🤗 Hugging&nbsp;Face</span> · SPACE</span>
+      <span><span class="hf-space__brand">🤗 Hugging&nbsp;Face</span> · {{ T "hf_space_type_space" | default "SPACE" }}</span>
     </div>
     <h3 class="hf-space__title">
       <span class="hf-space__owner">{{ .owner }} /</span> {{ .name }}

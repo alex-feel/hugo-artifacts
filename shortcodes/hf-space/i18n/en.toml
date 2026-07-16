@@ -1,0 +1,36 @@
+# Hugo hf-space module -- English UI strings.
+# The module ships its full i18n surface from this directory. Every template lookup pipes
+# through `| default "<English>"`, so a site language without these keys still renders.
+# The *_ago and likes-word keys are plural-form tables selected by Hugo's CLDR rules from an
+# integer count. The likes word next to the compact-formatted number ("1.2k") selects the
+# form of 1000, whose category fits a rounded quantity; raw counts below 1000 select their
+# own form.
+
+hf_space_type_space = "SPACE"
+hf_space_aria_label = "{{ .Title }}, a Hugging Face Space by {{ .Owner }}"
+hf_space_stat_sdk = "SDK"
+hf_space_stat_hardware = "Hardware"
+hf_space_stat_likes = "Likes"
+hf_space_open_in_spaces = "Open in Spaces"
+hf_space_just_now = "just now"
+hf_space_yesterday = "yesterday"
+
+[hf_space_likes_word]
+one = "like"
+other = "likes"
+
+[hf_space_hours_ago]
+one = "1 hour ago"
+other = "{{ .Count }} hours ago"
+
+[hf_space_days_ago]
+one = "1 day ago"
+other = "{{ .Count }} days ago"
+
+[hf_space_months_ago]
+one = "1 month ago"
+other = "{{ .Count }} months ago"
+
+[hf_space_years_ago]
+one = "1 year ago"
+other = "{{ .Count }} years ago"
