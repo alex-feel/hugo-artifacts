@@ -247,10 +247,10 @@
       {{- warnf "[arxiv-paper] %s See %s" $result.errorMessage $position -}}
     {{- end -}}
   {{- else -}}
-    {{/* Surface the rate-limit wait hint (clamped to one day by
-         classify-error.html) so an operator can act on it, mirroring the
-         github-repo and hf-space failure warns. */}}
-    {{- $hintClause := "" -}}
+    {{/* Surface the wait hint (clamped to one day by classify-error.html)
+         so an operator can act on it, with the same fallback sentence the
+         github-repo and hf-space failure warns always print. */}}
+    {{- $hintClause := " Hint: see warning context for guidance." -}}
     {{- with $result.waitHintSeconds -}}
       {{- $hintClause = printf " Hint: wait %d seconds and rebuild." . -}}
     {{- end -}}
