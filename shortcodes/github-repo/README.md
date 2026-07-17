@@ -141,12 +141,13 @@ The constants are baked into `fetch.html` and are **not** exposed as shortcode p
 | --- | --- | --- |
 | `attempts` | `5` | Maximum outer attempts per fetched endpoint |
 | `perAttemptTimeout` | `30s` | Per-request timeout passed to `resources.GetRemote` |
-| `overallBudgetSec` | `120` | Wall-clock cap per fetched endpoint, in seconds. A hard ceiling: an attempt only starts while the remaining budget still fits a full per-attempt timeout, so an attempt started near the boundary can never overshoot it |
+| `backoffSlackSec` | `10` | Reserved on top of the per-attempt timeout when deciding whether another attempt fits: Hugo retries the retryable statuses (408, 429, 500, 502, 503, 504) internally within each attempt, and its final backoff sleep (bounded under ten seconds) does not observe the request deadline, so such an attempt can run past its nominal timeout by up to that much |
+| `overallBudgetSec` | `120` | Wall-clock cap per fetched endpoint, in seconds. A hard ceiling: an attempt only starts while the remaining budget still fits a full per-attempt timeout plus the backoff slack, so even a boundary attempt against a persistently retryable-5xx host cannot overshoot the cap |
 | `waitHintCapSec` | `30` | Display cap for the wait hint in warning messages (the full numeric hint is still logged) |
 
 Each attempt uses a fresh cache key (`github-repo:OWNER/REPO:ENDPOINT:attemptN`) so that a response cached as an error by Hugo's `httpcache.Transport` on a prior attempt does not poison subsequent attempts within the same build.
 
-Hugo templates have no sleep primitive, so true backoff between outer attempts is structurally impossible. Hugo's own internal retry already provides a randomized exponential backoff (~100ms-5s per sleep step) for HTTP 408/429/500/502/503/504 within each attempt; outer attempts then drive a fresh request against the upstream API.
+Hugo templates have no sleep primitive, so true backoff between outer attempts is structurally impossible. Hugo's own internal retry already provides a randomized exponential backoff for HTTP 408/429/500/502/503/504 within each attempt (sleep steps double up to just under ten seconds -- the 5s figure in Hugo's source is the doubling threshold, not the sleep cap, which is why `backoffSlackSec` reserves ten); outer attempts then drive a fresh request against the upstream API.
 
 ### Error class taxonomy
 
@@ -195,7 +196,7 @@ Under the constants above, the per-call worst case is bounded as follows:
 
 These caps apply only when every endpoint exhausts retries against `server`, `secondary-rate-limit` (with a short reset window), `network`, `parse`, or `other` failures. The most common observed failure -- `primary-rate-limit` from an exhausted unauthenticated 60 req/h budget -- triggers an early break on attempt 2, so the realistic per-call cost is approximately one HTTP round-trip plus one classification.
 
-The table is the per-call-site ceiling, and during a full outage only the FIRST fetching call site pays it: exhausting against a host that never responds trips the circuit breaker above, so every later call site in the build degrades in effectively zero time. In the outage scenario the 240s rows additionally require the host to die between a call site's two endpoints -- a host that is down from the start fails the base-repo endpoint in 120s and skips the second endpoint entirely (`apiOk` is already false) -- while an exhaustion against slow responding failures (5xx, parse) can also reach 240s with the host up throughout, without ever involving the breaker.
+The table is the per-call-site ceiling, and during a full outage only the FIRST fetching call site pays it: exhausting against a host that never responds trips the circuit breaker above, so every later call site in the build degrades in effectively zero time. In the outage scenario the 240s rows additionally require the host to die between a call site's two endpoints -- a host that is down from the start fails the base-repo endpoint within its 120s budget (about 90s when every request window times out status-less, since the attempt reservation blocks a fourth window) and skips the second endpoint entirely (`apiOk` is already false) -- while an exhaustion against slow responding failures (5xx, parse) can also reach 240s with the host up throughout, without ever involving the breaker.
 
 When the API is healthy, the retry layer adds **zero** measurable overhead: the first attempt succeeds and the loop short-circuits.
 
