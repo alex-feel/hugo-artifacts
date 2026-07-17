@@ -114,7 +114,7 @@ Validation:
 - Omitting all of `id`, `url`, and `list` fails the build with an error message carrying the shortcode name and position.
 - Supplying an `id` or `url` from which no valid 11-character id can be extracted fails the build. YouTube ids are exactly 11 characters of `[A-Za-z0-9_-]`.
 - Supplying a `poster` that cannot be found (neither a page resource nor an asset) fails the build. This is treated as an authoring mistake, not a degradation case. Remove the `poster` parameter to fall back to the automatic thumbnail.
-- A missing remote thumbnail NEVER fails the build. The module warns once per build (deduplicated) and renders a neutral box with a working play button.
+- A missing remote thumbnail NEVER fails the build. The module warns once per page per video (deduplicated, keeping the call position useful) and renders a neutral box with a working play button.
 
 ## Poster resolution
 
@@ -128,6 +128,14 @@ The poster is always served from your own origin. The module resolves it at buil
 If none resolve, the facade renders a neutral 16:9 box and the play button still works.
 
 The chosen poster is processed into responsive WebP and JPEG variants and emitted as a `<picture>` with a WebP `<source>` and a JPEG `<img>` fallback. A responsive `srcset` ladder (1280 / 640 / 480 where the source is wide enough) is generated without upscaling, and explicit `width`/`height` on the `<img>` prevent layout shift.
+
+### Remote fetch bounds and the host-down circuit breaker
+
+Every remote tier passes an explicit `30s` timeout to `resources.GetRemote` (the function's own default is `2m`), so a single black-holed request can never stall a page render for minutes. A fetch that surfaces with no HTTP status code (a DNS failure, an unreachable host, a black-holed connection -- or a CDN that answered ONLY with the statuses Hugo retries internally, 408/429/500/502/503/504, until the request window closed) additionally marks `i.ytimg.com` unreachable for the rest of the build via a `hugo.Store` sentinel: the remaining tiers of that call site and the remote tiers of every later call site skip immediately, with a best-effort once-per-build warn naming the breaker plus the usual per-video no-poster warn. A failure that surfaces with a status code -- the 404 nil branch for a missing thumbnail, or a non-retryable status such as 403 or 501 -- never trips the breaker: it proves the host reachable and just falls through the tier chain.
+
+### Interplay with Hugo's render timeout
+
+Hugo aborts any page whose render exceeds the site-level `timeout` setting (default `60s`), and build-time poster fetching counts toward the clock of the page being rendered. With the bounds above, the worst case during a CDN outage is roughly one 30s request window before the breaker trips -- up to about ten seconds longer when the CDN answers with retryable 5xx errors, because Hugo retries those internally and the final backoff sleep does not observe the request deadline -- still inside Hugo's default, but a page that embeds several videos alongside other fetching modules shares one render clock, so a generous site-level margin (for example `timeout = '180s'`) keeps outage behavior a warning story instead of a build failure.
 
 ## Privacy model
 
@@ -144,7 +152,7 @@ The module degrades safely along several independent axes:
 
 - **No JavaScript / before enhancement:** the facade includes a plain `<a class="youtube-embed__link">` that navigates to the YouTube watch page (or playlist). This preserves the zero-contact guarantee, since it links away rather than embedding. When the enhancement script runs, it hides this link (`hidden`) and adds `youtube-embed--enhanced` to the root, so scripted visitors are not offered a duplicate, away-navigating control; visitors without scripting keep the link as the visible affordance.
 - **Missing remote thumbnail:** a neutral 16:9 box is rendered and the play button still works; the build is never broken.
-- **Network failure during build:** thumbnail fetch failures fall through the tier chain and ultimately to the neutral box, with a single deduplicated `warnf`.
+- **Network failure during build:** thumbnail fetch failures fall through the tier chain and ultimately to the neutral box, with a single deduplicated `warnf`. A host that never responds trips the circuit breaker described under [Poster resolution](#poster-resolution), so one outage never stalls more than roughly a single fetch window (about 30-40s).
 
 ## Localization
 

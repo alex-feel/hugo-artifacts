@@ -25,6 +25,23 @@
   - Else  No poster. Returns posterOk=false; the facade renders a neutral 16:9
           box. A missing remote poster NEVER fails the build (warnf, deduped).
 
+  Remote-fetch time bounds: every remote tier passes an explicit 30s timeout
+  to resources.GetRemote (the function's own default is 2m, long enough for a
+  black-holed CDN to push the rendering page past Hugo's render `timeout`),
+  and a fetch that surfaces with NO HTTP status code trips a host-down
+  circuit breaker in hugo.Store -- the remaining tiers of this call site and
+  every remote tier of every later call site skip immediately, with a
+  best-effort once-per-build warn naming the breaker (concurrently rendered
+  pages can race the sentinel check-then-set and each warn once). A failure
+  that surfaces WITH a status code -- the 404 nil branch, a non-retryable
+  status such as 403 or 501, a retryable status that recovers within the
+  window -- never trips it: the host is provably reachable. A PERSISTENTLY
+  retryable status (408, 429, 500, 502, 503, 504) is retried inside Hugo for
+  the whole request window and then surfaces status-less, so it trips the
+  breaker like a dark host -- intended for a CDN that never yields a poster
+  within the window. See the README's "Interplay with Hugo's render
+  timeout".
+
   Inputs (context dict):
   - .id       (string)        11-char video id ("" for a playlist-only embed).
   - .list     (string)        Playlist id, or "".
@@ -76,29 +93,49 @@
 {{- end -}}
 
 {{/* ---- Tiers 2-4: remote thumbnails (only when no local poster and a video
-        id exists; a playlist-only embed has no per-video thumbnail) ---- */}}
+        id exists; a playlist-only embed has no per-video thumbnail). The
+        breaker sentinel is re-read before every tier, so a trip at one tier
+        stops the remaining tiers of the SAME call site too. ---- */}}
 {{- if and (not $src) $id -}}
+  {{- $hostDownKey := "youtube-embed:host-down:i.ytimg.com" -}}
+  {{- $posterTimeout := "30s" -}}
+
   {{/* Tier 2: maxresdefault. The 404->nil branch is primary detection; the
        dimension guard rejects the placeholder that masquerades as a real
        thumbnail on some edges. Accept a small tolerance band around 1280x720 so
        a future minor encoding change does not spuriously reject a real frame. */}}
-  {{- $maxUrl := printf "https://i.ytimg.com/vi/%s/maxresdefault.jpg" $id -}}
-  {{- with try (resources.GetRemote $maxUrl) -}}
-    {{- with .Err -}}
-      {{/* Network/timeout/etc. -- not fatal; fall through to hqdefault. */}}
-    {{- else with .Value -}}
-      {{- if and (reflect.IsImageResourceProcessable .) (ge .Width 1000) (ge .Height 560) -}}
-        {{- $src = . -}}
-        {{- $tier = "maxres" -}}
+  {{- if not (hugo.Store.Get $hostDownKey) -}}
+    {{- $maxUrl := printf "https://i.ytimg.com/vi/%s/maxresdefault.jpg" $id -}}
+    {{- with try (resources.GetRemote $maxUrl (dict "timeout" $posterTimeout)) -}}
+      {{- with .Err -}}
+        {{/* Not fatal; fall through to hqdefault. A failure surfacing with
+             no HTTP status code -- the host never responded, or answered
+             only with statuses Hugo retries internally until the request
+             window closed -- trips the breaker. */}}
+        {{- $sc := 0 -}}
+        {{- with .Cause -}}{{- with .Data -}}{{- with .StatusCode -}}{{- $sc = . -}}{{- end -}}{{- end -}}{{- end -}}
+        {{- if eq $sc 0 -}}
+          {{- hugo.Store.Set $hostDownKey true -}}
+        {{- end -}}
+      {{- else with .Value -}}
+        {{- if and (reflect.IsImageResourceProcessable .) (ge .Width 1000) (ge .Height 560) -}}
+          {{- $src = . -}}
+          {{- $tier = "maxres" -}}
+        {{- end -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}
 
   {{/* Tier 3: hqdefault (480x360). */}}
-  {{- if not $src -}}
+  {{- if and (not $src) (not (hugo.Store.Get $hostDownKey)) -}}
     {{- $hqUrl := printf "https://i.ytimg.com/vi/%s/hqdefault.jpg" $id -}}
-    {{- with try (resources.GetRemote $hqUrl) -}}
+    {{- with try (resources.GetRemote $hqUrl (dict "timeout" $posterTimeout)) -}}
       {{- with .Err -}}
+        {{- $sc := 0 -}}
+        {{- with .Cause -}}{{- with .Data -}}{{- with .StatusCode -}}{{- $sc = . -}}{{- end -}}{{- end -}}{{- end -}}
+        {{- if eq $sc 0 -}}
+          {{- hugo.Store.Set $hostDownKey true -}}
+        {{- end -}}
       {{- else with .Value -}}
         {{- if reflect.IsImageResourceProcessable . -}}
           {{- $src = . -}}
@@ -109,16 +146,31 @@
   {{- end -}}
 
   {{/* Tier 4: default.jpg (0.jpg, 120x90) last resort. */}}
-  {{- if not $src -}}
+  {{- if and (not $src) (not (hugo.Store.Get $hostDownKey)) -}}
     {{- $defUrl := printf "https://i.ytimg.com/vi/%s/default.jpg" $id -}}
-    {{- with try (resources.GetRemote $defUrl) -}}
+    {{- with try (resources.GetRemote $defUrl (dict "timeout" $posterTimeout)) -}}
       {{- with .Err -}}
+        {{- $sc := 0 -}}
+        {{- with .Cause -}}{{- with .Data -}}{{- with .StatusCode -}}{{- $sc = . -}}{{- end -}}{{- end -}}{{- end -}}
+        {{- if eq $sc 0 -}}
+          {{- hugo.Store.Set $hostDownKey true -}}
+        {{- end -}}
       {{- else with .Value -}}
         {{- if reflect.IsImageResourceProcessable . -}}
           {{- $src = . -}}
           {{- $tier = "default" -}}
         {{- end -}}
       {{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* Once per build, name the breaker as the reason posters are skipped --
+       the per-video no-poster warn below stays as the per-call-site signal. */}}
+  {{- if and (not $src) (hugo.Store.Get $hostDownKey) -}}
+    {{- $k := "youtube-embed:warned-host-down" -}}
+    {{- if not (hugo.Store.Get $k) -}}
+      {{- hugo.Store.Set $k true -}}
+      {{- warnf "[youtube-embed] i.ytimg.com stopped responding and was marked unreachable for the rest of this build; remaining remote poster fetches are skipped. Facades render neutral boxes unless a local poster is supplied. See %s" $position -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
@@ -141,7 +193,8 @@
 -}}
 
 {{- if not $src -}}
-  {{/* No poster: warn once per build (deduped) and keep the neutral result. */}}
+  {{/* No poster: warn once per page per video ($page.Store-deduped, so the
+       position stays useful) and keep the neutral result. */}}
   {{- if $id -}}
     {{- $warnedKey := printf "youtube-embed:warned-no-poster:%s" $id -}}
     {{- if not ($page.Store.Get $warnedKey) -}}
