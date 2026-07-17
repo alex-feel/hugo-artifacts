@@ -156,6 +156,15 @@
   {{- $errorMessage = printf "HTTP %d" $statusCode -}}
 {{- end -}}
 
+{{/* The wait hint is remote-derived, so clamp it to one day: a longer hint
+     carries no actionable information for a build, and an absurd
+     Retry-After (anything up to int64 max parses) would otherwise overflow
+     the caller's millisecond multiplication and silently defeat its early
+     break. */}}
+{{- if gt $waitHintSeconds 86400 -}}
+  {{- $waitHintSeconds = 86400 -}}
+{{- end -}}
+
 {{/* Best-effort enrichment: if GitHub returned a JSON error body with a
      "message" field, surface it. Unmarshal failures are swallowed via try
      so a malformed body cannot break the build. */}}
