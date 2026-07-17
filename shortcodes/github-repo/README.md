@@ -141,7 +141,7 @@ The constants are baked into `fetch.html` and are **not** exposed as shortcode p
 | --- | --- | --- |
 | `attempts` | `5` | Maximum outer attempts per fetched endpoint |
 | `perAttemptTimeout` | `30s` | Per-request timeout passed to `resources.GetRemote` |
-| `overallBudgetSec` | `120` | Wall-clock cap per fetched endpoint, in seconds |
+| `overallBudgetSec` | `120` | Wall-clock cap per fetched endpoint, in seconds. A hard ceiling: an attempt only starts while the remaining budget still fits a full per-attempt timeout, so an attempt started near the boundary can never overshoot it |
 | `waitHintCapSec` | `30` | Display cap for the wait hint in warning messages (the full numeric hint is still logged) |
 
 Each attempt uses a fresh cache key (`github-repo:OWNER/REPO:ENDPOINT:attemptN`) so that a response cached as an error by Hugo's `httpcache.Transport` on a prior attempt does not poison subsequent attempts within the same build.
@@ -177,6 +177,10 @@ The `Hint:` field surfaces the full numeric `waitHintSeconds` so an operator can
 
 If the upstream response includes a JSON body with a `message` field (typical for GitHub error responses), the message is appended to the diagnostic. Malformed bodies are silently ignored so they cannot break the build.
 
+### Host-down circuit breaker
+
+When a fetch loop exhausts its attempts with NO attempt receiving any HTTP status code (every attempt ends `errorClass=network` with `statusCode=0` -- a DNS failure, an unreachable host, a black-holed connection), the module marks `api.github.com` unreachable for the rest of the build via a `hugo.Store` sentinel. Every later fetch loop -- any endpoint, any call site, any page -- checks the sentinel first and degrades immediately with a warn instead of burning another wall-clock budget, so a full API outage costs the build roughly one `overallBudgetSec` window instead of one per call site (concurrently rendered pages that started before the sentinel landed can each still pay an overlapping budget). A failure that surfaces WITH a status code -- a rate limit, an auth failure, a 404, or a non-retryable status such as 501 -- proves the host reachable, never trips the breaker, and keeps its own per-call-site retry budget. One nuance: Hugo retries the retryable statuses (408, 429, 500, 502, 503, 504) internally within each attempt's request window, so a host that answers ONLY with those for whole windows surfaces to the template as status-less no-response failures and trips the breaker exactly like a dark host -- the intended outcome for a host that never yields a usable response within the budget.
+
 ### Worst-case build time
 
 Under the constants above, the per-call worst case is bounded as follows:
@@ -191,9 +195,19 @@ Under the constants above, the per-call worst case is bounded as follows:
 
 These caps apply only when every endpoint exhausts retries against `server`, `secondary-rate-limit` (with a short reset window), `network`, `parse`, or `other` failures. The most common observed failure -- `primary-rate-limit` from an exhausted unauthenticated 60 req/h budget -- triggers an early break on attempt 2, so the realistic per-call cost is approximately one HTTP round-trip plus one classification.
 
+The table is the per-call-site ceiling, and during a full outage only the FIRST fetching call site pays it: exhausting against a host that never responds trips the circuit breaker above, so every later call site in the build degrades in effectively zero time. In the outage scenario the 240s rows additionally require the host to die between a call site's two endpoints -- a host that is down from the start fails the base-repo endpoint in 120s and skips the second endpoint entirely (`apiOk` is already false) -- while an exhaustion against slow responding failures (5xx, parse) can also reach 240s with the host up throughout, without ever involving the breaker.
+
 When the API is healthy, the retry layer adds **zero** measurable overhead: the first attempt succeeds and the loop short-circuits.
 
 Hugo's per-build resource cache also deduplicates same-URL calls within a build, so embedding the same repository in multiple shortcodes on a page pays the retry cost at most once per endpoint.
+
+### Interplay with Hugo's render timeout
+
+Hugo aborts any page whose render exceeds the site-level `timeout` setting (default `60s`), and every second this module spends fetching counts toward the clock of the page being rendered. Graceful degradation cannot rescue a page that is already out of render budget: during a full API outage the first fetching call site can spend up to 120s (240s when the host dies between a `lang`/`hero` call site's two endpoints) before it degrades, so a site whose `timeout` is at or below that figure can fail its build with `timed out rendering the page` even though every widget degraded correctly. The circuit breaker bounds the exposure to roughly one budget per build, but the page that pays that budget still needs headroom. Give the consuming site comfortable margin above the worst case:
+
+```toml
+timeout = '300s'
+```
 
 ### CI-level retry (cross-build resilience)
 

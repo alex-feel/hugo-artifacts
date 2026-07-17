@@ -11,8 +11,8 @@
 // fabricates height="0"; the two-positional shortcode shorthand renders;
 // the priority / eager / full loading rows emit their exact attribute
 // sets; credit_from_meta surfaces the IPTC credit; and a variant carrying
-// an unparseable width/height warns once and keeps rendering with the
-// source image's intrinsic dimensions.
+// an unparseable width/height warns once per media query and keeps
+// rendering with the dimensions of its largest generated derivative.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {dom, rawHtml, warnCount} from './helpers.js';
@@ -170,17 +170,34 @@ test('credit_from_meta surfaces the original image IPTC Credit field', () => {
   assert.equal(credit.textContent, 'Stock Agency Credit', 'the IPTC Credit field wins');
 });
 
-test('a variant with an unparseable width warns once and keeps rendering', () => {
+test('a variant with an unparseable width warns once per media query and keeps rendering', () => {
   const picture = page.querySelector('#variants-bad-dims picture');
   assert.ok(picture, 'the build did not fail on a non-numeric variant width');
   const source = picture.querySelector('source[media="(max-width: 480px)"]');
   assert.ok(source, 'the variant source still renders');
-  assert.equal(source.getAttribute('width'), '512', 'the intrinsic source width applies');
-  assert.equal(source.getAttribute('height'), '512', 'the intrinsic source height applies');
+  // The degraded variant falls back to the dimensions of its largest
+  // generated derivative; the 512px fixture source sits below the ladder
+  // cap, so the derivative keeps the full 512.
+  assert.equal(source.getAttribute('width'), '512', "the largest derivative's width applies");
+  assert.equal(source.getAttribute('height'), '512', "the largest derivative's height applies");
+  const narrow = picture.querySelector('source[media="(max-width: 320px)"]');
+  assert.ok(narrow, 'the second broken variant renders too');
   assert.equal(
     warnCount(
       /Ignoring a non-numeric width\/height value on the variant with media "\(max-width: 480px\)"/,
     ),
     1,
+  );
+  assert.equal(
+    warnCount(
+      /Ignoring a non-numeric width\/height value on the variant with media "\(max-width: 320px\)"/,
+    ),
+    1,
+    'a broken variant differing only by media query warns separately',
+  );
+  assert.equal(
+    warnCount(/got width=abc height=absent/),
+    2,
+    'an absent height reads as "absent", never as "<nil>"',
   );
 });

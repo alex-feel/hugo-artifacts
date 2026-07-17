@@ -27,7 +27,11 @@
   params -- the user requirement explicitly forbids new override surface):
   - $attempts            5    Outer attempts per fetched endpoint.
   - $perAttemptTimeout   30s  Per-request timeout for resources.GetRemote.
-  - $overallBudgetSec    120  Wall-clock cap per fetched endpoint.
+  - $overallBudgetSec    120  Wall-clock cap per fetched endpoint. An attempt
+                              only starts while the remaining budget still
+                              fits a full per-attempt timeout, so the cap is
+                              a hard ceiling -- never overshot by an attempt
+                              started near the boundary.
   - $waitHintCapSec      30   Display cap for waitHintSeconds in warnings;
                               the full numeric hint is logged unconditionally
                               so operators can act on it.
@@ -39,6 +43,23 @@
   - "auth"                Token/permissions issue; another attempt cannot fix.
   - "not-found"           Resource genuinely missing.
   - "secondary-rate-limit" with waitHintSeconds > remaining budget.
+
+  Host-down circuit breaker: a loop that exhausts with NO attempt receiving
+  any HTTP status code (every attempt ended errorClass "network" with
+  statusCode 0 -- a class the loop never early-breaks on, so its attempts
+  were genuinely spent) marks api.github.com unreachable for the rest of the
+  build via hugo.Store. Every later fetch loop in the build checks the
+  sentinel first and degrades immediately with a warn, so a full API outage
+  costs roughly one wall-clock budget per build instead of one per call
+  site (concurrently rendered pages that started before the sentinel landed
+  can each still pay an overlapping budget) -- sequential budget stacking
+  within one page render is what pushes a page past Hugo's render `timeout`
+  (see the README's "Interplay with Hugo's render timeout"). Any surfaced
+  status code on any attempt suppresses the trip; note that Hugo retries
+  the retryable statuses (408/429/500/502/503/504) internally within each
+  attempt's request window, so a host answering ONLY with those for a whole
+  window surfaces status-less and trips the breaker like a dark host --
+  intended, since it never yields a usable response within the budget.
 
   Context expectations:
   - .url (string)        Full GitHub repository URL.
@@ -98,12 +119,18 @@
 
 {{/* Retry constants. Aggressive defaults per user-approved plan. */}}
 {{- $attempts := 5 -}}
-{{- $perAttemptTimeout := "30s" -}}
+{{- $perAttemptTimeoutSec := 30 -}}
+{{- $perAttemptTimeout := printf "%ds" $perAttemptTimeoutSec -}}
 {{- $overallBudgetSec := 120 -}}
 {{- $waitHintCapSec := 30 -}}
 
 {{/* Early-break classes shared across the three endpoint loops. */}}
 {{- $earlyBreakClasses := slice "primary-rate-limit" "auth" "not-found" -}}
+
+{{/* Host-down circuit-breaker sentinel, shared across every call site in
+     the build. Each endpoint loop snapshots it before starting and trips it
+     after exhausting its attempts against a host that never responded. */}}
+{{- $hostDownKey := "github-repo:host-down:api.github.com" -}}
 
 {{/* API base URL. */}}
 {{- $apiBase := printf "https://api.github.com/repos/%s/%s" $owner $repo -}}
@@ -130,6 +157,7 @@
 {{- end -}}
 
 {{/* ---------- Endpoint 1 of up to 3: base repo ---------- */}}
+{{- $hostDown := hugo.Store.Get $hostDownKey -}}
 {{- $startSec := int now.Unix -}}
 {{- $repoResult := dict
   "ok" false
@@ -141,14 +169,20 @@
   "waitHintSeconds" 0
 -}}
 {{- $repoAttemptsUsed := 0 -}}
+{{- $repoSawResponse := false -}}
 {{- range $attempt := seq 1 $attempts -}}
   {{- if $repoResult.ok -}}
     {{/* Already succeeded; skip remaining attempts. */}}
+  {{- else if $hostDown -}}
+    {{/* Circuit breaker open: the host never responded to an earlier call
+         site this build, so degrade immediately instead of burning another
+         wall-clock budget. */}}
   {{- else -}}
     {{- $elapsed := sub (int now.Unix) $startSec -}}
     {{- $remaining := sub $overallBudgetSec $elapsed -}}
-    {{- if le $remaining 0 -}}
-      {{/* Wall-clock budget exhausted; stop attempting. */}}
+    {{- if lt $remaining $perAttemptTimeoutSec -}}
+      {{/* The remaining budget cannot fit a full attempt; stop so the
+           budget stays a hard ceiling. */}}
     {{- else if and (gt $attempt 1) (in $earlyBreakClasses $repoResult.errorClass) -}}
       {{/* Provably-useless class; further attempts within this build cannot succeed. */}}
     {{- else if and (gt $attempt 1) (eq $repoResult.errorClass "secondary-rate-limit") (gt $repoResult.waitHintSeconds $remaining) -}}
@@ -162,13 +196,24 @@
         "timeout" $perAttemptTimeout
       ) -}}
       {{- $repoAttemptsUsed = $attempt -}}
+      {{- if ne $repoResult.statusCode 0 -}}
+        {{- $repoSawResponse = true -}}
+      {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
 
+{{/* Trip the circuit breaker only when NO attempt received any HTTP status
+     code -- a host that answered even once (with any status) is reachable,
+     and the problem is then the endpoint or the request, not the host. */}}
+{{- if and (not $hostDown) (not $repoResult.ok) (eq $repoResult.errorClass "network") (eq $repoResult.statusCode 0) (not $repoSawResponse) -}}
+  {{- hugo.Store.Set $hostDownKey true -}}
+{{- end -}}
+
 {{/* On success, populate the normalized data dict from the JSON response;
-     on failure, keep the fallback and emit a single structured warning so
-     operators can act. */}}
+     on breaker skip, warn that this call site degraded without spending
+     budget; on failure, keep the fallback and emit a single structured
+     warning so operators can act. */}}
 {{- if $repoResult.ok -}}
   {{- $json := $repoResult.value -}}
 
@@ -238,6 +283,8 @@
     "sparkline" (slice)
     "extraClass" ""
   -}}
+{{- else if $hostDown -}}
+  {{- warnf "[github-repo] Skipping the GitHub API fetch for %s/%s: api.github.com was marked unreachable earlier in this build. Rendering the inline chip. See %s" $owner $repo $position -}}
 {{- else -}}
   {{- $hint := $repoResult.waitHintSeconds -}}
   {{- $guidanceHint := "" -}}
@@ -258,6 +305,7 @@
 
 {{/* ---------- Endpoint 2: language composition (variant=lang only) ---------- */}}
 {{- if and (eq $variant "lang") $data.apiOk -}}
+  {{- $langHostDown := hugo.Store.Get $hostDownKey -}}
   {{- $langUrl := printf "%s/languages" $apiBase -}}
   {{- $langStartSec := int now.Unix -}}
   {{- $langResult := dict
@@ -270,14 +318,17 @@
     "waitHintSeconds" 0
   -}}
   {{- $langAttemptsUsed := 0 -}}
+  {{- $langSawResponse := false -}}
   {{- range $attempt := seq 1 $attempts -}}
     {{- if $langResult.ok -}}
       {{/* Already succeeded; skip remaining attempts. */}}
+    {{- else if $langHostDown -}}
+      {{/* Circuit breaker open; degrade immediately. */}}
     {{- else -}}
       {{- $elapsed := sub (int now.Unix) $langStartSec -}}
       {{- $remaining := sub $overallBudgetSec $elapsed -}}
-      {{- if le $remaining 0 -}}
-        {{/* Budget exhausted. */}}
+      {{- if lt $remaining $perAttemptTimeoutSec -}}
+        {{/* The remaining budget cannot fit a full attempt. */}}
       {{- else if and (gt $attempt 1) (in $earlyBreakClasses $langResult.errorClass) -}}
         {{/* Provably-useless class. */}}
       {{- else if and (gt $attempt 1) (eq $langResult.errorClass "secondary-rate-limit") (gt $langResult.waitHintSeconds $remaining) -}}
@@ -291,8 +342,15 @@
           "timeout" $perAttemptTimeout
         ) -}}
         {{- $langAttemptsUsed = $attempt -}}
+        {{- if ne $langResult.statusCode 0 -}}
+          {{- $langSawResponse = true -}}
+        {{- end -}}
       {{- end -}}
     {{- end -}}
+  {{- end -}}
+
+  {{- if and (not $langHostDown) (not $langResult.ok) (eq $langResult.errorClass "network") (eq $langResult.statusCode 0) (not $langSawResponse) -}}
+    {{- hugo.Store.Set $hostDownKey true -}}
   {{- end -}}
 
   {{- if $langResult.ok -}}
@@ -314,6 +372,8 @@
       {{- $langSlice = sort $langSlice "pct" "desc" -}}
     {{- end -}}
     {{- $data = merge $data (dict "languages" $langSlice) -}}
+  {{- else if $langHostDown -}}
+    {{- warnf "[github-repo] Skipping the languages fetch for %s/%s: api.github.com was marked unreachable earlier in this build. Rendering without the language composition. See %s" $owner $repo $position -}}
   {{- else -}}
     {{- $hint := $langResult.waitHintSeconds -}}
     {{- $guidanceHint := "" -}}
@@ -332,6 +392,7 @@
 
 {{/* ---------- Endpoint 3: participation sparkline (variant=hero only) ---------- */}}
 {{- if and (eq $variant "hero") $data.apiOk -}}
+  {{- $statsHostDown := hugo.Store.Get $hostDownKey -}}
   {{- $statsUrl := printf "%s/stats/participation" $apiBase -}}
   {{- $statsStartSec := int now.Unix -}}
   {{- $statsResult := dict
@@ -344,14 +405,17 @@
     "waitHintSeconds" 0
   -}}
   {{- $statsAttemptsUsed := 0 -}}
+  {{- $statsSawResponse := false -}}
   {{- range $attempt := seq 1 $attempts -}}
     {{- if $statsResult.ok -}}
       {{/* Already succeeded; skip remaining attempts. */}}
+    {{- else if $statsHostDown -}}
+      {{/* Circuit breaker open; degrade immediately. */}}
     {{- else -}}
       {{- $elapsed := sub (int now.Unix) $statsStartSec -}}
       {{- $remaining := sub $overallBudgetSec $elapsed -}}
-      {{- if le $remaining 0 -}}
-        {{/* Budget exhausted. */}}
+      {{- if lt $remaining $perAttemptTimeoutSec -}}
+        {{/* The remaining budget cannot fit a full attempt. */}}
       {{- else if and (gt $attempt 1) (in $earlyBreakClasses $statsResult.errorClass) -}}
         {{/* Provably-useless class. */}}
       {{- else if and (gt $attempt 1) (eq $statsResult.errorClass "secondary-rate-limit") (gt $statsResult.waitHintSeconds $remaining) -}}
@@ -365,8 +429,15 @@
           "timeout" $perAttemptTimeout
         ) -}}
         {{- $statsAttemptsUsed = $attempt -}}
+        {{- if ne $statsResult.statusCode 0 -}}
+          {{- $statsSawResponse = true -}}
+        {{- end -}}
       {{- end -}}
     {{- end -}}
+  {{- end -}}
+
+  {{- if and (not $statsHostDown) (not $statsResult.ok) (eq $statsResult.errorClass "network") (eq $statsResult.statusCode 0) (not $statsSawResponse) -}}
+    {{- hugo.Store.Set $hostDownKey true -}}
   {{- end -}}
 
   {{- if $statsResult.ok -}}
@@ -374,6 +445,8 @@
     {{- with $statsJson.all -}}
       {{- $data = merge $data (dict "sparkline" .) -}}
     {{- end -}}
+  {{- else if $statsHostDown -}}
+    {{- warnf "[github-repo] Skipping the participation fetch for %s/%s: api.github.com was marked unreachable earlier in this build. Rendering without the sparkline. See %s" $owner $repo $position -}}
   {{- else -}}
     {{- $hint := $statsResult.waitHintSeconds -}}
     {{- $guidanceHint := "" -}}

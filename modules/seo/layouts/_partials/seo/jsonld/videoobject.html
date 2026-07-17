@@ -15,11 +15,19 @@
   Mutual-exclusion and uniqueness rules:
   - hasPart[] Clip and potentialAction SeekToAction are mutually exclusive;
     clips win and a warn fires when both are set.
-  - The WHOLE hasPart is dropped (with a warn) when any two clips share a
-    start_offset (Key Moments require unique start offsets).
-  - A clip whose start_offset does not parse is skipped WHOLE (startOffset is
-    Google-required on Clip; lib/num.html warns once); when every clip is
-    skipped, hasPart is not emitted.
+  - seo.video.clips must be a LIST of clip tables: a non-list value is
+    ignored with a warn (and seek_url_template, when set, then applies), and
+    a list entry that is not a table is skipped with the same per-clip warn
+    as a missing property -- author input never crashes the build.
+  - Every Clip requires name, start_offset, and url (all three are
+    Google-required for Key Moments): a clip missing any of them, or whose
+    start_offset does not parse, is skipped WHOLE with a warn (lib/num.html
+    warns the unparseable case) -- fabricating a default for a missing value
+    could mislabel a key moment. end_offset is the only optional clip
+    property; an unparseable value drops just that property.
+  - The WHOLE hasPart is dropped (with a warn) when two ELIGIBLE clips share
+    a start_offset (Key Moments require unique start offsets; a skipped clip
+    cannot collide); when every clip is skipped, hasPart is not emitted.
   - regionsAllowed XOR ineligibleRegion; both set warns and drops
     ineligible_region.
 
@@ -127,36 +135,89 @@
     {{- end -}}
 
     {{/* hasPart[] Clip (Key Moments) XOR potentialAction SeekToAction. Clips
-         win the deterministic tiebreak when both are set. This pair carries no
-         dedicated warn message, so the tiebreak is applied silently rather than
-         emitting an invented or mismatched message. Clip start_offsets must be
-         unique or the whole hasPart is dropped (that case has its own warn
-         below). */}}
-    {{- $hasClips := and $video.clips (gt (len $video.clips) 0) -}}
+         win the deterministic tiebreak when both are set, and the tiebreak
+         warns like the other mutually-exclusive pairs so the ignored
+         seek_url_template does not vanish silently. A clips value that is
+         not a list (a scalar, a table) is ignored with a warn instead of
+         crashing the range below -- and then does not suppress a valid
+         seek_url_template. */}}
+    {{- if and $video.clips (not (reflect.IsSlice $video.clips)) -}}
+      {{- partial "seo/lib/warn.html" (dict
+        "key" (printf "seo:warn:video-clips-shape:%s" $page.RelPermalink)
+        "message" (printf "[seo] VideoObject on %q sets seo.video.clips to a value that is not a list of clip tables; clips ignored." $page.RelPermalink)
+      ) -}}
+    {{- end -}}
+    {{- $hasClips := and (reflect.IsSlice $video.clips) (gt (len $video.clips) 0) -}}
     {{- $hasSeek := ne ($video.seek_url_template | default "") "" -}}
     {{- if and $hasClips $hasSeek -}}
+      {{- partial "seo/lib/warn.html" (dict
+        "key" (printf "seo:warn:video-clips-seek:%s" $page.RelPermalink)
+        "message" (printf "[seo] VideoObject on %q sets both clips and seek_url_template; they are mutually exclusive. Ignoring seek_url_template." $page.RelPermalink)
+      ) -}}
       {{- $hasSeek = false -}}
     {{- end -}}
 
     {{- if $hasClips -}}
-      {{/* Detect duplicate start_offsets. An unparseable start_offset
-           (guarded via lib/num.html, which warns once) is skipped here: that
-           whole clip entry is skipped below, so it cannot collide. */}}
+      {{/* Build the eligible clip list in ONE validation pass. Google
+           requires name, startOffset, and url on every Clip: an entry that
+           is not a table, or a clip missing any required property, is
+           skipped WHOLE with a warn naming what is wrong, and a clip whose
+           start_offset does not parse is skipped via lib/num.html, which
+           warns once naming the clip as what is omitted; an unparseable
+           end_offset drops just that property. Nothing is fabricated for a
+           missing value: a defaulted 0 start offset would mislabel a key
+           moment the author never declared. Presence is isset-based, so an
+           explicit empty value is validated (and dropped) and a native
+           (unquoted) 0 reaches the parser. */}}
+      {{- $clips := slice -}}
+      {{- $clipPos := 0 -}}
+      {{- range $video.clips -}}
+        {{- $clipPos = add $clipPos 1 -}}
+        {{- if not (reflect.IsMap .) -}}
+          {{- partial "seo/lib/warn.html" (dict
+            "key" (printf "seo:warn:video-clip-required:%s:%d" $page.RelPermalink $clipPos)
+            "message" (printf "[seo] VideoObject on %q: clip %d is not a table of clip properties; Google requires name, startOffset, and url on every Clip. Clip skipped." $page.RelPermalink $clipPos)
+          ) -}}
+        {{- else -}}
+        {{- $clipMissing := slice -}}
+        {{- if not .name -}}{{- $clipMissing = $clipMissing | append "name" -}}{{- end -}}
+        {{- if not (isset . "start_offset") -}}{{- $clipMissing = $clipMissing | append "start_offset" -}}{{- end -}}
+        {{- if not .url -}}{{- $clipMissing = $clipMissing | append "url" -}}{{- end -}}
+        {{- if gt (len $clipMissing) 0 -}}
+          {{- partial "seo/lib/warn.html" (dict
+            "key" (printf "seo:warn:video-clip-required:%s:%d" $page.RelPermalink $clipPos)
+            "message" (printf "[seo] VideoObject on %q: clip %d is missing %s; Google requires name, startOffset, and url on every Clip. Clip skipped." $page.RelPermalink $clipPos (delimit $clipMissing ", "))
+          ) -}}
+        {{- else -}}
+          {{- $so := partial "seo/lib/num.html" (dict "value" .start_offset "mode" "int" "field" "seo.video.clips.start_offset" "page" $page "what" "clip") -}}
+          {{- if ne (printf "%v" $so) "" -}}
+            {{- $clip := dict "@type" "Clip" "name" .name "startOffset" $so "url" .url -}}
+            {{- if isset . "end_offset" -}}
+              {{- $eo := partial "seo/lib/num.html" (dict "value" .end_offset "mode" "int" "field" "seo.video.clips.end_offset" "page" $page) -}}
+              {{- if ne (printf "%v" $eo) "" -}}
+                {{- $clip = merge $clip (dict "endOffset" $eo) -}}
+              {{- end -}}
+            {{- end -}}
+            {{- $clips = $clips | append $clip -}}
+          {{- end -}}
+        {{- end -}}
+        {{- end -}}
+      {{- end -}}
+      {{/* Key Moments require unique start offsets: a duplicate among the
+           ELIGIBLE clips drops the whole hasPart (choosing a survivor would
+           be arbitrary). Skipped clips cannot collide, and eligible offsets
+           are never negative (lib/num.html rejects negatives by default),
+           so the -1 sentinel is unambiguous. */}}
       {{- $seen := dict -}}
       {{- $dupOffset := -1 -}}
-      {{- range $video.clips -}}
-        {{- $soRaw := 0 -}}
-        {{- if isset . "start_offset" -}}{{- $soRaw = .start_offset -}}{{- end -}}
-        {{- $so := partial "seo/lib/num.html" (dict "value" $soRaw "mode" "int" "field" "seo.video.clips.start_offset" "page" $page) -}}
-        {{- if ne (printf "%v" $so) "" -}}
-          {{- $k := printf "%d" $so -}}
-          {{- if isset $seen $k -}}
-            {{- if lt $dupOffset 0 -}}
-              {{- $dupOffset = $so -}}
-            {{- end -}}
-          {{- else -}}
-            {{- $seen = merge $seen (dict $k true) -}}
+      {{- range $clips -}}
+        {{- $k := printf "%d" .startOffset -}}
+        {{- if isset $seen $k -}}
+          {{- if lt $dupOffset 0 -}}
+            {{- $dupOffset = .startOffset -}}
           {{- end -}}
+        {{- else -}}
+          {{- $seen = merge $seen (dict $k true) -}}
         {{- end -}}
       {{- end -}}
       {{- if ge $dupOffset 0 -}}
@@ -165,35 +226,6 @@
           "message" (printf "[seo] VideoObject on %q has two clips sharing startOffset %d; Key Moments require unique start offsets. hasPart omitted." $page.RelPermalink $dupOffset)
         ) -}}
       {{- else -}}
-        {{- $clips := slice -}}
-        {{- range $video.clips -}}
-          {{/* startOffset is Google-required on Clip: an unparseable
-               start_offset (lib/num.html warns once) skips this WHOLE clip
-               entry. Presence is isset-based, so an explicit empty value is
-               validated (and dropped) instead of coercing to 0, while an
-               absent start_offset keeps its documented 0 default. end_offset
-               stays a property-drop (optional), gated with isset so a native
-               (unquoted) 0 reaches the parser. */}}
-          {{- $soRaw := 0 -}}
-          {{- if isset . "start_offset" -}}{{- $soRaw = .start_offset -}}{{- end -}}
-          {{- $so := partial "seo/lib/num.html" (dict "value" $soRaw "mode" "int" "field" "seo.video.clips.start_offset" "page" $page) -}}
-          {{- if ne (printf "%v" $so) "" -}}
-            {{- $clip := dict "@type" "Clip" "startOffset" $so -}}
-            {{- with .name -}}
-              {{- $clip = merge $clip (dict "name" .) -}}
-            {{- end -}}
-            {{- if isset . "end_offset" -}}
-              {{- $eo := partial "seo/lib/num.html" (dict "value" .end_offset "mode" "int" "field" "seo.video.clips.end_offset" "page" $page) -}}
-              {{- if ne (printf "%v" $eo) "" -}}
-                {{- $clip = merge $clip (dict "endOffset" $eo) -}}
-              {{- end -}}
-            {{- end -}}
-            {{- with .url -}}
-              {{- $clip = merge $clip (dict "url" .) -}}
-            {{- end -}}
-            {{- $clips = $clips | append $clip -}}
-          {{- end -}}
-        {{- end -}}
         {{- with $clips -}}
           {{- $node = merge $node (dict "hasPart" .) -}}
         {{- end -}}

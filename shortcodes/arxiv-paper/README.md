@@ -169,7 +169,7 @@ Each API call is wrapped in an outer retry loop with error classification, sitti
 | --- | --- | --- |
 | `attempts` | `5` (arXiv), `3` (enrichers) | Maximum outer attempts |
 | `perAttemptTimeout` | `30s` (arXiv), `20s` (enrichers) | Per-request timeout passed to `resources.GetRemote` |
-| `overallBudgetSec` | `120` (arXiv), `60` (enrichers) | Wall-clock cap, in seconds |
+| `overallBudgetSec` | `120` (arXiv), `60` (enrichers) | Wall-clock cap, in seconds. A hard ceiling: an attempt only starts while the remaining budget still fits a full per-attempt timeout, so an attempt started near the boundary can never overshoot it |
 
 Each attempt uses a fresh cache key (`arxiv-paper:<id>:<endpoint>:attemptN`) so that a response cached as an error by Hugo's HTTP cache on a prior attempt does not poison subsequent attempts within the same build.
 
@@ -188,6 +188,18 @@ Each attempt uses a fresh cache key (`arxiv-paper:<id>:<endpoint>:attemptN`) so 
 | `parse` | 2xx response whose body is not a decodable document object (an array, blank, undecodable, null, or scalar body) | Early break -- a non-document body from these endpoints is deterministic, not transient. |
 
 arXiv reports "not found" with an HTTP 200 body (an empty feed for a nonexistent id, or an error `entry` for a malformed id), so `parse-atom.html` inspects the feed shape rather than trusting the status code. On retry exhaustion the module emits a single structured `warnf` and falls through to graceful degradation. The build is never broken by an API failure.
+
+### Host-down circuit breaker
+
+When a fetch loop exhausts its attempts with NO attempt receiving any HTTP status code (every attempt ends `errorClass=network` with `statusCode=0` -- a DNS failure, an unreachable host, a black-holed connection), the module marks that API host unreachable for the rest of the build via a `hugo.Store` sentinel, one per host: `export.arxiv.org`, `api.semanticscholar.org`, and `huggingface.co` trip independently. Every later fetch loop against a tripped host -- any paper, any page -- degrades immediately instead of burning another wall-clock budget (the arXiv spine warns per call site; a skipped enricher folds into its existing once-per-build unavailability warn), so a full outage costs the build roughly one budget window per host instead of one per call site (concurrently rendered pages that started before the sentinel landed can each still pay an overlapping budget). A failure that surfaces WITH a status code -- a rate limit, an auth failure, a 404, or a non-retryable status such as 501 -- proves the host reachable, never trips the breaker, and keeps its own per-call-site retry budget. One nuance: Hugo retries the retryable statuses (408, 429, 500, 502, 503, 504) internally within each attempt's request window, so a host that answers ONLY with those for whole windows surfaces to the template as status-less no-response failures and trips the breaker exactly like a dark host -- the intended outcome for a host that never yields a usable response within the budget.
+
+### Interplay with Hugo's render timeout
+
+Hugo aborts any page whose render exceeds the site-level `timeout` setting (default `60s`), and every second this module spends fetching counts toward the clock of the page being rendered. Graceful degradation cannot rescue a page that is already out of render budget: a full arXiv outage costs the first fetching call site up to 120s on the spine (the enrichers are then skipped, because they only run when the spine resolved a paper), while the true additive worst case -- a flaky-but-reachable spine that succeeds near its budget boundary combined with dark enricher hosts -- can reach roughly 240s on one call site. A site whose `timeout` is at or below those figures can fail its build with `timed out rendering the page` even though every widget degraded correctly. The circuit breakers bound the exposure to roughly one budget per host per build, but the page that pays those budgets still needs headroom. Give the consuming site comfortable margin above the worst case:
+
+```toml
+timeout = '300s'
+```
 
 ## Graceful Degradation
 

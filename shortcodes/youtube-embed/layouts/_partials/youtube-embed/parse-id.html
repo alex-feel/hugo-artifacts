@@ -43,9 +43,8 @@
                     The caller uses it only when no valid explicit `start`
                     parameter is set.
   - .startInvalid (bool) true when a url-carried offset was present but had to
-                    be discarded (a component above nine digits or otherwise
-                    out of range); the caller holds .Name/.Position and emits
-                    the warning.
+                    be discarded (a component above nine digits); the caller
+                    holds .Name/.Position and emits the warning.
   - .urlId (string) The video id extracted from `url`, or "" when none. Equals
                     .id when the url supplied the winning id; differs when an
                     explicit raw id superseded it.
@@ -103,12 +102,13 @@
        an invalid octal digit (int "08" is a fatal cast) cannot break the
        build; an all-zero component trims to empty and keeps its 0 default.
        Every component is capped at nine digits (no real YouTube offset comes
-       close, and the cap keeps the h/m/s sum far inside int64, where an
-       unchecked multiplication would silently wrap); an oversized or
-       unparseable component invalidates the WHOLE offset (a partial sum such
-       as "1h<overflowing>m3s" -> 3603 would be a wrong-but-plausible value)
-       and is surfaced as .startInvalid so the caller can warn -- diagnostics
-       belong to the caller per this partial's contract. */}}
+       close, and the cap keeps the surviving cast provably inside int64 and
+       the h/m/s sum far from the wrap an unchecked multiplication would
+       silently hit); an oversized component invalidates the WHOLE offset (a
+       partial sum such as "1h<oversized>m3s" -> 3603 would be a
+       wrong-but-plausible value) and is surfaced as .startInvalid so the
+       caller can warn -- diagnostics belong to the caller per this partial's
+       contract. */}}
   {{- with findRESubmatch `[?&#](?:t|start)=([0-9hms]+)` $u 1 -}}
     {{- $tval := index (index . 0) 1 -}}
     {{- if findRE `^[0-9]+s?$` $tval 1 -}}
@@ -116,16 +116,15 @@
       {{- if gt (len $sec) 9 -}}
         {{- $startInvalid = true -}}
       {{- else if $sec -}}
-        {{- $t := try (int $sec) -}}
-        {{- if $t.Err -}}{{- $startInvalid = true -}}{{- else -}}{{- with $t.Value -}}{{- $start = . -}}{{- end -}}{{- end -}}
+        {{- $start = int $sec -}}
       {{- end -}}
     {{- else -}}
       {{- $h := 0 -}}
       {{- $m := 0 -}}
       {{- $s := 0 -}}
-      {{- with findRESubmatch `([0-9]+)h` $tval 1 -}}{{- $d := strings.TrimLeft "0" (index (index . 0) 1) -}}{{- if gt (len $d) 9 -}}{{- $startInvalid = true -}}{{- else if $d -}}{{- $t := try (int $d) -}}{{- if $t.Err -}}{{- $startInvalid = true -}}{{- else -}}{{- with $t.Value -}}{{- $h = . -}}{{- end -}}{{- end -}}{{- end -}}{{- end -}}
-      {{- with findRESubmatch `([0-9]+)m` $tval 1 -}}{{- $d := strings.TrimLeft "0" (index (index . 0) 1) -}}{{- if gt (len $d) 9 -}}{{- $startInvalid = true -}}{{- else if $d -}}{{- $t := try (int $d) -}}{{- if $t.Err -}}{{- $startInvalid = true -}}{{- else -}}{{- with $t.Value -}}{{- $m = . -}}{{- end -}}{{- end -}}{{- end -}}{{- end -}}
-      {{- with findRESubmatch `([0-9]+)s` $tval 1 -}}{{- $d := strings.TrimLeft "0" (index (index . 0) 1) -}}{{- if gt (len $d) 9 -}}{{- $startInvalid = true -}}{{- else if $d -}}{{- $t := try (int $d) -}}{{- if $t.Err -}}{{- $startInvalid = true -}}{{- else -}}{{- with $t.Value -}}{{- $s = . -}}{{- end -}}{{- end -}}{{- end -}}{{- end -}}
+      {{- with findRESubmatch `([0-9]+)h` $tval 1 -}}{{- $d := strings.TrimLeft "0" (index (index . 0) 1) -}}{{- if gt (len $d) 9 -}}{{- $startInvalid = true -}}{{- else if $d -}}{{- $h = int $d -}}{{- end -}}{{- end -}}
+      {{- with findRESubmatch `([0-9]+)m` $tval 1 -}}{{- $d := strings.TrimLeft "0" (index (index . 0) 1) -}}{{- if gt (len $d) 9 -}}{{- $startInvalid = true -}}{{- else if $d -}}{{- $m = int $d -}}{{- end -}}{{- end -}}
+      {{- with findRESubmatch `([0-9]+)s` $tval 1 -}}{{- $d := strings.TrimLeft "0" (index (index . 0) 1) -}}{{- if gt (len $d) 9 -}}{{- $startInvalid = true -}}{{- else if $d -}}{{- $s = int $d -}}{{- end -}}{{- end -}}
       {{- if not $startInvalid -}}
         {{- $start = add (add (mul $h 3600) (mul $m 60)) $s -}}
       {{- end -}}
