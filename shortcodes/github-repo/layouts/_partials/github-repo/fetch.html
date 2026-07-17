@@ -41,9 +41,6 @@
                               backoff slack, so the cap is a hard ceiling --
                               never overshot even by a boundary attempt
                               against a persistently retryable-5xx host.
-  - $waitHintCapSec      30   Display cap for waitHintSeconds in warnings;
-                              the full numeric hint is logged unconditionally
-                              so operators can act on it.
 
   Early-break classes -- subsequent attempts are provably useless within a
   single build, so the loop short-circuits when the prior attempt's
@@ -133,7 +130,6 @@
 {{- $backoffSlackSec := 10 -}}
 {{- $attemptReserveSec := add $perAttemptTimeoutSec $backoffSlackSec -}}
 {{- $overallBudgetSec := 120 -}}
-{{- $waitHintCapSec := 30 -}}
 {{/* Gate arithmetic runs on a millisecond clock: integer-second deltas
      truncate, and a pathological alignment could let a boundary attempt
      slip past the cap by up to a second. */}}
@@ -302,16 +298,9 @@
 {{- else if $hostDown -}}
   {{- warnf "[github-repo] Skipping the GitHub API fetch for %s/%s: api.github.com was marked unreachable earlier in this build. Rendering the inline chip. See %s" $owner $repo $position -}}
 {{- else -}}
-  {{- $hint := $repoResult.waitHintSeconds -}}
-  {{- $guidanceHint := "" -}}
-  {{- if gt $hint 0 -}}
-    {{- if gt $hint $waitHintCapSec -}}
-      {{- $guidanceHint = printf "wait %d seconds and rebuild (display capped at %ds)" $hint $waitHintCapSec -}}
-    {{- else -}}
-      {{- $guidanceHint = printf "wait %d seconds and rebuild" $hint -}}
-    {{- end -}}
-  {{- else -}}
-    {{- $guidanceHint = "see warning context for guidance" -}}
+  {{- $guidanceHint := "see warning context for guidance" -}}
+  {{- with $repoResult.waitHintSeconds -}}
+    {{- $guidanceHint = printf "wait %d seconds and rebuild" . -}}
   {{- end -}}
   {{- warnf "[github-repo] Failed to fetch %s/%s after %d attempt(s) (errorClass=%s, statusCode=%d, message=%q). Hint: %s. See %s" $owner $repo $repoAttemptsUsed $repoResult.errorClass $repoResult.statusCode $repoResult.errorMessage $guidanceHint $position -}}
 {{- end -}}
@@ -391,16 +380,9 @@
   {{- else if $langHostDown -}}
     {{- warnf "[github-repo] Skipping the languages fetch for %s/%s: api.github.com was marked unreachable earlier in this build. Rendering without the language composition. See %s" $owner $repo $position -}}
   {{- else -}}
-    {{- $hint := $langResult.waitHintSeconds -}}
-    {{- $guidanceHint := "" -}}
-    {{- if gt $hint 0 -}}
-      {{- if gt $hint $waitHintCapSec -}}
-        {{- $guidanceHint = printf "wait %d seconds and rebuild (display capped at %ds)" $hint $waitHintCapSec -}}
-      {{- else -}}
-        {{- $guidanceHint = printf "wait %d seconds and rebuild" $hint -}}
-      {{- end -}}
-    {{- else -}}
-      {{- $guidanceHint = "see warning context for guidance" -}}
+    {{- $guidanceHint := "see warning context for guidance" -}}
+    {{- with $langResult.waitHintSeconds -}}
+      {{- $guidanceHint = printf "wait %d seconds and rebuild" . -}}
     {{- end -}}
     {{- warnf "[github-repo] Failed to fetch %s/%s languages after %d attempt(s) (errorClass=%s, statusCode=%d, message=%q). Hint: %s. See %s" $owner $repo $langAttemptsUsed $langResult.errorClass $langResult.statusCode $langResult.errorMessage $guidanceHint $position -}}
   {{- end -}}
@@ -464,16 +446,9 @@
   {{- else if $statsHostDown -}}
     {{- warnf "[github-repo] Skipping the participation fetch for %s/%s: api.github.com was marked unreachable earlier in this build. Rendering without the sparkline. See %s" $owner $repo $position -}}
   {{- else -}}
-    {{- $hint := $statsResult.waitHintSeconds -}}
-    {{- $guidanceHint := "" -}}
-    {{- if gt $hint 0 -}}
-      {{- if gt $hint $waitHintCapSec -}}
-        {{- $guidanceHint = printf "wait %d seconds and rebuild (display capped at %ds)" $hint $waitHintCapSec -}}
-      {{- else -}}
-        {{- $guidanceHint = printf "wait %d seconds and rebuild" $hint -}}
-      {{- end -}}
-    {{- else -}}
-      {{- $guidanceHint = "see warning context for guidance" -}}
+    {{- $guidanceHint := "see warning context for guidance" -}}
+    {{- with $statsResult.waitHintSeconds -}}
+      {{- $guidanceHint = printf "wait %d seconds and rebuild" . -}}
     {{- end -}}
     {{- warnf "[github-repo] Failed to fetch %s/%s participation after %d attempt(s) (errorClass=%s, statusCode=%d, message=%q). Hint: %s. See %s" $owner $repo $statsAttemptsUsed $statsResult.errorClass $statsResult.statusCode $statsResult.errorMessage $guidanceHint $position -}}
   {{- end -}}

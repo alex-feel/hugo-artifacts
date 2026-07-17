@@ -16,8 +16,9 @@
 // unparseable width warns naming the absent height, and two distinct
 // top-level mistakes sharing a position-less location each warn; a src-less
 // variant is dropped with the absent src named while an explicit-empty src
-// stays visible and quoted; and malformed variants entries (non-dict or
-// media-less) warn per entry position.
+// stays visible and quoted; malformed variants entries (non-dict or
+// media-less) warn per entry position; and sibling variants calls at one
+// position-less location stay distinct by the offending value.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {dom, rawHtml, warnCount} from './helpers.js';
@@ -228,9 +229,29 @@ test('two distinct top-level bad dims at a position-less location each warn', ()
   );
 });
 
+test('sibling variants calls at one location stay distinct by value', () => {
+  // Two layout-partial calls share the position-less page-path location and
+  // carry DIFFERENT malformed values at the SAME positions, so this is the
+  // one scenario where the value half of the shape-warn keys is observable:
+  // a value-less key would collapse each pair into a single warn.
+  const section = page.querySelector('#variants-collapse');
+  assert.equal(section.querySelectorAll('picture').length, 2, 'both sibling calls render');
+  assert.equal(warnCount(/Dropping variants entry 1: it is not a dict \(got "sibling-junk-a"/), 1);
+  assert.equal(warnCount(/Dropping variants entry 1: it is not a dict \(got "sibling-junk-b"/), 1);
+  assert.equal(
+    warnCount(/Dropping variants entry 2: it has no media query \(got src="media-less-a\.png"\)/),
+    1,
+  );
+  assert.equal(
+    warnCount(/Dropping variants entry 2: it has no media query \(got src="media-less-b\.png"\)/),
+    1,
+  );
+});
+
 test('malformed variants entries warn per position and are dropped', () => {
-  // The exact 1-based ordinals and offending values are pinned so a
-  // regression to 0-based positions or value-less keys cannot pass.
+  // The exact 1-based ordinals and offending values are pinned here, and the
+  // sibling-call test above pins the value half of the keys, so neither a
+  // regression to 0-based positions nor a value-less key can pass.
   assert.equal(warnCount(/Dropping variants entry 5: it is not a dict \(got "bogus-entry-one"/), 1);
   assert.equal(warnCount(/Dropping variants entry 6: it is not a dict \(got "bogus-entry-two"/), 1);
   assert.equal(

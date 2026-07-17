@@ -131,7 +131,6 @@ Each API call is wrapped in an outer retry loop with header-aware error classifi
 | `perAttemptTimeout` | `30s` | Per-request timeout passed to `resources.GetRemote` |
 | `backoffSlackSec` | `10` | Reserved on top of the per-attempt timeout when deciding whether another attempt fits: Hugo retries the retryable statuses (408, 429, 500, 502, 503, 504) internally within each attempt, and its final backoff sleep (bounded under ten seconds) does not observe the request deadline, so such an attempt can run past its nominal timeout by up to that much |
 | `overallBudgetSec` | `120` | Wall-clock cap, in seconds. A hard ceiling: an attempt only starts while the remaining budget still fits a full per-attempt timeout plus the backoff slack, so even a boundary attempt against a persistently retryable-5xx host cannot overshoot the cap (gate arithmetic runs on a millisecond clock, so integer-second truncation cannot leak past it either) |
-| `waitHintCapSec` | `30` | Display cap for the rate-limit wait hint in warnings (the full numeric hint is still logged) |
 
 Each attempt uses a fresh cache key (`hf-space:OWNER/NAME:space:attemptN`) so that a response cached as an error by Hugo's `httpcache.Transport` on a prior attempt does not poison subsequent attempts within the same build.
 
@@ -145,7 +144,7 @@ Hugo templates have no sleep primitive, so true backoff between outer attempts i
 | --- | --- | --- |
 | `auth` | HTTP 401 or 403 | Early break -- a missing/private Space or token/permission issue cannot be fixed by retrying. The Hub returns **401** (not 404) to anonymous clients for both missing and private Spaces, so the message names all three causes. |
 | `not-found` | HTTP 404 (typically only when authenticated) | Early break -- resource genuinely missing. |
-| `rate-limit` | HTTP 429 | Early break -- a rate-limit window cannot reset between immediate attempts. The wait hint is taken from a numeric `Retry-After`, else the `t` reset delta in the IETF `RateLimit` header, else a 60-second default, and surfaced for a later CI-level rebuild. An HTTP-date `Retry-After` (the other form RFC 9110 permits) is treated as absent and falls through to the next hint source. |
+| `rate-limit` | HTTP 429 | Early break -- a rate-limit window cannot reset between immediate attempts. The wait hint is taken from a numeric `Retry-After`, else the `t` reset delta in the IETF `RateLimit` header, else a 60-second default -- clamped to one day -- and surfaced for a later CI-level rebuild. An HTTP-date `Retry-After` (the other form RFC 9110 permits) is treated as absent and falls through to the next hint source. |
 | `server` | HTTP 5xx | Retry up to `attempts` or `overallBudgetSec`, whichever comes first. |
 | `network` | No HTTP response (DNS failure, connection refused, host timeout) | Retry up to `attempts` or `overallBudgetSec`. |
 | `parse` | 2xx response whose body is not a decodable JSON object (an array, blank, undecodable, null, or scalar body; `{}` is a valid payload). Unlike the github-repo sibling, no status code is special-cased: the Hub has no 202 still-computing answer. | Retry up to `attempts` or `overallBudgetSec`. |

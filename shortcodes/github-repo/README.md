@@ -143,7 +143,6 @@ The constants are baked into `fetch.html` and are **not** exposed as shortcode p
 | `perAttemptTimeout` | `30s` | Per-request timeout passed to `resources.GetRemote` |
 | `backoffSlackSec` | `10` | Reserved on top of the per-attempt timeout when deciding whether another attempt fits: Hugo retries the retryable statuses (408, 429, 500, 502, 503, 504) internally within each attempt, and its final backoff sleep (bounded under ten seconds) does not observe the request deadline, so such an attempt can run past its nominal timeout by up to that much |
 | `overallBudgetSec` | `120` | Wall-clock cap per fetched endpoint, in seconds. A hard ceiling: an attempt only starts while the remaining budget still fits a full per-attempt timeout plus the backoff slack, so even a boundary attempt against a persistently retryable-5xx host cannot overshoot the cap (gate arithmetic runs on a millisecond clock, so integer-second truncation cannot leak past it either) |
-| `waitHintCapSec` | `30` | Display cap for the wait hint in warning messages (the full numeric hint is still logged) |
 
 Each attempt uses a fresh cache key (`github-repo:OWNER/REPO:ENDPOINT:attemptN`) so that a response cached as an error by Hugo's `httpcache.Transport` on a prior attempt does not poison subsequent attempts within the same build.
 
@@ -155,8 +154,8 @@ Hugo templates have no sleep primitive, so true backoff between outer attempts i
 
 | `errorClass` | Trigger | Retry behavior |
 | --- | --- | --- |
-| `primary-rate-limit` | HTTP 403 with `X-RateLimit-Remaining: 0` | Early break -- subsequent attempts cannot succeed within the same build. Wait hint computed from `X-RateLimit-Reset`. |
-| `secondary-rate-limit` | HTTP 429 | Retry while the wait hint fits in the remaining wall-clock budget. Wait hint preference: numeric `Retry-After`, then `X-RateLimit-Reset` delta, then `60s`. An HTTP-date `Retry-After` (the other form RFC 9110 permits) is treated as absent and falls through to the next hint source. |
+| `primary-rate-limit` | HTTP 403 with `X-RateLimit-Remaining: 0` | Early break -- subsequent attempts cannot succeed within the same build. Wait hint computed from `X-RateLimit-Reset`, clamped to one day. |
+| `secondary-rate-limit` | HTTP 429 | Retry while the wait hint fits in the remaining wall-clock budget. Wait hint preference: numeric `Retry-After`, then `X-RateLimit-Reset` delta, then `60s`; the result is clamped to one day. An HTTP-date `Retry-After` (the other form RFC 9110 permits) is treated as absent and falls through to the next hint source. |
 | `auth` | HTTP 401, or HTTP 403 without rate-limit headers | Early break -- token / permissions issue cannot be fixed by retrying. |
 | `not-found` | HTTP 404 (Hugo's `nil` branch from `resources.GetRemote`) | Early break -- resource is genuinely missing. |
 | `server` | HTTP 5xx | Retry up to `attempts` or `overallBudgetSec`, whichever comes first. |
@@ -174,7 +173,7 @@ When retries exhaust, the module emits a single structured `warnf` per failed en
 [github-repo] Failed to fetch OWNER/REPO after N attempt(s) (errorClass=primary-rate-limit, statusCode=403, message="HTTP 403 (primary rate limit reached): API rate limit exceeded ..."). Hint: wait 1842 seconds and rebuild. See PATH:LINE:COL
 ```
 
-The `Hint:` field surfaces the full numeric `waitHintSeconds` so an operator can act on it directly. When the hint exceeds `waitHintCapSec` (30 seconds), the message is suffixed with `(display capped at 30s)` to acknowledge the cap without truncating the actionable number.
+The `Hint:` field surfaces the numeric `waitHintSeconds` so an operator can act on it directly; the classifier clamps remote-derived hints to one day, so the figure is always actionable and never absurd.
 
 If the upstream response includes a JSON body with a `message` field (typical for GitHub error responses), the message is appended to the diagnostic. Malformed bodies are silently ignored so they cannot break the build.
 
