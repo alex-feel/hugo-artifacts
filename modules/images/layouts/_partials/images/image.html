@@ -102,15 +102,28 @@
         {{- $vsrc := partial "images/resolve/source.html" (dict "page" $page "src" ($v.src | default "")) -}}
         {{- $vsrc = partial "images/resolve/remote.html" (dict "page" $page "source" $vsrc "opts" $opts) -}}
         {{- if not $vsrc.processable -}}
+          {{/* The media query is part of both dedup keys below: two broken
+               variants sharing a source (or a bad value) but targeting
+               different media are distinct authoring mistakes, so each
+               warns. */}}
           {{- partial "images/lib/warn.html" (dict
-              "key" (printf "images:warn:variant-unresolvable:%s:%s" $where (printf "%v" $v.src))
+              "key" (printf "images:warn:variant-unresolvable:%s:%s:%s" $where (printf "%v" $v.media) (printf "%v" $v.src))
               "message" (printf "[images] Dropping the variant with media %q: its source %q could not be resolved or processed. See %s" $v.media (printf "%v" $v.src) $where)) -}}
         {{- else -}}
           {{- $vdims := partial "images/resolve/dims.html" (dict "width" $v.width "height" $v.height) -}}
           {{- if not $vdims.ok -}}
+            {{/* A dimension that is absent or explicitly null reads as
+                 "absent" instead of Go's "<nil>" so the warn names the
+                 actual authoring state; value presence (ne nil) matches
+                 resolve/dims.html's own absence semantics, where a YAML
+                 null key counts as absent too. */}}
+            {{- $wDisp := "absent" -}}
+            {{- if ne (index $v "width") nil -}}{{- $wDisp = printf "%v" $v.width -}}{{- end -}}
+            {{- $hDisp := "absent" -}}
+            {{- if ne (index $v "height") nil -}}{{- $hDisp = printf "%v" $v.height -}}{{- end -}}
             {{- partial "images/lib/warn.html" (dict
-                "key" (printf "images:warn:variant-bad-dims:%s:%s:%v:%v" $where (printf "%v" $v.src) $v.width $v.height)
-                "message" (printf "[images] Ignoring a non-numeric width/height value on the variant with media %q (got width=%v height=%v). See %s" $v.media $v.width $v.height $where)) -}}
+                "key" (printf "images:warn:variant-bad-dims:%s:%s:%s:%s:%s" $where (printf "%v" $v.media) (printf "%v" $v.src) $wDisp $hDisp)
+                "message" (printf "[images] Ignoring a non-numeric width/height value on the variant with media %q (got width=%s height=%s). See %s" $v.media $wDisp $hDisp $where)) -}}
           {{- end -}}
           {{- $variant := dict "source" $vsrc "media" (printf "%v" $v.media) "darkSource" "" -}}
           {{- if gt $vdims.width 0 -}}{{- $variant = merge $variant (dict "width" $vdims.width) -}}{{- end -}}
