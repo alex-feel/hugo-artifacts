@@ -104,7 +104,7 @@ An unknown type emits one deduplicated build warning (so a typo surfaces once) a
 | `collapsible` | bool | no | `false` | Render as a native `<details>`/`<summary>` disclosure. Truthy tokens: `true`/`1`/`yes`/`on`, any casing. |
 | `open` | bool | no | `false` | When `collapsible`, start expanded (adds the `open` attribute). Same tokens as `collapsible`. |
 | `role` | string | no | passive | ARIA override: `note`, `alert`, `status`, or `none`. See [Accessibility](#accessibility). |
-| `icon` | string/bool | no | type default | Icon override: a built-in icon name, a single emoji, or an image reference (local path or `http(s)://` URL). `icon=false` suppresses the icon. See [Icons](#icons). |
+| `icon` | string/bool | no | type default | Icon override: a built-in icon name, a single emoji, or an image reference (local path or `http(s)://` URL). Any of the tokens `false`, `none`, `no`, `off`, `0`, or an empty string (any casing) suppresses the icon. See [Icons](#icons). |
 | `id` | string | no | -- | `id` attribute on the root element, for anchoring/linking. |
 | `class` | string | no | -- | Additional CSS class(es) appended to the root element. |
 
