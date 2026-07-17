@@ -10,9 +10,11 @@
 // derives its width from the aspect ratio; a width-only passthrough never
 // fabricates height="0"; the two-positional shortcode shorthand renders;
 // the priority / eager / full loading rows emit their exact attribute
-// sets; credit_from_meta surfaces the IPTC credit; and a variant carrying
-// an unparseable width/height warns once per media query and keeps
-// rendering with the dimensions of its largest generated derivative.
+// sets; credit_from_meta surfaces the IPTC credit; a variant carrying an
+// unparseable width/height warns once per media query and keeps rendering
+// with the dimensions of its largest generated derivative; a top-level
+// unparseable width warns naming the absent height; and a src-less variant
+// is dropped with the absent src named.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {dom, rawHtml, warnCount} from './helpers.js';
@@ -196,8 +198,28 @@ test('a variant with an unparseable width warns once per media query and keeps r
     'a broken variant differing only by media query warns separately',
   );
   assert.equal(
-    warnCount(/got width=abc height=absent/),
+    warnCount(/on the variant with media .+\(got width=abc height=absent\)/),
     2,
     'an absent height reads as "absent", never as "<nil>"',
   );
+});
+
+test('a top-level unparseable width warns once naming the absent height and keeps rendering', () => {
+  const picture = page.querySelector('#sc-bad-dims');
+  assert.ok(picture, 'the build did not fail on width="abc"');
+  assert.ok(picture.querySelector('img').getAttribute('srcset'), 'the pipeline runs normally');
+  assert.equal(
+    warnCount(/Ignoring a non-numeric width\/height value \(got width=abc height=absent\)/),
+    1,
+  );
+});
+
+test('a variant without a src is dropped with the absent src named', () => {
+  const picture = page.querySelector('#variants-bad-dims picture');
+  assert.equal(
+    picture.querySelectorAll('source[media="(max-width: 240px)"]').length,
+    0,
+    'the src-less variant emits no source element',
+  );
+  assert.equal(warnCount(/could not be resolved or processed \(got src=absent\)/), 1);
 });

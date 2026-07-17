@@ -105,10 +105,14 @@
           {{/* The media query is part of both dedup keys below: two broken
                variants sharing a source (or a bad value) but targeting
                different media are distinct authoring mistakes, so each
-               warns. */}}
+               warns. A src that is absent or explicitly null reads as
+               "absent" instead of Go's "<nil>"; a supplied value is quoted
+               so an explicit empty string stays visible in the message. */}}
+          {{- $srcDisp := "absent" -}}
+          {{- if ne (index $v "src") nil -}}{{- $srcDisp = printf "%q" (printf "%v" $v.src) -}}{{- end -}}
           {{- partial "images/lib/warn.html" (dict
-              "key" (printf "images:warn:variant-unresolvable:%s:%s:%s" $where (printf "%v" $v.media) (printf "%v" $v.src))
-              "message" (printf "[images] Dropping the variant with media %q: its source %q could not be resolved or processed. See %s" $v.media (printf "%v" $v.src) $where)) -}}
+              "key" (printf "images:warn:variant-unresolvable:%s:%s:%s" $where (printf "%v" $v.media) $srcDisp)
+              "message" (printf "[images] Dropping the variant with media %q: its source could not be resolved or processed (got src=%s). See %s" $v.media $srcDisp $where)) -}}
         {{- else -}}
           {{- $vdims := partial "images/resolve/dims.html" (dict "width" $v.width "height" $v.height) -}}
           {{- if not $vdims.ok -}}
