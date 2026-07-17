@@ -166,9 +166,13 @@
            warns once naming the clip as what is omitted; an unparseable
            end_offset drops just that property. Nothing is fabricated for a
            missing value: a defaulted 0 start offset would mislabel a key
-           moment the author never declared. Presence is isset-based, so an
-           explicit empty value is validated (and dropped) and a native
-           (unquoted) 0 reaches the parser. */}}
+           moment the author never declared. Presence is VALUE-based for
+           every clip field, including the optional end_offset: an explicit
+           null counts as missing (or, for end_offset, silently omits the
+           optional property), an explicit empty string fails the
+           required-field check (name/url) or the numeric parse (offsets),
+           and a native (unquoted) 0 reaches the parser (offsets) or emits
+           as its string form (name). */}}
       {{- $clips := slice -}}
       {{- $clipPos := 0 -}}
       {{- range $video.clips -}}
@@ -207,7 +211,7 @@
           {{- $so := partial "seo/lib/num.html" (dict "value" .start_offset "mode" "int" "field" (printf "seo.video.clips[%d].start_offset" $clipPos) "page" $page "what" "clip") -}}
           {{- if ne (printf "%v" $so) "" -}}
             {{- $clip := dict "@type" "Clip" "name" $clipName "startOffset" $so "url" $clipUrl -}}
-            {{- if isset . "end_offset" -}}
+            {{- if ne (index . "end_offset") nil -}}
               {{- $eo := partial "seo/lib/num.html" (dict "value" .end_offset "mode" "int" "field" (printf "seo.video.clips[%d].end_offset" $clipPos) "page" $page) -}}
               {{- if ne (printf "%v" $eo) "" -}}
                 {{- $clip = merge $clip (dict "endOffset" $eo) -}}
