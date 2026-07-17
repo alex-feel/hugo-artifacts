@@ -130,7 +130,7 @@ Each API call is wrapped in an outer retry loop with header-aware error classifi
 | `attempts` | `5` | Maximum outer attempts |
 | `perAttemptTimeout` | `30s` | Per-request timeout passed to `resources.GetRemote` |
 | `backoffSlackSec` | `10` | Reserved on top of the per-attempt timeout when deciding whether another attempt fits: Hugo retries the retryable statuses (408, 429, 500, 502, 503, 504) internally within each attempt, and its final backoff sleep (bounded under ten seconds) does not observe the request deadline, so such an attempt can run past its nominal timeout by up to that much |
-| `overallBudgetSec` | `120` | Wall-clock cap, in seconds. A hard ceiling: an attempt only starts while the remaining budget still fits a full per-attempt timeout plus the backoff slack, so even a boundary attempt against a persistently retryable-5xx host cannot overshoot the cap |
+| `overallBudgetSec` | `120` | Wall-clock cap, in seconds. A hard ceiling: an attempt only starts while the remaining budget still fits a full per-attempt timeout plus the backoff slack, so even a boundary attempt against a persistently retryable-5xx host cannot overshoot the cap (gate arithmetic runs on a millisecond clock, so integer-second truncation cannot leak past it either) |
 | `waitHintCapSec` | `30` | Display cap for the rate-limit wait hint in warnings (the full numeric hint is still logged) |
 
 Each attempt uses a fresh cache key (`hf-space:OWNER/NAME:space:attemptN`) so that a response cached as an error by Hugo's `httpcache.Transport` on a prior attempt does not poison subsequent attempts within the same build.
@@ -159,7 +159,7 @@ When the fetch loop exhausts its attempts with NO attempt receiving any HTTP sta
 
 ### Interplay with Hugo's render timeout
 
-Hugo aborts any page whose render exceeds the site-level `timeout` setting (default `60s`), and every second this module spends fetching counts toward the clock of the page being rendered. Graceful degradation cannot rescue a page that is already out of render budget: during a full Hub outage the first fetching call site can spend up to 120s before it degrades, so a site whose `timeout` is at or below that figure can fail its build with `timed out rendering the page` even though every widget degraded correctly. The circuit breaker bounds the exposure to roughly one budget per build, but the page that pays that budget still needs headroom. Give the consuming site comfortable margin above the worst case:
+Hugo aborts any page whose render exceeds the site-level `timeout` setting (default `60s`), and every second this module spends fetching counts toward the clock of the page being rendered. Graceful degradation cannot rescue a page that is already out of render budget: during a full Hub outage the first fetching call site can spend up to 120s before it degrades (about 90s when every request window times out status-less, since the attempt reservation blocks a fourth window), so a site whose `timeout` is at or below that figure can fail its build with `timed out rendering the page` even though every widget degraded correctly. The circuit breaker bounds the exposure to roughly one budget per build, but the page that pays that budget still needs headroom. Give the consuming site comfortable margin above the worst case:
 
 ```toml
 timeout = '180s'
