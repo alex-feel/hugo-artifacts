@@ -19,10 +19,14 @@
   numeric field is presence-gated with isset (never truthiness) so a native
   (unquoted) 0 -- a valid rating_value or worst_rating -- reaches the parser
   instead of silently vanishing. rating_value is REQUIRED in both kinds
-  (Google rejects an AggregateRating or a Review rating without it): when it
-  is absent or unparseable the WHOLE fragment is dropped (empty dict;
-  lib/num.html warns once), so the callers' presence gates degrade instead of
-  emitting a schema-invalid node. The optional numerics (review_count,
+  (Google rejects an AggregateRating or a Review rating without it). In the
+  aggregate kind an unparseable rating_value falls back to the value alias
+  when that is separately set, so a bad primary never shadows a parseable
+  alias; only when no supplied source parses -- and always in the review
+  kind, which has no alias -- is the WHOLE fragment dropped (empty dict;
+  lib/num.html warns once per failed source), so the callers' presence gates
+  degrade instead of emitting a schema-invalid node. The optional numerics
+  (review_count,
   rating_count, best_rating, worst_rating) drop only that single property
   with a deduped warn while the fragment still emits. A review author name is
   truncated to fewer than 100 characters (Google limit). A review
@@ -41,11 +45,13 @@
 {{- $result := dict -}}
 
 {{- if eq $kind "aggregate" -}}
-  {{/* AggregateRating: ratingValue (REQUIRED; an unparseable value drops the
-       whole fragment) plus a count (reviewCount preferred, else ratingCount).
-       Every gate is isset-based so a native (unquoted) 0 reaches lib/num.html
-       instead of failing a truthiness test; the rating_value/value alias is
-       likewise presence-resolved (rating_value wins when set). */}}
+  {{/* AggregateRating: ratingValue (REQUIRED; an unparseable rating_value
+       falls back to the value alias below, and only when no supplied source
+       parses is the whole fragment dropped) plus a count (reviewCount
+       preferred, else ratingCount). Every gate is isset-based so a native
+       (unquoted) 0 reaches lib/num.html instead of failing a truthiness
+       test; the rating_value/value alias is likewise presence-resolved
+       (rating_value wins when set). */}}
   {{- $ratingValue := $data.value -}}
   {{- if isset $data "rating_value" -}}
     {{- $ratingValue = $data.rating_value -}}
