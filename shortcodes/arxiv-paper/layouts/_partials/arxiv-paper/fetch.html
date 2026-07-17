@@ -247,7 +247,14 @@
       {{- warnf "[arxiv-paper] %s See %s" $result.errorMessage $position -}}
     {{- end -}}
   {{- else -}}
-    {{- warnf "[arxiv-paper] Failed to fetch arXiv paper %q after %d attempt(s) (errorClass=%s, statusCode=%d, message=%q). Rendering a minimal reference. See %s" $queryId $attemptsUsed $result.errorClass $result.statusCode $result.errorMessage $position -}}
+    {{/* Surface the rate-limit wait hint (clamped to one day by
+         classify-error.html) so an operator can act on it, mirroring the
+         github-repo and hf-space failure warns. */}}
+    {{- $hintClause := "" -}}
+    {{- with $result.waitHintSeconds -}}
+      {{- $hintClause = printf " Hint: wait %d seconds and rebuild." . -}}
+    {{- end -}}
+    {{- warnf "[arxiv-paper] Failed to fetch arXiv paper %q after %d attempt(s) (errorClass=%s, statusCode=%d, message=%q).%s Rendering a minimal reference. See %s" $queryId $attemptsUsed $result.errorClass $result.statusCode $result.errorMessage $hintClause $position -}}
   {{- end -}}
 {{- end -}}
 
