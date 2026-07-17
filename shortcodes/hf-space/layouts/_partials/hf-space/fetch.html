@@ -160,6 +160,11 @@
 {{- $attemptReserveSec := add $perAttemptTimeoutSec $backoffSlackSec -}}
 {{- $overallBudgetSec := 120 -}}
 {{- $waitHintCapSec := 30 -}}
+{{/* Gate arithmetic runs on a millisecond clock: integer-second deltas
+     truncate, and a pathological alignment could let a boundary attempt
+     slip past the cap by up to a second. */}}
+{{- $attemptReserveMs := mul $attemptReserveSec 1000 -}}
+{{- $overallBudgetMs := mul $overallBudgetSec 1000 -}}
 {{- $earlyBreakClasses := slice "auth" "not-found" "rate-limit" -}}
 
 {{/* Host-down circuit-breaker sentinel, shared across every call site in
@@ -174,7 +179,7 @@
      the volatile runtime.stage is intentionally NOT surfaced (see below). */}}
 {{- $apiUrl := printf "https://huggingface.co/api/spaces/%s/%s?expand[]=cardData&expand[]=runtime&expand[]=likes&expand[]=sdk&expand[]=lastModified&expand[]=tags&expand[]=author" $owner $name -}}
 
-{{- $startSec := int now.Unix -}}
+{{- $startMs := now.UnixMilli -}}
 {{- $result := dict
   "ok" false
   "value" nil
@@ -194,9 +199,8 @@
          site this build, so degrade immediately instead of burning another
          wall-clock budget. */}}
   {{- else -}}
-    {{- $elapsed := sub (int now.Unix) $startSec -}}
-    {{- $remaining := sub $overallBudgetSec $elapsed -}}
-    {{- if lt $remaining $attemptReserveSec -}}
+    {{- $remainingMs := sub $overallBudgetMs (sub now.UnixMilli $startMs) -}}
+    {{- if lt $remainingMs $attemptReserveMs -}}
       {{/* The remaining budget cannot fit a full attempt including the
            deadline-blind backoff slack; stop so the budget stays a hard
            ceiling. */}}

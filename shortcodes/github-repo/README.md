@@ -142,7 +142,7 @@ The constants are baked into `fetch.html` and are **not** exposed as shortcode p
 | `attempts` | `5` | Maximum outer attempts per fetched endpoint |
 | `perAttemptTimeout` | `30s` | Per-request timeout passed to `resources.GetRemote` |
 | `backoffSlackSec` | `10` | Reserved on top of the per-attempt timeout when deciding whether another attempt fits: Hugo retries the retryable statuses (408, 429, 500, 502, 503, 504) internally within each attempt, and its final backoff sleep (bounded under ten seconds) does not observe the request deadline, so such an attempt can run past its nominal timeout by up to that much |
-| `overallBudgetSec` | `120` | Wall-clock cap per fetched endpoint, in seconds. A hard ceiling: an attempt only starts while the remaining budget still fits a full per-attempt timeout plus the backoff slack, so even a boundary attempt against a persistently retryable-5xx host cannot overshoot the cap |
+| `overallBudgetSec` | `120` | Wall-clock cap per fetched endpoint, in seconds. A hard ceiling: an attempt only starts while the remaining budget still fits a full per-attempt timeout plus the backoff slack, so even a boundary attempt against a persistently retryable-5xx host cannot overshoot the cap (gate arithmetic runs on a millisecond clock, so integer-second truncation cannot leak past it either) |
 | `waitHintCapSec` | `30` | Display cap for the wait hint in warning messages (the full numeric hint is still logged) |
 
 Each attempt uses a fresh cache key (`github-repo:OWNER/REPO:ENDPOINT:attemptN`) so that a response cached as an error by Hugo's `httpcache.Transport` on a prior attempt does not poison subsequent attempts within the same build.

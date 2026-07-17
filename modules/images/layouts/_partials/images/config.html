@@ -391,11 +391,13 @@
        sharing a position-less $where (layout-partial calls report only the
        page path) each warn, and a dimension that is absent or explicitly
        null reads as "absent" instead of Go's "<nil>" -- mirroring the
-       art-direction variant warn in image.html. */}}
+       art-direction variant warn in image.html. A supplied value is quoted
+       so an explicit empty or literal "absent" string stays
+       distinguishable. */}}
   {{- $wDisp := "absent" -}}
-  {{- if ne (index $args "width") nil -}}{{- $wDisp = printf "%v" $args.width -}}{{- end -}}
+  {{- if ne (index $args "width") nil -}}{{- $wDisp = printf "%q" (printf "%v" $args.width) -}}{{- end -}}
   {{- $hDisp := "absent" -}}
-  {{- if ne (index $args "height") nil -}}{{- $hDisp = printf "%v" $args.height -}}{{- end -}}
+  {{- if ne (index $args "height") nil -}}{{- $hDisp = printf "%q" (printf "%v" $args.height) -}}{{- end -}}
   {{- partial "images/lib/warn.html" (dict
       "key" (printf "images:warn:bad-dims:%s:%s:%s" $where $wDisp $hDisp)
       "message" (printf "[images] Ignoring a non-numeric width/height value (got width=%s height=%s). See %s" $wDisp $hDisp $where)) -}}

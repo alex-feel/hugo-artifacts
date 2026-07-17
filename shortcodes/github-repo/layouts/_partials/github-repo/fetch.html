@@ -134,6 +134,11 @@
 {{- $attemptReserveSec := add $perAttemptTimeoutSec $backoffSlackSec -}}
 {{- $overallBudgetSec := 120 -}}
 {{- $waitHintCapSec := 30 -}}
+{{/* Gate arithmetic runs on a millisecond clock: integer-second deltas
+     truncate, and a pathological alignment could let a boundary attempt
+     slip past the cap by up to a second. */}}
+{{- $attemptReserveMs := mul $attemptReserveSec 1000 -}}
+{{- $overallBudgetMs := mul $overallBudgetSec 1000 -}}
 
 {{/* Early-break classes shared across the three endpoint loops. */}}
 {{- $earlyBreakClasses := slice "primary-rate-limit" "auth" "not-found" -}}
@@ -169,7 +174,7 @@
 
 {{/* ---------- Endpoint 1 of up to 3: base repo ---------- */}}
 {{- $hostDown := hugo.Store.Get $hostDownKey -}}
-{{- $startSec := int now.Unix -}}
+{{- $startMs := now.UnixMilli -}}
 {{- $repoResult := dict
   "ok" false
   "value" nil
@@ -189,15 +194,14 @@
          site this build, so degrade immediately instead of burning another
          wall-clock budget. */}}
   {{- else -}}
-    {{- $elapsed := sub (int now.Unix) $startSec -}}
-    {{- $remaining := sub $overallBudgetSec $elapsed -}}
-    {{- if lt $remaining $attemptReserveSec -}}
+    {{- $remainingMs := sub $overallBudgetMs (sub now.UnixMilli $startMs) -}}
+    {{- if lt $remainingMs $attemptReserveMs -}}
       {{/* The remaining budget cannot fit a full attempt including the
            deadline-blind backoff slack; stop so the budget stays a hard
            ceiling. */}}
     {{- else if and (gt $attempt 1) (in $earlyBreakClasses $repoResult.errorClass) -}}
       {{/* Provably-useless class; further attempts within this build cannot succeed. */}}
-    {{- else if and (gt $attempt 1) (eq $repoResult.errorClass "secondary-rate-limit") (gt $repoResult.waitHintSeconds $remaining) -}}
+    {{- else if and (gt $attempt 1) (eq $repoResult.errorClass "secondary-rate-limit") (gt (mul $repoResult.waitHintSeconds 1000) $remainingMs) -}}
       {{/* Secondary rate-limit reset window exceeds remaining budget. */}}
     {{- else -}}
       {{- $cacheKey := printf "github-repo:%s/%s:repo:attempt%d" $owner $repo $attempt -}}
@@ -319,7 +323,7 @@
 {{- if and (eq $variant "lang") $data.apiOk -}}
   {{- $langHostDown := hugo.Store.Get $hostDownKey -}}
   {{- $langUrl := printf "%s/languages" $apiBase -}}
-  {{- $langStartSec := int now.Unix -}}
+  {{- $langStartMs := now.UnixMilli -}}
   {{- $langResult := dict
     "ok" false
     "value" nil
@@ -337,14 +341,13 @@
     {{- else if $langHostDown -}}
       {{/* Circuit breaker open; degrade immediately. */}}
     {{- else -}}
-      {{- $elapsed := sub (int now.Unix) $langStartSec -}}
-      {{- $remaining := sub $overallBudgetSec $elapsed -}}
-      {{- if lt $remaining $attemptReserveSec -}}
+      {{- $remainingMs := sub $overallBudgetMs (sub now.UnixMilli $langStartMs) -}}
+      {{- if lt $remainingMs $attemptReserveMs -}}
         {{/* The remaining budget cannot fit a full attempt including the
              deadline-blind backoff slack. */}}
       {{- else if and (gt $attempt 1) (in $earlyBreakClasses $langResult.errorClass) -}}
         {{/* Provably-useless class. */}}
-      {{- else if and (gt $attempt 1) (eq $langResult.errorClass "secondary-rate-limit") (gt $langResult.waitHintSeconds $remaining) -}}
+      {{- else if and (gt $attempt 1) (eq $langResult.errorClass "secondary-rate-limit") (gt (mul $langResult.waitHintSeconds 1000) $remainingMs) -}}
         {{/* Reset window exceeds remaining budget. */}}
       {{- else -}}
         {{- $cacheKey := printf "github-repo:%s/%s:languages:attempt%d" $owner $repo $attempt -}}
@@ -407,7 +410,7 @@
 {{- if and (eq $variant "hero") $data.apiOk -}}
   {{- $statsHostDown := hugo.Store.Get $hostDownKey -}}
   {{- $statsUrl := printf "%s/stats/participation" $apiBase -}}
-  {{- $statsStartSec := int now.Unix -}}
+  {{- $statsStartMs := now.UnixMilli -}}
   {{- $statsResult := dict
     "ok" false
     "value" nil
@@ -425,14 +428,13 @@
     {{- else if $statsHostDown -}}
       {{/* Circuit breaker open; degrade immediately. */}}
     {{- else -}}
-      {{- $elapsed := sub (int now.Unix) $statsStartSec -}}
-      {{- $remaining := sub $overallBudgetSec $elapsed -}}
-      {{- if lt $remaining $attemptReserveSec -}}
+      {{- $remainingMs := sub $overallBudgetMs (sub now.UnixMilli $statsStartMs) -}}
+      {{- if lt $remainingMs $attemptReserveMs -}}
         {{/* The remaining budget cannot fit a full attempt including the
              deadline-blind backoff slack. */}}
       {{- else if and (gt $attempt 1) (in $earlyBreakClasses $statsResult.errorClass) -}}
         {{/* Provably-useless class. */}}
-      {{- else if and (gt $attempt 1) (eq $statsResult.errorClass "secondary-rate-limit") (gt $statsResult.waitHintSeconds $remaining) -}}
+      {{- else if and (gt $attempt 1) (eq $statsResult.errorClass "secondary-rate-limit") (gt (mul $statsResult.waitHintSeconds 1000) $remainingMs) -}}
         {{/* Reset window exceeds remaining budget. */}}
       {{- else -}}
         {{- $cacheKey := printf "github-repo:%s/%s:participation:attempt%d" $owner $repo $attempt -}}
