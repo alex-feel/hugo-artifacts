@@ -2,9 +2,11 @@
   Fetches and normalizes an arXiv paper for the variant partials, with the
   github-repo resilience contract in front of graceful degradation: every fetch
   is wrapped in `try`, failures are classified and logged once, and the build is
-  NEVER broken by a remote failure. The arXiv Atom API is the required spine;
-  Semantic Scholar and Hugging Face Papers are opt-in enrichers that each degrade
-  independently back to arXiv-only.
+  NEVER broken by a remote failure. A host that never responds trips a per-host
+  circuit breaker (see the retry-constants comment below), so later call sites
+  degrade immediately instead of re-burning the retry budget. The arXiv Atom
+  API is the required spine; Semantic Scholar and Hugging Face Papers are
+  opt-in enrichers that each degrade independently back to arXiv-only.
 
   Locator: `id` ("2512.24601", "2512.24601v2", or the pre-2007 "hep-th/9901001")
   or a full `url` (abs / pdf / html). `id` wins when both are given.
@@ -145,22 +147,53 @@
 -}}
 {{- $data := merge $defaults $fallbackCore -}}
 
-{{/* ---- Retry constants (baked in; no shortcode/site tuning surface). ---- */}}
+{{/* ---- Retry constants (baked in; no shortcode/site tuning surface). An
+     attempt only starts while the remaining budget still fits a full
+     per-attempt timeout, so each budget is a hard ceiling -- never overshot
+     by an attempt started near the boundary. ---- */}}
 {{- $attempts := 5 -}}
-{{- $perAttemptTimeout := "30s" -}}
+{{- $perAttemptTimeoutSec := 30 -}}
+{{- $perAttemptTimeout := printf "%ds" $perAttemptTimeoutSec -}}
 {{- $overallBudgetSec := 120 -}}
+{{- $enrichTimeoutSec := 20 -}}
+{{- $enrichTimeout := printf "%ds" $enrichTimeoutSec -}}
+{{- $enrichBudgetSec := 60 -}}
 {{- $earlyBreak := slice "auth" "not-found" "rate-limit" "media-type-config" "parse" -}}
+
+{{/* ---- Host-down circuit breakers (one hugo.Store sentinel per API host,
+     shared across every call site in the build). A loop that exhausts with
+     NO attempt receiving any HTTP status code (every attempt ended
+     errorClass "network" with statusCode 0 -- a class no loop early-breaks
+     on, so its attempts were genuinely spent) trips its host's sentinel;
+     every later loop against that host degrades immediately instead of
+     burning another wall-clock budget. During a full outage the build
+     therefore pays roughly one budget per host (concurrently rendered
+     pages that started before the sentinel landed can each still pay an
+     overlapping budget) -- sequential budget stacking within one page
+     render is what pushes a page past Hugo's render `timeout` (see the
+     README's "Interplay with Hugo's render timeout"). Any surfaced status
+     code on any attempt suppresses the trip; a host answering ONLY with
+     Hugo-internally-retried statuses (408/429/500/502/503/504) for whole
+     request windows surfaces status-less and trips like a dark host --
+     intended, since it never yields a usable response within the
+     budget. ---- */}}
+{{- $arxivDownKey := "arxiv-paper:host-down:export.arxiv.org" -}}
+{{- $s2DownKey := "arxiv-paper:host-down:api.semanticscholar.org" -}}
+{{- $hfDownKey := "arxiv-paper:host-down:huggingface.co" -}}
 
 {{/* ---- arXiv Atom fetch (required spine). ---- */}}
 {{- $apiUrl := printf "https://export.arxiv.org/api/query?id_list=%s&max_results=1" $queryId -}}
+{{- $hostDown := hugo.Store.Get $arxivDownKey -}}
 {{- $startSec := int now.Unix -}}
 {{- $result := dict "ok" false "value" nil "statusCode" 0 "errorClass" "network" "errorMessage" "" "waitHintSeconds" 0 -}}
 {{- $attemptsUsed := 0 -}}
+{{- $sawResponse := false -}}
 {{- range $attempt := seq 1 $attempts -}}
   {{- if $result.ok -}}
+  {{- else if $hostDown -}}
   {{- else -}}
     {{- $elapsed := sub (int now.Unix) $startSec -}}
-    {{- if le (sub $overallBudgetSec $elapsed) 0 -}}
+    {{- if lt (sub $overallBudgetSec $elapsed) $perAttemptTimeoutSec -}}
     {{- else if and (gt $attempt 1) (in $earlyBreak $result.errorClass) -}}
     {{- else -}}
       {{- $result = partial "arxiv-paper/fetch-once.html" (dict
@@ -170,8 +203,14 @@
         "timeout" $perAttemptTimeout
       ) -}}
       {{- $attemptsUsed = $attempt -}}
+      {{- if ne $result.statusCode 0 -}}
+        {{- $sawResponse = true -}}
+      {{- end -}}
     {{- end -}}
   {{- end -}}
+{{- end -}}
+{{- if and (not $hostDown) (not $result.ok) (eq $result.errorClass "network") (eq $result.statusCode 0) (not $sawResponse) -}}
+  {{- hugo.Store.Set $arxivDownKey true -}}
 {{- end -}}
 
 {{- if $result.ok -}}
@@ -185,6 +224,8 @@
   {{- else -}}
     {{- warnf "[arxiv-paper] arXiv returned no paper for %q (empty or error feed). Rendering a minimal reference. See %s" $queryId $position -}}
   {{- end -}}
+{{- else if $hostDown -}}
+  {{- warnf "[arxiv-paper] Skipping the arXiv fetch for %q: export.arxiv.org was marked unreachable earlier in this build. Rendering a minimal reference. See %s" $queryId $position -}}
 {{- else -}}
   {{- if eq $result.errorClass "media-type-config" -}}
     {{- $k := "arxiv-paper:warned-media-type-config" -}}
@@ -202,21 +243,32 @@
   {{- $s2Headers := dict -}}
   {{- with $s2Token -}}{{ $s2Headers = dict "x-api-key" . }}{{ end -}}
   {{- $s2Url := printf "https://api.semanticscholar.org/graph/v1/paper/arXiv:%s?fields=tldr,publicationVenue,fieldsOfStudy,citationCount" $data.id -}}
-  {{- $s2res := dict "ok" false "value" nil "errorClass" "network" "errorMessage" "" -}}
+  {{- $s2HostDown := hugo.Store.Get $s2DownKey -}}
+  {{- $s2res := dict "ok" false "value" nil "statusCode" 0 "errorClass" "network" "errorMessage" "" -}}
+  {{- $s2SawResponse := false -}}
   {{- $s2Start := int now.Unix -}}
   {{- range $a := seq 1 3 -}}
     {{- if $s2res.ok -}}
+    {{- else if $s2HostDown -}}
     {{- else if and (gt $a 1) (in $earlyBreak $s2res.errorClass) -}}
-    {{- else if gt (sub (int now.Unix) $s2Start) 60 -}}
+    {{- else if lt (sub $enrichBudgetSec (sub (int now.Unix) $s2Start)) $enrichTimeoutSec -}}
     {{- else -}}
       {{- $s2res = partial "arxiv-paper/fetch-once.html" (dict
         "url" $s2Url
         "cacheKey" (printf "arxiv-paper:%s:s2:attempt%d" $data.id $a)
         "format" "json"
         "headers" $s2Headers
-        "timeout" "20s"
+        "timeout" $enrichTimeout
       ) -}}
+      {{- if ne $s2res.statusCode 0 -}}
+        {{- $s2SawResponse = true -}}
+      {{- end -}}
     {{- end -}}
+  {{- end -}}
+  {{/* A breaker skip falls through to the once-per-build unavailable warn
+       below, which already carries the errorClass=network diagnosis. */}}
+  {{- if and (not $s2HostDown) (not $s2res.ok) (eq $s2res.errorClass "network") (eq $s2res.statusCode 0) (not $s2SawResponse) -}}
+    {{- hugo.Store.Set $s2DownKey true -}}
   {{- end -}}
   {{- if and $s2res.ok (isset $s2res.value "citationCount") -}}
     {{- $s2 := $s2res.value -}}
@@ -249,21 +301,32 @@
   {{- $hfHeaders := dict -}}
   {{- with $hfToken -}}{{ $hfHeaders = dict "Authorization" (printf "Bearer %s" .) }}{{ end -}}
   {{- $hfUrl := printf "https://huggingface.co/api/papers/%s" $data.id -}}
-  {{- $hfres := dict "ok" false "value" nil "errorClass" "network" "errorMessage" "" -}}
+  {{- $hfHostDown := hugo.Store.Get $hfDownKey -}}
+  {{- $hfres := dict "ok" false "value" nil "statusCode" 0 "errorClass" "network" "errorMessage" "" -}}
+  {{- $hfSawResponse := false -}}
   {{- $hfStart := int now.Unix -}}
   {{- range $a := seq 1 3 -}}
     {{- if $hfres.ok -}}
+    {{- else if $hfHostDown -}}
     {{- else if and (gt $a 1) (in $earlyBreak $hfres.errorClass) -}}
-    {{- else if gt (sub (int now.Unix) $hfStart) 60 -}}
+    {{- else if lt (sub $enrichBudgetSec (sub (int now.Unix) $hfStart)) $enrichTimeoutSec -}}
     {{- else -}}
       {{- $hfres = partial "arxiv-paper/fetch-once.html" (dict
         "url" $hfUrl
         "cacheKey" (printf "arxiv-paper:%s:hf:attempt%d" $data.id $a)
         "format" "json"
         "headers" $hfHeaders
-        "timeout" "20s"
+        "timeout" $enrichTimeout
       ) -}}
+      {{- if ne $hfres.statusCode 0 -}}
+        {{- $hfSawResponse = true -}}
+      {{- end -}}
     {{- end -}}
+  {{- end -}}
+  {{/* A breaker skip falls through to the once-per-build unavailable warn
+       below, which already carries the errorClass=network diagnosis. */}}
+  {{- if and (not $hfHostDown) (not $hfres.ok) (eq $hfres.errorClass "network") (eq $hfres.statusCode 0) (not $hfSawResponse) -}}
+    {{- hugo.Store.Set $hfDownKey true -}}
   {{- end -}}
   {{- if $hfres.ok -}}
     {{- $hf := $hfres.value -}}
