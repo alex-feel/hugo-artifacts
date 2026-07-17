@@ -149,14 +149,21 @@
 
 {{/* ---- Retry constants (baked in; no shortcode/site tuning surface). An
      attempt only starts while the remaining budget still fits a full
-     per-attempt timeout, so each budget is a hard ceiling -- never overshot
-     by an attempt started near the boundary. ---- */}}
+     per-attempt timeout plus the backoff slack, so each budget is a hard
+     ceiling -- never overshot even by a boundary attempt against a
+     persistently retryable-5xx host. The slack exists because Hugo retries
+     the retryable statuses (408, 429, 500, 502, 503, 504) internally within
+     each attempt, and its final backoff sleep (bounded under ten seconds)
+     does not observe the request deadline. ---- */}}
 {{- $attempts := 5 -}}
 {{- $perAttemptTimeoutSec := 30 -}}
 {{- $perAttemptTimeout := printf "%ds" $perAttemptTimeoutSec -}}
+{{- $backoffSlackSec := 10 -}}
+{{- $attemptReserveSec := add $perAttemptTimeoutSec $backoffSlackSec -}}
 {{- $overallBudgetSec := 120 -}}
 {{- $enrichTimeoutSec := 20 -}}
 {{- $enrichTimeout := printf "%ds" $enrichTimeoutSec -}}
+{{- $enrichReserveSec := add $enrichTimeoutSec $backoffSlackSec -}}
 {{- $enrichBudgetSec := 60 -}}
 {{- $earlyBreak := slice "auth" "not-found" "rate-limit" "media-type-config" "parse" -}}
 
@@ -193,7 +200,7 @@
   {{- else if $hostDown -}}
   {{- else -}}
     {{- $elapsed := sub (int now.Unix) $startSec -}}
-    {{- if lt (sub $overallBudgetSec $elapsed) $perAttemptTimeoutSec -}}
+    {{- if lt (sub $overallBudgetSec $elapsed) $attemptReserveSec -}}
     {{- else if and (gt $attempt 1) (in $earlyBreak $result.errorClass) -}}
     {{- else -}}
       {{- $result = partial "arxiv-paper/fetch-once.html" (dict
@@ -251,7 +258,7 @@
     {{- if $s2res.ok -}}
     {{- else if $s2HostDown -}}
     {{- else if and (gt $a 1) (in $earlyBreak $s2res.errorClass) -}}
-    {{- else if lt (sub $enrichBudgetSec (sub (int now.Unix) $s2Start)) $enrichTimeoutSec -}}
+    {{- else if lt (sub $enrichBudgetSec (sub (int now.Unix) $s2Start)) $enrichReserveSec -}}
     {{- else -}}
       {{- $s2res = partial "arxiv-paper/fetch-once.html" (dict
         "url" $s2Url
@@ -309,7 +316,7 @@
     {{- if $hfres.ok -}}
     {{- else if $hfHostDown -}}
     {{- else if and (gt $a 1) (in $earlyBreak $hfres.errorClass) -}}
-    {{- else if lt (sub $enrichBudgetSec (sub (int now.Unix) $hfStart)) $enrichTimeoutSec -}}
+    {{- else if lt (sub $enrichBudgetSec (sub (int now.Unix) $hfStart)) $enrichReserveSec -}}
     {{- else -}}
       {{- $hfres = partial "arxiv-paper/fetch-once.html" (dict
         "url" $hfUrl

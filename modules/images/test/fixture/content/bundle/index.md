@@ -83,6 +83,8 @@ resources:
 
 {{< image src="photo-1600.png" alt="Out-of-range quality degrades" quality="150" id="sc-quality-bomb" >}}
 
+{{< image src="photo-1600.png" alt="Bad top-level dims degrade" width="abc" id="sc-bad-dims" >}}
+
 {{< image src="tiny-500.png" alt="A typo probe" captoin="oops" id="sc-typo-param" >}}
 
 {{< image src="photo-1600.png" alt="A leading-zero widths scene" widths="0640,0960" id="sc-leadzero-widths" >}}

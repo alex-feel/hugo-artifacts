@@ -179,21 +179,36 @@
             "message" (printf "[seo] VideoObject on %q: clip %d is not a table of clip properties; Google requires name, startOffset, and url on every Clip. Clip skipped." $page.RelPermalink $clipPos)
           ) -}}
         {{- else -}}
+        {{/* name/url presence is VALUE presence (ne nil) plus stringify,
+             not truthiness, so an unquoted numeric value (a name of 0)
+             counts as set and emits as its string form, while an absent
+             key, an explicit null, a blank or whitespace-only value, and a
+             non-scalar shape (a map or slice would otherwise emit its Go
+             dump) all count as missing. start_offset presence is likewise
+             value-based, so an explicit null gets the missing-property
+             warn instead of a nonsense parse warn. The numeric fields
+             carry the clip position in their warn field, so two clips with
+             the same bad value each warn and the message names the
+             offender. */}}
+        {{- $clipName := "" -}}
+        {{- if and (ne (index . "name") nil) (not (reflect.IsMap .name)) (not (reflect.IsSlice .name)) -}}{{- $clipName = trim (printf "%v" .name) " \t\n\r" -}}{{- end -}}
+        {{- $clipUrl := "" -}}
+        {{- if and (ne (index . "url") nil) (not (reflect.IsMap .url)) (not (reflect.IsSlice .url)) -}}{{- $clipUrl = trim (printf "%v" .url) " \t\n\r" -}}{{- end -}}
         {{- $clipMissing := slice -}}
-        {{- if not .name -}}{{- $clipMissing = $clipMissing | append "name" -}}{{- end -}}
-        {{- if not (isset . "start_offset") -}}{{- $clipMissing = $clipMissing | append "start_offset" -}}{{- end -}}
-        {{- if not .url -}}{{- $clipMissing = $clipMissing | append "url" -}}{{- end -}}
+        {{- if not $clipName -}}{{- $clipMissing = $clipMissing | append "name" -}}{{- end -}}
+        {{- if eq (index . "start_offset") nil -}}{{- $clipMissing = $clipMissing | append "start_offset" -}}{{- end -}}
+        {{- if not $clipUrl -}}{{- $clipMissing = $clipMissing | append "url" -}}{{- end -}}
         {{- if gt (len $clipMissing) 0 -}}
           {{- partial "seo/lib/warn.html" (dict
             "key" (printf "seo:warn:video-clip-required:%s:%d" $page.RelPermalink $clipPos)
             "message" (printf "[seo] VideoObject on %q: clip %d is missing %s; Google requires name, startOffset, and url on every Clip. Clip skipped." $page.RelPermalink $clipPos (delimit $clipMissing ", "))
           ) -}}
         {{- else -}}
-          {{- $so := partial "seo/lib/num.html" (dict "value" .start_offset "mode" "int" "field" "seo.video.clips.start_offset" "page" $page "what" "clip") -}}
+          {{- $so := partial "seo/lib/num.html" (dict "value" .start_offset "mode" "int" "field" (printf "seo.video.clips[%d].start_offset" $clipPos) "page" $page "what" "clip") -}}
           {{- if ne (printf "%v" $so) "" -}}
-            {{- $clip := dict "@type" "Clip" "name" .name "startOffset" $so "url" .url -}}
+            {{- $clip := dict "@type" "Clip" "name" $clipName "startOffset" $so "url" $clipUrl -}}
             {{- if isset . "end_offset" -}}
-              {{- $eo := partial "seo/lib/num.html" (dict "value" .end_offset "mode" "int" "field" "seo.video.clips.end_offset" "page" $page) -}}
+              {{- $eo := partial "seo/lib/num.html" (dict "value" .end_offset "mode" "int" "field" (printf "seo.video.clips[%d].end_offset" $clipPos) "page" $page) -}}
               {{- if ne (printf "%v" $eo) "" -}}
                 {{- $clip = merge $clip (dict "endOffset" $eo) -}}
               {{- end -}}
