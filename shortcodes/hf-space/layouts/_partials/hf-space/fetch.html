@@ -16,10 +16,20 @@
   the module exposes no resilience-tuning surface, matching github-repo):
   - $attempts          5    Outer attempts.
   - $perAttemptTimeout 30s  Per-request timeout for resources.GetRemote.
+  - $backoffSlackSec   10   Reserved on top of the per-attempt timeout when
+                            deciding whether another attempt fits: Hugo
+                            retries the retryable statuses (408, 429, 500,
+                            502, 503, 504) internally within each attempt,
+                            and its final backoff sleep (bounded under ten
+                            seconds) does not observe the request deadline,
+                            so an attempt against such a host can run past
+                            its nominal timeout by up to that much.
   - $overallBudgetSec  120  Wall-clock cap. An attempt only starts while the
                             remaining budget still fits a full per-attempt
-                            timeout, so the cap is a hard ceiling -- never
-                            overshot by an attempt started near the boundary.
+                            timeout plus the backoff slack, so the cap is a
+                            hard ceiling -- never overshot even by a boundary
+                            attempt against a persistently retryable-5xx
+                            host.
   - $waitHintCapSec    30   Display cap for waitHintSeconds in warnings; the
                             full numeric hint is logged so operators can act.
 
@@ -146,6 +156,8 @@
 {{- $attempts := 5 -}}
 {{- $perAttemptTimeoutSec := 30 -}}
 {{- $perAttemptTimeout := printf "%ds" $perAttemptTimeoutSec -}}
+{{- $backoffSlackSec := 10 -}}
+{{- $attemptReserveSec := add $perAttemptTimeoutSec $backoffSlackSec -}}
 {{- $overallBudgetSec := 120 -}}
 {{- $waitHintCapSec := 30 -}}
 {{- $earlyBreakClasses := slice "auth" "not-found" "rate-limit" -}}
@@ -184,9 +196,10 @@
   {{- else -}}
     {{- $elapsed := sub (int now.Unix) $startSec -}}
     {{- $remaining := sub $overallBudgetSec $elapsed -}}
-    {{- if lt $remaining $perAttemptTimeoutSec -}}
-      {{/* The remaining budget cannot fit a full attempt; stop so the
-           budget stays a hard ceiling. */}}
+    {{- if lt $remaining $attemptReserveSec -}}
+      {{/* The remaining budget cannot fit a full attempt including the
+           deadline-blind backoff slack; stop so the budget stays a hard
+           ceiling. */}}
     {{- else if and (gt $attempt 1) (in $earlyBreakClasses $result.errorClass) -}}
       {{/* Provably-useless class within this build. */}}
     {{- else -}}
