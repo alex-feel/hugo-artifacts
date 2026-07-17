@@ -90,7 +90,10 @@
        position AND the offending value join the shape-warn keys: the
        position keeps identical malformed entries within one call distinct,
        and the value keeps same-position mistakes across sibling calls at
-       one position-less $where distinct. ---- */}}
+       one position-less $where distinct. Shape warns take precedence: a
+       variant that is malformed in shape AND carries bad dims warns once,
+       for the shape, because dims are only examined on well-shaped
+       variants. ---- */}}
   {{- $variants := slice -}}
   {{- if reflect.IsSlice $args.variants -}}
     {{- range $vi, $v := $args.variants -}}

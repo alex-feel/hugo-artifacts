@@ -39,6 +39,24 @@
             (dict "src" "avatar-512.png")))
       }}
     </section>
+    <section id="variants-collapse">
+      {{ partial "images/image.html" (dict
+          "page" .
+          "src" "avatar-512.png"
+          "alt" "Sibling variants call one"
+          "variants" (slice
+            "sibling-junk-a"
+            (dict "src" "media-less-a.png")))
+      }}
+      {{ partial "images/image.html" (dict
+          "page" .
+          "src" "avatar-512.png"
+          "alt" "Sibling variants call two"
+          "variants" (slice
+            "sibling-junk-b"
+            (dict "src" "media-less-b.png")))
+      }}
+    </section>
     <section id="bad-dims-collapse">
       {{ partial "images/image.html" (dict
           "page" .
