@@ -86,18 +86,25 @@
     {{- $dark = partial "images/resolve/remote.html" (dict "page" $page "source" $dark "opts" $opts) -}}
   {{- end -}}
 
-  {{/* ---- Art-direction variants (partial surface only) ---- */}}
+  {{/* ---- Art-direction variants (partial surface only). The 1-based entry
+       position AND the offending value join the shape-warn keys: the
+       position keeps identical malformed entries within one call distinct,
+       and the value keeps same-position mistakes across sibling calls at
+       one position-less $where distinct. ---- */}}
   {{- $variants := slice -}}
   {{- if reflect.IsSlice $args.variants -}}
-    {{- range $v := $args.variants -}}
+    {{- range $vi, $v := $args.variants -}}
       {{- if not (reflect.IsMap $v) -}}
+        {{- $entryDisp := printf "%q" (printf "%v" $v) -}}
         {{- partial "images/lib/warn.html" (dict
-            "key" (printf "images:warn:bad-variant:%s" $where)
-            "message" (printf "[images] Dropping a variants entry that is not a dict (each variant needs at least src and media). See %s" $where)) -}}
+            "key" (printf "images:warn:bad-variant:%s:%d:%s" $where (add $vi 1) $entryDisp)
+            "message" (printf "[images] Dropping variants entry %d: it is not a dict (got %s; each variant needs at least src and media). See %s" (add $vi 1) $entryDisp $where)) -}}
       {{- else if not $v.media -}}
+        {{- $mlSrcDisp := "absent" -}}
+        {{- if ne (index $v "src") nil -}}{{- $mlSrcDisp = printf "%q" (printf "%v" $v.src) -}}{{- end -}}
         {{- partial "images/lib/warn.html" (dict
-            "key" (printf "images:warn:variant-media:%s" $where)
-            "message" (printf "[images] Dropping a variant without a media query: art-directed sources are selected by their media attribute. See %s" $where)) -}}
+            "key" (printf "images:warn:variant-media:%s:%d:%s" $where (add $vi 1) $mlSrcDisp)
+            "message" (printf "[images] Dropping variants entry %d: it has no media query (got src=%s); art-directed sources are selected by their media attribute. See %s" (add $vi 1) $mlSrcDisp $where)) -}}
       {{- else -}}
         {{- $vsrc := partial "images/resolve/source.html" (dict "page" $page "src" ($v.src | default "")) -}}
         {{- $vsrc = partial "images/resolve/remote.html" (dict "page" $page "source" $vsrc "opts" $opts) -}}
@@ -120,11 +127,13 @@
                  "absent" instead of Go's "<nil>" so the warn names the
                  actual authoring state; value presence (ne nil) matches
                  resolve/dims.html's own absence semantics, where a YAML
-                 null key counts as absent too. */}}
+                 null key counts as absent too. A supplied value is quoted
+                 so an explicit empty or literal "absent" string stays
+                 distinguishable. */}}
             {{- $wDisp := "absent" -}}
-            {{- if ne (index $v "width") nil -}}{{- $wDisp = printf "%v" $v.width -}}{{- end -}}
+            {{- if ne (index $v "width") nil -}}{{- $wDisp = printf "%q" (printf "%v" $v.width) -}}{{- end -}}
             {{- $hDisp := "absent" -}}
-            {{- if ne (index $v "height") nil -}}{{- $hDisp = printf "%v" $v.height -}}{{- end -}}
+            {{- if ne (index $v "height") nil -}}{{- $hDisp = printf "%q" (printf "%v" $v.height) -}}{{- end -}}
             {{- partial "images/lib/warn.html" (dict
                 "key" (printf "images:warn:variant-bad-dims:%s:%s:%s:%s:%s" $where (printf "%v" $v.media) (printf "%v" $v.src) $wDisp $hDisp)
                 "message" (printf "[images] Ignoring a non-numeric width/height value on the variant with media %q (got width=%s height=%s). See %s" $v.media $wDisp $hDisp $where)) -}}

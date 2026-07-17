@@ -29,7 +29,28 @@
               "media" "(max-width: 320px)"
               "width" "abc")
             (dict
-              "media" "(max-width: 240px)")))
+              "media" "(max-width: 240px)")
+            (dict
+              "src" ""
+              "media" "(max-width: 200px)")
+            "bogus-entry-one"
+            "bogus-entry-two"
+            (dict "src" "avatar-512.png")
+            (dict "src" "avatar-512.png")))
+      }}
+    </section>
+    <section id="bad-dims-collapse">
+      {{ partial "images/image.html" (dict
+          "page" .
+          "src" "avatar-512.png"
+          "alt" "First distinct mistake at a shared location"
+          "width" "junkone")
+      }}
+      {{ partial "images/image.html" (dict
+          "page" .
+          "src" "avatar-512.png"
+          "alt" "Second distinct mistake at the same location"
+          "width" "junktwo")
       }}
     </section>
     {{ $bg := partial "images/src.html" (dict "page" . "src" "photo-1600.png" "width" 800) }}

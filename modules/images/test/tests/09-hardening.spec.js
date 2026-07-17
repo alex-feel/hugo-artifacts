@@ -13,8 +13,11 @@
 // sets; credit_from_meta surfaces the IPTC credit; a variant carrying an
 // unparseable width/height warns once per media query and keeps rendering
 // with the dimensions of its largest generated derivative; a top-level
-// unparseable width warns naming the absent height; and a src-less variant
-// is dropped with the absent src named.
+// unparseable width warns naming the absent height, and two distinct
+// top-level mistakes sharing a position-less location each warn; a src-less
+// variant is dropped with the absent src named while an explicit-empty src
+// stays visible and quoted; and malformed variants entries (non-dict or
+// media-less) warn per entry position.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {dom, rawHtml, warnCount} from './helpers.js';
@@ -198,9 +201,9 @@ test('a variant with an unparseable width warns once per media query and keeps r
     'a broken variant differing only by media query warns separately',
   );
   assert.equal(
-    warnCount(/on the variant with media .+\(got width=abc height=absent\)/),
+    warnCount(/on the variant with media .+\(got width="abc" height=absent\)/),
     2,
-    'an absent height reads as "absent", never as "<nil>"',
+    'an absent height reads as "absent", never as "<nil>"; supplied values are quoted',
   );
 });
 
@@ -209,8 +212,40 @@ test('a top-level unparseable width warns once naming the absent height and keep
   assert.ok(picture, 'the build did not fail on width="abc"');
   assert.ok(picture.querySelector('img').getAttribute('srcset'), 'the pipeline runs normally');
   assert.equal(
-    warnCount(/Ignoring a non-numeric width\/height value \(got width=abc height=absent\)/),
+    warnCount(/Ignoring a non-numeric width\/height value \(got width="abc" height=absent\)/),
     1,
+  );
+});
+
+test('two distinct top-level bad dims at a position-less location each warn', () => {
+  const section = page.querySelector('#bad-dims-collapse');
+  assert.equal(section.querySelectorAll('picture').length, 2, 'both degraded calls render');
+  assert.equal(warnCount(/\(got width="junkone" height=absent\)/), 1);
+  assert.equal(
+    warnCount(/\(got width="junktwo" height=absent\)/),
+    1,
+    'per-value keys keep distinct mistakes distinct at one shared location',
+  );
+});
+
+test('malformed variants entries warn per position and are dropped', () => {
+  // The exact 1-based ordinals and offending values are pinned so a
+  // regression to 0-based positions or value-less keys cannot pass.
+  assert.equal(warnCount(/Dropping variants entry 5: it is not a dict \(got "bogus-entry-one"/), 1);
+  assert.equal(warnCount(/Dropping variants entry 6: it is not a dict \(got "bogus-entry-two"/), 1);
+  assert.equal(
+    warnCount(/Dropping variants entry 7: it has no media query \(got src="avatar-512\.png"\)/),
+    1,
+  );
+  assert.equal(
+    warnCount(/Dropping variants entry 8: it has no media query \(got src="avatar-512\.png"\)/),
+    1,
+    'identical media-less entries stay distinct by position',
+  );
+  assert.equal(
+    warnCount(/could not be resolved or processed \(got src=""\)/),
+    1,
+    'an explicit empty src stays visible and quoted, distinct from an absent one',
   );
 });
 
