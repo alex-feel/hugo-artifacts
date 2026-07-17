@@ -16,7 +16,10 @@
   the module exposes no resilience-tuning surface, matching github-repo):
   - $attempts          5    Outer attempts.
   - $perAttemptTimeout 30s  Per-request timeout for resources.GetRemote.
-  - $overallBudgetSec  120  Wall-clock cap.
+  - $overallBudgetSec  120  Wall-clock cap. An attempt only starts while the
+                            remaining budget still fits a full per-attempt
+                            timeout, so the cap is a hard ceiling -- never
+                            overshot by an attempt started near the boundary.
   - $waitHintCapSec    30   Display cap for waitHintSeconds in warnings; the
                             full numeric hint is logged so operators can act.
 
@@ -26,6 +29,23 @@
   - "auth"        401/403; token/permission/private cannot be fixed by retrying.
   - "not-found"   404; resource genuinely missing.
   - "rate-limit"  429; the window cannot reset between immediate attempts.
+
+  Host-down circuit breaker: a loop that exhausts with NO attempt receiving
+  any HTTP status code (every attempt ended errorClass "network" with
+  statusCode 0 -- a class the loop never early-breaks on, so its attempts
+  were genuinely spent) marks huggingface.co unreachable for the rest of the
+  build via hugo.Store. Every later fetch loop in the build checks the
+  sentinel first and degrades immediately with a warn, so a full Hub outage
+  costs roughly one wall-clock budget per build instead of one per call site
+  (concurrently rendered pages that started before the sentinel landed can
+  each still pay an overlapping budget) -- sequential budget stacking within
+  one page render is what pushes a page past Hugo's render `timeout` (see the
+  README's "Interplay with Hugo's render timeout"). Any surfaced status code
+  on any attempt suppresses the trip; note that Hugo retries the retryable
+  statuses (408/429/500/502/503/504) internally within each attempt's request
+  window, so a host answering ONLY with those for a whole window surfaces
+  status-less and trips the breaker like a dark host -- intended, since it
+  never yields a usable response within the budget.
 
   Context expectations:
   - .id (string)          Space id "owner/name" (wins over .url when both set).
@@ -124,10 +144,17 @@
 
 {{/* Retry constants. */}}
 {{- $attempts := 5 -}}
-{{- $perAttemptTimeout := "30s" -}}
+{{- $perAttemptTimeoutSec := 30 -}}
+{{- $perAttemptTimeout := printf "%ds" $perAttemptTimeoutSec -}}
 {{- $overallBudgetSec := 120 -}}
 {{- $waitHintCapSec := 30 -}}
 {{- $earlyBreakClasses := slice "auth" "not-found" "rate-limit" -}}
+
+{{/* Host-down circuit-breaker sentinel, shared across every call site in
+     the build. The loop snapshots it before starting and trips it after
+     exhausting its attempts against a host that never responded. */}}
+{{- $hostDownKey := "hf-space:host-down:huggingface.co" -}}
+{{- $hostDown := hugo.Store.Get $hostDownKey -}}
 
 {{/* API URL. The expand[] keys pull cardData (title/emoji/colors/sdk_version/
      short_description/tags), runtime (hardware), likes, sdk, lastModified, tags
@@ -146,14 +173,20 @@
   "waitHintSeconds" 0
 -}}
 {{- $attemptsUsed := 0 -}}
+{{- $sawResponse := false -}}
 {{- range $attempt := seq 1 $attempts -}}
   {{- if $result.ok -}}
     {{/* Already succeeded; skip remaining attempts. */}}
+  {{- else if $hostDown -}}
+    {{/* Circuit breaker open: the host never responded to an earlier call
+         site this build, so degrade immediately instead of burning another
+         wall-clock budget. */}}
   {{- else -}}
     {{- $elapsed := sub (int now.Unix) $startSec -}}
     {{- $remaining := sub $overallBudgetSec $elapsed -}}
-    {{- if le $remaining 0 -}}
-      {{/* Wall-clock budget exhausted; stop attempting. */}}
+    {{- if lt $remaining $perAttemptTimeoutSec -}}
+      {{/* The remaining budget cannot fit a full attempt; stop so the
+           budget stays a hard ceiling. */}}
     {{- else if and (gt $attempt 1) (in $earlyBreakClasses $result.errorClass) -}}
       {{/* Provably-useless class within this build. */}}
     {{- else -}}
@@ -165,12 +198,24 @@
         "timeout" $perAttemptTimeout
       ) -}}
       {{- $attemptsUsed = $attempt -}}
+      {{- if ne $result.statusCode 0 -}}
+        {{- $sawResponse = true -}}
+      {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
 
+{{/* Trip the circuit breaker only when NO attempt received any HTTP status
+     code -- a host that answered even once (with any status) is reachable,
+     and the problem is then the endpoint or the request, not the host. */}}
+{{- if and (not $hostDown) (not $result.ok) (eq $result.errorClass "network") (eq $result.statusCode 0) (not $sawResponse) -}}
+  {{- hugo.Store.Set $hostDownKey true -}}
+{{- end -}}
+
 {{/* Build the normalized data dict. On success, populate from the JSON
-     response; on failure, keep the fallback and emit one structured warning. */}}
+     response; on breaker skip, warn that this call site degraded without
+     spending budget; on failure, keep the fallback and emit one structured
+     warning. */}}
 {{- $data := $fallback -}}
 {{- if $result.ok -}}
   {{- $json := $result.value -}}
@@ -292,6 +337,8 @@
     "apiOk" true
     "extraClass" ""
   -}}
+{{- else if $hostDown -}}
+  {{- warnf "[hf-space] Skipping the Hugging Face Hub fetch for %s: huggingface.co was marked unreachable earlier in this build. Rendering the inline chip. See %s" $fullName $position -}}
 {{- else -}}
   {{- $hint := $result.waitHintSeconds -}}
   {{- $guidanceHint := "" -}}

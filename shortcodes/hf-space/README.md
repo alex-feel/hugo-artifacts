@@ -129,7 +129,7 @@ Each API call is wrapped in an outer retry loop with header-aware error classifi
 | --- | --- | --- |
 | `attempts` | `5` | Maximum outer attempts |
 | `perAttemptTimeout` | `30s` | Per-request timeout passed to `resources.GetRemote` |
-| `overallBudgetSec` | `120` | Wall-clock cap, in seconds |
+| `overallBudgetSec` | `120` | Wall-clock cap, in seconds. A hard ceiling: an attempt only starts while the remaining budget still fits a full per-attempt timeout, so an attempt started near the boundary can never overshoot it |
 | `waitHintCapSec` | `30` | Display cap for the rate-limit wait hint in warnings (the full numeric hint is still logged) |
 
 Each attempt uses a fresh cache key (`hf-space:OWNER/NAME:space:attemptN`) so that a response cached as an error by Hugo's `httpcache.Transport` on a prior attempt does not poison subsequent attempts within the same build.
@@ -151,6 +151,18 @@ Hugo templates have no sleep primitive, so true backoff between outer attempts i
 | `other` | Anything else | Retry up to `attempts` or `overallBudgetSec`. |
 
 On retry exhaustion the module emits a single structured `warnf` per failed Space (with `errorClass`, `statusCode`, the Hub's error `message` when present, and a wait hint for rate limits) and falls through to graceful degradation. The build is never broken by an API failure.
+
+### Host-down circuit breaker
+
+When the fetch loop exhausts its attempts with NO attempt receiving any HTTP status code (every attempt ends `errorClass=network` with `statusCode=0` -- a DNS failure, an unreachable host, a black-holed connection), the module marks `huggingface.co` unreachable for the rest of the build via a `hugo.Store` sentinel. Every later call site -- any Space, any page -- checks the sentinel first and degrades immediately with a warn instead of burning another wall-clock budget, so a full Hub outage costs the build roughly one `overallBudgetSec` window instead of one per call site (concurrently rendered pages that started before the sentinel landed can each still pay an overlapping budget). A failure that surfaces WITH a status code -- a rate limit, an auth failure, a 404, or a non-retryable status such as 501 -- proves the host reachable, never trips the breaker, and keeps its own per-call-site retry budget. One nuance: Hugo retries the retryable statuses (408, 429, 500, 502, 503, 504) internally within each attempt's request window, so a host that answers ONLY with those for whole windows surfaces to the template as status-less no-response failures and trips the breaker exactly like a dark host -- the intended outcome for a host that never yields a usable response within the budget.
+
+### Interplay with Hugo's render timeout
+
+Hugo aborts any page whose render exceeds the site-level `timeout` setting (default `60s`), and every second this module spends fetching counts toward the clock of the page being rendered. Graceful degradation cannot rescue a page that is already out of render budget: during a full Hub outage the first fetching call site can spend up to 120s before it degrades, so a site whose `timeout` is at or below that figure can fail its build with `timed out rendering the page` even though every widget degraded correctly. The circuit breaker bounds the exposure to roughly one budget per build, but the page that pays that budget still needs headroom. Give the consuming site comfortable margin above the worst case:
+
+```toml
+timeout = '180s'
+```
 
 ## Graceful Degradation
 
