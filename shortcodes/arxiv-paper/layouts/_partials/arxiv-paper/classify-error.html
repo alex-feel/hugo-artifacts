@@ -109,6 +109,14 @@
   {{- end -}}
 {{- end -}}
 
+{{/* The wait hint is remote-derived, so clamp it to one day: a longer hint
+     carries no actionable information for a build, and an absurd
+     Retry-After (anything up to int64 max parses) must never reach callers
+     unbounded. */}}
+{{- if gt $waitHintSeconds 86400 -}}
+  {{- $waitHintSeconds = 86400 -}}
+{{- end -}}
+
 {{- return (dict
   "errorClass" $errorClass
   "waitHintSeconds" $waitHintSeconds
