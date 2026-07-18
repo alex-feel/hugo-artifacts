@@ -22,14 +22,24 @@ title = "Search Fixture"
 [params]
 description = "Hugo search module Playwright validation fixture site."
 
+# "keywords" is a real taxonomy here AND a reserved index record field
+# (author-supplied matching terms), so listing it in params.search.taxonomies
+# below must skip it with a warning instead of clobbering the record field.
+[taxonomies]
+  tag = 'tags'
+  category = 'categories'
+  keyword = 'keywords'
+
 # Deliberately exercises edge shapes: a comma-string sections allow-list
 # with a nested path, a capitalized entry ("Blog" must scope /blog/... --
 # matching is case-insensitive), an entry covering the dedicated search page
-# (which must still exclude itself from the index), forced caching
-# (deterministic on a small corpus), heading sub-records, the slash hotkey
-# opt-in, and every display toggle the result template ships.
+# (which must still exclude itself from the index), a taxonomies CSV
+# carrying the reserved name "keywords", forced caching (deterministic on a
+# small corpus), heading sub-records, the slash hotkey opt-in, and every
+# display toggle the result template ships.
 [params.search]
 sections = "Blog, docs/guides, hostile, excluded, search"
+taxonomies = "tags, categories, keywords"
 headings = true
 hotkey_slash = true
 cache = true

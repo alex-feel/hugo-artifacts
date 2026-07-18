@@ -1,6 +1,6 @@
 # search
 
-Fully client-side, privacy-preserving site search for any Hugo v0.160.0+ (extended) site: the module emits a per-language JSON index at build time through a custom output format, and a vendored [MiniSearch](https://github.com/lucaong/minisearch) engine searches it entirely in the visitor's browser -- no external service, no post-build indexer, no consumer `npm install`, no telemetry, zero third-party contact. Everything happens at build time or on the visitor's device.
+Fully client-side, privacy-preserving site search for any Hugo v0.160.0+ site: the module emits a per-language JSON index at build time through a custom output format, and a vendored [MiniSearch](https://github.com/lucaong/minisearch) engine searches it entirely in the visitor's browser -- no external service, no post-build indexer, no consumer `npm install`, no telemetry, zero third-party contact. Everything happens at build time or on the visitor's device.
 
 The module emits semantic HTML with [BEM](https://getbem.com/) class hooks and `data-*` attributes and ships **zero CSS** -- no stylesheets, no colors, no dark-mode rules -- so the consuming site owns every visual decision. Three surfaces share one search core: a dedicated search page (a real GET form that works without JavaScript), a command-palette modal (Ctrl/Cmd+K, built on the native `<dialog>` element), and an inline dropdown. English and Russian are first-class: language-aware Snowball stemming, `ё`/`е` folding, typo tolerance, prefix matching, and BM25 field-weighted ranking are applied symmetrically to indexing and querying, so `модуля` finds `модуль` and `running` finds `runs`.
 
@@ -50,7 +50,7 @@ Under a granular CSP the module needs exactly this directive set: `script-src 's
 
 ## Requirements
 
-- [Hugo](https://gohugo.io/) v0.160.0+ (extended edition)
+- [Hugo](https://gohugo.io/) v0.160.0+ (the standard edition suffices: the module uses only `js.Build` and `fingerprint`, both available in every edition)
 - [Go](https://go.dev/) 1.22+
 
 ## Usage
@@ -75,7 +75,7 @@ The dot MUST be the current Page; passing anything else is the module's single b
 {{ partial "search/page.html" (dict "page" . "autofocus" true) }}
 ```
 
-The command-palette modal belongs in a layout (typically the header); it renders a JavaScript-revealed trigger button plus a native `<dialog>`, opens on the configured hotkey (`mod+k` by default), and emits its dialog once per page -- additional placements render more triggers that reuse it. The inline dropdown is the opt-in third surface for a layout or content. Shortcode forms: `{{</* search modal */>}}` and `{{</* search surface="inline" */>}}`.
+The command-palette modal belongs in a layout (typically the header); it renders a JavaScript-revealed trigger button plus a native `<dialog>` and opens on the configured hotkey (`mod+k` by default). Every placement emits its own trigger and dialog -- a server-side once-per-page sentinel would strip the dialog from paginated outputs (`/page/2/` and beyond), because Hugo re-renders the same list page per pager; at enhancement time the script keeps the first dialog as the page's single shared palette, removes the redundant closed ones (invisible until then, since a closed `<dialog>` has no rendering), and every trigger opens that shared palette. The inline dropdown is the opt-in third surface for a layout or content. Shortcode forms: `{{</* search modal */>}}` and `{{</* search surface="inline" */>}}`.
 
 Every surface renders a real `<form method="get">` targeting the dedicated search page, so a no-JavaScript submission always navigates to `/search/?q=...` with the query intact. If you place the modal or inline surface but never create the search page, the build warns once per language and every search-page link falls back to `page_path` resolved for that language, so a later-created page starts working with no template change.
 
@@ -94,7 +94,7 @@ The index template emits one envelope per language (`/searchindex.json`, `/ru/se
 }
 ```
 
-`schemaVersion` is the compatibility contract between the emitted index and the module script: the client validates it and degrades honestly on a mismatch (skewed deploys), and it reserves headroom for future shape evolution such as sharding. `digest` is a content hash of the serialized records; the client-side cache key requires it because the index URL is stable rather than fingerprinted. All fields are DATA ONLY -- no pre-rendered HTML ever enters the index -- and the envelope must not be inlined into a `<script>` tag as-is (it is serialized without HTML escaping, which is safe only for a standalone `.json` file).
+`schemaVersion` is the compatibility contract between the emitted index and the module script: the client validates it and degrades predictably on a mismatch (skewed deploys), and it reserves headroom for future shape evolution such as sharding. `digest` is a content hash of the serialized records; the client-side cache key requires it because the index URL is stable rather than fingerprinted. All fields are DATA ONLY -- no pre-rendered HTML ever enters the index -- and the envelope must not be inlined into a `<script>` tag as-is (it is serialized without HTML escaping, which is safe only for a standalone `.json` file).
 
 Each record carries: `href` (the page's relative permalink; also the engine's document id), `title`, `section` and `sectionTitle` (grouping key and label), `date` (`YYYY-MM-DD`, omitted when the page has none), `description`, `summary` (truncated to `summary_max_length`), `keywords` (author-supplied extra matching terms), one array per configured taxonomy (`tags`, `categories` by default), `content` (indexed body text, truncated to `content_max_length`; never stored client-side), `image` (only when `show_image` is enabled at the defaults or site tier), and `headings` (sub-records with `id`/`level`/`title`, only when `headings = true`).
 
@@ -131,7 +131,7 @@ Kill switches: site `params.search.enable = false` disables every surface AND em
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | `sections` | list or CSV | `[]` | Sections to index: top-level names or nested path prefixes like `docs/guides`; `docs`, `/docs`, and `docs/` all work, and matching is case-insensitive (entries are lowercased to match Hugo's lowercase page paths). Empty indexes ALL regular pages. The sentinel `["mainSections"]` scopes to `site.MainSections`. INDEX-TIME. |
-| `taxonomies` | list or CSV | `["tags", "categories"]` | Taxonomies serialized into records and matched during search; every listed taxonomy becomes a search field and accepts a `boost.<name>` key. Only `tags` and `categories` have display slots; other listed taxonomies match but are not displayed. INDEX-TIME. |
+| `taxonomies` | list or CSV | `["tags", "categories"]` | Taxonomies serialized into records and matched during search; every listed taxonomy becomes a search field and accepts a `boost.<name>` key. Only `tags` and `categories` have display slots; other listed taxonomies match but are not displayed. A taxonomy named like a reserved record field (`href`, `title`, `section`, `sectionTitle`, `date`, `description`, `summary`, `keywords`, `content`, `image`, `headings` -- matched case-insensitively) is skipped with a warning, because serializing it would clobber that field. INDEX-TIME. |
 | `content` | string | `"full"` | Body strategy: `full` (plain text, truncated), `summary`, or `none`. INDEX-TIME. |
 | `content_max_length` | int | `8000` | Character bound for indexed body text; `0` = unlimited. INDEX-TIME. |
 | `summary_max_length` | int | `240` | Character bound for the stored result summary. INDEX-TIME. |
@@ -167,7 +167,7 @@ Call-site-only keys on the partials and the shortcode: `class` (appended to the 
 
 ### Validation
 
-Every misconfiguration warns once per build (deduplicated) or degrades: a non-map `params.search` or `search:` front matter value is ignored with a warning (except the bare `search: false` opt-out shorthand), malformed numbers fall back to the shipped defaults, an unknown shortcode surface renders the page surface, an unparseable hotkey disables the hotkey, an unwired output format renders the page surface's form but no modal, no inline surface, and no scripts, and a missing search page warns per language while every link falls back to the configured path. The single build-failing error is calling an entry partial with something other than a Page -- a wiring mistake, not a content problem.
+Every misconfiguration warns once per build (deduplicated; under Hugo's parallel page rendering, a warning that embeds per-caller context can rarely surface more than once) or degrades: a non-map `params.search` or `search:` front matter value is ignored with a warning (except the bare `search: false` opt-out shorthand), malformed numbers fall back to the shipped defaults, an unknown shortcode surface renders the page surface, an unparseable hotkey disables the hotkey, a taxonomy named like a reserved record field is skipped, an unwired output format renders the page surface's form but no modal, no inline surface, and no scripts, and a missing search page warns per language while every link falls back to the configured path. The single build-failing error is calling an entry partial with something other than a Page -- a wiring mistake, not a content problem.
 
 ## CustomEvents reference
 
@@ -189,6 +189,8 @@ Inbound: dispatching `search:rescan` on `document` re-runs initialization for la
 
 The dedicated page is deliberately simple: a labeled `type="search"` input, a results container of ordinary links (grouped under real `<h2>` headings when grouping is on), and a load-more button that keeps focus while appended results are announced. The modal and inline surfaces implement the combobox pattern: `role="combobox"` with `aria-expanded`, `aria-controls`, `aria-autocomplete="list"`, and `aria-activedescendant` tracking a `role="listbox"` of `role="option"` items -- DOM focus never leaves the input while arrowing through options, and the active option carries `aria-selected="true"`.
 
+Each surface root is a `<search>` element carrying an explicit `role="search"` -- redundant where the element is mapped natively and the landmark fallback for assistive technology stacks that predate it; the form inside carries no role of its own, so the landmark is never announced twice.
+
 The modal is a native `<dialog>` opened with `showModal()`, so focus containment, background inertness, Escape handling, and focus return to the invoker come from the platform. Escape is two-stage: the first press with a non-empty query clears it, the second closes. Result counts are announced through a polite `role="status"` region, debounced so rapid typing does not spam the queue; zero results and errors use the assertive `role="alert"` region. Every control has real visible text (never `aria-label`-only); icon-only presentation belongs to the consumer via the visually-hidden pattern under Styling. The module ships zero animation and never requests smooth scrolling; consumer transitions belong behind their own `prefers-reduced-motion` guards.
 
 ## Privacy
@@ -201,7 +203,9 @@ One consumer-side pattern trades this invariant away: replacing the `<noscript>`
 
 The module ships zero CSS. Server-rendered surface roots carry `search` plus one modifier: `search--page`, `search--modal`, `search--inline`. The one functional-CSS exception: JavaScript-only controls (the clear button, the load-more button, the modal trigger, the see-all link, the inline listbox) are hidden with BOTH the `hidden` attribute AND an inline `display:none`, because the attribute alone loses to ordinary consumer display rules; the script clears both on reveal.
 
-JS-injected classes -- flagged here because Tailwind-style tree-shaking never sees them in server HTML; safelist them via `hugo_stats.json` or your framework's equivalent: `search--enhanced`, `search--open`, `search--loading`, `search--has-results`, `search--no-results`, `search--error`, `search__option--active`, `search__mark`, plus the JS-created structural classes `search__list`, `search__group`, `search__group-title`, `search__option`.
+JS-injected classes -- flagged here because Tailwind-style tree-shaking never sees them in server HTML; safelist them via `hugo_stats.json` or your framework's equivalent: `search--enhanced`, `search--open`, `search--loading`, `search--has-results`, `search--no-results`, `search--error`, `search__option--active`, `search__mark`, plus the JS-created structural classes `search__list`, `search__group`, `search__group-title`, `search__group-count`, `search__option`, `search__result-tag`, `search__result-tag-separator`, `search__result-category`, and `search__result-category-separator`.
+
+Taxonomy slots are filled with one child element per term -- `search__result-tag` / `search__result-category` -- so each term is an addressable hook for chip-style presentation, with every `", "` separator in its own `search__result-tag-separator` / `search__result-category-separator` element a consumer can hide; unstyled, the slot still reads `a, b, c`. A shadowed result template may use a `<ul>`/`<ol>` for either slot: list slots get `<li>` children and no separator elements. When `group_by_section` is on, each JS-created `.search__group` block carries `data-search-section` (the group's section key; empty for root pages) and `data-search-count` -- the number of results currently rendered in the group, which grows as "show more" reveals further chunks -- so per-section accents and group counts are pure CSS on the consumer side. A `span.search__group-count` element carrying the same count as text rides beside the group heading; a heading-less root-page group gets the data attributes only, so it never leads with a bare, contextless number.
 
 Element hooks: `search__form`, `search__label` (and `search__label--hidden-hook` on the modal's label for visually-hidden styling), `search__input`, `search__submit`, `search__submit-icon`, `search__submit-label`, `search__clear`, `search__clear-icon`, `search__clear-label`, `search__trigger`, `search__trigger-icon`, `search__trigger-label`, `search__kbd`, `search__dialog`, `search__close`, `search__close-icon`, `search__close-label`, `search__status`, `search__alert`, `search__results`, `search__listbox`, `search__more`, `search__see-all`, `search__hints`, `search__hint`, `search__hint-label`, `search__heading`, `search__noscript`, `search__noscript-text`, and the per-result skeleton `search__result`, `search__result-link`, `search__result-title`, `search__result-section`, `search__result-snippet`, `search__result-date`, `search__result-tags`, `search__result-categories`, `search__result-image`.
 
@@ -271,7 +275,7 @@ modules/search/
 │           ├── form.html               # shared form fragment
 │           ├── results.html            # live regions + results container + template
 │           ├── result-template.html    # shadowable per-result skeleton
-│           ├── assets.html             # script emission (once per page)
+│           ├── assets.html             # script emission (per placement)
 │           ├── config.html             # four-tier cascade resolver
 │           ├── icon.html               # inline SVG glyphs
 │           ├── noscript.html           # shadowable no-JavaScript guidance

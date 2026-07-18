@@ -1,7 +1,8 @@
 // The command-palette modal: hotkeys, native dialog semantics, the
-// activedescendant keyboard model, Enter navigation on both branches, and
-// the two-stage Escape.
-/* global document, window, URL */
+// activedescendant keyboard model, Enter navigation on both branches, the
+// two-stage Escape, multi-placement dialog election, and rescan
+// re-election after a swap.
+/* global document, window, URL, CustomEvent */
 import {test, expect} from '@playwright/test';
 
 const DIALOG = '.search--modal .search__dialog';
@@ -82,6 +83,71 @@ test('slash opens the modal only outside text fields', async ({page}) => {
   await page.locator('h1').click();
   await page.keyboard.press('/');
   await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
+});
+
+test('a second placement keeps one dialog; its trigger opens the shared palette', async ({
+  page,
+}) => {
+  // The server emits a dialog per placement (a page-scoped sentinel cannot
+  // dedup per paginator output); enhancement elects the first dialog as the
+  // page's single shared palette and removes the rest.
+  await page.goto('/promo/');
+  await expect(page.locator('.search--modal.search--enhanced')).toHaveCount(2);
+  await expect(page.locator(DIALOG)).toHaveCount(1);
+  // The FIRST dialog wins the election: the fixture's header placement
+  // passes heading "Palette search" while the footer placement passes
+  // none, so the survivor is distinguishable.
+  await expect(page.locator(`${DIALOG} h2.search__heading`)).toHaveText('Palette search');
+  const triggers = page.locator('.search--modal .search__trigger');
+  await expect(triggers).toHaveCount(2);
+  await expect(triggers.nth(1)).toBeVisible();
+  await triggers.nth(1).click();
+  await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
+});
+
+test('extra triggers prefetch the shared backend on intent', async ({page}) => {
+  await page.goto('/promo/');
+  await expect(page.locator('.search--modal.search--enhanced')).toHaveCount(2);
+  await page.evaluate(() => {
+    document.addEventListener('search:ready', (event) => {
+      window.__searchReady = event.detail;
+    });
+  });
+  // Hovering the SECOND placement's trigger -- a trigger-only root after
+  // election -- must prefetch the owner's backend without any click.
+  await page.locator('.search--modal .search__trigger').nth(1).hover();
+  await expect.poll(() => page.evaluate(() => window.__searchReady)).toBeTruthy();
+});
+
+test('search:rescan re-elects a swapped-in modal root after the owner leaves', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  // Simulate a PJAX/Turbo navigation: replace the owning root with a fresh
+  // server-rendered copy and announce it via search:rescan.
+  await page.evaluate(() => {
+    const root = document.querySelector('.search--modal');
+    const fresh = root.cloneNode(true);
+    fresh.classList.remove('search--enhanced');
+    root.remove();
+    document.querySelector('header').appendChild(fresh);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator(DIALOG)).toHaveCount(1);
+  await page.keyboard.press('Control+KeyK');
+  const dialog = page.locator(DIALOG);
+  await expect(dialog).toHaveAttribute('open', '');
+  await page.locator(INPUT).fill('gravity');
+  await expect(page.locator('.search--modal .search__option')).toHaveCount(2);
+});
+
+test('pager outputs keep a working palette', async ({page}) => {
+  await page.goto('/blog/page/2/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  await page.keyboard.press('Control+KeyK');
+  const dialog = page.locator(DIALOG);
+  await expect(dialog).toHaveAttribute('open', '');
+  await page.locator(INPUT).fill('gravity');
+  await expect(page.locator('.search--modal .search__option')).toHaveCount(2);
 });
 
 test('enter with no active option navigates to see-all with a Cyrillic query intact', async ({

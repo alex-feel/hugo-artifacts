@@ -58,6 +58,12 @@ test.describe('search index envelope', () => {
       expect(heading.level).toBeGreaterThanOrEqual(2);
       expect(heading.title).not.toMatch(/<[a-z/]/);
     }
+
+    // The fixture's "keywords" taxonomy collides with the reserved record
+    // field of the same name: the resolver skips it with a warning, so the
+    // record keeps the author's search.keywords terms and the taxonomy's
+    // terms never clobber them.
+    expect(quantum.keywords).toEqual(['qubit-search-kw']);
   });
 
   test('ru index: envelope and morphology corpus', async ({request}) => {

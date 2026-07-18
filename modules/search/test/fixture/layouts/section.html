@@ -1,8 +1,9 @@
 {{ define "main" }}
   <h1>{{ .Title }}</h1>
   <ul>
-    {{ range .Pages }}
+    {{ range (.Paginate .Pages 2).Pages }}
       <li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>
     {{ end }}
   </ul>
+  {{ partial "pagination.html" . }}
 {{ end }}

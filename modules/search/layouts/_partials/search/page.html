@@ -68,7 +68,10 @@
   "worker" $cfg.worker
   "cache" $cfg.cache
 ) | jsonify -}}
-<search class="search search--page{{ with $cfg.class }} {{ . }}{{ end }}"
+{{/* role="search" is redundant where the <search> element is mapped, and
+     is the landmark fallback for assistive technology stacks that predate
+     it; on the SAME element it never duplicates the landmark. */}}
+<search role="search" class="search search--page{{ with $cfg.class }} {{ . }}{{ end }}"
   {{- with $cfg.id }} id="{{ . }}"{{ end }}
   data-search-surface="page"
   {{- with $cfg.index_url }} data-search-index-url="{{ . }}"{{ end }}

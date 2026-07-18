@@ -22,6 +22,34 @@ function fillText(el, text) {
   return false;
 }
 
+// Fills a taxonomy slot with one child element per term, so every term is
+// an addressable styling hook (chip presentation), and puts each separator
+// in its own classed element so a consumer can hide them -- unstyled, the
+// slot still reads "a, b, c". A list slot (a shadowed template may use
+// <ul>/<ol>) gets <li> children and no text separators; any other slot
+// element gets <span> children.
+function fillTerms(el, terms, termClass, separatorClass) {
+  if (!terms || !terms.length) {
+    el.remove();
+    return;
+  }
+  el.textContent = '';
+  const isList = el.tagName === 'UL' || el.tagName === 'OL';
+  terms.forEach((term, index) => {
+    if (index > 0 && !isList) {
+      const separator = document.createElement('span');
+      separator.className = separatorClass;
+      separator.textContent = ', ';
+      el.appendChild(separator);
+    }
+    const item = document.createElement(isList ? 'li' : 'span');
+    item.className = termClass;
+    item.textContent = term;
+    el.appendChild(item);
+  });
+  reveal(el);
+}
+
 function safeImageSrc(src) {
   if (!src) {
     return '';
@@ -116,16 +144,21 @@ export function renderResult(template, hit, ctx) {
 
   const tags = slot('tags');
   if (tags) {
-    fillText(tags, ctx.show.tags && hit.tags && hit.tags.length ? hit.tags.join(', ') : '');
+    fillTerms(
+      tags,
+      ctx.show.tags && hit.tags ? hit.tags : [],
+      'search__result-tag',
+      'search__result-tag-separator',
+    );
   }
 
   const categories = slot('categories');
   if (categories) {
-    fillText(
+    fillTerms(
       categories,
-      ctx.show.categories && hit.categories && hit.categories.length
-        ? hit.categories.join(', ')
-        : '',
+      ctx.show.categories && hit.categories ? hit.categories : [],
+      'search__result-category',
+      'search__result-category-separator',
     );
   }
 
@@ -145,8 +178,16 @@ export function renderResult(template, hit, ctx) {
 
 // Renders the dedicated page's results container: either a flat
 // .search__list or, when grouping is on, .search__group blocks each
-// carrying an h2.search__group-title and a nested .search__list. Group
-// titles are real headings so screen-reader users navigate groups natively.
+// carrying an h2.search__group-title with a span.search__group-count
+// beside it and a nested .search__list. Group titles are real headings so
+// screen-reader users navigate groups natively. Each group block exposes
+// its section key as data-search-section (empty for root pages) and its
+// rendered-result count as data-search-count -- the count covers the
+// results currently rendered in the group, so it grows as "show more"
+// reveals further chunks. The visible count element rides only with the
+// heading: a heading-less root-page group would otherwise lead with a
+// bare, contextless number, so there the data attribute alone carries the
+// value.
 export function renderPageResults(container, template, hits, ctx) {
   container.textContent = '';
   if (!hits.length) {
@@ -172,14 +213,20 @@ export function renderPageResults(container, template, hits, ctx) {
     }
     groups.get(key).hits.push(hit);
   }
-  for (const group of groups.values()) {
+  for (const [key, group] of groups.entries()) {
     const wrapper = document.createElement('div');
     wrapper.className = 'search__group';
+    wrapper.setAttribute('data-search-section', key);
+    wrapper.setAttribute('data-search-count', String(group.hits.length));
     if (group.title) {
       const heading = document.createElement('h2');
       heading.className = 'search__group-title';
       heading.textContent = group.title;
       wrapper.appendChild(heading);
+      const count = document.createElement('span');
+      count.className = 'search__group-count';
+      count.textContent = String(group.hits.length);
+      wrapper.appendChild(count);
     }
     const list = document.createElement('ul');
     list.className = 'search__list';

@@ -1,32 +1,34 @@
 {{/*
   search/assets.html -- INTERNAL (renderer tier).
 
-  Purpose: emits the module's page script once per page (a .Page.Store
-  sentinel), as a minified, fingerprinted ESM <script type="module"> with
-  Subresource Integrity. Called only by surfaces whose index wiring check
-  passed: no index URL, no scripts. The worker artifact has no SRI
-  mechanism, so the content hash in its fingerprinted filename (delivered
-  via data-search-worker-url on each surface root) is the integrity
-  control.
+  Purpose: emits the module's page script for one surface placement, as a
+  minified, fingerprinted ESM <script type="module"> with Subresource
+  Integrity. Called only by surfaces whose index wiring check passed: no
+  index URL, no scripts. The worker artifact has no SRI mechanism, so the
+  content hash in its fingerprinted filename (delivered via
+  data-search-worker-url on each surface root) is the integrity control.
+
+  Emission is deliberately per placement, NOT deduplicated through a
+  .Page.Store sentinel: the store persists across Hugo's paginator renders
+  of the same list page, so a sentinel would strip the script from /page/2/
+  and beyond. A page with several placements carries several identical
+  tags, which is harmless -- ES modules are singletons per resolved URL, so
+  the browser fetches and executes the module exactly once.
 
   Expected context (dict):
   - .page (Page) - The current page.
   - .cfg  (map)  - Resolved configuration from search/config.html, carrying
     the built script resource and worker_url.
 
-  Return value: none. Side effect: at most one script tag per page.
+  Return value: none. Side effect: one script tag per placement.
 */}}
 
 {{- $page := .page -}}
 {{- $cfg := .cfg -}}
-{{- $key := "search:assets-emitted" -}}
-{{- if not ($page.Store.Get $key) -}}
-  {{- $page.Store.Set $key true -}}
-  {{- if and $cfg.script $cfg.worker_url -}}
+{{- if and $cfg.script $cfg.worker_url -}}
 <script type="module" src="{{ $cfg.script.RelPermalink }}" integrity="{{ $cfg.script.Data.Integrity }}" crossorigin="anonymous"></script>
-  {{- else -}}
-    {{- partial "search/lib/warn.html" (dict
-        "key" "search:warn:missing-script"
-        "message" "[search] assets/js/search.js or assets/js/search-worker.js was not found; the module is not mounted correctly. The server-rendered search form keeps working, but client-side search stays inert.") -}}
-  {{- end -}}
+{{- else -}}
+  {{- partial "search/lib/warn.html" (dict
+      "key" "search:warn:missing-script"
+      "message" "[search] assets/js/search.js or assets/js/search-worker.js was not found; the module is not mounted correctly. The server-rendered search form keeps working, but client-side search stays inert.") -}}
 {{- end -}}

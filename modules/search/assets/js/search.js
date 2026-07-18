@@ -821,6 +821,31 @@ function isApplePlatform() {
   return /Mac|iPhone|iPad|iPod/.test(navigator.platform || '');
 }
 
+// One shared palette per page: the first dialog-carrying modal root to
+// enhance becomes the owner and wires the controller, the document-level
+// trigger delegation, and the hotkeys. Every other modal root -- a further
+// placement on the same page, or a root inserted later and announced via
+// search:rescan -- stays trigger-only: the server emits a dialog per
+// placement (a page-scoped sentinel cannot dedup per paginator output), so
+// the owner's page keeps exactly one dialog, the redundant closed ones are
+// removed here, and each extra trigger prefetches the owner's backend on
+// intent. Ownership is released when the owning root leaves the document
+// (a PJAX/Turbo swap), so a rescanned replacement root re-elects.
+let modalOwner = null;
+
+// addEventListener does not dedupe distinct closures, and a trigger can be
+// reached both by the owner's document-wide sweep and by its own root's
+// enhancement pass; the WeakSet keeps each trigger wired exactly once.
+const prefetchWiredTriggers = new WeakSet();
+
+function wireTriggerPrefetch(core, trigger) {
+  if (prefetchWiredTriggers.has(trigger)) {
+    return;
+  }
+  prefetchWiredTriggers.add(trigger);
+  wireIntentPrefetch(core, trigger);
+}
+
 function wireModal(root, config) {
   const trigger = root.querySelector('.search__trigger');
   const dialog = root.querySelector('.search__dialog');
@@ -832,10 +857,21 @@ function wireModal(root, config) {
   }
   revealControl(trigger);
 
-  // One dialog per page: additional modal placements render trigger-only
-  // roots; the owning root's controller handles every trigger through
-  // document-level delegation below.
-  if (!dialog) {
+  // A swap can remove the owning root while this module's JS context
+  // survives; releasing the stale ownership lets the next dialog-carrying
+  // root re-elect, and the swapped-out owner's document-level listeners
+  // stay inert through the isConnected guard in its open().
+  if (modalOwner && !modalOwner.root.isConnected) {
+    modalOwner = null;
+  }
+
+  if (modalOwner || !dialog) {
+    if (modalOwner && dialog) {
+      dialog.remove();
+    }
+    if (modalOwner && trigger) {
+      wireTriggerPrefetch(modalOwner.core, trigger);
+    }
     return;
   }
 
@@ -845,8 +881,13 @@ function wireModal(root, config) {
   const seeAll = root.querySelector('.search__see-all');
   const closeButton = root.querySelector('.search__close');
   if (!input || !listboxEl || !core.template) {
+    // A dialog whose inner markup fails the structural check can never
+    // open; removing it keeps the one-dialog invariant regardless of the
+    // broken root's position among the placements.
+    dialog.remove();
     return;
   }
+  modalOwner = {root, core};
   const listbox = createListbox(core, config, listboxEl, seeAll, false);
 
   const hooks = {
@@ -857,7 +898,9 @@ function wireModal(root, config) {
   };
 
   function open() {
-    if (dialog.open) {
+    // The isConnected guard turns a swapped-out owner's stale document
+    // listeners into no-ops: showModal() on a disconnected dialog throws.
+    if (!dialog.isConnected || dialog.open) {
       return;
     }
     dialog.showModal();
@@ -944,7 +987,7 @@ function wireModal(root, config) {
   });
 
   for (const trg of document.querySelectorAll('.search--modal .search__trigger')) {
-    wireIntentPrefetch(core, trg);
+    wireTriggerPrefetch(core, trg);
   }
 }
 

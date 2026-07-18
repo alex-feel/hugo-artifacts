@@ -13,5 +13,12 @@
     <main>
       {{ block "main" . }}{{ end }}
     </main>
+    {{/* A second modal placement on opted-in pages: the script must elect
+         the first dialog as the shared palette and remove this one's. */}}
+    {{ if .Params.second_modal }}
+    <footer>
+      {{ partial "search/modal.html" . }}
+    </footer>
+    {{ end }}
   </body>
 </html>

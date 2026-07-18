@@ -76,7 +76,25 @@ test('relative thumbnail renders; tags and categories slots deliver', async ({pa
   await expect(image).toHaveAttribute('src', '/img/cover.png');
   await expect(result.locator('.search__result-tags')).toHaveText('Hugo');
   await expect(result.locator('.search__result-categories')).toHaveText('Tools');
+  // Each term is its own addressable chip element.
+  await expect(result.locator('.search__result-tags .search__result-tag')).toHaveText(['Hugo']);
+  await expect(result.locator('.search__result-categories .search__result-category')).toHaveText([
+    'Tools',
+  ]);
   await expect(result.locator('.search__result-date')).toHaveAttribute('datetime', '2026-01-16');
+});
+
+test('multi-term tags render one chip per term with classed separators', async ({page}) => {
+  await page.goto('/search/');
+  await page.locator(INPUT).fill('gravity');
+  const result = page.locator('.search--page .search__result-link[href="/blog/gravity-title/"]');
+  await expect(result).toBeVisible();
+  const tags = result.locator('.search__result-tags');
+  await expect(tags.locator('.search__result-tag')).toHaveText(['Physics', 'Waves']);
+  // The ", " separator lives in its own classed element, so a consumer can
+  // hide it for chip presentation while the unstyled text stays readable.
+  await expect(tags.locator('.search__result-tag-separator')).toHaveCount(1);
+  await expect(tags).toHaveText('Physics, Waves');
 });
 
 test('regex metacharacters in queries crash nothing', async ({page}) => {
