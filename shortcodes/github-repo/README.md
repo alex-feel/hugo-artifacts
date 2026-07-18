@@ -23,7 +23,7 @@ hugo mod get github.com/alex-feel/hugo-artifacts/shortcodes/github-repo
 
 ## Requirements
 
-- Hugo v0.160.0+ (extended edition)
+- Hugo v0.160.0+ (any edition)
 - Go 1.22+
 
 ## Usage

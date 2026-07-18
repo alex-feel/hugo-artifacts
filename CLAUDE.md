@@ -44,7 +44,7 @@ Modules that fetch remote data at build time (anything calling `resources.GetRem
 
 A shortcode module may also ship a markup render hook (for example `layouts/_markup/render-blockquote.html`) when it usefully upgrades a Markdown construct -- the callout module ships one that turns GitHub-style `> [!NOTE]` alerts into the same callout markup while passing ordinary blockquotes through unchanged. Such a hook activates SITE-WIDE for every consumer that imports the module, so it MUST be non-destructive on the unmatched case, and the README MUST document the activation and that a site-level template overrides it.
 
-Each shortcode module carries a `README.md` in this order: an intro stating it emits style-agnostic BEM markup and delegates styling; Installation (a `[[module.imports]]` block, `hugo mod get`, and a note that a local `layouts/_shortcodes/<name>.html` overrides the module); Requirements (Hugo v0.160.0+ extended, Go 1.22+); Usage; Parameters with Validation notes; the module's feature sections; a Styling section documenting CSS hooks, CSS custom properties, data attributes, and Icons; and a Module Structure tree.
+Each shortcode module carries a `README.md` in this order: an intro stating it emits style-agnostic BEM markup and delegates styling; Installation (a `[[module.imports]]` block, `hugo mod get`, and a note that a local `layouts/_shortcodes/<name>.html` overrides the module); Requirements (Hugo v0.160.0+, any edition, Go 1.22+); Usage; Parameters with Validation notes; the module's feature sections; a Styling section documenting CSS hooks, CSS custom properties, data attributes, and Icons; and a Module Structure tree.
 
 Because a module cannot build standalone, validate every change against a consuming site (see "Verifying a module locally") -- a real `hugo` build catches template errors, deprecated-API usage, and graceful-degradation gaps that reading the templates does not.
 
@@ -161,4 +161,4 @@ If you are an agent reading this file: before writing any Markdown content, RE-R
 
 ## Requirements for any Hugo config authored here
 
-Hugo v0.160.0+ (extended edition), Go 1.22+. When declaring `[module.hugoVersion]` in a module's `hugo.toml`, set `min = "0.160.0"` unless the module genuinely requires a newer feature.
+Hugo v0.160.0+ (any edition -- the only extended-edition-exclusive feature is the deprecated embedded LibSass, which nothing here may use), Go 1.22+. When declaring `[module.hugoVersion]` in a module's `hugo.toml`, set `min = "0.160.0"` unless the module genuinely requires a newer feature.

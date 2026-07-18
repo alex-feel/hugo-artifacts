@@ -6,7 +6,7 @@ This module is the partner of [`modules/workbox`](../workbox/README.md), which v
 
 ## Status
 
-v1.0 -- production-ready surface. Hugo 0.160.0+ (extended), Go 1.22+. No deprecated APIs.
+v1.0 -- production-ready surface. Hugo 0.160.0+ (any edition), Go 1.22+. No deprecated APIs.
 
 ## Quick start
 

@@ -25,7 +25,7 @@ Confirm resolution with `hugo mod graph`. For local development against a checko
 
 ## Requirements
 
-- Hugo v0.160.0+ (extended edition)
+- Hugo v0.160.0+ (any edition)
 - Go 1.22+
 
 ## Usage

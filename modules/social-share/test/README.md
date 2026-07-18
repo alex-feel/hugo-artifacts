@@ -10,7 +10,7 @@ Playwright tests that validate the social-share module end to end against the mi
 
 ## Running
 
-Prerequisites: Hugo v0.160.0+ (extended), Go 1.22+, Node.js 22+, and the Playwright Chromium browser (`npx playwright install chromium`).
+Prerequisites: Hugo v0.160.0+ (any edition), Go 1.22+, Node.js 22+, and the Playwright Chromium browser (`npx playwright install chromium`).
 
 ```bash
 cd modules/social-share/test

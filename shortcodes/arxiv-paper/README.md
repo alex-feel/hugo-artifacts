@@ -38,7 +38,7 @@ Hugo does not merge security configuration from modules, so this one line must l
 
 ## Requirements
 
-- Hugo v0.160.0+ (extended edition)
+- Hugo v0.160.0+ (any edition)
 - Go 1.22+
 - The `security.http.mediaTypes` allow-list entry above (consuming site)
 
