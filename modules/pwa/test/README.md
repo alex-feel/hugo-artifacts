@@ -22,7 +22,7 @@ Row 4 is gated by `LEGACY_FIXTURE=1` (orchestrator's Pass 2) because it requires
 
 | Tool                  | Minimum                                                                       |
 |-----------------------|-------------------------------------------------------------------------------|
-| Hugo (extended)       | v0.160.0+ on PATH                                                             |
+| Hugo (any edition)    | v0.160.0+ on PATH                                                             |
 | Go                    | 1.22+                                                                         |
 | Node                  | 18+ (for Playwright + the test scripts)                                       |
 | Playwright Chromium   | Installed via `npx playwright install chromium` (one-time setup)              |

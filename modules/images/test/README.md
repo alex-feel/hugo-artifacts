@@ -18,7 +18,7 @@ The module ships zero JavaScript, so there is no browser behavior to test: every
 
 ## Running
 
-Prerequisites: Hugo v0.160.0+ (extended), Go 1.22+, Node.js 22+.
+Prerequisites: Hugo v0.160.0+ (any edition), Go 1.22+, Node.js 22+.
 
 ```bash
 cd modules/images/test

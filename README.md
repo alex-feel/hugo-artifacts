@@ -4,7 +4,7 @@
   <img src=".github/images/banner.png" alt="Hugo Artifacts - reusable, style-agnostic Hugo modules (shortcodes, asset and utility modules) that ship semantic BEM markup and zero CSS and drop into any number of unrelated sites" width="100%">
 </p>
 
-[![CI](https://github.com/alex-feel/hugo-artifacts/actions/workflows/ci.yml/badge.svg)](https://github.com/alex-feel/hugo-artifacts/actions/workflows/ci.yml) [![Hugo](https://img.shields.io/badge/Hugo-0.160.0%2B_extended-ff4088?logo=hugo&logoColor=white)](https://gohugo.io/) [![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/) [![GitHub License](https://img.shields.io/github/license/alex-feel/hugo-artifacts)](https://github.com/alex-feel/hugo-artifacts/blob/main/LICENSE) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/alex-feel/hugo-artifacts)
+[![CI](https://github.com/alex-feel/hugo-artifacts/actions/workflows/ci.yml/badge.svg)](https://github.com/alex-feel/hugo-artifacts/actions/workflows/ci.yml) [![Hugo](https://img.shields.io/badge/Hugo-0.160.0%2B-ff4088?logo=hugo&logoColor=white)](https://gohugo.io/) [![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/) [![GitHub License](https://img.shields.io/github/license/alex-feel/hugo-artifacts)](https://github.com/alex-feel/hugo-artifacts/blob/main/LICENSE) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/alex-feel/hugo-artifacts)
 
 Public multi-module Hugo monorepo for reusable artifacts -- themes, shortcode libraries, asset libraries, utility modules, and other components shared across any number of unrelated Hugo sites.
 
@@ -85,7 +85,7 @@ The [`examples/`](examples/) directory contains standalone reference implementat
 
 ## Requirements
 
-- [Hugo](https://gohugo.io/) v0.160.0+ (extended edition)
+- [Hugo](https://gohugo.io/) v0.160.0+ (any edition)
 - [Go](https://go.dev/) 1.22+
 
 ## Contributing

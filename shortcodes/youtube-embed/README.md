@@ -25,10 +25,10 @@ For local development against a checkout of this repository, use `hugo.work` (pr
 
 ## Requirements
 
-- Hugo v0.160.0+ (extended edition)
+- Hugo v0.160.0+ (any edition)
 - Go 1.22+
 
-The extended edition is required because the poster pipeline converts thumbnails to WebP, and `js.Build` bundles the client script.
+Any edition works: the poster pipeline's WebP encoding is WASM-based and available in every Hugo edition, and `js.Build` bundling has never been edition-gated.
 
 ## Usage
 

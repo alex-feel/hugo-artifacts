@@ -44,7 +44,7 @@ Only when you enable build-time remote fetching (`remote.fetch = true`), allow-l
 
 ## Requirements
 
-- [Hugo](https://gohugo.io/) v0.160.0+ (extended edition). The imaging pipeline itself (WebP and AVIF encoding included) is WASM-based and works in all Hugo editions; extended is the repository-wide baseline.
+- [Hugo](https://gohugo.io/) v0.160.0+ (any edition: WebP and AVIF encoding are WASM-based, so the full imaging pipeline works in every Hugo edition)
 - [Go](https://go.dev/) 1.22+ (required by Hugo Modules).
 - AVIF output additionally requires Hugo 0.163.0+; the module feature-detects the version and degrades to WebP plus the original format with one build warning below it.
 

@@ -8,7 +8,7 @@ The Cloudflare Workers reference backend is recommended for the quickstart becau
 
 You need the following before starting:
 
-- Hugo v0.160.0+ extended, installed locally.
+- Hugo v0.160.0+ (any edition), installed locally.
 - A Hugo site that already imports `modules/pwa` (see [`modules/pwa` Quick start](../modules/pwa/README.md#quick-start) for the minimum config).
 - Node.js v22+ (needed by `wrangler` and the one-shot `npx web-push` invocation that generates the VAPID keypair).
 - A free Cloudflare account (sign up at <https://dash.cloudflare.com/sign-up>).

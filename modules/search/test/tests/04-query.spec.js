@@ -81,18 +81,22 @@ test('a heading-less root-page group carries data attributes but no bare count',
   await expect(rootGroup.locator('.search__group-count')).toHaveCount(0);
 });
 
-test('group counts track rendered results and grow with show more', async ({page}) => {
-  // /search-chunked/ sets page_size: 1 in front matter; "gravity" matches
-  // two blog pages, so the blog group renders 1, then 2 -- pinning that the
-  // count is the RENDERED count, not the total match count.
+test('group counts track rendered results, grow with show more, and honor count_pad', async ({
+  page,
+}) => {
+  // /search-chunked/ sets page_size: 1 and count_pad: 2 in front matter;
+  // "gravity" matches two blog pages, so the blog group renders 1, then 2
+  // -- pinning that the count is the RENDERED count (not the total match
+  // count) and that the element text is zero-padded while the data
+  // attribute stays bare.
   await page.goto('/search-chunked/');
   await page.locator('.search--page .search__input').fill('gravity');
   const blogGroup = page.locator('.search--page .search__group[data-search-section="blog"]');
   await expect(blogGroup).toHaveAttribute('data-search-count', '1');
-  await expect(blogGroup.locator('.search__group-count')).toHaveText('1');
+  await expect(blogGroup.locator('.search__group-count')).toHaveText('01');
   await page.locator('.search--page .search__more').click();
   await expect(blogGroup).toHaveAttribute('data-search-count', '2');
-  await expect(blogGroup.locator('.search__group-count')).toHaveText('2');
+  await expect(blogGroup.locator('.search__group-count')).toHaveText('02');
 });
 
 test('russian stemmed recall and yo folding', async ({page}) => {

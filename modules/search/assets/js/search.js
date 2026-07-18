@@ -81,6 +81,9 @@ function readConfig(root) {
     minLength: parseInt(d.searchMinLength || '2', 10) || 0,
     debounce: parseInt(d.searchDebounce || '220', 10) || 0,
     pageSize: parseInt(d.searchPageSize || '10', 10) || 10,
+    // Clamped to 1..10: padStart with an absurd width would throw or
+    // allocate giant strings mid-render, and ten digits cover any count.
+    countPad: Math.min(Math.max(parseInt(d.searchCountPad || '1', 10) || 1, 1), 10),
     limit: parseInt(d.searchLimit || '8', 10) || 8,
     hotkey: d.searchHotkey || '',
     hotkeySlash: d.searchHotkeySlash === 'true',
@@ -663,6 +666,7 @@ function wirePage(root, config) {
       lang: config.lang,
       show: config.show,
       grouped: config.groupBySection,
+      countPad: config.countPad,
       listbox: false,
       highlighter: core.highlighter,
       terms: currentTerms,
@@ -828,22 +832,44 @@ function isApplePlatform() {
 // search:rescan -- stays trigger-only: the server emits a dialog per
 // placement (a page-scoped sentinel cannot dedup per paginator output), so
 // the owner's page keeps exactly one dialog, the redundant closed ones are
-// removed here, and each extra trigger prefetches the owner's backend on
-// intent. Ownership is released when the owning root leaves the document
-// (a PJAX/Turbo swap), so a rescanned replacement root re-elects.
+// detached here (and stashed for re-election), and each extra trigger
+// prefetches the owner's backend on intent. Triggers are revealed only
+// once an owner exists -- the owner's wiring sweep reveals every modal
+// trigger -- so a page whose only dialog is structurally broken never
+// shows a chip that cannot open anything. Ownership is released when the
+// owning root leaves the document (a PJAX/Turbo swap): a rescanned
+// replacement root re-elects directly, and recoverModalOwnership()
+// re-elects among already-enhanced survivors by restoring a stashed
+// dialog.
 let modalOwner = null;
+
+// Non-owner dialogs are detached to keep the one-dialog invariant, but a
+// swap can remove the owning root while a trigger-only survivor stays in
+// the document; each stash entry keeps that survivor re-electable.
+const stashedModalRoots = [];
 
 // addEventListener does not dedupe distinct closures, and a trigger can be
 // reached both by the owner's document-wide sweep and by its own root's
 // enhancement pass; the WeakSet keeps each trigger wired exactly once.
+// The listeners resolve the CURRENT owner at event time instead of
+// capturing a core: a closure pinned to a swapped-out owner would warm the
+// backend against a detached root, dispatching search:ready and state
+// classes where the consuming site can never observe them.
 const prefetchWiredTriggers = new WeakSet();
 
-function wireTriggerPrefetch(core, trigger) {
-  if (prefetchWiredTriggers.has(trigger)) {
+function wireTriggerPrefetch(trigger) {
+  if (!trigger || prefetchWiredTriggers.has(trigger)) {
     return;
   }
   prefetchWiredTriggers.add(trigger);
-  wireIntentPrefetch(core, trigger);
+  const prefetch = () => {
+    if (modalOwner) {
+      ensureBackend(modalOwner.core);
+    }
+  };
+  trigger.addEventListener('focus', prefetch);
+  trigger.addEventListener('pointerenter', prefetch);
+  trigger.addEventListener('touchstart', prefetch, {passive: true});
 }
 
 function wireModal(root, config) {
@@ -855,7 +881,6 @@ function wireModal(root, config) {
       kbd.textContent = '⌘';
     }
   }
-  revealControl(trigger);
 
   // A swap can remove the owning root while this module's JS context
   // survives; releasing the stale ownership lets the next dialog-carrying
@@ -867,10 +892,14 @@ function wireModal(root, config) {
 
   if (modalOwner || !dialog) {
     if (modalOwner && dialog) {
+      stashedModalRoots.push({root, config, dialog});
       dialog.remove();
     }
-    if (modalOwner && trigger) {
-      wireTriggerPrefetch(modalOwner.core, trigger);
+    if (modalOwner) {
+      // With an owner in place this trigger works through the owner's
+      // document-level delegation, so it may show itself.
+      revealControl(trigger);
+      wireTriggerPrefetch(trigger);
     }
     return;
   }
@@ -883,7 +912,9 @@ function wireModal(root, config) {
   if (!input || !listboxEl || !core.template) {
     // A dialog whose inner markup fails the structural check can never
     // open; removing it keeps the one-dialog invariant regardless of the
-    // broken root's position among the placements.
+    // broken root's position among the placements. The trigger stays
+    // hidden: with no owner yet, a revealed chip would open nothing, and
+    // a later owner's sweep reveals it once delegation can serve it.
     dialog.remove();
     return;
   }
@@ -898,9 +929,13 @@ function wireModal(root, config) {
   };
 
   function open() {
-    // The isConnected guard turns a swapped-out owner's stale document
-    // listeners into no-ops: showModal() on a disconnected dialog throws.
-    if (!dialog.isConnected || dialog.open) {
+    // Two guards keep a former owner's stale document listeners inert:
+    // the ownership check covers a deposed root whose nodes the host
+    // re-inserted (its open() would otherwise go live again beside the
+    // current owner's, stacking two dialogs), and the isConnected check
+    // covers the detached window before any rescan runs -- showModal() on
+    // a disconnected dialog throws.
+    if (!modalOwner || modalOwner.core !== core || !dialog.isConnected || dialog.open) {
       return;
     }
     dialog.showModal();
@@ -986,8 +1021,49 @@ function wireModal(root, config) {
     }
   });
 
+  // The sweep also covers roots enhanced before this owner existed (their
+  // triggers stayed hidden while nothing could serve them) and triggers of
+  // roots init has not reached yet.
   for (const trg of document.querySelectorAll('.search--modal .search__trigger')) {
-    wireTriggerPrefetch(core, trg);
+    revealControl(trg);
+    wireTriggerPrefetch(trg);
+  }
+}
+
+// After a swap removes the owning root, a replacement root re-elects
+// through wireModal -- but an already-enhanced trigger-only survivor is
+// skipped by init and its dialog was detached at election time. This
+// recovery pass restores a stashed dialog on the first connected survivor
+// and re-runs the modal wiring for it, so search:rescan revives the
+// palette even when the swap kept only trigger-only placements.
+function recoverModalOwnership() {
+  // Prune before the healthy-owner early return: an entry whose root left
+  // the document can never be re-elected, and keeping it would retain the
+  // swapped-out page's whole detached subtree (through the root's parent
+  // chain) for the lifetime of this JS context.
+  for (let i = stashedModalRoots.length - 1; i >= 0; i--) {
+    if (!stashedModalRoots[i].root.isConnected) {
+      stashedModalRoots.splice(i, 1);
+    }
+  }
+  if (modalOwner && modalOwner.root.isConnected) {
+    return;
+  }
+  modalOwner = null;
+  while (stashedModalRoots.length) {
+    const entry = stashedModalRoots.shift();
+    entry.root.appendChild(entry.dialog);
+    wireModal(entry.root, entry.config);
+    if (modalOwner) {
+      return;
+    }
+  }
+  // No electable dialog remains anywhere: hide every modal trigger again
+  // (reveal is otherwise one-way, and a chip that opens nothing violates
+  // the revealed-only-when-servable guarantee); a later rescan that
+  // elects an owner re-reveals them through the owner's sweep.
+  for (const trg of document.querySelectorAll('.search--modal .search__trigger')) {
+    hideControl(trg);
   }
 }
 
@@ -1058,6 +1134,7 @@ function init() {
       wirePage(root, config);
     }
   }
+  recoverModalOwnership();
 }
 
 if (document.readyState === 'loading') {

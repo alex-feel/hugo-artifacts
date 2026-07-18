@@ -184,10 +184,11 @@ export function renderResult(template, hit, ctx) {
 // its section key as data-search-section (empty for root pages) and its
 // rendered-result count as data-search-count -- the count covers the
 // results currently rendered in the group, so it grows as "show more"
-// reveals further chunks. The visible count element rides only with the
-// heading: a heading-less root-page group would otherwise lead with a
-// bare, contextless number, so there the data attribute alone carries the
-// value.
+// reveals further chunks. The count element's text is zero-padded to
+// ctx.countPad digits (data-search-count always carries the bare number).
+// The visible count element rides only with the heading: a heading-less
+// root-page group would otherwise lead with a bare, contextless number,
+// so there the data attribute alone carries the value.
 export function renderPageResults(container, template, hits, ctx) {
   container.textContent = '';
   if (!hits.length) {
@@ -225,7 +226,7 @@ export function renderPageResults(container, template, hits, ctx) {
       wrapper.appendChild(heading);
       const count = document.createElement('span');
       count.className = 'search__group-count';
-      count.textContent = String(group.hits.length);
+      count.textContent = String(group.hits.length).padStart(ctx.countPad || 1, '0');
       wrapper.appendChild(count);
     }
     const list = document.createElement('ul');

@@ -27,7 +27,7 @@ For local development against a checkout of this repository, use a `hugo.work` w
 
 ## Requirements
 
-- [Hugo](https://gohugo.io/) v0.160.0+ (extended edition)
+- [Hugo](https://gohugo.io/) v0.160.0+ (any edition)
 - [Go](https://go.dev/) 1.22+
 
 ## Usage

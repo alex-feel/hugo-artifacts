@@ -61,7 +61,7 @@
      the remaining keys run through all four tiers. */}}
 {{- $cascade := dict -}}
 {{- $siteScoped := slice "sections" "taxonomies" "content" "content_max_length" "summary_max_length" "strip_code_blocks" "headings" "headings_max_level" "stemming" "stopwords" "stopwords_extra" "worker" "cache" "enable" -}}
-{{- $allTiers := slice "min_query_length" "debounce_ms" "fuzzy" "prefix" "show_description" "show_image" "show_tags" "show_categories" "show_dates" "group_by_section" "page_path" "results_limit" "page_size" "hotkey" "hotkey_slash" -}}
+{{- $allTiers := slice "min_query_length" "debounce_ms" "fuzzy" "prefix" "show_description" "show_image" "show_tags" "show_categories" "show_dates" "group_by_section" "count_pad" "page_path" "results_limit" "page_size" "hotkey" "hotkey_slash" -}}
 {{- range $k := $siteScoped -}}
   {{- $v := index $defaults $k -}}
   {{- if isset $sitep $k -}}{{- $v = index $sitep $k -}}{{- end -}}
@@ -108,7 +108,7 @@
 {{/* Integers and the fuzzy fraction: guarded casts so a malformed value
      degrades to the shipped default instead of failing the build. */}}
 {{- $ints := dict -}}
-{{- range $k := slice "content_max_length" "summary_max_length" "headings_max_level" "min_query_length" "debounce_ms" "results_limit" "page_size" -}}
+{{- range $k := slice "content_max_length" "summary_max_length" "headings_max_level" "min_query_length" "debounce_ms" "results_limit" "page_size" "count_pad" -}}
   {{- $n := 0 -}}
   {{- $r := try (int (float (printf "%v" (index $cascade $k | default 0)))) -}}
   {{- if $r.Err -}}
@@ -121,6 +121,13 @@
   {{- end -}}
   {{- $ints = merge $ints (dict $k $n) -}}
 {{- end -}}
+
+{{/* count_pad is a digit width: clamp it to 1..10 so an absurd or hostile
+     value can never reach the client's padStart, which would throw or
+     allocate giant zero-filled strings mid-render. */}}
+{{- if lt $ints.count_pad 1 -}}{{- $ints = merge $ints (dict "count_pad" 1) -}}{{- end -}}
+{{- if gt $ints.count_pad 10 -}}{{- $ints = merge $ints (dict "count_pad" 10) -}}{{- end -}}
+
 {{- $fuzzy := 0.0 -}}
 {{- $fr := try (float (printf "%v" ($cascade.fuzzy | default 0))) -}}
 {{- if $fr.Err -}}
@@ -328,6 +335,7 @@
   "debounce_ms" $ints.debounce_ms
   "results_limit" $ints.results_limit
   "page_size" $ints.page_size
+  "count_pad" $ints.count_pad
   "fuzzy" $fuzzy
   "boost" $boost
   "stopwords_extra" $stopwordsExtra
