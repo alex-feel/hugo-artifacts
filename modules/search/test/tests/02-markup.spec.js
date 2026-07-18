@@ -60,6 +60,31 @@ test('inline: working GET form into the search page; listbox dual-hidden', async
   expect(options.cache).toBe('true');
 });
 
+test('paginator outputs carry the full modal, the script, and single landmarks', async ({page}) => {
+  // The page-scoped-store regression: Hugo re-renders the same section page
+  // once per pager, so a once-per-page sentinel would strip the dialog and
+  // the script from every output after the first.
+  await page.goto('/blog/page/2/');
+  const modal = page.locator('.search--modal');
+  await expect(modal).toHaveCount(1);
+  await expect(modal.locator('.search__dialog')).toHaveCount(1);
+  expect(await page.locator('script[type="module"][src*="search"]').count()).toBe(1);
+
+  // The <search> root owns the landmark (the explicit role is the
+  // legacy-AT fallback on the SAME element); the form inside carries no
+  // role of its own, so the landmark never announces twice.
+  await expect(modal).toHaveAttribute('role', 'search');
+  expect(await modal.locator('.search__form[role]').count()).toBe(0);
+});
+
+test('a reserved-name taxonomy never reaches the client field list', async ({page}) => {
+  await page.goto('/');
+  const options = JSON.parse(
+    await page.locator('.search--modal').getAttribute('data-search-options'),
+  );
+  expect(options.taxonomies).toEqual(['tags', 'categories']);
+});
+
 test('ru surfaces target ru URLs and a Cyrillic query round-trips', async ({page}) => {
   await page.goto('/ru/search/');
   const root = page.locator('.search--page');

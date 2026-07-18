@@ -3,9 +3,14 @@
 
   Purpose: single funnel for every module warning, deduplicated per build via
   a hugo.Store sentinel, so a misconfiguration repeated across hundreds of
-  pages surfaces exactly once. The module never breaks a build over search
-  configuration; its one errorf (a non-Page context) lives in the three
-  public entry partials.
+  pages surfaces exactly once. The get-then-set below is not atomic and Hugo
+  renders pages in parallel, so the sentinel is best-effort: concurrent first
+  callers can each pass the check. Hugo's logger suppresses byte-identical
+  statements, which closes the gap for any message that is identical across
+  callers; a message embedding per-caller context (a position or page path)
+  accepts that it can rarely surface more than once. The module never breaks
+  a build over search configuration; its one errorf (a non-Page context)
+  lives in the three public entry partials.
 
   Expected context (dict):
   - .key     (string) - Deduplication key, unique per warning class and

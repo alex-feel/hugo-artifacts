@@ -8,9 +8,15 @@
 
   and receives a JavaScript-revealed trigger button plus a NATIVE <dialog>
   opened with showModal(), so focus containment, background inertness,
-  Escape handling, and focus return come from the platform. The dialog is
-  emitted once per page (a .Page.Store sentinel); additional modal
-  placements on the same page render another trigger that reuses it.
+  Escape handling, and focus return come from the platform. Every placement
+  emits its own trigger AND dialog: a .Page.Store sentinel cannot dedup the
+  dialog per rendered output, because Hugo re-renders a paginated list page
+  once per pager while the store persists across those renders -- a
+  server-side sentinel would strip the dialog from /page/2/ and beyond. The
+  module script elects the first dialog as the page's single shared palette
+  and removes the redundant ones at enhancement time; a closed <dialog> is
+  display:none per the UA stylesheet and absent from the accessibility
+  tree, so the pre-enhancement duplicates are invisible.
 
   Expected context: the current Page, or a dict whose "page" key is the
   current Page plus option keys (any four-tier key from
@@ -24,7 +30,7 @@
   warning names the fix.
 
   Return value: none. This partial renders. It also emits the module's
-  script once per page.
+  script once per placement.
 */}}
 
 {{- $arg := . -}}
@@ -66,10 +72,10 @@
   "worker" $cfg.worker
   "cache" $cfg.cache
 ) | jsonify -}}
-{{- $dialogKey := "search:modal-emitted" -}}
-{{- $ownsDialog := not ($page.Store.Get $dialogKey) -}}
-{{- if $ownsDialog -}}{{- $page.Store.Set $dialogKey true -}}{{- end -}}
-<search class="search search--modal{{ with $cfg.class }} {{ . }}{{ end }}"
+{{/* role="search" is redundant where the <search> element is mapped, and
+     is the landmark fallback for assistive technology stacks that predate
+     it; on the SAME element it never duplicates the landmark. */}}
+<search role="search" class="search search--modal{{ with $cfg.class }} {{ . }}{{ end }}"
   {{- with $cfg.id }} id="{{ . }}"{{ end }}
   data-search-surface="modal"
   data-search-index-url="{{ $cfg.index_url }}"
@@ -107,7 +113,6 @@
     {{- end }}
     {{- end }}
   </button>
-  {{- if $ownsDialog }}
   <dialog class="search__dialog" aria-label="{{ $cfg.aria_label | default (T "search_dialog_label" | default "Site search") }}">
     {{- with $cfg.heading }}
     <h2 class="search__heading">{{ . }}</h2>
@@ -120,7 +125,6 @@
       <span class="search__hint"><kbd class="search__kbd">Esc</kbd> <span class="search__hint-label">{{ T "search_hint_close" | default "to close" }}</span></span>
     </div>
   </dialog>
-  {{- end }}
 </search>
 {{ partial "search/assets.html" (dict "page" $page "cfg" $cfg) }}
 

@@ -28,7 +28,10 @@
 {{- if eq $surface "page" -}}{{- $action = $page.RelPermalink -}}{{- end -}}
 {{- $placeholder := $cfg.placeholder | default (T "search_placeholder" | default "Search") -}}
 {{- $label := T "search_label" | default "Search this site" -}}
-<form class="search__form" method="get" action="{{ $action }}" role="search">
+{{/* No role="search" here: the surface root is a <search> element (with
+     the role as its own legacy-AT fallback), and a role on the form nested
+     inside it would announce a duplicate landmark. */}}
+<form class="search__form" method="get" action="{{ $action }}">
   {{- if eq $surface "modal" }}
   <label class="search__label search__label--hidden-hook" for="{{ $inputId }}">{{ $label }}</label>
   {{- else }}

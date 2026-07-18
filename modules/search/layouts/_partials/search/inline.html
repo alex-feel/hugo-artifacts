@@ -19,7 +19,7 @@
   warning names the fix.
 
   Return value: none. This partial renders. It also emits the module's
-  script once per page.
+  script once per placement.
 */}}
 
 {{- $arg := . -}}
@@ -61,7 +61,10 @@
   "worker" $cfg.worker
   "cache" $cfg.cache
 ) | jsonify -}}
-<search class="search search--inline{{ with $cfg.class }} {{ . }}{{ end }}"
+{{/* role="search" is redundant where the <search> element is mapped, and
+     is the landmark fallback for assistive technology stacks that predate
+     it; on the SAME element it never duplicates the landmark. */}}
+<search role="search" class="search search--inline{{ with $cfg.class }} {{ . }}{{ end }}"
   {{- with $cfg.id }} id="{{ . }}"{{ end }}
   data-search-surface="inline"
   data-search-index-url="{{ $cfg.index_url }}"

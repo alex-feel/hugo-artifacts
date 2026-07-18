@@ -160,7 +160,19 @@
   {{- end -}}
 {{- end -}}
 
-{{/* Taxonomies: slice or comma-separated string of taxonomy plural names. */}}
+{{/* Taxonomies: slice or comma-separated string of taxonomy plural names.
+     Record keys are a flat namespace shared with the per-taxonomy term
+     arrays, and Go's merge matches keys case-insensitively, so a taxonomy
+     whose lowercased name equals a record field's would silently clobber
+     that field in every record (Hugo resolves terms for all-lowercase
+     taxonomy names only, hence the lowercase comparison) and double-book
+     the engine field of the same name; reserved names are skipped with one
+     warning instead. The message carries no per-caller position: the
+     taxonomies key is site-scoped, so the offending value lives in the
+     site config or the shipped defaults, and a position-free message stays
+     byte-identical across Hugo's parallel page renders, letting the
+     logger's duplicate suppression back up the store sentinel. */}}
+{{- $reservedTaxonomyNames := slice "href" "title" "section" "sectiontitle" "date" "description" "summary" "keywords" "content" "image" "headings" -}}
 {{- $rawTax := $cascade.taxonomies | default (slice) -}}
 {{- if not (reflect.IsSlice $rawTax) -}}
   {{- $rawTax = split (printf "%v" $rawTax) "," -}}
@@ -168,7 +180,13 @@
 {{- $taxonomies := slice -}}
 {{- range $rawTax -}}
   {{- with trim (printf "%v" .) " \t\n\r" -}}
-    {{- $taxonomies = $taxonomies | append . -}}
+    {{- if in $reservedTaxonomyNames (lower .) -}}
+      {{- partial "search/lib/warn.html" (dict
+          "key" (printf "search:warn:reserved-taxonomy:%s" (lower .))
+          "message" (printf "[search] Ignoring the taxonomy %q: its name collides with the reserved index record field of the same name (matched case-insensitively), so serializing it would clobber that field. Rename the taxonomy to search it, or drop it from params.search.taxonomies to silence this warning." .)) -}}
+    {{- else -}}
+      {{- $taxonomies = $taxonomies | append . -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 

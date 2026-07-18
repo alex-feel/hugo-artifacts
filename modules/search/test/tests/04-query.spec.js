@@ -44,13 +44,14 @@ test('heading sub-records: anchor deep link plus the parent page', async ({page}
   await expect(page.locator(`${RESULT_LINKS}[href="/blog/quantum-notes/"]`)).toHaveCount(1);
 });
 
-test('group_by_section renders labeled groups', async ({page}) => {
+test('group_by_section renders labeled groups with section and count hooks', async ({page}) => {
   await page.goto('/search/');
   await page.locator('.search--page .search__input').fill('beacon');
   const groups = page.locator('.search--page .search__group');
   await expect(groups).toHaveCount(2);
   for (const group of await groups.all()) {
     await expect(group.locator('h2.search__group-title')).toHaveCount(1);
+    await expect(group.locator('span.search__group-count')).toHaveCount(1);
     await expect(group.locator('ul.search__list')).toHaveCount(1);
   }
   // Group order follows relevance, so the label set is asserted unordered.
@@ -58,6 +59,40 @@ test('group_by_section renders labeled groups', async ({page}) => {
     .locator('.search--page h2.search__group-title')
     .evaluateAll((els) => els.map((el) => el.textContent).sort());
   expect(titles).toEqual(['Blog', 'Documentation']);
+
+  // Consumer interop hooks: the section key rides as data-search-section
+  // and the rendered-result count as data-search-count plus the count
+  // element's text.
+  const blogGroup = page.locator('.search--page .search__group[data-search-section="blog"]');
+  await expect(blogGroup).toHaveCount(1);
+  await expect(blogGroup).toHaveAttribute('data-search-count', '1');
+  await expect(blogGroup.locator('.search__group-count')).toHaveText('1');
+});
+
+test('a heading-less root-page group carries data attributes but no bare count', async ({page}) => {
+  await page.goto('/search/');
+  await page.locator('.search--page .search__input').fill('tricks');
+  const rootGroup = page.locator('.search--page .search__group[data-search-section=""]');
+  await expect(rootGroup).toHaveCount(1);
+  await expect(rootGroup).toHaveAttribute('data-search-count', '1');
+  // No section title means no heading -- and the visible count stays out
+  // too, so the group never leads with a contextless number.
+  await expect(rootGroup.locator('h2.search__group-title')).toHaveCount(0);
+  await expect(rootGroup.locator('.search__group-count')).toHaveCount(0);
+});
+
+test('group counts track rendered results and grow with show more', async ({page}) => {
+  // /search-chunked/ sets page_size: 1 in front matter; "gravity" matches
+  // two blog pages, so the blog group renders 1, then 2 -- pinning that the
+  // count is the RENDERED count, not the total match count.
+  await page.goto('/search-chunked/');
+  await page.locator('.search--page .search__input').fill('gravity');
+  const blogGroup = page.locator('.search--page .search__group[data-search-section="blog"]');
+  await expect(blogGroup).toHaveAttribute('data-search-count', '1');
+  await expect(blogGroup.locator('.search__group-count')).toHaveText('1');
+  await page.locator('.search--page .search__more').click();
+  await expect(blogGroup).toHaveAttribute('data-search-count', '2');
+  await expect(blogGroup.locator('.search__group-count')).toHaveText('2');
 });
 
 test('russian stemmed recall and yo folding', async ({page}) => {
