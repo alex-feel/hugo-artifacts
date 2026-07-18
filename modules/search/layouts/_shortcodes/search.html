@@ -19,8 +19,8 @@
     presentation keys (see the module README Parameters table).
   - results_limit, page_size, min_query_length, debounce_ms, fuzzy, prefix,
     show_description, show_image, show_tags, show_categories, show_dates,
-    group_by_section, hotkey, hotkey_slash, page_path: per-surface cascade
-    keys, forwarded only when present.
+    group_by_section, count_pad, hotkey, hotkey_slash, page_path:
+    per-surface cascade keys, forwarded only when present.
 
   Never errorf: parameter problems degrade exactly as the partials document
   (deduplicated warnf or the shipped default).
@@ -30,7 +30,7 @@
 
 {{- $surface := "page" -}}
 {{- if .IsNamedParams -}}
-  {{- range $k := slice "surface" "class" "id" "placeholder" "aria_label" "heading" "autofocus" "results_limit" "page_size" "min_query_length" "debounce_ms" "fuzzy" "prefix" "show_description" "show_image" "show_tags" "show_categories" "show_dates" "group_by_section" "hotkey" "hotkey_slash" "page_path" -}}
+  {{- range $k := slice "surface" "class" "id" "placeholder" "aria_label" "heading" "autofocus" "results_limit" "page_size" "min_query_length" "debounce_ms" "fuzzy" "prefix" "show_description" "show_image" "show_tags" "show_categories" "show_dates" "group_by_section" "count_pad" "hotkey" "hotkey_slash" "page_path" -}}
     {{- if isset $.Params $k -}}
       {{- $args = merge $args (dict $k ($.Get $k)) -}}
     {{- end -}}

@@ -87,6 +87,7 @@
   {{- if $cfg.show_categories }} data-search-show-categories="true"{{ end }}
   {{- if $cfg.show_dates }} data-search-show-dates="true"{{ end }}
   {{- if $cfg.group_by_section }} data-search-group-by-section="true"{{ end }}
+  data-search-count-pad="{{ $cfg.count_pad }}"
   data-search-options="{{ $options }}"
   data-search-i18n-idle="{{ $cfg.i18n.idle }}"
   data-search-i18n-loading="{{ $cfg.i18n.loading }}"

@@ -14,9 +14,10 @@
   once per pager while the store persists across those renders -- a
   server-side sentinel would strip the dialog from /page/2/ and beyond. The
   module script elects the first dialog as the page's single shared palette
-  and removes the redundant ones at enhancement time; a closed <dialog> is
-  display:none per the UA stylesheet and absent from the accessibility
-  tree, so the pre-enhancement duplicates are invisible.
+  and detaches the redundant ones at enhancement time (stashed, so a swap
+  that removes the owning root can restore one on a survivor); a closed
+  <dialog> is display:none per the UA stylesheet and absent from the
+  accessibility tree, so the pre-enhancement duplicates are invisible.
 
   Expected context: the current Page, or a dict whose "page" key is the
   current Page plus option keys (any four-tier key from

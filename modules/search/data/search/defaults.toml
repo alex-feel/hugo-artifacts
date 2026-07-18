@@ -108,6 +108,11 @@ show_dates = true
 # Group results by top-level section, labeled with the section title.
 group_by_section = false
 
+# Minimum digit width of the group count element's text when grouping is
+# on: 2 renders a three-hit group as "03". Clamped to the 1..10 band; the
+# data-search-count attribute always carries the bare number.
+count_pad = 1
+
 # --- Surfaces ---
 
 # Path of the consumer-created dedicated search page (resolved per language

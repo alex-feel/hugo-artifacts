@@ -1,8 +1,9 @@
 // The command-palette modal: hotkeys, native dialog semantics, the
 // activedescendant keyboard model, Enter navigation on both branches, the
-// two-stage Escape, multi-placement dialog election, and rescan
-// re-election after a swap.
-/* global document, window, URL, CustomEvent */
+// two-stage Escape, multi-placement dialog election, rescan re-election
+// after a swap (replacement roots and stashed survivors), and the
+// hidden-trigger guarantee when no dialog can serve.
+/* global document, window, URL, CustomEvent, MutationObserver */
 import {test, expect} from '@playwright/test';
 
 const DIALOG = '.search--modal .search__dialog';
@@ -148,6 +149,81 @@ test('pager outputs keep a working palette', async ({page}) => {
   await expect(dialog).toHaveAttribute('open', '');
   await page.locator(INPUT).fill('gravity');
   await expect(page.locator('.search--modal .search__option')).toHaveCount(2);
+});
+
+test('search:rescan restores a stashed dialog when the swap keeps only trigger-only survivors', async ({
+  page,
+}) => {
+  await page.goto('/promo/');
+  await expect(page.locator('.search--modal.search--enhanced')).toHaveCount(2);
+  await expect(page.locator(DIALOG)).toHaveCount(1);
+  // Remove the owning header root entirely; the enhanced footer survivor
+  // carries no dialog (it was detached at election), so recovery must
+  // restore its stashed one and wire a fresh controller.
+  await page.evaluate(() => {
+    document.querySelector('header .search--modal').remove();
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator(DIALOG)).toHaveCount(1);
+  const trigger = page.locator('.search--modal .search__trigger');
+  await expect(trigger).toHaveCount(1);
+  await trigger.click();
+  await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
+  await page.locator(INPUT).fill('gravity');
+  await expect(page.locator('.search--modal .search__option')).toHaveCount(2);
+});
+
+test('a sole placement with a structurally broken dialog never reveals its trigger', async ({
+  page,
+}) => {
+  // Strip the dialog's input while the document is still parsing, before
+  // the module script evaluates: the only dialog then fails the structural
+  // check, no owner can elect, and a revealed trigger would be a chip that
+  // opens nothing.
+  await page.addInitScript(() => {
+    // Observe document itself: documentElement does not exist yet when
+    // init scripts run.
+    const observer = new MutationObserver(() => {
+      const input = document.querySelector('.search__dialog .search__input');
+      if (input) {
+        input.remove();
+        observer.disconnect();
+      }
+    });
+    observer.observe(document, {childList: true, subtree: true});
+  });
+  await page.goto('/blog/gravity-title/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
+  expect(await page.locator('.search--modal .search__dialog').count()).toBe(0);
+});
+
+test('losing the last electable dialog hides revealed triggers again', async ({page}) => {
+  // Break the HEADER placement's dialog during parsing: the footer
+  // placement then elects, and its sweep reveals both triggers.
+  await page.addInitScript(() => {
+    const observer = new MutationObserver(() => {
+      const input = document.querySelector('header .search__dialog .search__input');
+      if (input) {
+        input.remove();
+        observer.disconnect();
+      }
+    });
+    observer.observe(document, {childList: true, subtree: true});
+  });
+  await page.goto('/promo/');
+  const triggers = page.locator('.search--modal .search__trigger');
+  await expect(triggers.first()).toBeVisible();
+  await expect(triggers.nth(1)).toBeVisible();
+  // Removing the owning footer root leaves no electable dialog anywhere
+  // (the broken header dialog was removed, never stashed): the surviving
+  // header trigger must hide again instead of opening nothing.
+  await page.evaluate(() => {
+    document.querySelector('footer .search--modal').remove();
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(triggers).toHaveCount(1);
+  await expect(triggers.first()).toBeHidden();
 });
 
 test('enter with no active option navigates to see-all with a Cyrillic query intact', async ({
