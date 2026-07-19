@@ -9,13 +9,17 @@
 // before wiring, after wiring, or on the stash-drain path; a gutted
 // owner is deposed with its husk removed -- closed first when open, so
 // search--open and search:close stay consistent -- and its record
-// dropped, so restored dialogs linger unwired; a multi-placement page
-// falls back to its stashed survivor; the inert template is exempt
-// everywhere), the :modal probe (modern engines normalize the owner's
-// dialog restored while open; engines without :modal neither close an
-// open palette on rescan nor skip fresh-root and deposed-owner
-// normalization), and the hidden-trigger guarantee when no dialog can
-// serve.
+// dropped, so restored dialogs linger unserved, with a stray-open
+// restore closed back to baseline even beside a healthy owner, the
+// module's own re-inserted torn-down dialog firing its close listener,
+// and a non-dialog impostor wearing the class unable to break recovery;
+// a multi-placement page falls back to its stashed
+// survivor; the inert template is exempt everywhere), the :modal probe
+// (modern engines normalize the owner's dialog restored while open and
+// spare a dialog a host put in the top layer itself; engines without
+// :modal neither close an open palette on rescan nor skip fresh-root
+// and deposed-owner normalization), and the hidden-trigger guarantee
+// when no dialog can serve.
 /* global document, window, URL, CustomEvent, MutationObserver, Element */
 import {test, expect} from '@playwright/test';
 
@@ -747,6 +751,149 @@ test('a dead placement drops its record: restored dialogs linger unwired', async
   await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
   await page.keyboard.press('Control+KeyK');
   await expect(page.locator('.search--modal .search__dialog')).not.toHaveAttribute('open', '');
+});
+
+test('a stray-open dialog restored into a dead root is closed back to baseline', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  await page.evaluate(() => {
+    const dialog = document.querySelector('.search--modal .search__dialog');
+    window.__searchCache = {clone: dialog.cloneNode(true)};
+    dialog.querySelector('.search__input').remove();
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  expect(await page.locator('.search--modal .search__dialog').count()).toBe(0);
+  // A host restore that carries the open attribute into the record-less
+  // dead root would render as a visible in-flow panel of dead controls;
+  // the sweep must close it back to the inert lingering baseline.
+  await page.evaluate(() => {
+    window.__searchCache.clone.setAttribute('open', '');
+    document.querySelector('.search--modal').appendChild(window.__searchCache.clone);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator('.search--modal .search__dialog')).toHaveCount(1);
+  await expect(page.locator('.search--modal .search__dialog')).not.toHaveAttribute('open', '');
+  await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
+});
+
+test('a stray-open restore into a dead root closes while a healthy owner serves', async ({
+  page,
+}) => {
+  await page.goto('/promo/');
+  await expect(page.locator('.search--modal.search--enhanced')).toHaveCount(2);
+  // Gut the header owner: the footer takes over through the stash drain,
+  // and the header root goes dead and record-less.
+  await page.evaluate(() => {
+    const dialog = document.querySelector('header .search--modal .search__dialog');
+    window.__searchCache = {clone: dialog.cloneNode(true)};
+    dialog.querySelector('.search__input').remove();
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator('footer .search--modal .search__dialog')).toHaveCount(1);
+  // Restore an open-carrying clone into the dead header root: the sweep
+  // must close it even though the healthy footer owner makes recovery
+  // return early, leaving the documented DOM-soft state -- a second,
+  // closed, unopenable dialog lingering beside the served one.
+  await page.evaluate(() => {
+    window.__searchCache.clone.setAttribute('open', '');
+    document.querySelector('header .search--modal').appendChild(window.__searchCache.clone);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  const headerDialog = page.locator('header .search--modal .search__dialog');
+  await expect(headerDialog).toHaveCount(1);
+  await expect(headerDialog).not.toHaveAttribute('open', '');
+  await expect(page.locator('.search--modal .search__dialog')).toHaveCount(2);
+  // The footer owner still serves every trigger.
+  await page.locator('footer .search--modal .search__trigger').click();
+  await expect(page.locator('footer .search--modal .search__dialog')).toHaveAttribute('open', '');
+  await page.locator('footer .search--modal .search__input').fill('gravity');
+  await expect(page.locator('.search--modal .search__option')).toHaveCount(2);
+});
+
+test('a host-opened top-layer dialog in a dead root survives the sweep', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  await page.evaluate(() => {
+    const dialog = document.querySelector('.search--modal .search__dialog');
+    window.__searchCache = {clone: dialog.cloneNode(true)};
+    dialog.querySelector('.search__input').remove();
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  expect(await page.locator('.search--modal .search__dialog').count()).toBe(0);
+  // The host restores a dialog into the dead root and puts it in the top
+  // layer ITSELF via showModal(): where the engine can answer, the probe
+  // must spare it -- force-closing a dialog the user may be interacting
+  // with is exactly what the :modal check exists to prevent.
+  await page.evaluate(() => {
+    document.querySelector('.search--modal').appendChild(window.__searchCache.clone);
+    window.__searchCache.clone.showModal();
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  const dialog = page.locator('.search--modal .search__dialog');
+  await expect(dialog).toHaveAttribute('open', '');
+  expect(await dialog.evaluate((el) => el.matches(':modal'))).toBeTruthy();
+});
+
+test('re-inserting the torn-down wired dialog fires its close listener', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  // Tear the owner down while CLOSED: no close event fires, so the
+  // dialog node leaves with its close listener still attached.
+  await page.evaluate(() => {
+    window.__closes = 0;
+    document.addEventListener('search:close', () => {
+      window.__closes += 1;
+    });
+    const dialog = document.querySelector('.search--modal .search__dialog');
+    window.__searchCache = {dialog};
+    dialog.querySelector('.search__input').remove();
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  expect(await page.locator('.search--modal .search__dialog').count()).toBe(0);
+  expect(await page.evaluate(() => window.__closes)).toBe(0);
+  // A host re-inserts that SAME node with a stray open attribute: the
+  // sweep's close fires the still-attached listener, dispatching exactly
+  // one search:close for this close -- the listener stays attached and
+  // reports every close truthfully.
+  await page.evaluate(() => {
+    window.__searchCache.dialog.setAttribute('open', '');
+    document.querySelector('.search--modal').appendChild(window.__searchCache.dialog);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator('.search--modal .search__dialog')).not.toHaveAttribute('open', '');
+  await expect.poll(() => page.evaluate(() => window.__closes)).toBe(1);
+  await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
+});
+
+test('a non-dialog element carrying the dialog class cannot break recovery', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  await page.evaluate(() => {
+    const dialog = document.querySelector('.search--modal .search__dialog');
+    window.__searchCache = {clone: dialog.cloneNode(true)};
+    dialog.querySelector('.search__input').remove();
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  expect(await page.locator('.search--modal .search__dialog').count()).toBe(0);
+  // A host inserts a non-<dialog> element wearing the class and the open
+  // attribute: close() is not a function on a div, so the sweep must
+  // skip it via the open PROPERTY guard instead of throwing and killing
+  // every later recovery pass.
+  await page.evaluate(() => {
+    const div = document.createElement('div');
+    div.className = 'search__dialog';
+    div.setAttribute('open', '');
+    document.querySelector('.search--modal').appendChild(div);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  // Recovery survived: a later stray-open restore is still normalized.
+  await page.evaluate(() => {
+    window.__searchCache.clone.setAttribute('open', '');
+    document.querySelector('.search--modal').appendChild(window.__searchCache.clone);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator('dialog.search__dialog')).not.toHaveAttribute('open', '');
+  await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
 });
 
 test('enter with no active option navigates to see-all with a Cyrillic query intact', async ({

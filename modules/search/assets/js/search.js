@@ -1152,15 +1152,36 @@ function recordDialogIntact(record) {
 // roots past the elected winner: a re-inserted dialog that was open at
 // swap time kept its open attribute while losing top-layer status and
 // would render as a visible in-flow panel (closing it fires the record's
-// close listener, keeping search--open and search:close consistent), and
-// a root whose record fails the integrity gate holds only unservable
+// close listener, keeping search--open and search:close consistent), a
+// root whose record fails the integrity gate holds only unservable
 // dialogs -- unwired impostors, the record's own gutted husk, or a
 // dialog reparented out of the root -- which are closed as needed and
-// removed, and the dead record is dropped with them.
+// removed, and the dead record is dropped with them. Record-less roots
+// get any stray-open restored dialog closed back to the inert baseline.
 function sweepFormerOwnerRoots() {
   for (const root of document.querySelectorAll('.search--modal')) {
     const record = formerModalOwners.get(root);
     if (!record) {
+      // A record-less root -- trigger-only, wiring-refused, or dead --
+      // has no module-opened dialog, so an open one inside is a stray
+      // the host restored with its open attribute intact and would
+      // render as a visible in-flow panel of dead controls; close it
+      // back to the closed lingering baseline. Freshly restored markup
+      // carries no listeners, so its close is silent; the module's own
+      // torn-down dialog, if a host re-inserts that same node, still
+      // carries its close listener and reports every close with a
+      // truthful search:close. The probe spares a dialog a host put in
+      // the top layer itself where the engine can answer; the open
+      // PROPERTY guard skips a non-<dialog> element carrying the class
+      // and attribute, whose close() would throw and abort recovery;
+      // and the closest check pins each dialog to its NEAREST root, so
+      // one nested under a mangled ancestor root is judged only in its
+      // own root's pass.
+      for (const stray of root.querySelectorAll('.search__dialog[open]')) {
+        if (stray.open && !isModalDialog(stray) && stray.closest('.search--modal') === root) {
+          stray.close();
+        }
+      }
       continue;
     }
     if (recordDialogIntact(record)) {
@@ -1202,6 +1223,11 @@ function sweepFormerOwnerRoots() {
       }
       record.dialog.remove();
       for (const impostor of root.querySelectorAll('.search__dialog')) {
+        // Nearest-root association: a dialog nested under a mangled
+        // ancestor root belongs to its own root's pass, not this one.
+        if (impostor.closest('.search--modal') !== root) {
+          continue;
+        }
         if (impostor.open) {
           impostor.close();
         }
