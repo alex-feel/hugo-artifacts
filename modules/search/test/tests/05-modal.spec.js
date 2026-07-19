@@ -8,8 +8,9 @@
 // (input and listbox must stay inside the dialog whether moved out
 // before wiring, after wiring, or on the stash-drain path; a gutted
 // owner is deposed with its husk removed -- closed first when open, so
-// search--open and search:close stay consistent -- and a multi-placement
-// page falls back to its stashed survivor; the inert template is exempt
+// search--open and search:close stay consistent -- and its record
+// dropped, so restored dialogs linger unwired; a multi-placement page
+// falls back to its stashed survivor; the inert template is exempt
 // everywhere), the :modal probe (modern engines normalize the owner's
 // dialog restored while open; engines without :modal neither close an
 // open palette on rescan nor skip fresh-root and deposed-owner
@@ -719,6 +720,33 @@ test('gutting the owner on a multi-placement page restores the stashed survivor'
   await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
   await page.locator(INPUT).fill('gravity');
   await expect(page.locator('.search--modal .search__option')).toHaveCount(2);
+});
+
+test('a dead placement drops its record: restored dialogs linger unwired', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  // Keep a pristine copy of the dialog, then gut the live one: the sweep
+  // removes the husk AND drops the permanently failing record, freeing
+  // the detached subtree it would otherwise retain for the JS-context
+  // lifetime.
+  await page.evaluate(() => {
+    const dialog = document.querySelector('.search--modal .search__dialog');
+    window.__searchCache = {clone: dialog.cloneNode(true)};
+    dialog.querySelector('.search__input').remove();
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  expect(await page.locator('.search--modal .search__dialog').count()).toBe(0);
+  // A host restore into the dead root joins the wiring-refusal end state:
+  // record-less, so the healthy copy is neither wired nor swept away --
+  // it lingers closed and inert instead of being deleted on every pass.
+  await page.evaluate(() => {
+    document.querySelector('.search--modal').appendChild(window.__searchCache.clone);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator('.search--modal .search__dialog')).toHaveCount(1);
+  await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
+  await page.keyboard.press('Control+KeyK');
+  await expect(page.locator('.search--modal .search__dialog')).not.toHaveAttribute('open', '');
 });
 
 test('enter with no active option navigates to see-all with a Cyrillic query intact', async ({

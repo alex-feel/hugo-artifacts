@@ -1156,7 +1156,7 @@ function recordDialogIntact(record) {
 // a root whose record fails the integrity gate holds only unservable
 // dialogs -- unwired impostors, the record's own gutted husk, or a
 // dialog reparented out of the root -- which are closed as needed and
-// removed.
+// removed, and the dead record is dropped with them.
 function sweepFormerOwnerRoots() {
   for (const root of document.querySelectorAll('.search--modal')) {
     const record = formerModalOwners.get(root);
@@ -1191,10 +1191,12 @@ function sweepFormerOwnerRoots() {
       // search:close consistent (the queued close event reaches a
       // detached dialog's listener while dispatch targets the still-
       // connected root; a never-wired impostor has no listener, so its
-      // close() is silent). Such a root stays enhanced with a
-      // permanently failing record and can never re-elect -- dialogs
-      // restored into it are removed again on every later pass; only a
-      // fresh replacement root revives that placement.
+      // close() is silent). The record itself is dropped: it can never
+      // pass the gate again, and keeping it would retain the detached
+      // dialog subtree for the lifetime of this JS context. The root
+      // then joins the wiring-refusal end state -- enhanced and
+      // record-less, so anything a host restores into it stays unwired
+      // and inert; only a fresh replacement root revives the placement.
       if (record.dialog.open) {
         record.dialog.close();
       }
@@ -1205,6 +1207,7 @@ function sweepFormerOwnerRoots() {
         }
         impostor.remove();
       }
+      formerModalOwners.delete(root);
     }
   }
 }
