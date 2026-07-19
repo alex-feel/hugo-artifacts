@@ -29,7 +29,7 @@
 // The repo-root ESLint flat config grants browser globals only to
 // enumerated bundle paths, so this file declares the DOM globals it uses
 // via a flat-config-honored /* global */ directive.
-/* global document, window, navigator, CustomEvent, Worker, URL, setTimeout, clearTimeout, requestIdleCallback */
+/* global document, window, navigator, CustomEvent, Worker, URL, setTimeout, clearTimeout, requestIdleCallback, HTMLDialogElement */
 
 import {createProcessTerm} from './search/pipeline.js';
 import {createHighlighter} from './search/highlight.js';
@@ -957,7 +957,20 @@ function wireModalDocumentListeners() {
 
 function wireModal(root, config) {
   const trigger = root.querySelector('.search__trigger');
-  const dialog = root.querySelector('.search__dialog');
+  // Only a real <dialog> can be wired: an impostor wearing the class
+  // (host morphing, a class collision, or a foreign-namespace dialog)
+  // has no close()/showModal(), so treating it as the palette would
+  // throw mid-wiring. The FIRST real dialog wins; impostors are
+  // invisible and cannot poison a real dialog behind them, and a root
+  // with none stays dialog-less with its trigger correctly hidden
+  // until an owner exists.
+  let dialog = null;
+  for (const candidate of root.querySelectorAll('dialog.search__dialog')) {
+    if (isRealDialog(candidate)) {
+      dialog = candidate;
+      break;
+    }
+  }
 
   if (isApplePlatform()) {
     for (const kbd of root.querySelectorAll('[data-search-kbd="mod"]')) {
@@ -1147,6 +1160,44 @@ function recordDialogIntact(record) {
   );
 }
 
+// CSS type selectors are namespace-agnostic, so dialog.search__dialog
+// also matches a foreign-namespace element with localName "dialog"
+// (<svg><dialog> parses as an SVGElement -- dialog is not in the HTML
+// parser's breakout list) and a script-created HTML-namespace unknown
+// element named DIALOG. Neither carries close()/showModal(), so every
+// site that acts on a queried dialog filters through this predicate:
+// only a real HTMLDialogElement is the module's to serve or sweep, and
+// everything else wearing the class stays invisible -- and the host's
+// responsibility.
+function isRealDialog(el) {
+  return el instanceof HTMLDialogElement;
+}
+
+// Closes host-restored stray-open dialogs inside a root, exempting at
+// most one node (the owner's own dialog, whose normalization carries
+// the owner exemption). Only real <dialog> elements are addressed --
+// an impostor wearing the class, on which close() would throw and
+// permanently abort recovery, fails the predicate; the probe spares a
+// dialog the host itself put in the top layer where the engine can
+// answer; and the closest check pins each dialog to its NEAREST root,
+// so one nested under a mangled ancestor root is judged only in its
+// own root's pass. Freshly restored markup carries no listeners, so
+// its close is silent; the module's own torn-down dialog, if a host
+// re-inserts that same node, still carries its close listener and
+// reports every close with a truthful search:close.
+function closeStrayDialogs(root, exempt) {
+  for (const stray of root.querySelectorAll('dialog.search__dialog[open]')) {
+    if (
+      isRealDialog(stray) &&
+      stray !== exempt &&
+      !isModalDialog(stray) &&
+      stray.closest('.search--modal') === root
+    ) {
+      stray.close();
+    }
+  }
+}
+
 // Hygiene over every former-owner root, decoupled from election so it
 // also runs when a healthy owner makes recovery return early and for
 // roots past the elected winner: a re-inserted dialog that was open at
@@ -1156,8 +1207,9 @@ function recordDialogIntact(record) {
 // root whose record fails the integrity gate holds only unservable
 // dialogs -- unwired impostors, the record's own gutted husk, or a
 // dialog reparented out of the root -- which are closed as needed and
-// removed, and the dead record is dropped with them. Record-less roots
-// get any stray-open restored dialog closed back to the inert baseline.
+// removed, and the dead record is dropped with them. Stray-open restored
+// dialogs are closed back to the inert baseline everywhere: in
+// record-less roots and beside a healthy owner's dialog alike.
 function sweepFormerOwnerRoots() {
   for (const root of document.querySelectorAll('.search--modal')) {
     const record = formerModalOwners.get(root);
@@ -1165,23 +1217,8 @@ function sweepFormerOwnerRoots() {
       // A record-less root -- trigger-only, wiring-refused, or dead --
       // has no module-opened dialog, so an open one inside is a stray
       // the host restored with its open attribute intact and would
-      // render as a visible in-flow panel of dead controls; close it
-      // back to the closed lingering baseline. Freshly restored markup
-      // carries no listeners, so its close is silent; the module's own
-      // torn-down dialog, if a host re-inserts that same node, still
-      // carries its close listener and reports every close with a
-      // truthful search:close. The probe spares a dialog a host put in
-      // the top layer itself where the engine can answer; the open
-      // PROPERTY guard skips a non-<dialog> element carrying the class
-      // and attribute, whose close() would throw and abort recovery;
-      // and the closest check pins each dialog to its NEAREST root, so
-      // one nested under a mangled ancestor root is judged only in its
-      // own root's pass.
-      for (const stray of root.querySelectorAll('.search__dialog[open]')) {
-        if (stray.open && !isModalDialog(stray) && stray.closest('.search--modal') === root) {
-          stray.close();
-        }
-      }
+      // render as a visible in-flow panel of dead controls.
+      closeStrayDialogs(root, null);
       continue;
     }
     if (recordDialogIntact(record)) {
@@ -1201,6 +1238,11 @@ function sweepFormerOwnerRoots() {
       ) {
         record.dialog.close();
       }
+      // A host-restored stray beside the healthy owner's dialog is just
+      // as unservable as one in a dead root; only the record's own
+      // dialog is exempt -- its normalization above owns the owner
+      // exemption.
+      closeStrayDialogs(root, record.dialog);
     } else {
       // Every dialog a gate-failing record can account for is
       // unservable and is removed: the record's own -- a husk whose
@@ -1222,10 +1264,13 @@ function sweepFormerOwnerRoots() {
         record.dialog.close();
       }
       record.dialog.remove();
-      for (const impostor of root.querySelectorAll('.search__dialog')) {
-        // Nearest-root association: a dialog nested under a mangled
-        // ancestor root belongs to its own root's pass, not this one.
-        if (impostor.closest('.search--modal') !== root) {
+      // Only real <dialog> elements are addressed (an impostor wearing
+      // the class, whatever its namespace, is invisible to the modal
+      // machinery and stays the host's responsibility); the closest
+      // check keeps a dialog nested under a mangled ancestor root in
+      // its own root's pass, not this one.
+      for (const impostor of root.querySelectorAll('dialog.search__dialog')) {
+        if (!isRealDialog(impostor) || impostor.closest('.search--modal') !== root) {
           continue;
         }
         if (impostor.open) {
