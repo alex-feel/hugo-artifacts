@@ -10,11 +10,14 @@
 // owner is deposed with its husk removed -- closed first when open, so
 // search--open and search:close stay consistent -- and its record
 // dropped, so restored dialogs linger unserved, with a stray-open
-// restore closed back to baseline even beside a healthy owner, the
-// module's own re-inserted torn-down dialog firing its close listener,
-// and a non-dialog impostor wearing the class unable to break recovery;
-// a multi-placement page falls back to its stashed
-// survivor; the inert template is exempt everywhere), the :modal probe
+// restore closed back to baseline in dead roots and beside or inside
+// the healthy owner's root alike, the module's own re-inserted
+// torn-down dialog firing its close listener, and impostors wearing
+// the class (div, details, or a foreign-namespace dialog) invisible to
+// wiring and recovery, able to break neither, with wiring electing the
+// first real dialog past any of them; a multi-placement page falls
+// back to its stashed survivor; the inert template is exempt
+// everywhere), the :modal probe
 // (modern engines normalize the owner's dialog restored while open and
 // spare a dialog a host put in the top layer itself; engines without
 // :modal neither close an open palette on rescan nor skip fresh-root
@@ -877,8 +880,8 @@ test('a non-dialog element carrying the dialog class cannot break recovery', asy
   expect(await page.locator('.search--modal .search__dialog').count()).toBe(0);
   // A host inserts a non-<dialog> element wearing the class and the open
   // attribute: close() is not a function on a div, so the sweep must
-  // skip it via the open PROPERTY guard instead of throwing and killing
-  // every later recovery pass.
+  // leave it untouched -- the real-dialog predicate keeps it invisible
+  // instead of throwing and killing every later recovery pass.
   await page.evaluate(() => {
     const div = document.createElement('div');
     div.className = 'search__dialog';
@@ -894,6 +897,157 @@ test('a non-dialog element carrying the dialog class cannot break recovery', asy
   });
   await expect(page.locator('dialog.search__dialog')).not.toHaveAttribute('open', '');
   await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
+});
+
+test('a details element wearing the dialog class cannot break recovery', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  await page.evaluate(() => {
+    const dialog = document.querySelector('.search--modal .search__dialog');
+    window.__searchCache = {clone: dialog.cloneNode(true)};
+    dialog.querySelector('.search__input').remove();
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  expect(await page.locator('.search--modal dialog.search__dialog').count()).toBe(0);
+  // Unlike a div, <details> natively reflects the open attribute as a
+  // truthy open PROPERTY, so a truthiness guard passes it and close()
+  // still throws; only the tag-qualified selector keeps it invisible to
+  // the sweep.
+  await page.evaluate(() => {
+    const details = document.createElement('details');
+    details.className = 'search__dialog';
+    details.setAttribute('open', '');
+    document.querySelector('.search--modal').appendChild(details);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  // Recovery survived: a later stray-open restore is still normalized.
+  await page.evaluate(() => {
+    window.__searchCache.clone.setAttribute('open', '');
+    document.querySelector('.search--modal').appendChild(window.__searchCache.clone);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator('dialog.search__dialog')).not.toHaveAttribute('open', '');
+  await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
+});
+
+test('a stray-open restore beside the healthy owner is closed on rescan', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  // The host restores an open-carrying clone into the OWNER's own root:
+  // the intact branch must close the stray while exempting the record's
+  // wired dialog, leaving the palette fully served.
+  await page.evaluate(() => {
+    const dialog = document.querySelector('.search--modal .search__dialog');
+    const clone = dialog.cloneNode(true);
+    clone.setAttribute('open', '');
+    dialog.closest('.search--modal').appendChild(clone);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator('.search--modal .search__dialog')).toHaveCount(2);
+  expect(await page.locator('.search--modal .search__dialog[open]').count()).toBe(0);
+  await page.keyboard.press('Control+KeyK');
+  const openDialogs = page.locator('.search--modal .search__dialog[open]');
+  await expect(openDialogs).toHaveCount(1);
+  expect(await openDialogs.evaluate((el) => el.matches(':modal'))).toBeTruthy();
+});
+
+test('a details element in place of the sole dialog leaves the root dialog-less', async ({
+  page,
+}) => {
+  // A host morph swaps the fully parsed dialog for a <details> carrying
+  // the same class, children, and open attribute -- before the module
+  // evaluates. Wiring must not treat it as the palette (close() and
+  // showModal() would throw mid-pass): the tag-qualified query leaves
+  // the root dialog-less, the trigger stays hidden, and enhancement of
+  // the surfaces after it proceeds untouched.
+  await page.addInitScript(() => {
+    const observer = new MutationObserver(() => {
+      const dialog = document.querySelector('.search--modal .search__dialog');
+      if (dialog && document.querySelector('h1')) {
+        const details = document.createElement('details');
+        details.className = dialog.className;
+        details.setAttribute('open', '');
+        while (dialog.firstChild) {
+          details.appendChild(dialog.firstChild);
+        }
+        dialog.replaceWith(details);
+        observer.disconnect();
+      }
+    });
+    observer.observe(document, {childList: true, subtree: true});
+  });
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  // The inline surface parses after the header modal: it enhancing
+  // proves the wiring pass survived the impostor.
+  await expect(page.locator('.search--inline')).toHaveClass(/search--enhanced/);
+  await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
+  expect(await page.locator('dialog.search__dialog').count()).toBe(0);
+  expect(await page.locator('details.search__dialog').count()).toBe(1);
+});
+
+test('a foreign-namespace dialog element cannot break recovery', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  await page.evaluate(() => {
+    const dialog = document.querySelector('.search--modal .search__dialog');
+    window.__searchCache = {clone: dialog.cloneNode(true)};
+    dialog.querySelector('.search__input').remove();
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  expect(await page.locator('.search--modal dialog.search__dialog').count()).toBe(0);
+  // CSS type selectors are namespace-agnostic: an SVG-namespace element
+  // with localName "dialog" matches dialog.search__dialog while carrying
+  // neither close() nor a truthy open property, so only the real-dialog
+  // predicate keeps the sweep from throwing on it.
+  await page.evaluate(() => {
+    const holder = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const impostor = document.createElementNS('http://www.w3.org/2000/svg', 'dialog');
+    impostor.setAttribute('class', 'search__dialog');
+    impostor.setAttribute('open', '');
+    holder.appendChild(impostor);
+    document.querySelector('.search--modal').appendChild(holder);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  // Recovery survived: a later stray-open restore is still normalized.
+  await page.evaluate(() => {
+    window.__searchCache.clone.setAttribute('open', '');
+    document.querySelector('.search--modal').appendChild(window.__searchCache.clone);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator('.search--modal > dialog.search__dialog')).not.toHaveAttribute(
+    'open',
+    '',
+  );
+  await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
+});
+
+test('wiring elects the real dialog past a preceding impostor', async ({page}) => {
+  // An impostor wearing the class BEFORE the real dialog must not be
+  // captured as the palette (its containment gate would refuse the root
+  // outright); wiring walks past impostors to the first real <dialog>.
+  await page.addInitScript(() => {
+    const observer = new MutationObserver(() => {
+      const dialog = document.querySelector('.search--modal .search__dialog');
+      if (dialog && document.querySelector('h1')) {
+        const holder = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        const impostor = document.createElementNS('http://www.w3.org/2000/svg', 'dialog');
+        impostor.setAttribute('class', 'search__dialog');
+        holder.appendChild(impostor);
+        dialog.parentNode.insertBefore(holder, dialog);
+        observer.disconnect();
+      }
+    });
+    observer.observe(document, {childList: true, subtree: true});
+  });
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  await expect(page.locator('.search--modal .search__trigger')).toBeVisible();
+  await page.keyboard.press('Control+KeyK');
+  const dialog = page.locator('.search--modal > dialog.search__dialog');
+  await expect(dialog).toHaveAttribute('open', '');
+  await page.locator(INPUT).fill('gravity');
+  await expect(page.locator('.search--modal .search__option')).toHaveCount(2);
 });
 
 test('enter with no active option navigates to see-all with a Cyrillic query intact', async ({
