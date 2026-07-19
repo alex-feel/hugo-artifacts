@@ -1,8 +1,9 @@
 // The command-palette modal: hotkeys, native dialog semantics, the
 // activedescendant keyboard model, Enter navigation on both branches, the
 // two-stage Escape, multi-placement dialog election, rescan re-election
-// after a swap (replacement roots and stashed survivors), and the
-// hidden-trigger guarantee when no dialog can serve.
+// after a swap (replacement roots, stashed survivors, and re-adopted
+// re-inserted former owners), and the hidden-trigger guarantee when no
+// dialog can serve.
 /* global document, window, URL, CustomEvent, MutationObserver */
 import {test, expect} from '@playwright/test';
 
@@ -196,6 +197,54 @@ test('a sole placement with a structurally broken dialog never reveals its trigg
   await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
   await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
   expect(await page.locator('.search--modal .search__dialog').count()).toBe(0);
+});
+
+test('search:rescan re-adopts a re-inserted former owner', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  // Detach the owning root (a host cache holds it) and announce the loss.
+  await page.evaluate(() => {
+    const root = document.querySelector('.search--modal');
+    window.__searchCache = {root, parent: root.parentElement};
+    root.remove();
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator('.search--modal')).toHaveCount(0);
+  // Cache restore: the SAME nodes return -- connected, already enhanced,
+  // dialog intact, never stashed -- and a rescan must re-adopt the old
+  // controller rather than leave a servable dialog with no owner.
+  await page.evaluate(() => {
+    window.__searchCache.parent.appendChild(window.__searchCache.root);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator('.search--modal .search__trigger')).toBeVisible();
+  await page.keyboard.press('Control+KeyK');
+  await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
+  await page.locator(INPUT).fill('gravity');
+  await expect(page.locator('.search--modal .search__option')).toHaveCount(2);
+});
+
+test('a re-inserted former owner with a replaced dialog is not re-adopted', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  // Host teardown that strips listeners by cloning: root identity is
+  // preserved but the record's own wired dialog is gone, so re-adoption
+  // must refuse the unwired impostor and the trigger must hide rather
+  // than open nothing.
+  await page.evaluate(() => {
+    const root = document.querySelector('.search--modal');
+    window.__searchCache = {root, parent: root.parentElement};
+    root.remove();
+    const dialog = root.querySelector('.search__dialog');
+    dialog.replaceWith(dialog.cloneNode(true));
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await page.evaluate(() => {
+    window.__searchCache.parent.appendChild(window.__searchCache.root);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator('.search--modal')).toHaveCount(1);
+  await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
 });
 
 test('losing the last electable dialog hides revealed triggers again', async ({page}) => {

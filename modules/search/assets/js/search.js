@@ -826,8 +826,9 @@ function isApplePlatform() {
 }
 
 // One shared palette per page: the first dialog-carrying modal root to
-// enhance becomes the owner and wires the controller, the document-level
-// trigger delegation, and the hotkeys. Every other modal root -- a further
+// enhance becomes the owner and wires the controller (the first election
+// in a JS context additionally registers the singleton document-level
+// trigger delegation and hotkey listeners). Every other modal root -- a further
 // placement on the same page, or a root inserted later and announced via
 // search:rescan -- stays trigger-only: the server emits a dialog per
 // placement (a page-scoped sentinel cannot dedup per paginator output), so
@@ -840,13 +841,22 @@ function isApplePlatform() {
 // owning root leaves the document (a PJAX/Turbo swap): a rescanned
 // replacement root re-elects directly, and recoverModalOwnership()
 // re-elects among already-enhanced survivors by restoring a stashed
-// dialog.
+// dialog or re-adopting a re-inserted former owner. The document-level
+// click delegation and hotkey listeners are singletons that resolve the
+// current owner at event time, so elections never accumulate listeners.
 let modalOwner = null;
 
 // Non-owner dialogs are detached to keep the one-dialog invariant, but a
 // swap can remove the owning root while a trigger-only survivor stays in
 // the document; each stash entry keeps that survivor re-electable.
 const stashedModalRoots = [];
+
+// Former owners are remembered by their root nodes: a host cache restore
+// can re-insert a deposed owner's subtree (connected, already enhanced,
+// dialog intact, never stashed), and recovery re-adopts its controller --
+// every element-local listener still sits on its own nodes. The WeakMap
+// ties each record's lifetime to the host's own retention of the root.
+const formerModalOwners = new WeakMap();
 
 // addEventListener does not dedupe distinct closures, and a trigger can be
 // reached both by the owner's document-wide sweep and by its own root's
@@ -872,6 +882,76 @@ function wireTriggerPrefetch(trigger) {
   trigger.addEventListener('touchstart', prefetch, {passive: true});
 }
 
+// Reveals and prefetch-wires every modal trigger. Run after an election or
+// a re-adoption: it also covers roots enhanced before an owner existed
+// (their triggers stayed hidden while nothing could serve them) and
+// triggers of roots init has not reached yet.
+function sweepModalTriggers() {
+  for (const trg of document.querySelectorAll('.search--modal .search__trigger')) {
+    revealControl(trg);
+    wireTriggerPrefetch(trg);
+  }
+}
+
+// The click-delegation and hotkey listeners are registered ONCE per JS
+// context and resolve the CURRENT owner at event time: per-owner document
+// listeners would accumulate across elections and retain each deposed
+// owner's detached root, core, and dialog for the lifetime of the context
+// -- the same retention class the stash prune and the trigger-prefetch
+// listeners already guard against.
+let modalDocumentListenersWired = false;
+
+function wireModalDocumentListeners() {
+  if (modalDocumentListenersWired) {
+    return;
+  }
+  modalDocumentListenersWired = true;
+  document.addEventListener('click', (event) => {
+    const clicked =
+      event.target && event.target.closest && event.target.closest('.search__trigger');
+    if (clicked && clicked.closest('.search--modal') && modalOwner) {
+      modalOwner.open();
+    }
+  });
+  document.addEventListener('keydown', (event) => {
+    const owner = modalOwner;
+    if (!owner) {
+      return;
+    }
+    const hotkey = owner.hotkey;
+    if (hotkey && typeof event.key === 'string' && event.key.toLowerCase() === hotkey.key) {
+      const wantMeta = hotkey.mod && owner.apple;
+      const wantCtrl = hotkey.ctrl || (hotkey.mod && !owner.apple);
+      if (
+        event.metaKey === wantMeta &&
+        event.ctrlKey === wantCtrl &&
+        event.altKey === hotkey.alt &&
+        event.shiftKey === hotkey.shift
+      ) {
+        event.preventDefault();
+        if (owner.isOpen()) {
+          owner.close();
+        } else {
+          owner.open();
+        }
+        return;
+      }
+    }
+    if (
+      owner.hotkeySlash &&
+      event.key === '/' &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      !isTypingContext(event.target) &&
+      !owner.isOpen()
+    ) {
+      event.preventDefault();
+      owner.open();
+    }
+  });
+}
+
 function wireModal(root, config) {
   const trigger = root.querySelector('.search__trigger');
   const dialog = root.querySelector('.search__dialog');
@@ -884,8 +964,8 @@ function wireModal(root, config) {
 
   // A swap can remove the owning root while this module's JS context
   // survives; releasing the stale ownership lets the next dialog-carrying
-  // root re-elect, and the swapped-out owner's document-level listeners
-  // stay inert through the isConnected guard in its open().
+  // root re-elect, and the singleton document listeners simply resolve
+  // the new owner from then on.
   if (modalOwner && !modalOwner.root.isConnected) {
     modalOwner = null;
   }
@@ -896,8 +976,9 @@ function wireModal(root, config) {
       dialog.remove();
     }
     if (modalOwner) {
-      // With an owner in place this trigger works through the owner's
-      // document-level delegation, so it may show itself.
+      // With an owner in place this trigger works through the singleton
+      // document-level delegation, which serves the current owner, so it
+      // may show itself.
       revealControl(trigger);
       wireTriggerPrefetch(trigger);
     }
@@ -918,7 +999,6 @@ function wireModal(root, config) {
     dialog.remove();
     return;
   }
-  modalOwner = {root, core};
   const listbox = createListbox(core, config, listboxEl, seeAll, false);
 
   const hooks = {
@@ -929,12 +1009,11 @@ function wireModal(root, config) {
   };
 
   function open() {
-    // Two guards keep a former owner's stale document listeners inert:
-    // the ownership check covers a deposed root whose nodes the host
-    // re-inserted (its open() would otherwise go live again beside the
-    // current owner's, stacking two dialogs), and the isConnected check
-    // covers the detached window before any rescan runs -- showModal() on
-    // a disconnected dialog throws.
+    // Defense in depth: the ownership check keeps a retained reference to
+    // a deposed record from opening a second dialog beside the current
+    // owner's, and the isConnected check covers the window where the
+    // owner's root left the document before any rescan ran -- showModal()
+    // on a disconnected dialog throws.
     if (!modalOwner || modalOwner.core !== core || !dialog.isConnected || dialog.open) {
       return;
     }
@@ -978,64 +1057,28 @@ function wireModal(root, config) {
     listbox.onKeydown(event, null);
   });
 
-  document.addEventListener('click', (event) => {
-    const clicked =
-      event.target && event.target.closest && event.target.closest('.search__trigger');
-    if (clicked && clicked.closest('.search--modal')) {
-      open();
-    }
-  });
-
-  const hotkey = parseHotkey(config.hotkey);
-  const apple = isApplePlatform();
-  document.addEventListener('keydown', (event) => {
-    if (hotkey && typeof event.key === 'string' && event.key.toLowerCase() === hotkey.key) {
-      const wantMeta = hotkey.mod && apple;
-      const wantCtrl = hotkey.ctrl || (hotkey.mod && !apple);
-      if (
-        event.metaKey === wantMeta &&
-        event.ctrlKey === wantCtrl &&
-        event.altKey === hotkey.alt &&
-        event.shiftKey === hotkey.shift
-      ) {
-        event.preventDefault();
-        if (dialog.open) {
-          close();
-        } else {
-          open();
-        }
-        return;
-      }
-    }
-    if (
-      config.hotkeySlash &&
-      event.key === '/' &&
-      !event.ctrlKey &&
-      !event.metaKey &&
-      !event.altKey &&
-      !isTypingContext(event.target) &&
-      !dialog.open
-    ) {
-      event.preventDefault();
-      open();
-    }
-  });
-
-  // The sweep also covers roots enhanced before this owner existed (their
-  // triggers stayed hidden while nothing could serve them) and triggers of
-  // roots init has not reached yet.
-  for (const trg of document.querySelectorAll('.search--modal .search__trigger')) {
-    revealControl(trg);
-    wireTriggerPrefetch(trg);
-  }
+  modalOwner = {
+    root,
+    core,
+    dialog,
+    open,
+    close,
+    isOpen: () => dialog.open,
+    hotkey: parseHotkey(config.hotkey),
+    hotkeySlash: config.hotkeySlash,
+    apple: isApplePlatform(),
+  };
+  formerModalOwners.set(root, modalOwner);
+  wireModalDocumentListeners();
+  sweepModalTriggers();
 }
 
 // After a swap removes the owning root, a replacement root re-elects
-// through wireModal -- but an already-enhanced trigger-only survivor is
-// skipped by init and its dialog was detached at election time. This
-// recovery pass restores a stashed dialog on the first connected survivor
-// and re-runs the modal wiring for it, so search:rescan revives the
-// palette even when the swap kept only trigger-only placements.
+// through wireModal -- but already-enhanced survivors are skipped by init.
+// This recovery pass restores a stashed dialog on the first connected
+// trigger-only survivor, or re-adopts a re-inserted former owner whose
+// dialog was never stashed, so search:rescan revives the palette whatever
+// mix of placements the swap kept.
 function recoverModalOwnership() {
   // Prune before the healthy-owner early return: an entry whose root left
   // the document can never be re-elected, and keeping it would retain the
@@ -1055,6 +1098,23 @@ function recoverModalOwnership() {
     entry.root.appendChild(entry.dialog);
     wireModal(entry.root, entry.config);
     if (modalOwner) {
+      return;
+    }
+  }
+  // A formerly-owning root re-inserted by a host cache restore is
+  // connected and still carries its fully wired dialog, but was never
+  // stashed and stays invisible to init (already enhanced); re-adopting
+  // its controller keeps the page from holding a servable dialog with no
+  // owner and every trigger hidden. The gate checks the record's OWN
+  // dialog identity, not mere dialog presence: a restore that kept the
+  // root but replaced the dialog subtree (a listener-stripping clone, a
+  // sanitizer, a morphing library) offers an unwired impostor whose
+  // adoption would install a sticky owner that can never open.
+  for (const root of document.querySelectorAll('.search--modal')) {
+    const record = formerModalOwners.get(root);
+    if (record && record.dialog.isConnected && root.contains(record.dialog)) {
+      modalOwner = record;
+      sweepModalTriggers();
       return;
     }
   }
