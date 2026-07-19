@@ -4,9 +4,18 @@
 // after a swap (replacement roots, stashed survivors, and re-adopted
 // re-inserted former owners -- including open-at-swap normalization on
 // both the re-adoption and fresh-wiring paths, re-adoption's priority
-// over the stash, and impostor-dialog removal), and the hidden-trigger
-// guarantee when no dialog can serve.
-/* global document, window, URL, CustomEvent, MutationObserver */
+// over the stash, and impostor-dialog removal), the integrity-gate scope
+// (input and listbox must stay inside the dialog whether moved out
+// before wiring, after wiring, or on the stash-drain path; a gutted
+// owner is deposed with its husk removed -- closed first when open, so
+// search--open and search:close stay consistent -- and a multi-placement
+// page falls back to its stashed survivor; the inert template is exempt
+// everywhere), the :modal probe (modern engines normalize the owner's
+// dialog restored while open; engines without :modal neither close an
+// open palette on rescan nor skip fresh-root and deposed-owner
+// normalization), and the hidden-trigger guarantee when no dialog can
+// serve.
+/* global document, window, URL, CustomEvent, MutationObserver, Element */
 import {test, expect} from '@playwright/test';
 
 const DIALOG = '.search--modal .search__dialog';
@@ -362,6 +371,354 @@ test('losing the last electable dialog hides revealed triggers again', async ({p
   });
   await expect(triggers).toHaveCount(1);
   await expect(triggers.first()).toBeHidden();
+});
+
+test('a shadowed layout with the template outside the dialog stays fully servable', async ({
+  page,
+}) => {
+  // A consumer shadow may place the inert <template data-search-template>
+  // anywhere inside the surface root: rendering clones the reference
+  // captured at wiring, so root-level placement is fully functional and
+  // neither wiring nor the recovery sweep may reject or destroy it. The
+  // h1 guard delays the move until the header (and the template inside
+  // it) has fully parsed, still before the module script evaluates.
+  await page.addInitScript(() => {
+    const observer = new MutationObserver(() => {
+      const template = document.querySelector(
+        '.search--modal .search__dialog template[data-search-template]',
+      );
+      if (template && document.querySelector('h1')) {
+        template.closest('.search--modal').appendChild(template);
+        observer.disconnect();
+      }
+    });
+    observer.observe(document, {childList: true, subtree: true});
+  });
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  // init itself ends with a recovery pass, so a scope-mismatched gate
+  // would have destroyed the dialog before this first assertion.
+  await expect(page.locator(DIALOG)).toHaveCount(1);
+  await page.evaluate(() => {
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator(DIALOG)).toHaveCount(1);
+  await page.keyboard.press('Control+KeyK');
+  await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
+  await page.locator(INPUT).fill('gravity');
+  await expect(page.locator('.search--modal .search__option')).toHaveCount(2);
+});
+
+test('wiring refuses a dialog whose input sits outside it', async ({page}) => {
+  // showModal() makes everything outside the dialog inert, so a shadow
+  // that moves the input out produces a palette that opens but cannot be
+  // typed into; the structural check must treat it like any other broken
+  // dialog: remove it and keep the trigger hidden.
+  await page.addInitScript(() => {
+    const observer = new MutationObserver(() => {
+      const input = document.querySelector('.search--modal .search__dialog .search__input');
+      if (input) {
+        input.closest('.search--modal').appendChild(input);
+        observer.disconnect();
+      }
+    });
+    observer.observe(document, {childList: true, subtree: true});
+  });
+  await page.goto('/blog/gravity-title/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
+  expect(await page.locator('.search--modal .search__dialog').count()).toBe(0);
+});
+
+test('a gutted owner is deposed: husk removed, trigger hidden', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  await expect(page.locator('.search--modal .search__trigger')).toBeVisible();
+  // Detaching the wired input from the owner's own dialog leaves an
+  // unservable husk: the sweep must remove it and recovery must depose
+  // the owner (a connected-root check alone would keep the ghost elected
+  // with its trigger revealed while open() no-ops forever).
+  await page.evaluate(() => {
+    document.querySelector('.search--modal .search__input').remove();
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
+  expect(await page.locator('.search--modal .search__dialog').count()).toBe(0);
+});
+
+test('a detached results listbox also fails the integrity gate', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  // A palette whose wired listbox is gone opens and accepts typing but
+  // can never show a result, so it is exactly as unservable as one with
+  // a detached input.
+  await page.evaluate(() => {
+    document.querySelector('.search--modal .search__listbox').remove();
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
+  expect(await page.locator('.search--modal .search__dialog').count()).toBe(0);
+});
+
+test('stripping the template after wiring does not depose the owner', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  // A sanitizer that strips <template> elements leaves the controller
+  // fully functional -- rendering clones the reference captured at
+  // wiring -- so the integrity gate must not fail over it.
+  await page.evaluate(() => {
+    document.querySelector('.search--modal template[data-search-template]').remove();
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator(DIALOG)).toHaveCount(1);
+  await page.keyboard.press('Control+KeyK');
+  await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
+  await page.locator(INPUT).fill('gravity');
+  await expect(page.locator('.search--modal .search__option')).toHaveCount(2);
+});
+
+test('without :modal support a rescan leaves the open palette alone', async ({page}) => {
+  // Chrome 37-104, Edge 79-104, Firefox 98-102, and Safari 15.4-15.5 run
+  // the full showModal() top-layer lifecycle but throw on
+  // matches(':modal'), so the sweep cannot distinguish the owner's
+  // legitimately open dialog from a stray one -- and must not close a
+  // palette mid-use.
+  await page.addInitScript(() => {
+    const original = Element.prototype.matches;
+    Element.prototype.matches = function (selector) {
+      if (String(selector).includes(':modal')) {
+        throw new SyntaxError('unsupported pseudo-class');
+      }
+      return original.call(this, selector);
+    };
+  });
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  await page.keyboard.press('Control+KeyK');
+  await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
+  await page.locator(INPUT).fill('gravity');
+  await expect(page.locator('.search--modal .search__option')).toHaveCount(2);
+  await page.evaluate(() => {
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
+  await expect(page.locator('.search--modal .search__option')).toHaveCount(2);
+});
+
+test('without :modal support a deposed owner still normalizes on re-adoption', async ({page}) => {
+  // The owner exemption must not swallow the provable stray case: after
+  // deposition the record is no longer the owner, so its re-inserted
+  // open-at-swap dialog closes back to the baseline even where the
+  // :modal probe cannot answer.
+  await page.addInitScript(() => {
+    const original = Element.prototype.matches;
+    Element.prototype.matches = function (selector) {
+      if (String(selector).includes(':modal')) {
+        throw new SyntaxError('unsupported pseudo-class');
+      }
+      return original.call(this, selector);
+    };
+  });
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  await page.keyboard.press('Control+KeyK');
+  await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
+  await page.evaluate(() => {
+    const root = document.querySelector('.search--modal');
+    window.__searchCache = {root, parent: root.parentElement};
+    root.remove();
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await page.evaluate(() => {
+    window.__searchCache.parent.appendChild(window.__searchCache.root);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator(DIALOG)).not.toHaveAttribute('open', '');
+  await page.keyboard.press('Control+KeyK');
+  await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
+});
+
+test('gutting an OPEN palette closes it before removal: class and event stay consistent', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  await page.evaluate(() => {
+    window.__closes = 0;
+    document.addEventListener('search:close', () => {
+      window.__closes += 1;
+    });
+  });
+  await page.keyboard.press('Control+KeyK');
+  await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--open/);
+  // A sanitizer detaches the wired input while the palette is open: the
+  // sweep must close the husk BEFORE removing it, so the wired close
+  // listener drops search--open and dispatches search:close -- removal
+  // alone fires no close event and would strand both documented hooks.
+  await page.evaluate(() => {
+    document.querySelector('.search--modal .search__input').remove();
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator('.search--modal')).not.toHaveClass(/search--open/);
+  await expect.poll(() => page.evaluate(() => window.__closes)).toBe(1);
+  await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
+  expect(await page.locator('.search--modal .search__dialog').count()).toBe(0);
+});
+
+test('an input moved out of the dialog after wiring fails the gate', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  // The moved input stays connected inside the ROOT, so only a
+  // dialog-scoped containment clause catches it -- a gate relaxed to
+  // root scope (the exact defect class this round fixed) would keep the
+  // owner elected with a palette that opens modally around an inert,
+  // unreachable input.
+  await page.evaluate(() => {
+    const input = document.querySelector('.search--modal .search__input');
+    input.closest('.search--modal').appendChild(input);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
+  expect(await page.locator('.search--modal .search__dialog').count()).toBe(0);
+});
+
+test('a listbox moved out of the dialog after wiring fails the gate', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  await page.evaluate(() => {
+    const listbox = document.querySelector('.search--modal .search__listbox');
+    listbox.closest('.search--modal').appendChild(listbox);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
+  expect(await page.locator('.search--modal .search__dialog').count()).toBe(0);
+});
+
+test('on modern engines a rescan normalizes the owner root restored while open', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  await page.keyboard.press('Control+KeyK');
+  await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
+  // A cache restore detaches and re-inserts the OWNER's root while the
+  // palette is open, with no rescan in between: the record is still the
+  // owner, so only the probe-supported side of the sweep's exemption
+  // closes the now in-flow dialog -- an exemption applied on modern
+  // engines too (or a mis-cached probe) would leave it stuck open.
+  await page.evaluate(() => {
+    const root = document.querySelector('.search--modal');
+    const parent = root.parentElement;
+    root.remove();
+    parent.appendChild(root);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator(DIALOG)).not.toHaveAttribute('open', '');
+  // The owner survived intact: the hotkey reopens the palette modally.
+  await page.keyboard.press('Control+KeyK');
+  await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
+  expect(await page.locator(DIALOG).evaluate((el) => el.matches(':modal'))).toBeTruthy();
+});
+
+test('wiring refuses a dialog whose listbox sits outside it', async ({page}) => {
+  await page.addInitScript(() => {
+    const observer = new MutationObserver(() => {
+      const listbox = document.querySelector('.search--modal .search__dialog .search__listbox');
+      if (listbox) {
+        listbox.closest('.search--modal').appendChild(listbox);
+        observer.disconnect();
+      }
+    });
+    observer.observe(document, {childList: true, subtree: true});
+  });
+  await page.goto('/blog/gravity-title/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
+  expect(await page.locator('.search--modal .search__dialog').count()).toBe(0);
+});
+
+test('the stash drain applies the wiring containment check', async ({page}) => {
+  // The stash drain elects through wireModal and recovery returns
+  // immediately on election, with no sweep afterwards in that pass --
+  // the one path where the wiring check is not shadowed by the recovery
+  // gate. Break the FOOTER placement before enhancement by moving its
+  // input out of the dialog: the footer dialog is stashed at election
+  // time (the structural check runs only on the electing path), and the
+  // drain must refuse it when the header owner later disappears.
+  await page.addInitScript(() => {
+    const observer = new MutationObserver(() => {
+      const input = document.querySelector('footer .search--modal .search__dialog .search__input');
+      if (input) {
+        input.closest('.search--modal').appendChild(input);
+        observer.disconnect();
+      }
+    });
+    observer.observe(document, {childList: true, subtree: true});
+  });
+  await page.goto('/promo/');
+  await expect(page.locator('.search--modal.search--enhanced')).toHaveCount(2);
+  await page.evaluate(() => {
+    document.querySelector('header .search--modal').remove();
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
+  expect(await page.locator('.search--modal .search__dialog').count()).toBe(0);
+});
+
+test('without :modal support a swapped-in fresh root with a stray-open dialog starts closed', async ({
+  page,
+}) => {
+  // wireModal's normalization is unconditional -- a never-wired dialog
+  // cannot be the module's live modal -- so it must fire even where the
+  // probe cannot answer; extending the sweep's owner exemption into
+  // wiring would ship a visibly open in-flow clone on every swap.
+  await page.addInitScript(() => {
+    const original = Element.prototype.matches;
+    Element.prototype.matches = function (selector) {
+      if (String(selector).includes(':modal')) {
+        throw new SyntaxError('unsupported pseudo-class');
+      }
+      return original.call(this, selector);
+    };
+  });
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  await page.keyboard.press('Control+KeyK');
+  await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
+  await page.evaluate(() => {
+    const root = document.querySelector('.search--modal');
+    const clone = root.cloneNode(true);
+    clone.classList.remove('search--enhanced');
+    root.replaceWith(clone);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator(DIALOG)).not.toHaveAttribute('open', '');
+  await page.keyboard.press('Control+KeyK');
+  await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
+});
+
+test('gutting the owner on a multi-placement page restores the stashed survivor', async ({
+  page,
+}) => {
+  await page.goto('/promo/');
+  await expect(page.locator('.search--modal.search--enhanced')).toHaveCount(2);
+  await expect(page.locator(DIALOG)).toHaveCount(1);
+  // Detach the header owner's wired input: the sweep removes the husk,
+  // the gate deposes the owner, re-adoption finds no candidate, and the
+  // stash drain must then restore the footer's dialog and wire a fresh
+  // controller -- pinning the husk-removal -> depose -> stash-drain
+  // ordering.
+  await page.evaluate(() => {
+    document.querySelector('header .search--modal .search__input').remove();
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator('footer .search--modal .search__dialog')).toHaveCount(1);
+  await expect(page.locator(DIALOG)).toHaveCount(1);
+  const trigger = page.locator('footer .search--modal .search__trigger');
+  await expect(trigger).toBeVisible();
+  await trigger.click();
+  await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
+  await page.locator(INPUT).fill('gravity');
+  await expect(page.locator('.search--modal .search__option')).toHaveCount(2);
 });
 
 test('enter with no active option navigates to see-all with a Cyrillic query intact', async ({
