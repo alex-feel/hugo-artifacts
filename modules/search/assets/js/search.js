@@ -840,10 +840,11 @@ function isApplePlatform() {
 // shows a chip that cannot open anything. Ownership is released when the
 // owning root leaves the document (a PJAX/Turbo swap): a rescanned
 // replacement root re-elects directly, and recoverModalOwnership()
-// re-elects among already-enhanced survivors by restoring a stashed
-// dialog or re-adopting a re-inserted former owner. The document-level
-// click delegation and hotkey listeners are singletons that resolve the
-// current owner at event time, so elections never accumulate listeners.
+// re-elects among already-enhanced survivors -- re-adopting a re-inserted
+// former owner first (normalizing a dialog that was open at swap time),
+// then restoring a stashed dialog. The document-level click delegation
+// and hotkey listeners are singletons that resolve the current owner at
+// event time, so elections never accumulate listeners.
 let modalOwner = null;
 
 // Non-owner dialogs are detached to keep the one-dialog invariant, but a
@@ -999,6 +1000,13 @@ function wireModal(root, config) {
     dialog.remove();
     return;
   }
+  // A swapped-in copy of a palette that was open when its source page was
+  // torn down carries a stray open attribute without top-layer status;
+  // normalize before wiring so the lifecycle starts from the closed
+  // baseline (no close listener is registered yet, so this is silent).
+  if (dialog.open && !isModalDialog(dialog)) {
+    dialog.close();
+  }
   const listbox = createListbox(core, config, listboxEl, seeAll, false);
 
   const hooks = {
@@ -1073,13 +1081,75 @@ function wireModal(root, config) {
   sweepModalTriggers();
 }
 
+// :modal shipped later than <dialog> itself (Firefox 103 versus 98,
+// Safari 15.6 versus 15.4), and matches() THROWS on an unknown selector
+// -- exactly in the stray-open recovery path. An engine without the
+// pseudo-class cannot have put a dialog in the top layer through this
+// module's showModal() lifecycle across a swap anyway, so unsupported
+// safely means not-modal.
+function isModalDialog(dialog) {
+  try {
+    return dialog.matches(':modal');
+  } catch {
+    return false;
+  }
+}
+
+// A former-owner record is re-adoptable only when the dialog AND the
+// wired controls its closures captured are the connected ones: a restore
+// that kept the <dialog> node but replaced its children (a sanitizer or
+// a morphing library) would pass a dialog-identity check alone, electing
+// a controller whose input and template are detached -- a palette that
+// opens but can never search, shadowing any healthy stashed survivor.
+function recordDialogIntact(record) {
+  return (
+    record.dialog.isConnected &&
+    record.root.contains(record.dialog) &&
+    record.core.input.isConnected &&
+    record.dialog.contains(record.core.input) &&
+    record.core.template.isConnected &&
+    record.dialog.contains(record.core.template)
+  );
+}
+
+// Hygiene over every former-owner root, decoupled from election so it
+// also runs when a healthy owner makes recovery return early and for
+// roots past the elected winner: a re-inserted dialog that was open at
+// swap time kept its open attribute while losing top-layer status and
+// would render as a visible in-flow panel (closing it fires the record's
+// close listener, keeping search--open and search:close consistent), and
+// a root whose record fails the integrity gate holds only an unwired
+// impostor dialog, which is removed.
+function sweepFormerOwnerRoots() {
+  for (const root of document.querySelectorAll('.search--modal')) {
+    const record = formerModalOwners.get(root);
+    if (!record) {
+      continue;
+    }
+    if (recordDialogIntact(record)) {
+      if (record.dialog.open && !isModalDialog(record.dialog)) {
+        record.dialog.close();
+      }
+    } else {
+      const impostor = root.querySelector('.search__dialog');
+      if (impostor) {
+        impostor.remove();
+      }
+    }
+  }
+}
+
 // After a swap removes the owning root, a replacement root re-elects
 // through wireModal -- but already-enhanced survivors are skipped by init.
-// This recovery pass restores a stashed dialog on the first connected
-// trigger-only survivor, or re-adopts a re-inserted former owner whose
-// dialog was never stashed, so search:rescan revives the palette whatever
-// mix of placements the swap kept.
+// This recovery pass re-adopts a re-inserted former owner whose dialog was
+// never stashed, then falls back to restoring a stashed dialog on the
+// first connected trigger-only survivor, so search:rescan revives the
+// palette whatever mix of placements the swap kept. Re-adoption runs
+// FIRST: the former owner is fully wired already, and electing a stashed
+// survivor beside it would leave the former owner's connected dialog as a
+// second one.
 function recoverModalOwnership() {
+  sweepFormerOwnerRoots();
   // Prune before the healthy-owner early return: an entry whose root left
   // the document can never be re-elected, and keeping it would retain the
   // swapped-out page's whole detached subtree (through the root's parent
@@ -1093,28 +1163,30 @@ function recoverModalOwnership() {
     return;
   }
   modalOwner = null;
+  // A formerly-owning root re-inserted by a host cache restore is
+  // connected and still carries its fully wired dialog, but was never
+  // stashed and stays invisible to init (already enhanced); re-adopting
+  // its controller keeps the page from holding a servable dialog with no
+  // owner and every trigger hidden. The integrity gate (dialog identity
+  // AND the wired inner controls) keeps a gutted restore from shadowing
+  // a healthy stashed survivor; the sweep above already normalized
+  // stray-open dialogs and removed impostors. Former owners that do not
+  // win this scan keep their in-place dialogs: their nodes carry live
+  // listeners, so stashing them would double-wire, and staying in place
+  // keeps them re-adoptable later.
+  for (const root of document.querySelectorAll('.search--modal')) {
+    const record = formerModalOwners.get(root);
+    if (record && recordDialogIntact(record)) {
+      modalOwner = record;
+      sweepModalTriggers();
+      return;
+    }
+  }
   while (stashedModalRoots.length) {
     const entry = stashedModalRoots.shift();
     entry.root.appendChild(entry.dialog);
     wireModal(entry.root, entry.config);
     if (modalOwner) {
-      return;
-    }
-  }
-  // A formerly-owning root re-inserted by a host cache restore is
-  // connected and still carries its fully wired dialog, but was never
-  // stashed and stays invisible to init (already enhanced); re-adopting
-  // its controller keeps the page from holding a servable dialog with no
-  // owner and every trigger hidden. The gate checks the record's OWN
-  // dialog identity, not mere dialog presence: a restore that kept the
-  // root but replaced the dialog subtree (a listener-stripping clone, a
-  // sanitizer, a morphing library) offers an unwired impostor whose
-  // adoption would install a sticky owner that can never open.
-  for (const root of document.querySelectorAll('.search--modal')) {
-    const record = formerModalOwners.get(root);
-    if (record && record.dialog.isConnected && root.contains(record.dialog)) {
-      modalOwner = record;
-      sweepModalTriggers();
       return;
     }
   }

@@ -2,8 +2,10 @@
 // activedescendant keyboard model, Enter navigation on both branches, the
 // two-stage Escape, multi-placement dialog election, rescan re-election
 // after a swap (replacement roots, stashed survivors, and re-adopted
-// re-inserted former owners), and the hidden-trigger guarantee when no
-// dialog can serve.
+// re-inserted former owners -- including open-at-swap normalization on
+// both the re-adoption and fresh-wiring paths, re-adoption's priority
+// over the stash, and impostor-dialog removal), and the hidden-trigger
+// guarantee when no dialog can serve.
 /* global document, window, URL, CustomEvent, MutationObserver */
 import {test, expect} from '@playwright/test';
 
@@ -245,6 +247,93 @@ test('a re-inserted former owner with a replaced dialog is not re-adopted', asyn
   });
   await expect(page.locator('.search--modal')).toHaveCount(1);
   await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
+  // The refused impostor is removed rather than left as a second,
+  // unservable dialog.
+  await expect(page.locator('.search--modal .search__dialog')).toHaveCount(0);
+});
+
+test('re-adoption normalizes a dialog that was open at swap time', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  await page.keyboard.press('Control+KeyK');
+  await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
+  // Detach the root while the palette is open: removal strips top-layer
+  // status but keeps the open attribute.
+  await page.evaluate(() => {
+    const root = document.querySelector('.search--modal');
+    window.__searchCache = {root, parent: root.parentElement};
+    root.remove();
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await page.evaluate(() => {
+    window.__searchCache.parent.appendChild(window.__searchCache.root);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  // Re-adoption must close the stray-open dialog back to the baseline,
+  // and the hotkey must reopen it modally.
+  await expect(page.locator(DIALOG)).not.toHaveAttribute('open', '');
+  await page.keyboard.press('Control+KeyK');
+  await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
+  expect(await page.locator(DIALOG).evaluate((el) => el.matches(':modal'))).toBeTruthy();
+});
+
+test('a swapped-in fresh root with a stray-open dialog starts closed', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  await page.keyboard.press('Control+KeyK');
+  await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
+  // A host that clones the open palette into a fresh replacement root:
+  // the clone keeps the stray open attribute without top-layer status,
+  // and wireModal must normalize it before wiring.
+  await page.evaluate(() => {
+    const root = document.querySelector('.search--modal');
+    const clone = root.cloneNode(true);
+    clone.classList.remove('search--enhanced');
+    root.replaceWith(clone);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator(DIALOG)).not.toHaveAttribute('open', '');
+  await page.keyboard.press('Control+KeyK');
+  await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
+  expect(await page.locator(DIALOG).evaluate((el) => el.matches(':modal'))).toBeTruthy();
+});
+
+test('re-adoption outranks the stash so no second dialog lingers', async ({page}) => {
+  await page.goto('/promo/');
+  await expect(page.locator('.search--modal.search--enhanced')).toHaveCount(2);
+  // Depose the header owner (keeping its nodes); the stashed footer
+  // survivor takes over.
+  await page.evaluate(() => {
+    const header = document.querySelector('header .search--modal');
+    window.__searchCache = {root: header, parent: header.parentElement};
+    header.remove();
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator(DIALOG)).toHaveCount(1);
+  // Give the stash a candidate under the new owner: a fresh third
+  // placement, whose dialog is detached at enhancement.
+  await page.evaluate(() => {
+    const clone = document.querySelector('footer .search--modal').cloneNode(true);
+    clone.classList.remove('search--enhanced');
+    document.body.appendChild(clone);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator(DIALOG)).toHaveCount(1);
+  // Remove the footer owner and restore the original header root: the
+  // fully wired former owner must win over the stashed clone, leaving
+  // exactly one connected dialog -- the header's, identified by its
+  // call-site heading.
+  await page.evaluate(() => {
+    document.querySelector('footer .search--modal').remove();
+    window.__searchCache.parent.appendChild(window.__searchCache.root);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator(DIALOG)).toHaveCount(1);
+  await expect(page.locator(`${DIALOG} h2.search__heading`)).toHaveText('Palette search');
+  const trigger = page.locator('header .search--modal .search__trigger');
+  await expect(trigger).toBeVisible();
+  await trigger.click();
+  await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
 });
 
 test('losing the last electable dialog hides revealed triggers again', async ({page}) => {
