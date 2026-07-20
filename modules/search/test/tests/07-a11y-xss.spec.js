@@ -1,7 +1,9 @@
-// Live-region announcements plus the client-side rendering trust
-// boundaries: hostile payloads stay text, the img slot's scheme filter
-// drops javascript: URLs, taxonomy slots deliver end to end, and query
+// Live-region announcements (pluralized counts across CLDR forms and the
+// min-length hint) plus the client-side rendering trust boundaries:
+// hostile payloads stay text, the img slot's scheme filter drops
+// javascript: URLs, taxonomy slots deliver end to end, and query
 // metacharacters never reach RegExp construction.
+/* global document, window */
 import {test, expect} from '@playwright/test';
 
 const INPUT = '.search--page .search__input';
@@ -10,6 +12,33 @@ test('status region announces a debounced pluralized count', async ({page}) => {
   await page.goto('/search/');
   await page.locator(INPUT).fill('beacon');
   await expect(page.locator('.search--page .search__status')).toHaveText('2 results');
+});
+
+test('typing below min_query_length announces the hint and sends no query', async ({page}) => {
+  await page.goto('/search/');
+  await page.evaluate(() => {
+    window.__queries = [];
+    document.addEventListener('search:query', (event) => window.__queries.push(event.detail.query));
+  });
+  await page.locator(INPUT).fill('g');
+  await expect(page.locator('.search--page .search__status')).toHaveText(
+    'Type at least 2 characters',
+  );
+  // Past the debounce window, still no query left for the backend.
+  await page.waitForTimeout(400);
+  expect(await page.evaluate(() => window.__queries)).toEqual([]);
+});
+
+test('ru plural forms resolve through Intl.PluralRules', async ({page}) => {
+  // Russian distinguishes the one form ("1 результат") from the other
+  // form ("результата"): a correct CLDR selection is visible on a
+  // single-hit query, and a two-hit query picks the few form.
+  await page.goto('/ru/search/');
+  const input = page.locator('.search--page .search__input');
+  await input.fill('компаса');
+  await expect(page.locator('.search--page .search__status')).toHaveText('1 результат');
+  await input.fill('поиска');
+  await expect(page.locator('.search--page .search__status')).toHaveText('2 результата');
 });
 
 test('zero results land in the alert region and clear the status region', async ({page}) => {

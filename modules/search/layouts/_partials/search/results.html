@@ -3,9 +3,10 @@
 
   Purpose: the shared results block: the two live regions (present in the
   server HTML from the start, because live regions must exist before their
-  content changes), the results container (a plain div on the dedicated
-  page; a listbox on the modal and inline surfaces), the see-all link or
-  load-more button, and the cloneable result template. The status region is
+  content changes), the results container (a named region on the dedicated
+  page -- an accessible name is ARIA-prohibited on a role-less div -- and a
+  listbox on the modal and inline surfaces), the see-all link or load-more
+  button, and the cloneable result template. The status region is
   polite; the alert region is assertive and reserved exclusively for
   zero-results and errors.
 
@@ -27,7 +28,7 @@
 <p class="search__status" role="status"></p>
 <p class="search__alert" role="alert"></p>
 {{- if eq $surface "page" }}
-<div class="search__results" aria-label="{{ $resultsLabel }}"></div>
+<div class="search__results" role="region" aria-label="{{ $resultsLabel }}"></div>
 <button class="search__more" type="button" hidden style="display:none">{{ T "search_more" | default "Show more results" }}</button>
 {{- else }}
 <ul class="search__listbox" id="{{ $listboxId }}" role="listbox" aria-label="{{ $resultsLabel }}"{{ if eq $surface "inline" }} hidden style="display:none"{{ end }}></ul>

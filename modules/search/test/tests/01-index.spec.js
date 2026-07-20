@@ -64,6 +64,12 @@ test.describe('search index envelope', () => {
     // record keeps the author's search.keywords terms and the taxonomy's
     // terms never clobber them.
     expect(quantum.keywords).toEqual(['qubit-search-kw']);
+
+    // A page WITHOUT search.keywords falls back to its standard keywords
+    // front matter for the same boosted field (search.keywords wins when
+    // present -- the quantum assertion above pins that side).
+    const lighthouse = env.docs.find((d) => d.href === '/blog/lighthouse-post/');
+    expect(lighthouse.keywords).toEqual(['pharos']);
   });
 
   test('ru index: envelope and morphology corpus', async ({request}) => {

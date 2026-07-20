@@ -62,23 +62,28 @@
   {{- end -}}
 {{- end -}}
 
-{{/* Author-supplied extra terms: participate in matching, never displayed. */}}
+{{/* Author-supplied extra terms: participate in matching, never displayed.
+     search.keywords wins when present (presence wins, like every tier of
+     the cascade); otherwise the standard keywords front matter feeds the
+     same boosted field, so a site that already curates page keywords gets
+     that recall without duplicating them. */}}
 {{- $pagep := $page.Params.search -}}
-{{- if reflect.IsMap $pagep -}}
-  {{- $rawKeywords := index $pagep "keywords" -}}
-  {{- if ne $rawKeywords nil -}}
-    {{- if not (reflect.IsSlice $rawKeywords) -}}
-      {{- $rawKeywords = split (printf "%v" $rawKeywords) "," -}}
+{{- $rawKeywords := $page.Keywords -}}
+{{- if and (reflect.IsMap $pagep) (isset $pagep "keywords") -}}
+  {{- $rawKeywords = index $pagep "keywords" -}}
+{{- end -}}
+{{- if ne $rawKeywords nil -}}
+  {{- if not (reflect.IsSlice $rawKeywords) -}}
+    {{- $rawKeywords = split (printf "%v" $rawKeywords) "," -}}
+  {{- end -}}
+  {{- $keywords := slice -}}
+  {{- range $rawKeywords -}}
+    {{- with trim (printf "%v" .) " \t\n\r" -}}
+      {{- $keywords = $keywords | append . -}}
     {{- end -}}
-    {{- $keywords := slice -}}
-    {{- range $rawKeywords -}}
-      {{- with trim (printf "%v" .) " \t\n\r" -}}
-        {{- $keywords = $keywords | append . -}}
-      {{- end -}}
-    {{- end -}}
-    {{- with $keywords -}}
-      {{- $record = merge $record (dict "keywords" .) -}}
-    {{- end -}}
+  {{- end -}}
+  {{- with $keywords -}}
+    {{- $record = merge $record (dict "keywords" .) -}}
   {{- end -}}
 {{- end -}}
 

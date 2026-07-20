@@ -11,9 +11,14 @@ import {normalize, TOKEN_SPLIT} from './pipeline.js';
 // page-side tokens match the indexed ones.
 const TOKEN_SCAN = /[^\n\r\p{Z}\p{P}]+/gu;
 
-export function createHighlighter(processTerm) {
-  // Derives the stemmed query-term set plus the normalized final term (for
-  // plain prefix marking, mirroring the engine's last-term prefix search).
+export function createHighlighter(processTerm, prefix) {
+  // Derives the stemmed query-term set plus the normalized final term for
+  // plain prefix marking, mirroring the engine's last-term prefix search:
+  // when prefix matching is disabled the engine runs none, so lastToken
+  // stays empty, and a final term the pipeline drops (a stopword) never
+  // reaches the engine's prefix search either -- marking its prefixes
+  // would highlight words the query cannot have matched ("gravity of"
+  // must not mark "office").
   function queryTerms(query) {
     const tokens = normalize(query).split(TOKEN_SPLIT).filter(Boolean);
     const stems = new Set();
@@ -23,7 +28,8 @@ export function createHighlighter(processTerm) {
         stems.add(stem);
       }
     }
-    return {stems, lastToken: tokens.length ? tokens[tokens.length - 1] : ''};
+    const last = tokens.length ? tokens[tokens.length - 1] : '';
+    return {stems, lastToken: prefix && last && processTerm(last) ? last : ''};
   }
 
   function markTextNode(node, terms) {

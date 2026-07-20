@@ -25,6 +25,11 @@
 {{- $searchPagePath := "" -}}
 {{- with site.GetPage $cfg.page_path -}}{{- $searchPagePath = .Path -}}{{- end -}}
 {{- $docs := slice -}}
+{{/* Scratch, not a dict accumulator: the sentinel needs EXACT-key
+     lookups on both sides, and merge folds map keys case-insensitively,
+     so a case-variant href would swallow a later true duplicate's
+     sentinel along with its warning. */}}
+{{- $seen := newScratch -}}
 {{- if $cfg.enable -}}
   {{- range site.RegularPages -}}
     {{- $keep := true -}}
@@ -84,8 +89,20 @@
       {{- end -}}
     {{- end -}}
 
+    {{/* href is the engine's document id and duplicate ids break
+         client-side search, so colliding permalinks (for example two
+         pages with the same url front matter) must not reach the
+         envelope: the first record wins and each collision warns once. */}}
     {{- if $keep -}}
-      {{- $docs = $docs | append (partialCached "search/lib/record.html" (dict "page" . "cfg" $cfg) .Path) -}}
+      {{- $record := partialCached "search/lib/record.html" (dict "page" . "cfg" $cfg) .Path -}}
+      {{- if $seen.Get $record.href -}}
+        {{- partial "search/lib/warn.html" (dict
+            "key" (printf "search:warn:duplicate-href:%s" $record.href)
+            "message" (printf "[search] Skipping the duplicate search index record for %s: another page already emitted this permalink, and duplicate record ids would break client-side search." $record.href)) -}}
+      {{- else -}}
+        {{- $seen.Set $record.href true -}}
+        {{- $docs = $docs | append $record -}}
+      {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
