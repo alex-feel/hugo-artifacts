@@ -29,6 +29,11 @@ test('dedicated page: form contract, defaults, noscript, live regions', async ({
 
   await expect(root.locator('.search__status')).toHaveAttribute('role', 'status');
   await expect(root.locator('.search__alert')).toHaveAttribute('role', 'alert');
+  // The results container carries an accessible name, which ARIA prohibits
+  // on a role-less div: the explicit region role makes the name valid and
+  // the results reachable as a landmark.
+  await expect(root.locator('.search__results')).toHaveAttribute('role', 'region');
+  await expect(root.locator('.search__results')).toHaveAttribute('aria-label', 'Search results');
   await expect(root.locator('.search__noscript')).toHaveCount(1);
   await expect(root.locator('.search__clear')).toBeHidden();
   await expect(root.locator('.search__more')).toBeHidden();

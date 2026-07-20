@@ -1,6 +1,8 @@
 // Serialized-index caching (forced on in the fixture) and the full
-// CustomEvent contract, including the inbound search:rescan hook.
-/* global document, window, caches, URL, CustomEvent */
+// CustomEvent contract: search:error with its phase, the outbound event
+// payload walk, the inbound search:rescan hook (including page-surface
+// swaps), and index-shape resilience.
+/* global document, window, caches, URL, CustomEvent, PopStateEvent, history */
 import {test, expect} from '@playwright/test';
 
 async function captureReady(page) {
@@ -97,4 +99,84 @@ test('event payload walk and the search:rescan inbound hook', async ({page}) => 
     return document.querySelectorAll('.search--inline.search--enhanced').length;
   });
   expect(enhancedCount).toBe(2);
+});
+
+test('a failing index fetch surfaces search:error with the fetch phase', async ({page}) => {
+  await page.route('**/searchindex.json*', (route) => route.fulfill({status: 404, body: ''}));
+  await page.goto('/');
+  await page.evaluate(() => {
+    window.__errors = [];
+    document.addEventListener('search:error', (event) => window.__errors.push(event.detail));
+  });
+  await page.locator('.search--inline .search__input').fill('gravity');
+  await expect(page.locator('.search--inline')).toHaveClass(/search--error/);
+  const errors = await page.evaluate(() => window.__errors);
+  expect(errors.length).toBeGreaterThan(0);
+  expect(errors[0]).toMatchObject({phase: 'fetch'});
+  await expect(page.locator('.search--inline .search__alert')).toHaveText(
+    'Search is unavailable. Reload the page to try again.',
+  );
+});
+
+test('a duplicate record id degrades to a skip, never a site-wide failure', async ({page}) => {
+  // One duplicated href in the served index (a consumer-shadowed index
+  // template without the shipped dedup) must not kill client-side
+  // search: the engine drops the duplicate and serves the rest.
+  await page.route('**/searchindex.json*', async (route) => {
+    const response = await route.fetch();
+    const env = await response.json();
+    env.docs.push(env.docs.find((d) => d.href === '/blog/gravity-title/'));
+    env.docCount = env.docs.length;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(env),
+    });
+  });
+  await page.goto('/search/');
+  await page.locator('.search--page .search__input').fill('gravity');
+  // Two results, not three (the duplicate is skipped) and not an error
+  // state (the build survived).
+  await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(2);
+  expect(await page.locator('.search--page.search--error').count()).toBe(0);
+});
+
+test('page-surface swaps never accumulate window listeners; the live root serves popstate', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    window.__popstateRegistrations = 0;
+    const original = window.addEventListener.bind(window);
+    window.addEventListener = (type, ...rest) => {
+      if (type === 'popstate') {
+        window.__popstateRegistrations++;
+      }
+      return original(type, ...rest);
+    };
+  });
+  await page.goto('/search/?q=gravity');
+  await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(2);
+  // Swap the page root twice (a PJAX-style replacement) and rescan.
+  for (let i = 0; i < 2; i++) {
+    await page.evaluate(() => {
+      const root = document.querySelector('.search--page');
+      const clone = root.cloneNode(true);
+      clone.classList.remove('search--enhanced');
+      clone.querySelector('.search__results').textContent = '';
+      root.replaceWith(clone);
+      document.dispatchEvent(new CustomEvent('search:rescan'));
+    });
+    await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(
+      2,
+    );
+  }
+  // The window listeners are singletons: three wirings, one registration.
+  expect(await page.evaluate(() => window.__popstateRegistrations)).toBe(1);
+  // The freshly wired root still serves external ?q= changes.
+  await page.evaluate(() => {
+    history.pushState(null, '', '/search/?q=beacon');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(page.locator('.search--page .search__input')).toHaveValue('beacon');
+  await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(2);
 });

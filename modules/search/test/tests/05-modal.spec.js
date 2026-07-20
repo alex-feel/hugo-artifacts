@@ -21,9 +21,12 @@
 // (modern engines normalize the owner's dialog restored while open and
 // spare a dialog a host put in the top layer itself; engines without
 // :modal neither close an open palette on rescan nor skip fresh-root
-// and deposed-owner normalization), and the hidden-trigger guarantee
-// when no dialog can serve.
-/* global document, window, URL, CustomEvent, MutationObserver, Element */
+// and deposed-owner normalization), the hidden-trigger guarantee when
+// no dialog can serve, the IME composition guard on the listbox
+// keyboard model, the modifier-less-hotkey typing guard, and the
+// dialog-less-engine support floor (no HTMLDialogElement global: the
+// modal stays unwired while every other surface still enhances).
+/* global document, window, URL, CustomEvent, MutationObserver, Element, KeyboardEvent */
 import {test, expect} from '@playwright/test';
 
 const DIALOG = '.search--modal .search__dialog';
@@ -1078,4 +1081,101 @@ test('escape clears first, closes second; focus returns to the trigger', async (
   await page.keyboard.press('Escape');
   await expect(dialog).not.toHaveAttribute('open', '');
   await expect(trigger).toBeFocused();
+});
+
+test('an IME composition Enter or arrow never commits or navigates', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  await page.keyboard.press('Control+KeyK');
+  const input = page.locator(INPUT);
+  await input.fill('gravity');
+  const options = page.locator('.search--modal .search__option');
+  await expect(options).toHaveCount(2);
+  await page.keyboard.press('ArrowDown');
+  await expect(options.first()).toHaveAttribute('aria-selected', 'true');
+  // A composition commit-Enter (isComposing, or the legacy keyCode 229)
+  // and a composition arrow belong to the IME: they must neither
+  // activate the option and navigate nor move the active option.
+  await page.evaluate(() => {
+    const el = document.querySelector('.search--modal .search__input');
+    el.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Enter',
+        isComposing: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    const legacy = new KeyboardEvent('keydown', {key: 'Enter', bubbles: true, cancelable: true});
+    Object.defineProperty(legacy, 'keyCode', {value: 229});
+    el.dispatchEvent(legacy);
+    el.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'ArrowDown',
+        isComposing: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
+  await page.waitForTimeout(200);
+  expect(page.url()).not.toContain('/blog/');
+  await expect(page.locator(DIALOG)).toHaveAttribute('open', '');
+  await expect(options.first()).toHaveAttribute('aria-selected', 'true');
+});
+
+test('a modifier-less hotkey never fires while typing, never closes from its own input', async ({
+  page,
+}) => {
+  // Patch the modal's configured hotkey to a bare "k" before the module
+  // evaluates: a hotkey with no non-typing modifier is an ordinary
+  // character in a field, so it must be suppressed there -- like the
+  // slash opt-in -- and keep working outside typing contexts.
+  await page.addInitScript(() => {
+    const observer = new MutationObserver(() => {
+      const modal = document.querySelector('.search--modal');
+      if (modal) {
+        modal.dataset.searchHotkey = 'k';
+        observer.disconnect();
+      }
+    });
+    observer.observe(document, {childList: true, subtree: true});
+  });
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  const dialog = page.locator(DIALOG);
+  // Typing "k" into the inline surface's input is text entry, not a command.
+  const inlineInput = page.locator('.search--inline .search__input');
+  await inlineInput.click();
+  await page.keyboard.press('k');
+  await expect(inlineInput).toHaveValue('k');
+  await expect(dialog).not.toHaveAttribute('open', '');
+  // Outside a typing context the bare hotkey opens the palette.
+  await page.evaluate(() => document.activeElement.blur());
+  await page.keyboard.press('k');
+  await expect(dialog).toHaveAttribute('open', '');
+  // Typing "k" into the palette's own input must not toggle it closed.
+  await page.locator(INPUT).pressSequentially('k');
+  await expect(dialog).toHaveAttribute('open', '');
+  await expect(page.locator(INPUT)).toHaveValue('k');
+});
+
+test('engines without HTMLDialogElement keep every other surface enhanced', async ({page}) => {
+  // Simulate an engine that predates <dialog>: the global is absent, so
+  // a bare reference in the real-dialog predicate would throw a
+  // ReferenceError that kills init for the whole page. With the typeof
+  // guard the modal simply never wires -- trigger hidden, GET baseline
+  // -- while the inline surface enhances and searches normally.
+  await page.addInitScript(() => {
+    delete window.HTMLDialogElement;
+  });
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(String(error)));
+  await page.goto('/');
+  await expect(page.locator('.search--inline')).toHaveClass(/search--enhanced/);
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
+  await page.locator('.search--inline .search__input').fill('gravity');
+  await expect(page.locator('.search--inline .search__option')).toHaveCount(2);
+  expect(errors).toHaveLength(0);
 });

@@ -6,6 +6,7 @@
 // zero code duplication.
 //
 // Message protocol (all payloads structured-clone-safe):
+//   backend -> page  boot    {}  (worker mode only: script loaded)
 //   page -> backend  init    {indexUrl, lang, options, cache}
 //   backend -> page  ready   {docCount, source: "cache" | "network"}
 //   page -> backend  query   {id, q, limit, boost, fuzzy, prefix}
@@ -233,6 +234,12 @@ export function createSearchBackend() {
 // new Worker(url, {type: 'module'}) and speaks the message protocol above.
 if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope) {
   const backend = createSearchBackend();
+  // The boot ack tells the page this script loaded and is running, so
+  // the page scopes its startup timeout to script boot alone: the init
+  // reply that follows takes honest network time (index fetch) plus CPU
+  // time (engine build), and timing those out would terminate a healthy
+  // worker mid-download.
+  self.postMessage({type: 'boot'});
   self.addEventListener('message', (event) => {
     const message = event.data || {};
     if (message.type === 'init') {

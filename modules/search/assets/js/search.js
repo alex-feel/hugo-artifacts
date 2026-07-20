@@ -37,7 +37,11 @@ import {renderResult, renderPageResults} from './search/render.js';
 import {readQuery, writeQuery, onExternalChange} from './search/url-state.js';
 
 const ANNOUNCE_DELAY_MS = 500;
-const WORKER_READY_TIMEOUT_MS = 5000;
+// Bounds only the worker BOOT ack (script load and evaluation), never the
+// index fetch or build: those take honest network and CPU time on slow
+// connections, and terminating mid-download would double the download by
+// forcing the main-thread fallback to re-fetch the same index.
+const WORKER_BOOT_TIMEOUT_MS = 5000;
 const IDLE_PREFETCH_TIMEOUT_MS = 3000;
 
 let requestCounter = 0;
@@ -144,9 +148,9 @@ function connectWorker(workerUrl, initMessage) {
       if (!settled) {
         settled = true;
         worker.terminate();
-        reject({transport: true, message: 'worker ready timeout'});
+        reject({transport: true, message: 'worker boot timeout'});
       }
-    }, WORKER_READY_TIMEOUT_MS);
+    }, WORKER_BOOT_TIMEOUT_MS);
     worker.addEventListener('error', () => {
       if (!settled) {
         settled = true;
@@ -157,6 +161,15 @@ function connectWorker(workerUrl, initMessage) {
     });
     worker.addEventListener('message', (event) => {
       const message = event.data || {};
+      if (message.type === 'boot') {
+        // The boot ack: the worker script loaded and is running, so the
+        // startup timer has done its job. From here the init reply owns
+        // the outcome -- a genuine failure arrives as an error message
+        // (transport false, no pointless fallback), and a slow index
+        // download is not a failure at all.
+        clearTimeout(timer);
+        return;
+      }
       if (!settled) {
         settled = true;
         clearTimeout(timer);
@@ -270,7 +283,7 @@ function createCore(root, config) {
     status: root.querySelector('.search__status'),
     alert: root.querySelector('.search__alert'),
     template: root.querySelector('template[data-search-template]'),
-    highlighter: createHighlighter(processTerm),
+    highlighter: createHighlighter(processTerm, config.options.prefix),
     backendPromise: null,
     failed: false,
     lastSentId: 0,
@@ -382,44 +395,46 @@ function runQuery(core, q, hooks) {
           fuzzy: core.config.options.fuzzy,
           prefix: core.config.options.prefix,
         })
-        .then(
-          (message) => {
-            // Stale-result guard: drop results older than the last request
-            // this surface sent, and results for a query it since cleared.
-            if (message.id < core.lastSentId || core.currentQuery.trim() !== q) {
-              return;
-            }
-            const terms = core.highlighter.queryTerms(q);
-            hooks.render(message, terms);
-            if (message.count > 0) {
-              setStateClass(core, 'search--has-results');
-              announceSettled(core, pluralCount(core, message.count), '');
-            } else {
-              setStateClass(core, 'search--no-results');
-              // Function replacer: $-sequences in the query are inert, and
-              // replaceAll fills EVERY %s a translation carries.
-              announceSettled(
-                core,
-                '',
-                core.config.i18n.noResults.replaceAll('%s', () => q),
-              );
-            }
-            dispatch(core.root, 'search:results', {
-              query: q,
-              count: message.count,
-              surface: core.config.surface,
-            });
-          },
-          (failure) => {
-            // Error state for that query only; the next input retries.
-            setStateClass(core, 'search--error');
-            announceNow(core, '', core.config.i18n.error);
-            dispatch(core.root, 'search:error', {
-              phase: (failure && failure.phase) || 'query',
-              message: String((failure && failure.message) || failure),
-            });
-          },
-        );
+        .then((message) => {
+          // Stale-result guard: drop results older than the last request
+          // this surface sent, and results for a query it since cleared.
+          if (message.id < core.lastSentId || core.currentQuery.trim() !== q) {
+            return;
+          }
+          const terms = core.highlighter.queryTerms(q);
+          hooks.render(message, terms);
+          if (message.count > 0) {
+            setStateClass(core, 'search--has-results');
+            announceSettled(core, pluralCount(core, message.count), '');
+          } else {
+            setStateClass(core, 'search--no-results');
+            // Function replacer: $-sequences in the query are inert, and
+            // replaceAll fills EVERY %s a translation carries.
+            announceSettled(
+              core,
+              '',
+              core.config.i18n.noResults.replaceAll('%s', () => q),
+            );
+          }
+          dispatch(core.root, 'search:results', {
+            query: q,
+            count: message.count,
+            surface: core.config.surface,
+          });
+        })
+        // One catch behind the success handler, not a two-argument then:
+        // a render or announce that throws (a malformed hit, a platform
+        // API an old engine lacks) then lands in the same per-query error
+        // state instead of dying as an unhandled rejection. The next
+        // input retries.
+        .catch((failure) => {
+          setStateClass(core, 'search--error');
+          announceNow(core, '', core.config.i18n.error);
+          dispatch(core.root, 'search:error', {
+            phase: (failure && failure.phase) || 'query',
+            message: String((failure && failure.message) || failure),
+          });
+        });
     },
     () => {},
   );
@@ -605,6 +620,14 @@ function createListbox(core, config, listbox, seeAll, isInline) {
   }
 
   function onKeydown(event, escapeHook) {
+    // An IME composition owns Enter (candidate commit) and the arrow
+    // keys (candidate navigation); acting on them would navigate away
+    // or hijack the candidate list mid-composition. keyCode 229 is the
+    // legacy composition signal from engines and IMEs that predate
+    // isComposing.
+    if (event.isComposing || event.keyCode === 229) {
+      return;
+    }
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       move(1);
@@ -751,10 +774,20 @@ function wirePage(root, config) {
       }
       event.preventDefault();
       clearTimeout(core.debounceTimer);
+      // Form-state restoration and autofill set input.value without an
+      // input event, leaving currentQuery stale; syncing it here keeps
+      // the stale-result guard from silently discarding the submit's
+      // own response.
+      core.currentQuery = input.value;
       const trimmed = input.value.trim();
       if (trimmed.length >= config.minLength) {
         writeQuery(trimmed);
         runQuery(core, trimmed, hooks);
+      } else if (trimmed) {
+        // A too-short restored query explains itself instead of an
+        // Enter that visibly does nothing; an empty submit keeps the
+        // current state, mirroring handleInput.
+        announceNow(core, core.config.i18n.minChars, '');
       }
     });
   }
@@ -779,7 +812,7 @@ function wirePage(root, config) {
     setTimeout(() => ensureBackend(core), IDLE_PREFETCH_TIMEOUT_MS);
   }
 
-  onExternalChange((q) => {
+  onExternalChange(root, (q) => {
     input.value = q;
     core.currentQuery = q;
     toggleClear();
@@ -931,6 +964,15 @@ function wireModalDocumentListeners() {
         event.altKey === hotkey.alt &&
         event.shiftKey === hotkey.shift
       ) {
+        // A hotkey with no non-typing modifier (a bare "k", or a
+        // shift-only "shift+k" -- shift is how capitals are typed) is
+        // an ordinary character in a field: firing there would eat the
+        // keystroke, and with the palette open its own input would
+        // toggle it closed mid-word. Ctrl, Alt, and mod chords never
+        // type text, so they keep working everywhere.
+        if (!(hotkey.mod || hotkey.ctrl || hotkey.alt) && isTypingContext(event.target)) {
+          return;
+        }
         event.preventDefault();
         if (owner.isOpen()) {
           owner.close();
@@ -963,10 +1005,13 @@ function wireModal(root, config) {
   // throw mid-wiring. The FIRST real dialog wins; impostors are
   // invisible and cannot poison a real dialog behind them, and a root
   // with none stays dialog-less with its trigger correctly hidden
-  // until an owner exists.
+  // until an owner exists. The closest check pins each candidate to its
+  // NEAREST modal root -- the same pinning the recovery sweep applies --
+  // so a dialog belonging to a nested placement is elected by its own
+  // root's pass, never adopted by an ancestor.
   let dialog = null;
   for (const candidate of root.querySelectorAll('dialog.search__dialog')) {
-    if (isRealDialog(candidate)) {
+    if (isRealDialog(candidate) && candidate.closest('.search--modal') === root) {
       dialog = candidate;
       break;
     }
@@ -1166,11 +1211,18 @@ function recordDialogIntact(record) {
 // parser's breakout list) and a script-created HTML-namespace unknown
 // element named DIALOG. Neither carries close()/showModal(), so every
 // site that acts on a queried dialog filters through this predicate:
-// only a real HTMLDialogElement is the module's to serve or sweep, and
-// everything else wearing the class stays invisible -- and the host's
-// responsibility.
+// only a same-realm HTMLDialogElement is the module's to serve or
+// sweep, and everything else wearing the class stays invisible -- and
+// the host's responsibility (a genuine dialog adopted from another
+// realm fails the instanceof check too and simply goes unserved). The
+// typeof guard carries engines that predate <dialog>: the global is
+// absent there, a bare reference would throw and kill init for every
+// surface, and <dialog> markup parses as HTMLUnknownElement anyway --
+// with the guard, every candidate fails the predicate, the modal stays
+// unwired with its trigger hidden, and the page and inline surfaces
+// enhance on top of the server GET baseline.
 function isRealDialog(el) {
-  return el instanceof HTMLDialogElement;
+  return typeof HTMLDialogElement === 'function' && el instanceof HTMLDialogElement;
 }
 
 // Closes host-restored stray-open dialogs inside a root, exempting at

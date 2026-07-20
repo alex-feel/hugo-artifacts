@@ -1,7 +1,8 @@
 // Query behavior on the dedicated page: recall in both languages, ranking,
-// prefix and fuzzy matching, heading deep links, grouped rendering, and the
-// ?q= round-trip.
-/* global history, location */
+// prefix and fuzzy matching (including prefix = false), keywords-field
+// recall, highlight scope, form submit semantics, heading deep links,
+// grouped rendering, and the ?q= round-trip.
+/* global document, history, location, MutationObserver */
 import {test, expect} from '@playwright/test';
 
 const RESULT_LINKS = '.search--page .search__results .search__result-link';
@@ -33,6 +34,93 @@ test('english recall, title-over-body ranking, prefix, fuzzy, stemming', async (
   await expect
     .poll(async () => (await hrefs(page)).includes('/blog/spacetime-basics/'))
     .toBeTruthy();
+});
+
+test('standard keywords front matter matches through the boosted keywords field', async ({
+  page,
+}) => {
+  // The lighthouse page carries keywords: ['pharos'] and no
+  // search.keywords: without the record builder's fallback the term
+  // reaches no indexed field and this query returns nothing.
+  await page.goto('/search/');
+  await page.locator('.search--page .search__input').fill('pharos');
+  await expect(page.locator(`${RESULT_LINKS}[href="/blog/lighthouse-post/"]`)).toHaveCount(1);
+});
+
+test('a trailing stopword never prefix-marks unrelated words', async ({page}) => {
+  // "of" is a stopword: the engine drops it from the query and runs no
+  // prefix search for it, so the highlighter must not mark words that
+  // merely start with it ("official", or every literal "of") -- only the
+  // real term's matches carry marks.
+  await page.goto('/search/');
+  await page.locator('.search--page .search__input').fill('gravity of');
+  await expect(page.locator(RESULT_LINKS)).toHaveCount(2);
+  const marks = await page
+    .locator('.search--page .search__results .search__mark')
+    .evaluateAll((els) => els.map((el) => el.textContent.toLowerCase()));
+  expect(marks.length).toBeGreaterThan(0);
+  for (const mark of marks) {
+    expect(mark.startsWith('of')).toBeFalsy();
+  }
+  expect(marks.some((m) => m.startsWith('gravity'))).toBeTruthy();
+});
+
+test('prefix = false disables the engine prefix search and prefix marking', async ({page}) => {
+  // Patch the page root's options while the document is still parsing,
+  // before the module script evaluates: with prefix off, a partial final
+  // term matches nothing by prefix, and a query the default fuzzy still
+  // bridges renders results without a single prefix mark.
+  await page.addInitScript(() => {
+    const observer = new MutationObserver(() => {
+      const root = document.querySelector('.search--page');
+      if (root) {
+        const options = JSON.parse(root.dataset.searchOptions);
+        options.prefix = false;
+        root.dataset.searchOptions = JSON.stringify(options);
+        observer.disconnect();
+      }
+    });
+    observer.observe(document, {childList: true, subtree: true});
+  });
+  await page.goto('/search/');
+  const input = page.locator('.search--page .search__input');
+  // "beac" prefix-matches "beacon" only when prefix is on; two edits away,
+  // it is out of the default fuzzy's reach too.
+  await input.fill('beac');
+  await expect(page.locator('.search--page .search__alert')).toHaveText('No results for “beac”');
+  // The default fuzzy bridges "gravit" to the indexed stem, so results
+  // render -- but the final term must not prefix-mark "gravity" in them.
+  await input.fill('gravit');
+  await expect(page.locator(RESULT_LINKS)).toHaveCount(2);
+  expect(await page.locator('.search--page .search__results .search__mark').count()).toBe(0);
+});
+
+test('form submit works after programmatic value restoration', async ({page}) => {
+  // Form-state restoration and autofill set the input value without an
+  // input event; Enter must still search instead of the stale-query guard
+  // silently discarding the submit's own response.
+  await page.goto('/search/');
+  await expect(page.locator('.search--page')).toHaveClass(/search--enhanced/);
+  await page.evaluate(() => {
+    const root = document.querySelector('.search--page');
+    root.querySelector('.search__input').value = 'gravity';
+    root.querySelector('.search__form').requestSubmit();
+  });
+  await expect(page.locator(RESULT_LINKS)).toHaveCount(2);
+  await expect.poll(() => page.url()).toContain('q=gravity');
+});
+
+test('a too-short submit explains itself through the status region', async ({page}) => {
+  await page.goto('/search/');
+  await expect(page.locator('.search--page')).toHaveClass(/search--enhanced/);
+  await page.evaluate(() => {
+    const root = document.querySelector('.search--page');
+    root.querySelector('.search__input').value = 'g';
+    root.querySelector('.search__form').requestSubmit();
+  });
+  await expect(page.locator('.search--page .search__status')).toHaveText(
+    'Type at least 2 characters',
+  );
 });
 
 test('heading sub-records: anchor deep link plus the parent page', async ({page}) => {

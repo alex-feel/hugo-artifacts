@@ -52,9 +52,24 @@ export function engineOptions(fields, processTerm) {
   return {idField: 'href', fields, storeFields: STORE_FIELDS, extractField, processTerm};
 }
 
+// addAll THROWS on a duplicate document id and MiniSearch offers no
+// skip option, so one colliding record -- a consumer-shadowed index
+// template without the shipped dedup, or duplicate heading anchors --
+// would otherwise kill search site-wide; the first record wins,
+// mirroring the index template's own build-time dedup.
 export function buildEngine(docs, options) {
   const engine = new MiniSearch(options);
-  engine.addAll(docs);
+  const seen = new Set();
+  const unique = [];
+  for (const doc of docs) {
+    const id = doc[options.idField];
+    if (seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    unique.push(doc);
+  }
+  engine.addAll(unique);
   return engine;
 }
 
