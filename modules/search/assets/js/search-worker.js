@@ -18,7 +18,11 @@
 // -- not the transfer source: the envelope is fetched and parsed on EVERY
 // init, both because the compound cache key is computable only from the
 // fetched envelope and because the network transfer itself rides the HTTP
-// revalidation caching of the stable index URL.
+// revalidation caching of the stable index URL. ready.docCount is the
+// engine's OWN document count -- the records a query can actually return,
+// heading sub-records included -- never the envelope's self-reported
+// docCount field: a tampered or shadowed envelope can claim any number,
+// and client-side duplicate skips shrink what the engine accepts.
 /* global self, fetch, caches, Response, WorkerGlobalScope, URL */
 
 import {createProcessTerm} from './search/pipeline.js';
@@ -198,7 +202,7 @@ export function createSearchBackend() {
       }
     }
 
-    return {docCount: envelope.docCount, source};
+    return {docCount: engine.documentCount, source};
   }
 
   function query(payload) {

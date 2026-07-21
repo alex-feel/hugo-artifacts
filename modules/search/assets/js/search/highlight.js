@@ -13,12 +13,16 @@ const TOKEN_SCAN = /[^\n\r\p{Z}\p{P}]+/gu;
 
 export function createHighlighter(processTerm, prefix) {
   // Derives the stemmed query-term set plus the normalized final term for
-  // plain prefix marking, mirroring the engine's last-term prefix search:
-  // when prefix matching is disabled the engine runs none, so lastToken
-  // stays empty, and a final term the pipeline drops (a stopword) never
-  // reaches the engine's prefix search either -- marking its prefixes
-  // would highlight words the query cannot have matched ("gravity of"
-  // must not mark "office").
+  // plain prefix marking. lastToken approximates the engine's last-term
+  // prefix search from the safe side, never exactly: when prefix matching
+  // is disabled the engine runs none, so lastToken stays empty; and when
+  // the pipeline drops the final term (a stopword), lastToken stays empty
+  // too -- marking its prefixes would highlight words the query cannot
+  // have matched ("gravity of" must not mark "office") -- even though the
+  // engine, whose prefix flag rides its PROCESSED terms, still
+  // prefix-searches the surviving last stem. The deliberate trade is
+  // under-marking: a prefix-only match of that surviving stem goes
+  // unmarked rather than risk marking a non-match.
   function queryTerms(query) {
     const tokens = normalize(query).split(TOKEN_SPLIT).filter(Boolean);
     const stems = new Set();

@@ -30,6 +30,17 @@ export function writeQuery(q) {
 const externalChangeEntries = [];
 let externalChangeListenersWired = false;
 
+// Pruning is aggressive by design (zero retention of detached subtrees),
+// so a root detached at the moment an event fires loses its entry even
+// when the host later reattaches that same node -- and a reattached root
+// cannot re-register through enhancement, which skips already-enhanced
+// roots. The WeakMap remembers every registration for exactly that case:
+// keyed by the root, its lifetime rides the host's own retention of the
+// node (the modal machinery's former-owner records make the same trade),
+// and readoptExternalChange() re-registers a remembered root once it is
+// back in the document.
+const knownRegistrations = new WeakMap();
+
 function pruneExternalChangeEntries() {
   for (let i = externalChangeEntries.length - 1; i >= 0; i--) {
     if (!externalChangeEntries[i].root.isConnected) {
@@ -49,9 +60,11 @@ function notifyExternalChange() {
 // Re-runs the callback when navigation restores a different query: back and
 // forward (popstate) and bfcache restores (pageshow with persisted). The
 // root anchors the registration's lifetime: once it leaves the document,
-// the callback is dropped.
+// the callback is dropped from the live list -- and remembered for
+// re-adoption should the host bring the same root back.
 export function onExternalChange(root, callback) {
   pruneExternalChangeEntries();
+  knownRegistrations.set(root, callback);
   externalChangeEntries.push({root, callback});
   if (externalChangeListenersWired) {
     return;
@@ -63,4 +76,25 @@ export function onExternalChange(root, callback) {
       notifyExternalChange();
     }
   });
+}
+
+// Re-registers a previously registered root the pruning dropped while it
+// was detached. Run from the rescan path for roots enhancement skips as
+// already enhanced: a no-op for roots never registered (every non-page
+// surface), for disconnected roots, and for roots whose entry is still
+// live -- so callers need not distinguish, and a registration can never
+// double. The singleton listeners are already wired: a remembered root
+// implies a prior onExternalChange() call.
+export function readoptExternalChange(root) {
+  const callback = knownRegistrations.get(root);
+  if (!callback || !root.isConnected) {
+    return;
+  }
+  pruneExternalChangeEntries();
+  for (const entry of externalChangeEntries) {
+    if (entry.root === root) {
+      return;
+    }
+  }
+  externalChangeEntries.push({root, callback});
 }
