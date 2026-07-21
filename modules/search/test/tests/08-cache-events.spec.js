@@ -1,7 +1,8 @@
 // Serialized-index caching (forced on in the fixture) and the full
 // CustomEvent contract: search:error with its phase, the outbound event
-// payload walk, the inbound search:rescan hook (including page-surface
-// swaps), and index-shape resilience.
+// payload walk (including the ready docCount's immunity to envelope
+// claims), the inbound search:rescan hook (including page-surface swaps
+// and detached-root re-adoption), and index-shape resilience.
 /* global document, window, caches, URL, CustomEvent, PopStateEvent, history */
 import {test, expect} from '@playwright/test';
 
@@ -179,4 +180,68 @@ test('page-surface swaps never accumulate window listeners; the live root serves
   });
   await expect(page.locator('.search--page .search__input')).toHaveValue('beacon');
   await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(2);
+});
+
+test('a page root detached across a popstate re-adopts URL sync on rescan', async ({page}) => {
+  await page.goto('/search/?q=gravity');
+  await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(2);
+  // Detach the enhanced root, fire popstate while it sits outside the
+  // document (the url-state registry prunes its entry), reattach the
+  // SAME node, and announce it with search:rescan -- the documented
+  // host contract after any DOM manipulation.
+  await page.evaluate(() => {
+    const root = document.querySelector('.search--page');
+    const parent = root.parentNode;
+    root.remove();
+    history.pushState(null, '', '/search/?q=plasma');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    parent.appendChild(root);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  // The reattached root serves external ?q= changes again.
+  await page.evaluate(() => {
+    history.pushState(null, '', '/search/?q=beacon');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(page.locator('.search--page .search__input')).toHaveValue('beacon');
+  await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(2);
+});
+
+test('search:ready docCount reports the engine count, immune to envelope claims', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    window.__readies = [];
+    document.addEventListener('search:ready', (event) => window.__readies.push(event.detail));
+  });
+  await page.goto('/search/');
+  await page.locator('.search--page .search__input').focus();
+  await expect.poll(() => page.evaluate(() => window.__readies.length)).toBeGreaterThan(0);
+  const healthy = await page.evaluate(() => window.__readies[0]);
+  expect(healthy.source).toBe('network');
+  // Serve a tampered envelope: one duplicated heading-carrying record,
+  // an inflated docCount claim, and a flipped digest so the
+  // serialized-index cache written by the healthy load misses and the
+  // engine truly rebuilds from the tampered docs.
+  await page.route('**/searchindex.json*', async (route) => {
+    const response = await route.fetch();
+    const env = await response.json();
+    env.docs.push(env.docs.find((d) => d.href === '/blog/quantum-notes/'));
+    env.docCount = 999;
+    env.digest = (env.digest[0] === '0' ? '1' : '0') + env.digest.slice(1);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(env),
+    });
+  });
+  await page.reload();
+  await page.locator('.search--page .search__input').focus();
+  await expect.poll(() => page.evaluate(() => window.__readies.length)).toBeGreaterThan(0);
+  const tampered = await page.evaluate(() => window.__readies[0]);
+  expect(tampered.source).toBe('network');
+  // The engine skipped the duplicate AND its expanded heading children
+  // (quantum-notes carries three), so the truthful count equals the
+  // healthy build's -- never the claimed 999.
+  expect(tampered.docCount).toBe(healthy.docCount);
 });

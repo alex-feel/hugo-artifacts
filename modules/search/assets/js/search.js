@@ -34,13 +34,25 @@
 import {createProcessTerm} from './search/pipeline.js';
 import {createHighlighter} from './search/highlight.js';
 import {renderResult, renderPageResults} from './search/render.js';
-import {readQuery, writeQuery, onExternalChange} from './search/url-state.js';
+import {
+  readQuery,
+  writeQuery,
+  onExternalChange,
+  readoptExternalChange,
+} from './search/url-state.js';
 
 const ANNOUNCE_DELAY_MS = 500;
 // Bounds only the worker BOOT ack (script load and evaluation), never the
 // index fetch or build: those take honest network and CPU time on slow
 // connections, and terminating mid-download would double the download by
-// forcing the main-thread fallback to re-fetch the same index.
+// forcing the main-thread fallback to re-fetch the same index. The
+// post-boot phase is DELIBERATELY unbounded -- no deadline can tell a
+// slow legitimate download from a hang, so any timer here re-creates the
+// mid-download terminate this constant was scoped to avoid. A stalled
+// fetch is bounded by the browser's own network stack instead, whose
+// eventual failure surfaces through the phase-"fetch" error path; the
+// residual risk (a fetch a broken service worker parks forever, leaving
+// the surface in search--loading) is accepted.
 const WORKER_BOOT_TIMEOUT_MS = 5000;
 const IDLE_PREFETCH_TIMEOUT_MS = 3000;
 
@@ -1231,12 +1243,17 @@ function isRealDialog(el) {
 // an impostor wearing the class, on which close() would throw and
 // permanently abort recovery, fails the predicate; the probe spares a
 // dialog the host itself put in the top layer where the engine can
-// answer; and the closest check pins each dialog to its NEAREST root,
-// so one nested under a mangled ancestor root is judged only in its
-// own root's pass. Freshly restored markup carries no listeners, so
-// its close is silent; the module's own torn-down dialog, if a host
-// re-inserts that same node, still carries its close listener and
-// reports every close with a truthful search:close.
+// answer -- on engines without :modal it cannot, so a host-opened
+// top-layer dialog wearing the module's class inside the module's root
+// is closed as stray there, an accepted degradation: the class hands
+// the dialog to this hygiene, and the unanswerable probe leaves no way
+// to tell it from a restored stray; and the closest check pins each
+// dialog to its NEAREST root, so one nested under a mangled ancestor
+// root is judged only in its own root's pass. Freshly restored markup
+// carries no listeners, so its close is silent; the module's own
+// torn-down dialog, if a host re-inserts that same node, still carries
+// its close listener and reports every close with a truthful
+// search:close.
 function closeStrayDialogs(root, exempt) {
   for (const stray of root.querySelectorAll('dialog.search__dialog[open]')) {
     if (
@@ -1451,6 +1468,12 @@ function wireInline(root, config) {
 function init() {
   for (const root of document.querySelectorAll('.search')) {
     if (root.classList.contains('search--enhanced')) {
+      // A reattached enhanced root keeps its element-local wiring, but a
+      // page root's URL-state registration is pruned while it is
+      // detached; re-adopting here restores ?q= sync on rescan -- the
+      // page-surface counterpart of recoverModalOwnership(), and a no-op
+      // for every root that never registered.
+      readoptExternalChange(root);
       continue;
     }
     const config = readConfig(root);

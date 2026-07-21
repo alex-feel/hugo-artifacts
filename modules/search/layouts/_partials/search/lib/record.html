@@ -66,7 +66,10 @@
      search.keywords wins when present (presence wins, like every tier of
      the cascade); otherwise the standard keywords front matter feeds the
      same boosted field, so a site that already curates page keywords gets
-     that recall without duplicating them. */}}
+     that recall without duplicating them. Presence includes an explicitly
+     EMPTY search.keywords list: it overrides the fallback into no
+     keywords at all -- the author's way to keep this page's standard
+     keywords out of search matching. */}}
 {{- $pagep := $page.Params.search -}}
 {{- $rawKeywords := $page.Keywords -}}
 {{- if and (reflect.IsMap $pagep) (isset $pagep "keywords") -}}
