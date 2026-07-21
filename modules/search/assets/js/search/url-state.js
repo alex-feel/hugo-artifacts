@@ -65,6 +65,17 @@ function notifyExternalChange() {
 export function onExternalChange(root, callback) {
   pruneExternalChangeEntries();
   knownRegistrations.set(root, callback);
+  for (const entry of externalChangeEntries) {
+    if (entry.root === root) {
+      // A re-registration for a live root (a host that stripped the
+      // enhanced marker and rescanned -- a contract violation) replaces
+      // the callback instead of accumulating a second entry, so one
+      // popstate can never fan out to two callbacks on one root; the
+      // newest wiring wins, matching the WeakMap's memory.
+      entry.callback = callback;
+      return;
+    }
+  }
   externalChangeEntries.push({root, callback});
   if (externalChangeListenersWired) {
     return;
@@ -79,12 +90,13 @@ export function onExternalChange(root, callback) {
 }
 
 // Re-registers a previously registered root the pruning dropped while it
-// was detached. Run from the rescan path for roots enhancement skips as
-// already enhanced: a no-op for roots never registered (every non-page
-// surface), for disconnected roots, and for roots whose entry is still
-// live -- so callers need not distinguish, and a registration can never
-// double. The singleton listeners are already wired: a remembered root
-// implies a prior onExternalChange() call.
+// was detached, and reconciles it with the current URL. Run from the
+// rescan path for roots enhancement skips as already enhanced: a no-op
+// for roots never registered (every non-page surface), for disconnected
+// roots, and for roots whose entry is still live -- so callers need not
+// distinguish, and a registration can never double. The singleton
+// listeners are already wired: a remembered root implies a prior
+// onExternalChange() call.
 export function readoptExternalChange(root) {
   const callback = knownRegistrations.get(root);
   if (!callback || !root.isConnected) {
@@ -97,4 +109,11 @@ export function readoptExternalChange(root) {
     }
   }
   externalChangeEntries.push({root, callback});
+  // Genuine re-adoption reconciles with the address bar: a navigation
+  // that fired while the root was detached is gone for good (its event
+  // already dispatched), so without this call the surface would show
+  // the pre-detach query against the URL's newer one until the next
+  // navigation or input. The live-entry early return above keeps
+  // ordinary rescans from re-running the current query.
+  callback(readQuery());
 }

@@ -1,9 +1,10 @@
-// Serialized-index caching (forced on in the fixture) and the full
-// CustomEvent contract: search:error with its phase, the outbound event
-// payload walk (including the ready docCount's immunity to envelope
-// claims), the inbound search:rescan hook (including page-surface swaps
-// and detached-root re-adoption), and index-shape resilience.
-/* global document, window, caches, URL, CustomEvent, PopStateEvent, history */
+// Serialized-index caching (forced on in the fixture; the write off the
+// ready critical path) and the full CustomEvent contract: search:error
+// with its phase, the outbound event payload walk (including the ready
+// docCount's immunity to envelope claims), the inbound search:rescan
+// hook (including page-surface swaps and detached-root re-adoption with
+// URL reconciliation), and index-shape resilience.
+/* global document, window, caches, URL, CustomEvent, PopStateEvent, history, MutationObserver, Event */
 import {test, expect} from '@playwright/test';
 
 async function captureReady(page) {
@@ -22,6 +23,17 @@ test('first build from network, warm start from cache; compound key rides the qu
   await expect.poll(() => page.evaluate(() => window.__readies.length)).toBeGreaterThan(0);
   const first = await page.evaluate(() => window.__readies[0]);
   expect(first.source).toBe('network');
+
+  // The write runs off the ready critical path, so wait for the entry
+  // to land before reloading -- reloading mid-write would race it.
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const cache = await caches.open('search-index-v1');
+        return (await cache.keys()).length;
+      }),
+    )
+    .toBeGreaterThan(0);
 
   // The envelope is fetched on BOTH loads; source names the INDEX-BUILD
   // source, so the reload builds from the serialized cache entry.
@@ -193,16 +205,52 @@ test('a page root detached across a popstate re-adopts URL sync on rescan', asyn
     const root = document.querySelector('.search--page');
     const parent = root.parentNode;
     root.remove();
-    history.pushState(null, '', '/search/?q=plasma');
+    history.pushState(null, '', '/search/?q=beacon');
     window.dispatchEvent(new PopStateEvent('popstate'));
     parent.appendChild(root);
     document.dispatchEvent(new CustomEvent('search:rescan'));
   });
-  // The reattached root serves external ?q= changes again.
+  // Re-adoption reconciles with the address bar immediately: the
+  // navigation missed while the root was detached lands at rescan,
+  // without waiting for any further event.
+  await expect(page.locator('.search--page .search__input')).toHaveValue('beacon');
+  await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(2);
+  // And the re-registered root serves subsequent external changes.
   await page.evaluate(() => {
-    history.pushState(null, '', '/search/?q=beacon');
+    history.pushState(null, '', '/search/?q=gravity');
     window.dispatchEvent(new PopStateEvent('popstate'));
   });
+  await expect(page.locator('.search--page .search__input')).toHaveValue('gravity');
+  await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(2);
+});
+
+test('reconciliation cancels a pending debounced keystroke for good', async ({page}) => {
+  await page.goto('/search/?q=gravity');
+  await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(2);
+  // Start a debounced keystroke, then run the whole
+  // detach/popstate/reattach/rescan burst synchronously inside the
+  // debounce window: reconciliation must kill the pending timer, or the
+  // orphaned timer later fires and writes the stale typed query back
+  // over the URL the reconcile just applied.
+  await page.evaluate(() => {
+    const root = document.querySelector('.search--page');
+    const input = root.querySelector('.search__input');
+    input.value = 'plasma';
+    input.dispatchEvent(new Event('input', {bubbles: true}));
+    const parent = root.parentNode;
+    root.remove();
+    history.pushState(null, '', '/search/?q=beacon');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    parent.appendChild(root);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator('.search--page .search__input')).toHaveValue('beacon');
+  // Outwait the debounce residue (220ms default) with margin: the URL
+  // and the input must both keep the reconciled query.
+  await page.waitForTimeout(600);
+  expect(await page.evaluate(() => new URL(window.location.href).searchParams.get('q'))).toBe(
+    'beacon',
+  );
   await expect(page.locator('.search--page .search__input')).toHaveValue('beacon');
   await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(2);
 });
@@ -244,4 +292,43 @@ test('search:ready docCount reports the engine count, immune to envelope claims'
   // (quantum-notes carries three), so the truthful count equals the
   // healthy build's -- never the claimed 999.
   expect(tampered.docCount).toBe(healthy.docCount);
+});
+
+test('a hung cache write never blocks the ready reply', async ({page}) => {
+  // Force the main-thread backend (the page realm's caches stub cannot
+  // reach a worker's) and stub Cache Storage so match misses and put
+  // parks forever: the engine is fully built by write time, so ready
+  // must arrive regardless.
+  await page.addInitScript(() => {
+    const observer = new MutationObserver(() => {
+      const root = document.querySelector('.search--page');
+      if (root) {
+        const options = JSON.parse(root.dataset.searchOptions);
+        options.worker = false;
+        root.dataset.searchOptions = JSON.stringify(options);
+        observer.disconnect();
+      }
+    });
+    observer.observe(document, {childList: true, subtree: true});
+    Object.defineProperty(window, 'caches', {
+      configurable: true,
+      value: {
+        open: async () => ({
+          match: async () => undefined,
+          put: () => new Promise(() => {}),
+          keys: async () => [],
+          delete: async () => true,
+        }),
+      },
+    });
+    window.__readies = [];
+    document.addEventListener('search:ready', (event) => window.__readies.push(event.detail));
+  });
+  await page.goto('/search/');
+  await page.locator('.search--page .search__input').focus();
+  await expect.poll(() => page.evaluate(() => window.__readies.length)).toBeGreaterThan(0);
+  expect((await page.evaluate(() => window.__readies[0])).source).toBe('network');
+  // The built engine serves queries while the write sits parked.
+  await page.locator('.search--page .search__input').fill('gravity');
+  await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(2);
 });

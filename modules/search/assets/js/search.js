@@ -51,8 +51,11 @@ const ANNOUNCE_DELAY_MS = 500;
 // mid-download terminate this constant was scoped to avoid. A stalled
 // fetch is bounded by the browser's own network stack instead, whose
 // eventual failure surfaces through the phase-"fetch" error path; the
-// residual risk (a fetch a broken service worker parks forever, leaving
-// the surface in search--loading) is accepted.
+// accepted residuals, either of which leaves the surface in
+// search--loading, are a fetch a broken service worker parks forever
+// and a hung Cache Storage READ while serialized-index caching is
+// active (the write side runs after the ready reply, off the critical
+// path, so it can never park a built engine).
 const WORKER_BOOT_TIMEOUT_MS = 5000;
 const IDLE_PREFETCH_TIMEOUT_MS = 3000;
 
@@ -825,6 +828,12 @@ function wirePage(root, config) {
   }
 
   onExternalChange(root, (q) => {
+    // An external change stomps the input state synchronously, so any
+    // pending debounced keystroke must die with it -- like every other
+    // synchronous stomp site (handleInput, the submit handler). An
+    // orphaned timer would later fire and write its stale pre-change
+    // query back over the URL this callback just applied.
+    clearTimeout(core.debounceTimer);
     input.value = q;
     core.currentQuery = q;
     toggleClear();
