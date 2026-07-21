@@ -59,6 +59,37 @@ function fnv1a(str) {
   return (hash >>> 0).toString(16);
 }
 
+// Persists the serialized engine OFF the ready critical path: by the
+// time this runs the engine is fully built, so awaiting Cache Storage
+// here would only delay -- or, hung, park -- first results for a pure
+// optimization. Deliberately not awaited by the caller; the internal
+// try/catch swallows every failure (a write that never lands costs one
+// rebuild on the next visit), so the detached promise cannot reject
+// unhandled.
+async function persistEngine(cacheKey, indexUrl, engine) {
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.put(
+      cacheKey,
+      new Response(serializeEngine(engine), {
+        headers: {'Content-Type': 'application/json'},
+      }),
+    );
+    // Evict stale entries for the SAME index URL by pathname equality
+    // (never a raw string prefix, which fragment blindness would
+    // defeat), keeping only the entry just written.
+    const indexPathname = new URL(indexUrl, globalThis.location.href).pathname;
+    for (const request of await cache.keys()) {
+      const url = new URL(request.url);
+      if (url.pathname === indexPathname && request.url !== cacheKey) {
+        await cache.delete(request);
+      }
+    }
+  } catch {
+    // Cache persistence is an optimization; failures never surface.
+  }
+}
+
 // Heading sub-records flatten into child documents (anchor deep links); the
 // parent grouping fields ride along so child results group and label like
 // their parents.
@@ -178,27 +209,7 @@ export function createSearchBackend() {
     if (!engine) {
       engine = buildEngine(expandDocs(docs, options.headings === true), msOptions);
       if (wantCache && cacheAvailable) {
-        try {
-          const cache = await caches.open(CACHE_NAME);
-          await cache.put(
-            cacheKey,
-            new Response(serializeEngine(engine), {
-              headers: {'Content-Type': 'application/json'},
-            }),
-          );
-          // Evict stale entries for the SAME index URL by pathname equality
-          // (never a raw string prefix, which fragment blindness would
-          // defeat), keeping only the entry just written.
-          const indexPathname = new URL(indexUrl, globalThis.location.href).pathname;
-          for (const request of await cache.keys()) {
-            const url = new URL(request.url);
-            if (url.pathname === indexPathname && request.url !== cacheKey) {
-              await cache.delete(request);
-            }
-          }
-        } catch {
-          // Cache persistence is an optimization; failures never surface.
-        }
+        persistEngine(cacheKey, indexUrl, engine);
       }
     }
 
