@@ -68,17 +68,32 @@ function dispatch(root, name, detail) {
   root.dispatchEvent(new CustomEvent(name, {bubbles: true, detail}));
 }
 
+// Every write below is guarded by a read: a same-value set of a
+// reflected attribute (hidden) or of an inline style declaration still
+// queues MutationObserver attribute records, and these helpers run on
+// repeat-heavy paths -- every keystroke's clear-button toggle, every
+// render's show-more toggle, and every rescan's trigger sweep -- where
+// an attribute-observing auto-rescanning host would loop on records
+// that changed nothing.
 function revealControl(el) {
   if (el) {
-    el.hidden = false;
-    el.style.removeProperty('display');
+    if (el.hidden) {
+      el.hidden = false;
+    }
+    if (el.style.display) {
+      el.style.removeProperty('display');
+    }
   }
 }
 
 function hideControl(el) {
   if (el) {
-    el.hidden = true;
-    el.style.display = 'none';
+    if (!el.hidden) {
+      el.hidden = true;
+    }
+    if (el.style.display !== 'none') {
+      el.style.display = 'none';
+    }
   }
 }
 
@@ -303,6 +318,7 @@ function createCore(root, config) {
     highlighter: createHighlighter(processTerm, config.options.prefix),
     backendPromise: null,
     failed: false,
+    errored: false,
     lastSentId: 0,
     debounceTimer: null,
     announceTimer: null,
@@ -311,6 +327,13 @@ function createCore(root, config) {
 }
 
 function setStateClass(core, name) {
+  // The class is presentation in the DOM, where a host can (wrongly)
+  // strip or add it; this core-level record is the marker the host
+  // cannot reach -- the same two-marker split the enhancement gate
+  // makes -- so behavior keyed on the error state reads the record,
+  // never the class. Both error setters route through here, keeping
+  // the record complete by construction.
+  core.errored = name === 'search--error';
   core.root.classList.remove(
     'search--loading',
     'search--has-results',
@@ -463,6 +486,24 @@ function runQuery(core, q, hooks) {
 function handleInput(core, value, hooks) {
   core.currentQuery = value;
   clearTimeout(core.debounceTimer);
+  // A failed backend is terminal for this page's lifetime, so no typed
+  // input may repaint the surface as healthy over it: the clear and
+  // too-short branches below would swap the error alert for idle or
+  // hint text, and a later valid query would then die silently in the
+  // cached rejection behind a healthy-looking surface. The error state
+  // stays until the page-surface form's native GET submit -- that
+  // path's recovery -- reloads the page. An explicit EMPTY still runs
+  // the clear hook, though: emptying the input is user intent the URL
+  // must mirror (writeQuery('') rides the page surface's clear hook),
+  // or the documented reload recovery would resurrect the query the
+  // user just cleared from the stale ?q= -- the hook touches no state
+  // class and no announcement, so the error surface stays intact.
+  if (core.failed) {
+    if (!value.trim()) {
+      hooks.clear();
+    }
+    return;
+  }
   const trimmed = value.trim();
   if (!trimmed) {
     hooks.clear();
@@ -830,6 +871,25 @@ function wirePage(root, config) {
   }
 
   onExternalChange(root, (q) => {
+    // A failed backend is terminal for this page's lifetime: no
+    // navigation can revive it, so this callback only mirrors the URL
+    // into the visible input -- the native form must show the query it
+    // would submit -- and leaves the error surface untouched. Falling
+    // through instead would repaint a dead surface as healthy: the
+    // too-short branch below swaps the error alert for the min-chars
+    // hint, and typed valid queries then die silently in the cached
+    // rejection. The form's native GET submit is that path's recovery.
+    // The debounce clear kills the one timer that can outlive the
+    // failure (a keystroke debounced while the backend was still
+    // initializing), so it cannot fire and write its query over the
+    // URL this navigation just applied.
+    if (core.failed) {
+      clearTimeout(core.debounceTimer);
+      input.value = q;
+      core.currentQuery = q;
+      toggleClear();
+      return;
+    }
     // A no-change notification (a re-adoption that missed nothing, or a
     // history hop landing on the identical query) has nothing to apply,
     // so pending work is deliberately left armed and NOTHING is cleared
@@ -838,17 +898,12 @@ function wirePage(root, config) {
     // debounce fired -- clearing it would leave the surface silent and
     // empty for a query the input visibly shows), and a pending count
     // announcement still describes this same query. The skip also
-    // requires a healthy surface: in the per-query error state the
-    // surface does NOT reflect this query, so an identical-query
-    // navigation is a retry request rather than redundancy and falls
-    // through to re-run below (a no-op when the BACKEND failed -- the
-    // rejected connection stays cached, and submit's native GET
-    // fallback is that path's recovery).
-    if (
-      q === input.value &&
-      q === core.currentQuery &&
-      !core.root.classList.contains('search--error')
-    ) {
+    // requires a healthy surface: in the per-query error state
+    // (recorded on the core, where a host cannot forge it) the surface
+    // does NOT reflect this query, so an identical-query navigation is
+    // a retry request rather than redundancy and falls through to
+    // re-run below.
+    if (q === input.value && q === core.currentQuery && !core.errored) {
       return;
     }
     // A genuine change stomps the input state synchronously, so pending
