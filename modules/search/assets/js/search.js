@@ -837,8 +837,18 @@ function wirePage(root, config) {
     // query its FIRST run (typed text whose URL caught up before the
     // debounce fired -- clearing it would leave the surface silent and
     // empty for a query the input visibly shows), and a pending count
-    // announcement still describes this same query.
-    if (q === input.value && q === core.currentQuery) {
+    // announcement still describes this same query. The skip also
+    // requires a healthy surface: in the per-query error state the
+    // surface does NOT reflect this query, so an identical-query
+    // navigation is a retry request rather than redundancy and falls
+    // through to re-run below (a no-op when the BACKEND failed -- the
+    // rejected connection stays cached, and submit's native GET
+    // fallback is that path's recovery).
+    if (
+      q === input.value &&
+      q === core.currentQuery &&
+      !core.root.classList.contains('search--error')
+    ) {
       return;
     }
     // A genuine change stomps the input state synchronously, so pending
@@ -861,7 +871,9 @@ function wirePage(root, config) {
       container.textContent = '';
       hideControl(more);
       setStateClass(core, null);
-      announceNow(core, core.config.i18n.idle, '');
+      // A non-empty too-short query explains itself, an empty one goes
+      // idle -- the same split handleInput and the submit handler make.
+      announceNow(core, trimmed ? core.config.i18n.minChars : core.config.i18n.idle, '');
     }
   });
 }
@@ -1490,14 +1502,21 @@ function wireInline(root, config) {
 
 // ---- Idempotent init ----
 
-// The search--enhanced class is the visible enhancement marker, but it
-// lives in the DOM where a host can (wrongly) strip it; this WeakSet is
-// the marker the host cannot reach. Without it, a stripped marker plus a
+// Two enhancement markers gate wiring, each covering the other's blind
+// spot. The search--enhanced class is the visible one, but it lives in
+// the DOM where a host can (wrongly) strip it; this WeakSet is the
+// marker the host cannot reach. Without it, a stripped marker plus a
 // rescan would re-run a surface's wiring on the SAME root -- a second
 // core whose duplicate element listeners double every event and whose
-// own timers escape the first core's guards. Keyed by the root, its
-// lifetime rides the host's retention of the node, like every other
-// registry here.
+// own timers escape the first core's guards. The class stays a gate in
+// its own right as the cross-context sentinel: a second copy of this
+// script has its own WeakSet, and only the DOM marker stops it from
+// re-wiring roots the first copy owns. The cost of trusting the class
+// is that a CLONED root (marker copied, wiring not) is skipped as
+// enhanced and stays inert; stripping the class from the clone before
+// rescanning wires it fresh. Keyed by the root, the WeakSet's lifetime
+// rides the host's retention of the node, like every other registry
+// here.
 const enhancedRoots = new WeakSet();
 
 function init() {
@@ -1508,9 +1527,14 @@ function init() {
       // detached; re-adopting here restores ?q= sync on rescan -- the
       // page-surface counterpart of recoverModalOwnership(), and a no-op
       // for every root that never registered. A stripped marker class is
-      // restored (a no-op when present): the wiring it advertises is
-      // still live.
-      root.classList.add('search--enhanced');
+      // restored -- the wiring it advertises is still live -- but only
+      // when actually missing: a same-value class set still queues
+      // MutationObserver attribute records, and a host auto-rescanning
+      // from an attribute observer would loop on them, so a rescan over
+      // intact roots must stay DOM-silent.
+      if (!root.classList.contains('search--enhanced')) {
+        root.classList.add('search--enhanced');
+      }
       readoptExternalChange(root);
       continue;
     }
