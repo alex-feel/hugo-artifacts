@@ -9,7 +9,11 @@ export function readQuery() {
 }
 
 // Debounce-friendly single write: sets or removes ?q= without adding
-// history entries.
+// history entries. A write that would leave the URL unchanged is
+// skipped outright -- the same write-on-change rule the control toggles
+// follow -- so clearing a surface whose URL never carried the query, or
+// re-running the query the URL already shows, spends none of the
+// replaceState call budget that some engines rate-limit.
 export function writeQuery(q) {
   const url = new URL(window.location.href);
   if (q) {
@@ -17,7 +21,9 @@ export function writeQuery(q) {
   } else {
     url.searchParams.delete('q');
   }
-  history.replaceState(history.state, '', url);
+  if (url.href !== window.location.href) {
+    history.replaceState(history.state, '', url);
+  }
 }
 
 // One registry behind singleton window listeners: a page surface

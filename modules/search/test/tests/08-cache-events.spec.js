@@ -12,8 +12,14 @@
 // rather than the forgeable state class; a desynced autofilled input
 // resyncs; a too-short query announces the hint), backend-failure
 // stickiness (neither typing nor navigation repaints a dead backend's
-// surface as healthy, while an explicit clear still empties ?q=), and
-// index-shape resilience.
+// surface as healthy, while an explicit clear still empties ?q=),
+// keystroke-path write-on-change (settled below-minimum keystrokes, an
+// already-collapsed inline blur, a re-render of an already-expanded
+// combobox, and a single-option listbox wrap queue no attribute
+// records, and a ?q= write that would not change the URL never calls
+// replaceState -- byte-exactly, so a differently-encoded spelling of
+// the same query still writes and normalizes), and index-shape
+// resilience.
 /* global document, window, caches, URL, CustomEvent, PopStateEvent, history, MutationObserver, Event */
 import {test, expect} from '@playwright/test';
 
@@ -756,6 +762,181 @@ test('the error record survives a host-stripped state class', async ({page}) => 
     window.dispatchEvent(new PopStateEvent('popstate'));
   });
   await expect(root.locator('.search__results .search__result-link')).toHaveCount(2);
+});
+
+test('settled below-minimum keystrokes queue no attribute records', async ({page}) => {
+  await page.goto('/');
+  await captureReady(page);
+  await page.keyboard.press('Control+KeyK');
+  const input = page.locator('.search--modal .search__input');
+  await expect(input).toBeFocused();
+  // Opening ran the backend init: wait out the loading paint and its
+  // clear so the transition's own records are spent before observing.
+  await expect.poll(() => page.evaluate(() => window.__readies.length)).toBeGreaterThan(0);
+  await input.fill('a');
+  // Every below-minimum keystroke re-runs the clear path: the listbox
+  // clear's aria-expanded write and the state-class sweep both target
+  // values the DOM already holds, and a same-value attribute set still
+  // queues a record -- fuel for an attribute-observing auto-rescanning
+  // host. The settled state must be silent SUBTREE-WIDE, the state
+  // classes on the root included. (collapse() never runs here -- its
+  // own already-collapsed path is pinned by the inline blur spec
+  // below.)
+  await page.evaluate(() => {
+    window.__attrRecords = 0;
+    const observer = new MutationObserver((records) => {
+      window.__attrRecords += records.length;
+    });
+    observer.observe(document.documentElement, {attributes: true, subtree: true});
+  });
+  await input.fill('b');
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.__attrRecords)).toBe(0);
+});
+
+test('a single-option listbox wrap stays attribute-silent', async ({page}) => {
+  await page.goto('/');
+  await captureReady(page);
+  await page.keyboard.press('Control+KeyK');
+  const input = page.locator('.search--modal .search__input');
+  await expect(input).toBeFocused();
+  await expect.poll(() => page.evaluate(() => window.__readies.length)).toBeGreaterThan(0);
+  // 'pharos' matches exactly one page (through its keywords field), so
+  // arrowing past the only option wraps back onto it.
+  await input.fill('pharos');
+  const options = page.locator('.search--modal .search__option');
+  await expect(options).toHaveCount(1);
+  await page.keyboard.press('ArrowDown');
+  await expect(options.first()).toHaveAttribute('aria-selected', 'true');
+  // The wrap lands on the option already active: re-selecting it would
+  // rewrite aria-selected, the active class, and aria-activedescendant
+  // with the values they already hold -- same-value writes that still
+  // queue records.
+  await page.evaluate(() => {
+    window.__attrRecords = 0;
+    const observer = new MutationObserver((records) => {
+      window.__attrRecords += records.length;
+    });
+    observer.observe(document.documentElement, {attributes: true, subtree: true});
+  });
+  await page.keyboard.press('ArrowDown');
+  await expect(options.first()).toHaveAttribute('aria-selected', 'true');
+  expect(await page.evaluate(() => window.__attrRecords)).toBe(0);
+});
+
+test('an already-collapsed inline blur queues no attribute records', async ({page}) => {
+  await page.goto('/');
+  await captureReady(page);
+  const root = page.locator('.search--inline');
+  await expect(root).toHaveClass(/search--enhanced/);
+  const input = root.locator('.search__input');
+  await input.focus();
+  await expect.poll(() => page.evaluate(() => window.__readies.length)).toBeGreaterThan(0);
+  // collapse() runs on EVERY focus departure, expanded or not: the
+  // first blur settles the never-expanded listbox, and the second must
+  // then be a pure no-op -- its aria-expanded write targets the 'false'
+  // the input has held since the server rendered it.
+  await input.blur();
+  await page.waitForTimeout(100);
+  await input.focus();
+  await page.evaluate(() => {
+    window.__attrRecords = 0;
+    const observer = new MutationObserver((records) => {
+      window.__attrRecords += records.length;
+    });
+    observer.observe(document.documentElement, {attributes: true, subtree: true});
+  });
+  await input.blur();
+  await page.waitForTimeout(150);
+  expect(await page.evaluate(() => window.__attrRecords)).toBe(0);
+});
+
+test('a re-render keeps the expanded combobox attribute-silent on the input', async ({page}) => {
+  await page.goto('/');
+  await captureReady(page);
+  await page.keyboard.press('Control+KeyK');
+  const input = page.locator('.search--modal .search__input');
+  await expect(input).toBeFocused();
+  await expect.poll(() => page.evaluate(() => window.__readies.length)).toBeGreaterThan(0);
+  await input.fill('gravity');
+  const options = page.locator('.search--modal .search__option');
+  await expect(options).toHaveCount(2);
+  // A second query's render re-expands an already-expanded combobox:
+  // expand()'s aria-expanded write targets the 'true' already in place,
+  // so the input itself must see zero attribute records while the
+  // listbox's contents change around it.
+  await page.evaluate(() => {
+    window.__attrRecords = 0;
+    const observer = new MutationObserver((records) => {
+      window.__attrRecords += records.length;
+    });
+    observer.observe(document.querySelector('.search--modal .search__input'), {attributes: true});
+  });
+  await input.fill('pharos');
+  await expect(options).toHaveCount(1);
+  expect(await page.evaluate(() => window.__attrRecords)).toBe(0);
+});
+
+test('a no-change ?q= write never touches history', async ({page}) => {
+  await page.addInitScript(() => {
+    window.__replaceStates = 0;
+    const native = history.replaceState.bind(history);
+    history.replaceState = (...args) => {
+      window.__replaceStates++;
+      return native(...args);
+    };
+  });
+  await page.goto('/search/');
+  const root = page.locator('.search--page');
+  const input = root.locator('.search__input');
+  await input.focus();
+  // Below-minimum keystrokes clear a URL that never carried ?q=; the
+  // write-on-change rule skips the call entirely, because engines
+  // rate-limit replaceState and each redundant call spends that budget.
+  await input.fill('a');
+  expect(await page.evaluate(() => window.__replaceStates)).toBe(0);
+  // A real transition still writes: the query lands in the URL once...
+  await input.fill('beacon');
+  await expect(root.locator('.search__results .search__result-link')).toHaveCount(2);
+  await expect.poll(() => page.evaluate(() => window.__replaceStates)).toBe(1);
+  // ...and clearing a URL that carries it writes once more.
+  await root.locator('.search__clear').click();
+  await expect(input).toHaveValue('');
+  await expect.poll(() => page.evaluate(() => window.__replaceStates)).toBe(2);
+  // Back at a clean URL, a below-minimum keystroke is a no-op again.
+  await input.fill('a');
+  await page.waitForTimeout(600);
+  expect(await page.evaluate(() => window.__replaceStates)).toBe(2);
+});
+
+test('the ?q= write skip is byte-exact, never value-level', async ({page}) => {
+  await page.addInitScript(() => {
+    window.__replaceStates = 0;
+    const native = history.replaceState.bind(history);
+    history.replaceState = (...args) => {
+      window.__replaceStates++;
+      return native(...args);
+    };
+  });
+  // A deep link runs its query WITHOUT writing the URL back, so typing
+  // text that trims to that same query exercises the guard's set
+  // branch: against the canonical URL it is a no-op...
+  await page.goto('/search/?q=beacon');
+  const root = page.locator('.search--page');
+  const input = root.locator('.search__input');
+  await expect(root.locator('.search__results .search__result-link')).toHaveCount(2);
+  await input.fill('beacon ');
+  await page.waitForTimeout(600);
+  expect(await page.evaluate(() => window.__replaceStates)).toBe(0);
+  // ...while against a differently-ENCODED spelling of the same value
+  // the bytes differ, so the write fires and normalizes the URL -- a
+  // value-level comparison would wrongly skip it and strand the
+  // non-canonical spelling.
+  await page.goto('/search/?q=b%65acon');
+  await expect(root.locator('.search__results .search__result-link')).toHaveCount(2);
+  await input.fill('beacon ');
+  await expect.poll(() => page.evaluate(() => window.location.search)).toBe('?q=beacon');
+  expect(await page.evaluate(() => window.__replaceStates)).toBe(1);
 });
 
 test('the ownerless-modal end state stays DOM-silent on repeated rescans', async ({page}) => {
