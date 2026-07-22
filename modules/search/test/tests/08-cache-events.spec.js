@@ -4,12 +4,16 @@
 // docCount's immunity to envelope claims), the inbound search:rescan
 // hook (page-surface swaps, detached-root re-adoption with URL
 // reconciliation and its no-change skip, the stripped-marker
-// double-wire guard, and DOM-silence over intact roots), external-change
-// semantics (a same-query hop leaves a pending first run armed; a
-// genuine change kills the stale count announcement; an errored query
-// retries on an identical-query navigation; a desynced autofilled input
-// resyncs; a too-short query announces the hint), and index-shape
-// resilience.
+// double-wire guard, and subtree-wide DOM-silence over intact roots and
+// over the ownerless-modal end state), external-change semantics (a
+// same-query hop leaves a pending first run armed; a genuine change
+// kills the stale count announcement; an errored query retries on an
+// identical-query navigation, keyed on the module's own error record
+// rather than the forgeable state class; a desynced autofilled input
+// resyncs; a too-short query announces the hint), backend-failure
+// stickiness (neither typing nor navigation repaints a dead backend's
+// surface as healthy, while an explicit clear still empties ?q=), and
+// index-shape resilience.
 /* global document, window, caches, URL, CustomEvent, PopStateEvent, history, MutationObserver, Event */
 import {test, expect} from '@playwright/test';
 
@@ -497,12 +501,16 @@ test('a rescan over intact roots queues no attribute mutations', async ({page}) 
   // MutationObserver (an automation of the rescan contract); a
   // same-value marker re-set on the skip path would queue a record per
   // rescan and feed that observer a rescan -> mutation -> rescan loop.
+  // The observation is SUBTREE-WIDE: the marker re-set is only the
+  // root-level instance of the hazard, and a same-value control toggle
+  // anywhere below (the clear button, the modal triggers) feeds the
+  // same loop.
   await page.evaluate(() => {
     window.__attrRecords = 0;
     const observer = new MutationObserver((records) => {
       window.__attrRecords += records.length;
     });
-    observer.observe(document.querySelector('.search--page'), {attributes: true});
+    observer.observe(document.documentElement, {attributes: true, subtree: true});
     document.dispatchEvent(new CustomEvent('search:rescan'));
   });
   await page.waitForTimeout(100);
@@ -607,4 +615,173 @@ test('an external change to a too-short query announces the min-length hint', as
     'Type at least 2 characters',
   );
   await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(0);
+});
+
+test('a backend failure survives an identical-query navigation', async ({page}) => {
+  await page.route('**/searchindex.json*', (route) => route.fulfill({status: 404, body: ''}));
+  // The too-short deep link runs nothing, so backend init rides the
+  // focus intent prefetch -- and fails, terminally for this page.
+  await page.goto('/search/?q=a');
+  const root = page.locator('.search--page');
+  await root.locator('.search__input').focus();
+  await expect(root).toHaveClass(/search--error/);
+  await expect(root.locator('.search__alert')).toHaveText(
+    'Search is unavailable. Reload the page to try again.',
+  );
+  // The identical-query hop must NOT fall through to the too-short
+  // branch: that branch would strip the error state and swap the error
+  // alert for the min-chars hint over a permanently dead backend,
+  // behind which later valid queries die silently.
+  await page.evaluate(() => {
+    history.pushState(null, '', '/search/?q=a');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(root).toHaveClass(/search--error/);
+  await expect(root.locator('.search__alert')).toHaveText(
+    'Search is unavailable. Reload the page to try again.',
+  );
+  await expect(root.locator('.search__status')).not.toHaveText('Type at least 2 characters');
+  await expect(root.locator('.search__input')).toHaveValue('a');
+});
+
+test('typing never repaints a failed backend as healthy', async ({page}) => {
+  await page.route('**/searchindex.json*', (route) => route.fulfill({status: 404, body: ''}));
+  await page.goto('/search/');
+  const root = page.locator('.search--page');
+  const input = root.locator('.search__input');
+  await input.focus();
+  await expect(root).toHaveClass(/search--error/);
+  // A too-short keystroke's branch would swap the error alert for the
+  // min-chars hint, and a valid query would then die silently in the
+  // cached rejection behind that healthy-looking surface.
+  await input.fill('a');
+  await expect(root).toHaveClass(/search--error/);
+  await expect(root.locator('.search__alert')).toHaveText(
+    'Search is unavailable. Reload the page to try again.',
+  );
+  await input.fill('beacon');
+  // Outwait the debounce (220ms default) with margin: no repaint, no
+  // results, the error surface intact.
+  await page.waitForTimeout(600);
+  await expect(root).toHaveClass(/search--error/);
+  await expect(root.locator('.search__alert')).toHaveText(
+    'Search is unavailable. Reload the page to try again.',
+  );
+  await expect(root.locator('.search__results .search__result-link')).toHaveCount(0);
+});
+
+test('clearing a failed surface still clears the URL', async ({page}) => {
+  await page.route('**/searchindex.json*', (route) => route.fulfill({status: 404, body: ''}));
+  // A valid-length deep link runs the query at wiring, so the failure
+  // arrives without any further intent and the clear button is revealed.
+  await page.goto('/search/?q=beacon');
+  const root = page.locator('.search--page');
+  await expect(root).toHaveClass(/search--error/);
+  // Emptying the input is user intent the URL must mirror even over a
+  // dead backend: the documented reload recovery would otherwise
+  // resurrect the cleared query from the stale ?q= -- while the error
+  // surface itself stays untouched, never repainted as healthy.
+  await root.locator('.search__clear').click();
+  await expect(root.locator('.search__input')).toHaveValue('');
+  await expect
+    .poll(() => page.evaluate(() => new URL(window.location.href).searchParams.get('q')))
+    .toBe(null);
+  await expect(root).toHaveClass(/search--error/);
+  await expect(root.locator('.search__alert')).toHaveText(
+    'Search is unavailable. Reload the page to try again.',
+  );
+});
+
+test('the error record survives a host-stripped state class', async ({page}) => {
+  // The same one-shot per-query error forge as the retry spec above,
+  // but the host (wrongly) strips the error state class before the
+  // navigation: the skip must read the module's own core-level record,
+  // not the forgeable DOM class, so the identical-query retry still
+  // runs and recovers.
+  await page.addInitScript(() => {
+    window.__forgeQueryError = false;
+    window.__workerMessages = 0;
+    const NativeWorker = window.Worker;
+    window.Worker = class extends NativeWorker {
+      constructor(...args) {
+        super(...args);
+        const nativeAdd = this.addEventListener.bind(this);
+        this.addEventListener = (type, listener, ...rest) => {
+          if (type !== 'message') {
+            nativeAdd(type, listener, ...rest);
+            return;
+          }
+          nativeAdd(
+            type,
+            (event) => {
+              window.__workerMessages++;
+              if (window.__forgeQueryError && event.data && event.data.type === 'results') {
+                window.__forgeQueryError = false;
+                listener({
+                  data: {
+                    type: 'error',
+                    id: event.data.id,
+                    phase: 'query',
+                    message: 'forged transient failure',
+                  },
+                });
+                return;
+              }
+              listener(event);
+            },
+            ...rest,
+          );
+        };
+      }
+    };
+    window.__readies = [];
+    document.addEventListener('search:ready', (event) => window.__readies.push(event.detail));
+  });
+  await page.goto('/search/');
+  const root = page.locator('.search--page');
+  const input = root.locator('.search__input');
+  await input.focus();
+  await expect.poll(() => page.evaluate(() => window.__readies.length)).toBeGreaterThan(0);
+  // The forge only exists in worker mode; a silent main-thread fallback
+  // must fail here, loudly, not false-pass below.
+  expect(await page.evaluate(() => window.__workerMessages)).toBeGreaterThan(0);
+  await page.evaluate(() => {
+    window.__forgeQueryError = true;
+  });
+  await input.fill('beacon');
+  await expect(root).toHaveClass(/search--error/);
+  await page.evaluate(() => {
+    document.querySelector('.search--page').classList.remove('search--error');
+    history.pushState(null, '', '/search/?q=beacon');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(root.locator('.search__results .search__result-link')).toHaveCount(2);
+});
+
+test('the ownerless-modal end state stays DOM-silent on repeated rescans', async ({page}) => {
+  await page.goto('/');
+  await expect(page.locator('.search--modal')).toHaveClass(/search--enhanced/);
+  // Gut the only dialog: recovery finds no electable dialog anywhere
+  // and hides every modal trigger -- a genuine transition on this FIRST
+  // rescan, whose records are the transition's own.
+  await page.evaluate(() => {
+    document.querySelector('.search--modal .search__dialog').remove();
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator('.search--modal .search__trigger')).toBeHidden();
+  // The steady state must be silent SUBTREE-WIDE: the end state's
+  // re-hide runs on EVERY rescan, and an unguarded same-value hidden or
+  // inline-style set would queue a record per rescan -- the same
+  // observer-loop mechanism the enhanced-marker guard closes, one level
+  // down.
+  await page.evaluate(() => {
+    window.__attrRecords = 0;
+    const observer = new MutationObserver((records) => {
+      window.__attrRecords += records.length;
+    });
+    observer.observe(document.documentElement, {attributes: true, subtree: true});
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await page.waitForTimeout(100);
+  expect(await page.evaluate(() => window.__attrRecords)).toBe(0);
 });
