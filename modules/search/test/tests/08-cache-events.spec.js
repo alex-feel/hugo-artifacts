@@ -2,8 +2,11 @@
 // ready critical path) and the full CustomEvent contract: search:error
 // with its phase, the outbound event payload walk (including the ready
 // docCount's immunity to envelope claims), the inbound search:rescan
-// hook (including page-surface swaps and detached-root re-adoption with
-// URL reconciliation), and index-shape resilience.
+// hook (page-surface swaps, detached-root re-adoption with URL
+// reconciliation and its no-change skip, and the stripped-marker
+// double-wire guard), external-change timer hygiene (a same-query hop
+// leaves a pending first run armed; a genuine change kills the stale
+// count announcement), and index-shape resilience.
 /* global document, window, caches, URL, CustomEvent, PopStateEvent, history, MutationObserver, Event */
 import {test, expect} from '@playwright/test';
 
@@ -220,6 +223,146 @@ test('a page root detached across a popstate re-adopts URL sync on rescan', asyn
     history.pushState(null, '', '/search/?q=gravity');
     window.dispatchEvent(new PopStateEvent('popstate'));
   });
+  await expect(page.locator('.search--page .search__input')).toHaveValue('gravity');
+  await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(2);
+});
+
+test('a same-query history hop never swallows a pending first run', async ({page}) => {
+  await page.goto('/search/');
+  // Type, then let the URL catch up and fire popstate BEFORE the
+  // debounce elapses: the no-change guard must leave the pending
+  // debounce armed -- it still owes this query its FIRST run, and
+  // clearing it would leave the surface silent and empty for a query
+  // the input visibly shows.
+  await page.evaluate(() => {
+    const input = document.querySelector('.search--page .search__input');
+    input.value = 'beacon';
+    input.dispatchEvent(new Event('input', {bubbles: true}));
+    history.pushState(null, '', '/search/?q=beacon');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(2);
+  await expect(page.locator('.search--page .search__input')).toHaveValue('beacon');
+});
+
+test('a stale count announcement never lands after an external change', async ({page}) => {
+  // Virtual time (installed before load) controls every page-side
+  // timer; worker messages flow in real time. The Worker subclass
+  // latches 'results' replies on demand, so the second query's response
+  // is provably absent while the first query's frozen 500ms count
+  // announcement crosses its horizon. Time is frozen only AFTER the
+  // backend is ready: a virtual-time jump while connectWorker's boot
+  // timer is pending would fire it, terminate the healthy worker, and
+  // silently fall back to the main thread -- where replies resolve
+  // synchronously and the latch never engages.
+  await page.clock.install();
+  await page.addInitScript(() => {
+    window.__heldResults = [];
+    window.__holdResults = false;
+    window.__workerMessages = 0;
+    const NativeWorker = window.Worker;
+    window.Worker = class extends NativeWorker {
+      constructor(...args) {
+        super(...args);
+        const nativeAdd = this.addEventListener.bind(this);
+        this.addEventListener = (type, listener, ...rest) => {
+          if (type !== 'message') {
+            nativeAdd(type, listener, ...rest);
+            return;
+          }
+          nativeAdd(
+            type,
+            (event) => {
+              window.__workerMessages++;
+              if (window.__holdResults && event.data && event.data.type === 'results') {
+                window.__heldResults.push(() => listener(event));
+                return;
+              }
+              listener(event);
+            },
+            ...rest,
+          );
+        };
+      }
+    };
+    window.__readies = [];
+    document.addEventListener('search:ready', (event) => window.__readies.push(event.detail));
+  });
+  await page.goto('/search/');
+  const input = page.locator('.search--page .search__input');
+  await input.focus();
+  await expect.poll(() => page.evaluate(() => window.__readies.length)).toBeGreaterThan(0);
+  // The latch only exists in worker mode; a silent main-thread fallback
+  // must fail here, loudly, not false-pass below.
+  expect(await page.evaluate(() => window.__workerMessages)).toBeGreaterThan(0);
+  await page.clock.pauseAt(Date.now() + 60000);
+  await input.fill('gravity');
+  await page.clock.runFor(250);
+  await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(2);
+  // The 500ms count announcement for gravity is now armed at frozen
+  // virtual time. Hold the next results reply and hop to pharos.
+  await page.evaluate(() => {
+    window.__holdResults = true;
+    history.pushState(null, '', '/search/?q=pharos');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await page.clock.runFor(600);
+  // The stale gravity count must not land while pharos is pending.
+  await expect(page.locator('.search--page .search__status')).not.toHaveText('2 results');
+  // Release the held reply: the pharos count lands instead.
+  await page.evaluate(() => {
+    window.__holdResults = false;
+    for (const release of window.__heldResults.splice(0)) {
+      release();
+    }
+  });
+  await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(1);
+  await page.clock.runFor(600);
+  await expect(page.locator('.search--page .search__status')).toHaveText('1 result');
+});
+
+test('a stripped enhanced marker never double-wires; rescan restores it', async ({page}) => {
+  await page.goto('/search/');
+  // Strip the DOM marker (a host contract violation) and rescan: the
+  // module-side memory must refuse to wire a second core -- duplicate
+  // element listeners would double every event and arm timers the
+  // first core's guards cannot reach -- and must restore the marker.
+  await page.evaluate(() => {
+    window.__queries = [];
+    document.addEventListener('search:query', (event) => window.__queries.push(event.detail));
+    document.querySelector('.search--page').classList.remove('search--enhanced');
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await expect(page.locator('.search--page')).toHaveClass(/search--enhanced/);
+  await page.locator('.search--page .search__input').fill('beacon');
+  await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(2);
+  // One wired core, one query -- a double-wired root would send two.
+  const beaconQueries = await page.evaluate(() =>
+    window.__queries.filter((detail) => detail.query === 'beacon'),
+  );
+  expect(beaconQueries).toHaveLength(1);
+});
+
+test('re-adoption skips the reconcile when nothing changed', async ({page}) => {
+  await page.goto('/search/?q=gravity');
+  await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(2);
+  // Prune the entry with a popstate fired while the root is detached
+  // and the URL UNCHANGED, then reattach and rescan: re-adoption has
+  // nothing to reconcile, so re-running the current query would only
+  // repeat the render and the events.
+  await page.evaluate(() => {
+    window.__queries = [];
+    document.addEventListener('search:query', (event) => window.__queries.push(event.detail));
+    const root = document.querySelector('.search--page');
+    const parent = root.parentNode;
+    root.remove();
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    parent.appendChild(root);
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await page.waitForTimeout(200);
+  expect(await page.evaluate(() => window.__queries.length)).toBe(0);
+  // The surface keeps its state untouched.
   await expect(page.locator('.search--page .search__input')).toHaveValue('gravity');
   await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(2);
 });

@@ -53,9 +53,11 @@ const ANNOUNCE_DELAY_MS = 500;
 // eventual failure surfaces through the phase-"fetch" error path; the
 // accepted residuals, either of which leaves the surface in
 // search--loading, are a fetch a broken service worker parks forever
-// and a hung Cache Storage READ while serialized-index caching is
-// active (the write side runs after the ready reply, off the critical
-// path, so it can never park a built engine).
+// and a hung READ-SIDE Cache Storage operation -- opening the cache,
+// matching, reading a matched body, or deleting a corrupt entry --
+// while serialized-index caching is active (the write side runs after
+// the ready reply, off the critical path, so it can never park a built
+// engine).
 const WORKER_BOOT_TIMEOUT_MS = 5000;
 const IDLE_PREFETCH_TIMEOUT_MS = 3000;
 
@@ -828,12 +830,26 @@ function wirePage(root, config) {
   }
 
   onExternalChange(root, (q) => {
-    // An external change stomps the input state synchronously, so any
-    // pending debounced keystroke must die with it -- like every other
+    // A no-change notification (a re-adoption that missed nothing, or a
+    // history hop landing on the identical query) has nothing to apply,
+    // so pending work is deliberately left armed and NOTHING is cleared
+    // here: a debounced keystroke for this same value may still owe the
+    // query its FIRST run (typed text whose URL caught up before the
+    // debounce fired -- clearing it would leave the surface silent and
+    // empty for a query the input visibly shows), and a pending count
+    // announcement still describes this same query.
+    if (q === input.value && q === core.currentQuery) {
+      return;
+    }
+    // A genuine change stomps the input state synchronously, so pending
+    // work for the replaced query dies with it -- like every other
     // synchronous stomp site (handleInput, the submit handler). An
-    // orphaned timer would later fire and write its stale pre-change
-    // query back over the URL this callback just applied.
+    // orphaned debounce timer would later fire and write its stale
+    // pre-change query back over the URL this callback just applied;
+    // a pending count announcement left armed could land its stale
+    // count between this change and the new response.
     clearTimeout(core.debounceTimer);
+    clearTimeout(core.announceTimer);
     input.value = q;
     core.currentQuery = q;
     toggleClear();
@@ -1474,14 +1490,27 @@ function wireInline(root, config) {
 
 // ---- Idempotent init ----
 
+// The search--enhanced class is the visible enhancement marker, but it
+// lives in the DOM where a host can (wrongly) strip it; this WeakSet is
+// the marker the host cannot reach. Without it, a stripped marker plus a
+// rescan would re-run a surface's wiring on the SAME root -- a second
+// core whose duplicate element listeners double every event and whose
+// own timers escape the first core's guards. Keyed by the root, its
+// lifetime rides the host's retention of the node, like every other
+// registry here.
+const enhancedRoots = new WeakSet();
+
 function init() {
   for (const root of document.querySelectorAll('.search')) {
-    if (root.classList.contains('search--enhanced')) {
+    if (root.classList.contains('search--enhanced') || enhancedRoots.has(root)) {
       // A reattached enhanced root keeps its element-local wiring, but a
       // page root's URL-state registration is pruned while it is
       // detached; re-adopting here restores ?q= sync on rescan -- the
       // page-surface counterpart of recoverModalOwnership(), and a no-op
-      // for every root that never registered.
+      // for every root that never registered. A stripped marker class is
+      // restored (a no-op when present): the wiring it advertises is
+      // still live.
+      root.classList.add('search--enhanced');
       readoptExternalChange(root);
       continue;
     }
@@ -1491,6 +1520,7 @@ function init() {
       continue;
     }
     root.classList.add('search--enhanced');
+    enhancedRoots.add(root);
     if (config.surface === 'modal') {
       wireModal(root, config);
     } else if (config.surface === 'inline') {
