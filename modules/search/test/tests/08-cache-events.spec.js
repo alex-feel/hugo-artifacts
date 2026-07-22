@@ -3,10 +3,13 @@
 // with its phase, the outbound event payload walk (including the ready
 // docCount's immunity to envelope claims), the inbound search:rescan
 // hook (page-surface swaps, detached-root re-adoption with URL
-// reconciliation and its no-change skip, and the stripped-marker
-// double-wire guard), external-change timer hygiene (a same-query hop
-// leaves a pending first run armed; a genuine change kills the stale
-// count announcement), and index-shape resilience.
+// reconciliation and its no-change skip, the stripped-marker
+// double-wire guard, and DOM-silence over intact roots), external-change
+// semantics (a same-query hop leaves a pending first run armed; a
+// genuine change kills the stale count announcement; an errored query
+// retries on an identical-query navigation; a desynced autofilled input
+// resyncs; a too-short query announces the hint), and index-shape
+// resilience.
 /* global document, window, caches, URL, CustomEvent, PopStateEvent, history, MutationObserver, Event */
 import {test, expect} from '@playwright/test';
 
@@ -474,4 +477,134 @@ test('a hung cache write never blocks the ready reply', async ({page}) => {
   // The built engine serves queries while the write sits parked.
   await page.locator('.search--page .search__input').fill('gravity');
   await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(2);
+});
+
+test('a rescan over intact roots queues no attribute mutations', async ({page}) => {
+  // Settle the backend before observing: the search page's idle
+  // prefetch flips the loading state class on this root, and those are
+  // real attribute writes the observer below must not attribute to the
+  // rescan. The ready listener rides addInitScript because the idle
+  // prefetch can beat a post-load evaluate to the ready event.
+  await page.addInitScript(() => {
+    window.__readies = [];
+    document.addEventListener('search:ready', (event) => window.__readies.push(event.detail));
+  });
+  await page.goto('/search/');
+  await expect(page.locator('.search--page')).toHaveClass(/search--enhanced/);
+  await page.locator('.search--page .search__input').focus();
+  await expect.poll(() => page.evaluate(() => window.__readies.length)).toBeGreaterThan(0);
+  // A host may auto-dispatch rescans from an attribute-observing
+  // MutationObserver (an automation of the rescan contract); a
+  // same-value marker re-set on the skip path would queue a record per
+  // rescan and feed that observer a rescan -> mutation -> rescan loop.
+  await page.evaluate(() => {
+    window.__attrRecords = 0;
+    const observer = new MutationObserver((records) => {
+      window.__attrRecords += records.length;
+    });
+    observer.observe(document.querySelector('.search--page'), {attributes: true});
+    document.dispatchEvent(new CustomEvent('search:rescan'));
+  });
+  await page.waitForTimeout(100);
+  expect(await page.evaluate(() => window.__attrRecords)).toBe(0);
+});
+
+test('an identical-query navigation retries an errored query', async ({page}) => {
+  // Forge exactly one per-query error reply through the Worker
+  // subclass: the connection stays healthy (only the pending request
+  // rejects), so the retry the navigation requests can actually
+  // recover -- unlike a failed BACKEND, whose rejected connection
+  // stays cached.
+  await page.addInitScript(() => {
+    window.__forgeQueryError = false;
+    window.__workerMessages = 0;
+    const NativeWorker = window.Worker;
+    window.Worker = class extends NativeWorker {
+      constructor(...args) {
+        super(...args);
+        const nativeAdd = this.addEventListener.bind(this);
+        this.addEventListener = (type, listener, ...rest) => {
+          if (type !== 'message') {
+            nativeAdd(type, listener, ...rest);
+            return;
+          }
+          nativeAdd(
+            type,
+            (event) => {
+              window.__workerMessages++;
+              if (window.__forgeQueryError && event.data && event.data.type === 'results') {
+                window.__forgeQueryError = false;
+                listener({
+                  data: {
+                    type: 'error',
+                    id: event.data.id,
+                    phase: 'query',
+                    message: 'forged transient failure',
+                  },
+                });
+                return;
+              }
+              listener(event);
+            },
+            ...rest,
+          );
+        };
+      }
+    };
+    window.__readies = [];
+    document.addEventListener('search:ready', (event) => window.__readies.push(event.detail));
+  });
+  await page.goto('/search/');
+  const root = page.locator('.search--page');
+  const input = root.locator('.search__input');
+  await input.focus();
+  await expect.poll(() => page.evaluate(() => window.__readies.length)).toBeGreaterThan(0);
+  // The forge only exists in worker mode; a silent main-thread fallback
+  // must fail here, loudly, not false-pass below.
+  expect(await page.evaluate(() => window.__workerMessages)).toBeGreaterThan(0);
+  await page.evaluate(() => {
+    window.__forgeQueryError = true;
+  });
+  await input.fill('beacon');
+  await expect(root).toHaveClass(/search--error/);
+  // Land on the identical query via history: the errored surface does
+  // not reflect it, so the navigation is a retry request, never a
+  // redundant no-change skip.
+  await page.evaluate(() => {
+    history.pushState(null, '', '/search/?q=beacon');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(root.locator('.search__results .search__result-link')).toHaveCount(2);
+  await expect(root).not.toHaveClass(/search--error/);
+});
+
+test('an autofill-desynced input reconciles on a same-value navigation', async ({page}) => {
+  await page.goto('/search/');
+  // Form restoration and autofill set input.value WITHOUT an input
+  // event, leaving currentQuery stale; a navigation landing on that
+  // same visible value must resync and run the query -- the skip's
+  // input.value half alone cannot tell this desync from a genuinely
+  // settled query.
+  await page.evaluate(() => {
+    document.querySelector('.search--page .search__input').value = 'beacon';
+    history.pushState(null, '', '/search/?q=beacon');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(2);
+});
+
+test('an external change to a too-short query announces the min-length hint', async ({page}) => {
+  await page.goto('/search/?q=gravity');
+  await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(2);
+  // A hand-edited or restored URL can carry a non-empty query below the
+  // minimum; the surface explains itself exactly as typing and submit
+  // do, instead of announcing the idle text over a visible query.
+  await page.evaluate(() => {
+    history.pushState(null, '', '/search/?q=a');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(page.locator('.search--page .search__status')).toHaveText(
+    'Type at least 2 characters',
+  );
+  await expect(page.locator('.search--page .search__results .search__result-link')).toHaveCount(0);
 });

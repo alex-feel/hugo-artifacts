@@ -67,11 +67,13 @@ export function onExternalChange(root, callback) {
   knownRegistrations.set(root, callback);
   for (const entry of externalChangeEntries) {
     if (entry.root === root) {
-      // A re-registration for a live root (a host that stripped the
-      // enhanced marker and rescanned -- a contract violation) replaces
-      // the callback instead of accumulating a second entry, so one
-      // popstate can never fan out to two callbacks on one root; the
-      // newest wiring wins, matching the WeakMap's memory.
+      // A re-registration for a live root replaces the callback instead
+      // of accumulating a second entry, so one popstate can never fan
+      // out to two callbacks on one root; the newest wiring wins,
+      // matching the WeakMap's memory. Enhancement's own idempotency
+      // gate no longer re-wires live roots, so no module path reaches
+      // this branch today; it stays as the registry's own guarantee
+      // rather than a bet on every future caller.
       entry.callback = callback;
       return;
     }
