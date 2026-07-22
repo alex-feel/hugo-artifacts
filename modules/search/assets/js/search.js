@@ -69,12 +69,13 @@ function dispatch(root, name, detail) {
 }
 
 // Every write below is guarded by a read: a same-value set of a
-// reflected attribute (hidden) or of an inline style declaration still
-// queues MutationObserver attribute records, and these helpers run on
-// repeat-heavy paths -- every keystroke's clear-button toggle, every
-// render's show-more toggle, and every rescan's trigger sweep -- where
-// an attribute-observing auto-rescanning host would loop on records
-// that changed nothing.
+// reflected attribute (hidden), of an inline style declaration, or of a
+// plain attribute still queues MutationObserver attribute records, and
+// these helpers run on repeat-heavy paths -- every keystroke's
+// clear-button and combobox-collapse toggles, every render's show-more
+// toggle, and every rescan's trigger sweep -- where an
+// attribute-observing auto-rescanning host would churn on records that
+// changed nothing.
 function revealControl(el) {
   if (el) {
     if (el.hidden) {
@@ -94,6 +95,12 @@ function hideControl(el) {
     if (el.style.display !== 'none') {
       el.style.display = 'none';
     }
+  }
+}
+
+function syncAttribute(el, name, value) {
+  if (el.getAttribute(name) !== value) {
+    el.setAttribute(name, value);
   }
 }
 
@@ -326,6 +333,13 @@ function createCore(root, config) {
   };
 }
 
+const STATE_CLASSES = [
+  'search--loading',
+  'search--has-results',
+  'search--no-results',
+  'search--error',
+];
+
 function setStateClass(core, name) {
   // The class is presentation in the DOM, where a host can (wrongly)
   // strip or add it; this core-level record is the marker the host
@@ -334,13 +348,16 @@ function setStateClass(core, name) {
   // never the class. Both error setters route through here, keeping
   // the record complete by construction.
   core.errored = name === 'search--error';
-  core.root.classList.remove(
-    'search--loading',
-    'search--has-results',
-    'search--no-results',
-    'search--error',
-  );
-  if (name) {
+  // classList.remove of an absent token and classList.add of a present
+  // one still rewrite the class attribute and queue mutation records,
+  // and this runs on every empty and below-minimum keystroke -- so each
+  // token moves only when the DOM actually disagrees.
+  for (const cls of STATE_CLASSES) {
+    if (cls !== name && core.root.classList.contains(cls)) {
+      core.root.classList.remove(cls);
+    }
+  }
+  if (name && !core.root.classList.contains(name)) {
     core.root.classList.add(name);
   }
 }
@@ -543,7 +560,7 @@ function createListbox(core, config, listbox, seeAll, isInline) {
     collapsed = false;
     if (options.length) {
       revealControl(listbox);
-      input.setAttribute('aria-expanded', 'true');
+      syncAttribute(input, 'aria-expanded', 'true');
     }
   }
 
@@ -553,10 +570,17 @@ function createListbox(core, config, listbox, seeAll, isInline) {
     if (isInline) {
       hideControl(listbox);
     }
-    input.setAttribute('aria-expanded', 'false');
+    syncAttribute(input, 'aria-expanded', 'false');
   }
 
   function setActive(index) {
+    // A single-option listbox wraps arrow movement onto the option
+    // already active; re-selecting it would only rewrite aria-selected,
+    // the active class, and aria-activedescendant with the values they
+    // already hold -- same-value writes that still queue records.
+    if (index === active) {
+      return;
+    }
     if (active >= 0 && options[active]) {
       options[active].setAttribute('aria-selected', 'false');
       options[active].classList.remove('search__option--active');
@@ -620,7 +644,7 @@ function createListbox(core, config, listbox, seeAll, isInline) {
     if (options.length) {
       expand();
     } else {
-      input.setAttribute('aria-expanded', 'false');
+      syncAttribute(input, 'aria-expanded', 'false');
       if (isInline) {
         hideControl(listbox);
       }
@@ -641,7 +665,7 @@ function createListbox(core, config, listbox, seeAll, isInline) {
     listbox.textContent = '';
     options = [];
     setActive(-1);
-    input.setAttribute('aria-expanded', 'false');
+    syncAttribute(input, 'aria-expanded', 'false');
     if (isInline) {
       hideControl(listbox);
     }
