@@ -23,6 +23,11 @@
 //     test DATA (paralleling the .prettierignore exclusion): bare URLs inside
 //     shortcode arguments, javascript: destinations, and attribute blocks
 //     whose line structure is semantically load-bearing.
+//   - test-results/ and playwright-report/ are Playwright-generated output
+//     (error-context snapshots, HTML reports) that any module's test suite
+//     can leave behind after a failed run; they are tool artifacts, never
+//     authored content, and are excluded generically (paralleling the
+//     .prettierignore patterns).
 {
   "config": {
     "default": true,
@@ -41,7 +46,7 @@
     "modules/pwa/test/README.md",
     "modules/pwa/test/IOS_MANUAL_MATRIX.md",
     "modules/images/test/fixture/content/**",
-    "modules/pwa/test/test-results/**",
-    "modules/pwa/test/playwright-report/**",
+    "**/test-results/**",
+    "**/playwright-report/**",
   ],
 }
