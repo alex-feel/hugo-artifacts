@@ -301,7 +301,7 @@ The language dot color is set via the `--github-repo-lang-color` CSS custom prop
 
 ### Icons
 
-All icons are inline SVGs using `fill="currentColor"` (inherits text color), `aria-hidden="true"`, and `width="1em" height="1em"` (scales with font size). No external icon fonts are required.
+All icons are inline SVGs using `fill="currentColor"` (inherits text color), `aria-hidden="true"`, `focusable="false"`, and `width="1em" height="1em"` (scales with font size). No external icon fonts are required.
 
 ## Module Structure
 
