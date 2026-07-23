@@ -1,0 +1,27 @@
+{{/*
+  Public organization memberships. Only memberships the person set to public
+  are visible to any token, so this list is a floor. Org avatars are exposed
+  as data-avatar URLs rather than rendered images, keeping the markup
+  style-agnostic and the build free of extra image fetches.
+
+  Context: the render.html context dict (.d carries the normalized data).
+*/}}
+
+{{- $d := .d -}}
+{{- if gt (len $d.orgs) 0 -}}
+<section class="github-profile__section github-profile__section--orgs">
+  <ul class="github-profile__orgs" aria-label="{{ T "github_profile_orgs_label" | default "Organizations" }}" data-total="{{ $d.orgsTotal }}">
+    {{- range $d.orgs }}
+    <li class="github-profile__org"
+        data-org="{{ .login }}"
+        {{- with .avatarUrl }}
+        data-avatar="{{ . }}"
+        {{- end }}>
+      <a class="github-profile__org-name" href="{{ or .url (printf "https://github.com/%s" .login) }}" target="_blank" rel="noopener noreferrer">
+        {{- partial "github-profile/icon.html" (dict "name" "org" "class" "github-profile__icon") }} {{ or .name .login -}}
+      </a>
+    </li>
+    {{- end }}
+  </ul>
+</section>
+{{- end -}}

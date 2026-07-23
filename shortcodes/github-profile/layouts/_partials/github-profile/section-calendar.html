@@ -1,0 +1,49 @@
+{{/*
+  Contribution calendar (heatmap) as style-agnostic markup: one span per
+  day, one column div per week. Each day carries the raw count
+  (data-count), the ISO date (data-date), and GitHub's quartile level enum
+  (data-level) -- GitHub's own hex shades are a design decision and are
+  never emitted. The inline style carries only a CSS custom-property NAME
+  indirection (--github-profile-day-level pointing at a site-defined
+  --github-profile-level-N token), so the consuming site owns the palette
+  entirely, via either the tokens or [data-level] selectors.
+
+  Context: the render.html context dict (.d carries the normalized data).
+*/}}
+
+{{- $d := .d -}}
+{{- if gt (len $d.calendarWeeks) 0 -}}
+{{- $levelIndex := dict "NONE" 0 "FIRST_QUARTILE" 1 "SECOND_QUARTILE" 2 "THIRD_QUARTILE" 3 "FOURTH_QUARTILE" 4 -}}
+<section class="github-profile__section github-profile__section--calendar">
+  <div class="github-profile__calendar"
+       role="img"
+       aria-label="{{ T "github_profile_calendar_label" $d.calendarTotal | default (printf "%d contributions" $d.calendarTotal) }}"
+       data-total="{{ $d.calendarTotal }}"
+       {{- if ge $d.streakCurrent 0 }}
+       data-current-streak="{{ $d.streakCurrent }}"
+       data-longest-streak="{{ $d.streakLongest }}"
+       {{- end }}>
+    {{- range $d.calendarWeeks }}
+    <div class="github-profile__calendar-week">
+      {{- range .days }}
+      <span class="github-profile__calendar-day"
+            data-date="{{ .date }}"
+            data-count="{{ .count }}"
+            data-level="{{ .level }}"
+            style="--github-profile-day-level: var(--github-profile-level-{{ index $levelIndex .level | default 0 }})"></span>
+      {{- end }}
+    </div>
+    {{- end }}
+  </div>
+  {{- if ge $d.streakCurrent 0 }}
+  <span class="github-profile__streak" data-streak="current" data-raw="{{ $d.streakCurrent }}">
+    <span class="github-profile__metric-label">{{ T "github_profile_streak_current" | default "current streak" }}</span>
+    <span class="github-profile__metric-value">{{ T "github_profile_streak_days" $d.streakCurrent | default (printf "%d days" $d.streakCurrent) }}</span>
+  </span>
+  <span class="github-profile__streak" data-streak="longest" data-raw="{{ $d.streakLongest }}">
+    <span class="github-profile__metric-label">{{ T "github_profile_streak_longest" | default "longest streak" }}</span>
+    <span class="github-profile__metric-value">{{ T "github_profile_streak_days" $d.streakLongest | default (printf "%d days" $d.streakLongest) }}</span>
+  </span>
+  {{- end }}
+</section>
+{{- end -}}

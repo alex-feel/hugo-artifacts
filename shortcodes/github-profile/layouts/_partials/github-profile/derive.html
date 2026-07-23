@@ -1,0 +1,470 @@
+{{/*
+  Transforms the raw fetch result into the normalized, render-ready data
+  dict consumed by the section partials. All computed metrics live here:
+  per-organization rollups, all-time sums, 90-day recency, language byte
+  shares, streaks, and the optional transparent activity score.
+
+  Every field access on remote-derived data is guarded (missing keys skip
+  their feature; numeric casts go through github-profile/to-int.html), so a
+  partially resolved GraphQL response renders whatever it carries and never
+  fails the build.
+
+  Context expectations:
+  - .raw (dict)          Return value of github-profile/fetch.html.
+  - .requestedLogin (string) The shortcode's user parameter, used by the
+                         degraded branch where no remote fields exist.
+  - .history (string)    "year" or "all".
+  - .showStreak (bool)   Whether to compute calendar streaks.
+  - .showRank (bool)     Whether to compute the activity score.
+  - .nameOverride (string) Display-name override from the shortcode call.
+
+  Returns: the normalized dict documented field-by-field in the README's
+  Styling section (every data-* attribute maps to one of these fields).
+*/}}
+
+{{- $raw := .raw -}}
+{{- $requestedLogin := .requestedLogin -}}
+{{- $history := .history -}}
+{{- $showStreak := .showStreak -}}
+{{- $showRank := .showRank -}}
+{{- $nameOverride := .nameOverride -}}
+
+{{- $user := $raw.user -}}
+
+{{- $data := dict
+  "apiOk" $raw.apiOk
+  "degradedReason" $raw.degradedReason
+  "mergedPrCount" $raw.mergedPrCount
+  "historyEffective" "year"
+-}}
+
+{{- if $raw.apiOk -}}
+
+{{/* ---------- Identity ---------- */}}
+{{- $login := printf "%v" (or (index $user "login") "") -}}
+{{- $identity := dict
+  "login" $login
+  "name" (or $nameOverride (index $user "name") $login)
+  "bio" (or (index $user "bio") "")
+  "company" (or (index $user "company") "")
+  "location" (or (index $user "location") "")
+  "pronouns" (or (index $user "pronouns") "")
+  "websiteUrl" (or (index $user "websiteUrl") "")
+  "avatarUrl" (or (index $user "avatarUrl") "")
+  "profileUrl" (or (index $user "url") (printf "https://github.com/%s" $login))
+  "hireable" (eq (printf "%v" (index $user "isHireable")) "true")
+  "statusMessage" ""
+  "statusEmoji" ""
+-}}
+{{- with index $user "status" -}}
+  {{- $identity = merge $identity (dict
+    "statusMessage" (or (index . "message") "")
+    "statusEmoji" (or (index . "emoji") "")
+  ) -}}
+{{- end -}}
+{{- $userId := partial "github-profile/to-int.html" (index $user "databaseId") -}}
+
+{{/* Account tenure in whole years. The timestamp is remote-derived, so the
+     parse is try-wrapped and an unparseable value degrades to 0 (the
+     renderer hides the tenure line at 0). */}}
+{{- $tenureYears := 0 -}}
+{{- with index $user "createdAt" -}}
+  {{- $t := try (time.AsTime .) -}}
+  {{- if not $t.Err -}}
+    {{- with $t.Value -}}
+      {{- $tenureYears = int (math.Floor (math.Div (now.Sub .).Hours 8760.0)) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $followers := 0 -}}
+{{- with index $user "followers" -}}
+  {{- $followers = partial "github-profile/to-int.html" (index . "totalCount") -}}
+{{- end -}}
+{{- $following := 0 -}}
+{{- with index $user "following" -}}
+  {{- $following = partial "github-profile/to-int.html" (index . "totalCount") -}}
+{{- end -}}
+
+{{/* ---------- Contribution totals ---------- */}}
+{{- $cc := dict -}}
+{{- with index $user "contributionsCollection" -}}
+  {{- $cc = . -}}
+{{- end -}}
+
+{{- $windowTotals := dict
+  "commits" (partial "github-profile/to-int.html" (index $cc "totalCommitContributions"))
+  "issues" (partial "github-profile/to-int.html" (index $cc "totalIssueContributions"))
+  "prs" (partial "github-profile/to-int.html" (index $cc "totalPullRequestContributions"))
+  "reviews" (partial "github-profile/to-int.html" (index $cc "totalPullRequestReviewContributions"))
+  "reposCreated" (partial "github-profile/to-int.html" (index $cc "totalRepositoryContributions"))
+  "restricted" (partial "github-profile/to-int.html" (index $cc "restrictedContributionsCount"))
+-}}
+
+{{- $totals := $windowTotals -}}
+{{- $historyEffective := "year" -}}
+{{- if eq $history "all" -}}
+  {{- with $raw.yearTotals -}}
+    {{/* Sum the aliased calendar-year blocks. The blocks are disjoint
+         calendar years, so plain addition yields all-time totals. */}}
+    {{- $allCommits := 0 -}}
+    {{- $allIssues := 0 -}}
+    {{- $allPrs := 0 -}}
+    {{- $allReviews := 0 -}}
+    {{- $allRepos := 0 -}}
+    {{- $allRestricted := 0 -}}
+    {{- range $alias, $block := . -}}
+      {{- if reflect.IsMap $block -}}
+        {{- $allCommits = add $allCommits (partial "github-profile/to-int.html" (index $block "totalCommitContributions")) -}}
+        {{- $allIssues = add $allIssues (partial "github-profile/to-int.html" (index $block "totalIssueContributions")) -}}
+        {{- $allPrs = add $allPrs (partial "github-profile/to-int.html" (index $block "totalPullRequestContributions")) -}}
+        {{- $allReviews = add $allReviews (partial "github-profile/to-int.html" (index $block "totalPullRequestReviewContributions")) -}}
+        {{- $allRepos = add $allRepos (partial "github-profile/to-int.html" (index $block "totalRepositoryContributions")) -}}
+        {{- $allRestricted = add $allRestricted (partial "github-profile/to-int.html" (index $block "restrictedContributionsCount")) -}}
+      {{- end -}}
+    {{- end -}}
+    {{- $totals = dict
+      "commits" $allCommits
+      "issues" $allIssues
+      "prs" $allPrs
+      "reviews" $allReviews
+      "reposCreated" $allRepos
+      "restricted" $allRestricted
+    -}}
+    {{- $historyEffective = "all" -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---------- Contribution calendar ---------- */}}
+{{- $calendarWeeks := slice -}}
+{{- $flatDays := slice -}}
+{{- $calendarTotal := 0 -}}
+{{- with index $cc "contributionCalendar" -}}
+  {{- $calendarTotal = partial "github-profile/to-int.html" (index . "totalContributions") -}}
+  {{- range index . "weeks" | default (slice) -}}
+    {{- $days := slice -}}
+    {{- range index . "contributionDays" | default (slice) -}}
+      {{- $day := dict
+        "date" (printf "%v" (or (index . "date") ""))
+        "count" (partial "github-profile/to-int.html" (index . "contributionCount"))
+        "level" (printf "%v" (or (index . "contributionLevel") "NONE"))
+      -}}
+      {{- $days = $days | append $day -}}
+      {{- $flatDays = $flatDays | append $day -}}
+    {{- end -}}
+    {{- $calendarWeeks = $calendarWeeks | append (dict "days" $days) -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* 90-day recency window: the trailing 90 day-cells of the calendar. */}}
+{{- $recentDays := $flatDays -}}
+{{- if gt (len $flatDays) 90 -}}
+  {{- $recentDays = last 90 $flatDays -}}
+{{- end -}}
+{{- $recentActive := 0 -}}
+{{- $recentTotal := 0 -}}
+{{- range $recentDays -}}
+  {{- if gt .count 0 -}}
+    {{- $recentActive = add $recentActive 1 -}}
+    {{- $recentTotal = add $recentTotal .count -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---------- Streaks (opt-in) ---------- */}}
+{{- $streakCurrent := -1 -}}
+{{- $streakLongest := -1 -}}
+{{- if and $showStreak (gt (len $flatDays) 0) -}}
+  {{/* Current streak: consecutive contribution days ending today, or ending
+       yesterday when today has no contribution yet (the
+       github-readme-streak-stats definition). */}}
+  {{- $streakCurrent = 0 -}}
+  {{- range $i, $day := collections.Reverse $flatDays -}}
+    {{- if gt $day.count 0 -}}
+      {{- $streakCurrent = add $streakCurrent 1 -}}
+    {{- else if eq $i 0 -}}
+      {{/* Today without a contribution does not reset the streak. */}}
+    {{- else -}}
+      {{- break -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $streakLongest = 0 -}}
+  {{- $run := 0 -}}
+  {{- range $flatDays -}}
+    {{- if gt .count 0 -}}
+      {{- $run = add $run 1 -}}
+      {{- if gt $run $streakLongest -}}
+        {{- $streakLongest = $run -}}
+      {{- end -}}
+    {{- else -}}
+      {{- $run = 0 -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---------- Language byte shares ---------- */}}
+{{/* Aggregated across owned non-fork repositories AND externally
+     contributed repositories, so the shares reflect measured code depth
+     wherever the person works, not only their own account. */}}
+{{- $langBytes := dict -}}
+{{- $ownedNodes := slice -}}
+{{- $ownedStars := 0 -}}
+{{- with index $user "repositories" -}}
+  {{- $ownedNodes = index . "nodes" | default (slice) -}}
+{{- end -}}
+{{- $contribNodes := slice -}}
+{{- $externalRepos := 0 -}}
+{{- with index $user "repositoriesContributedTo" -}}
+  {{- $externalRepos = partial "github-profile/to-int.html" (index . "totalCount") -}}
+  {{- $contribNodes = index . "nodes" | default (slice) -}}
+{{- end -}}
+{{- range $repoSet := slice $ownedNodes $contribNodes -}}
+  {{- range $repoSet -}}
+    {{- with index . "languages" -}}
+      {{- range index . "edges" | default (slice) -}}
+        {{- $size := partial "github-profile/to-int.html" (index . "size") -}}
+        {{- $langName := "" -}}
+        {{- with index . "node" -}}
+          {{- $langName = printf "%v" (or (index . "name") "") -}}
+        {{- end -}}
+        {{- if and $langName (gt $size 0) -}}
+          {{- $langBytes = merge $langBytes (dict $langName (add (index $langBytes $langName | default 0) $size)) -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- range $ownedNodes -}}
+  {{- $ownedStars = add $ownedStars (partial "github-profile/to-int.html" (index . "stargazerCount")) -}}
+{{- end -}}
+{{- $langTotal := 0 -}}
+{{- range $name, $bytes := $langBytes -}}
+  {{- $langTotal = add $langTotal $bytes -}}
+{{- end -}}
+{{- $languages := slice -}}
+{{- if gt $langTotal 0 -}}
+  {{- range $name, $bytes := $langBytes -}}
+    {{/* Share rounded to one decimal place. */}}
+    {{- $pct := math.Div (math.Round (math.Mul (math.Div (float $bytes) (float $langTotal)) 1000)) 10 -}}
+    {{- $languages = $languages | append (dict "name" $name "pct" $pct "bytes" $bytes) -}}
+  {{- end -}}
+  {{- $languages = sort $languages "bytes" "desc" -}}
+  {{- if gt (len $languages) 8 -}}
+    {{- $languages = first 8 $languages -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---------- Per-organization rollup ---------- */}}
+{{/* Groups the four *ContributionsByRepository lists by repository owner,
+     excluding the person's own account, yielding {commits, issues, prs,
+     reviews} per organization or external user -- the composite GitHub
+     itself never presents. Scoped to the snapshot's rolling-year window and
+     to the API's top-100-repositories-per-type ceiling. */}}
+{{- $roll := dict -}}
+{{- $rollSources := slice
+  (dict "field" "commitContributionsByRepository" "key" "commits")
+  (dict "field" "issueContributionsByRepository" "key" "issues")
+  (dict "field" "pullRequestContributionsByRepository" "key" "prs")
+  (dict "field" "pullRequestReviewContributionsByRepository" "key" "reviews")
+-}}
+{{- range $src := $rollSources -}}
+  {{- range index $cc $src.field | default (slice) -}}
+    {{- $ownerLogin := "" -}}
+    {{- $ownerType := "" -}}
+    {{- with index . "repository" -}}
+      {{- with index . "owner" -}}
+        {{- $ownerLogin = printf "%v" (or (index . "login") "") -}}
+        {{- $ownerType = printf "%v" (or (index . "__typename") "") -}}
+      {{- end -}}
+    {{- end -}}
+    {{- $count := 0 -}}
+    {{- with index . "contributions" -}}
+      {{- $count = partial "github-profile/to-int.html" (index . "totalCount") -}}
+    {{- end -}}
+    {{- if and $ownerLogin (ne $ownerLogin $login) (gt $count 0) -}}
+      {{- $entry := dict "login" $ownerLogin "type" $ownerType "commits" 0 "issues" 0 "prs" 0 "reviews" 0 "total" 0 -}}
+      {{- with index $roll $ownerLogin -}}
+        {{- $entry = . -}}
+      {{- end -}}
+      {{- $entry = merge $entry (dict
+        $src.key (add (index $entry $src.key) $count)
+        "total" (add (index $entry "total") $count)
+      ) -}}
+      {{- $roll = merge $roll (dict $ownerLogin $entry) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $orgRollup := slice -}}
+{{- range $ownerLogin, $entry := $roll -}}
+  {{- $orgRollup = $orgRollup | append $entry -}}
+{{- end -}}
+{{- $orgRollup = sort $orgRollup "total" "desc" -}}
+{{- if gt (len $orgRollup) 10 -}}
+  {{- $orgRollup = first 10 $orgRollup -}}
+{{- end -}}
+
+{{/* ---------- Externally contributed repositories ---------- */}}
+{{- $contributed := slice -}}
+{{- $externalOrgSeen := dict -}}
+{{- $externalOrgs := 0 -}}
+{{- range $contribNodes -}}
+  {{- $ownerLogin := "" -}}
+  {{- $ownerType := "" -}}
+  {{- with index . "owner" -}}
+    {{- $ownerLogin = printf "%v" (or (index . "login") "") -}}
+    {{- $ownerType = printf "%v" (or (index . "__typename") "") -}}
+  {{- end -}}
+  {{- if and (eq $ownerType "Organization") $ownerLogin (not (index $externalOrgSeen $ownerLogin)) -}}
+    {{- $externalOrgSeen = merge $externalOrgSeen (dict $ownerLogin true) -}}
+    {{- $externalOrgs = add $externalOrgs 1 -}}
+  {{- end -}}
+  {{- $langName := "" -}}
+  {{- with index . "primaryLanguage" -}}
+    {{- $langName = printf "%v" (or (index . "name") "") -}}
+  {{- end -}}
+  {{- $contributed = $contributed | append (dict
+    "nameWithOwner" (printf "%v" (or (index . "nameWithOwner") ""))
+    "description" (or (index . "description") "")
+    "url" (or (index . "url") "")
+    "stars" (partial "github-profile/to-int.html" (index . "stargazerCount"))
+    "language" $langName
+    "ownerLogin" $ownerLogin
+    "ownerType" $ownerType
+  ) -}}
+{{- end -}}
+{{- $contributed = sort $contributed "stars" "desc" -}}
+{{- if gt (len $contributed) 12 -}}
+  {{- $contributed = first 12 $contributed -}}
+{{- end -}}
+
+{{/* ---------- Public organization memberships ---------- */}}
+{{- $orgs := slice -}}
+{{- $orgsTotal := 0 -}}
+{{- with index $user "organizations" -}}
+  {{- $orgsTotal = partial "github-profile/to-int.html" (index . "totalCount") -}}
+  {{- range index . "nodes" | default (slice) -}}
+    {{- $orgs = $orgs | append (dict
+      "login" (printf "%v" (or (index . "login") ""))
+      "name" (or (index . "name") "")
+      "url" (or (index . "url") "")
+      "avatarUrl" (or (index . "avatarUrl") "")
+    ) -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---------- Pinned repositories ---------- */}}
+{{- $pinned := slice -}}
+{{- with index $user "pinnedItems" -}}
+  {{- range index . "nodes" | default (slice) -}}
+    {{- if eq (printf "%v" (index . "__typename")) "Repository" -}}
+      {{- $langName := "" -}}
+      {{- with index . "primaryLanguage" -}}
+        {{- $langName = printf "%v" (or (index . "name") "") -}}
+      {{- end -}}
+      {{- $pinned = $pinned | append (dict
+        "nameWithOwner" (printf "%v" (or (index . "nameWithOwner") ""))
+        "description" (or (index . "description") "")
+        "url" (or (index . "url") "")
+        "stars" (partial "github-profile/to-int.html" (index . "stargazerCount"))
+        "language" $langName
+      ) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---------- Social accounts (LinkedIn first) ---------- */}}
+{{- $socialsLinkedIn := slice -}}
+{{- $socialsRest := slice -}}
+{{- with index $user "socialAccounts" -}}
+  {{- range index . "nodes" | default (slice) -}}
+    {{- $account := dict
+      "provider" (printf "%v" (or (index . "provider") ""))
+      "displayName" (or (index . "displayName") "")
+      "url" (or (index . "url") "")
+    -}}
+    {{- if eq $account.provider "LINKEDIN" -}}
+      {{- $socialsLinkedIn = $socialsLinkedIn | append $account -}}
+    {{- else -}}
+      {{- $socialsRest = $socialsRest | append $account -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $socials := $socialsLinkedIn | append $socialsRest -}}
+
+{{/* ---------- Activity score (opt-in) ---------- */}}
+{{/* The github-readme-stats formula, computed transparently: commits, PRs,
+     issues, and reviews go through the exponential CDF 1 - 2^(-x/median);
+     stars and followers through the log-normal approximation x/(x+median).
+     Weights 2/3/1/1/4/1; medians 250 (1000 for all-time commits), 50, 25,
+     2, 50, 10. The score is a percentile where LOWER is better, mapped to
+     levels S through C. */}}
+{{- $rankLevel := "" -}}
+{{- $rankPercentile := 0.0 -}}
+{{- if $showRank -}}
+  {{- $commitsMedian := 250.0 -}}
+  {{- if eq $historyEffective "all" -}}
+    {{- $commitsMedian = 1000.0 -}}
+  {{- end -}}
+  {{- $eCommits := math.Sub 1 (math.Pow 2 (math.Mul -1 (math.Div (float $totals.commits) $commitsMedian))) -}}
+  {{- $ePrs := math.Sub 1 (math.Pow 2 (math.Mul -1 (math.Div (float $totals.prs) 50.0))) -}}
+  {{- $eIssues := math.Sub 1 (math.Pow 2 (math.Mul -1 (math.Div (float $totals.issues) 25.0))) -}}
+  {{- $eReviews := math.Sub 1 (math.Pow 2 (math.Mul -1 (math.Div (float $totals.reviews) 2.0))) -}}
+  {{- $lStars := math.Div (math.Div (float $ownedStars) 50.0) (add 1 (math.Div (float $ownedStars) 50.0)) -}}
+  {{- $lFollowers := math.Div (math.Div (float $followers) 10.0) (add 1 (math.Div (float $followers) 10.0)) -}}
+  {{- $weighted := add (math.Mul 2 $eCommits) (math.Mul 3 $ePrs) (math.Mul 1 $eIssues) (math.Mul 1 $eReviews) (math.Mul 4 $lStars) (math.Mul 1 $lFollowers) -}}
+  {{- $rankScore := math.Sub 1 (math.Div $weighted 12.0) -}}
+  {{- $rankPercentile = math.Div (math.Round (math.Mul $rankScore 1000)) 10 -}}
+  {{- $thresholds := slice 1.0 12.5 25.0 37.5 50.0 62.5 75.0 87.5 100.0 -}}
+  {{- $levels := slice "S" "A+" "A" "A-" "B+" "B" "B-" "C+" "C" -}}
+  {{- $rankLevel = "C" -}}
+  {{- $assigned := false -}}
+  {{- range $i, $t := $thresholds -}}
+    {{- if and (not $assigned) (le $rankPercentile $t) -}}
+      {{- $rankLevel = index $levels $i -}}
+      {{- $assigned = true -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $data = merge $data (dict
+  "login" $login
+  "userId" $userId
+  "identity" $identity
+  "tenureYears" $tenureYears
+  "followers" $followers
+  "following" $following
+  "totals" $totals
+  "historyEffective" $historyEffective
+  "calendarWeeks" $calendarWeeks
+  "calendarTotal" $calendarTotal
+  "recentActive" $recentActive
+  "recentTotal" $recentTotal
+  "streakCurrent" $streakCurrent
+  "streakLongest" $streakLongest
+  "languages" $languages
+  "orgRollup" $orgRollup
+  "contributed" $contributed
+  "externalRepos" $externalRepos
+  "externalOrgs" $externalOrgs
+  "orgs" $orgs
+  "orgsTotal" $orgsTotal
+  "ownedStars" $ownedStars
+  "pinned" $pinned
+  "socials" $socials
+  "rankLevel" $rankLevel
+  "rankPercentile" $rankPercentile
+) -}}
+
+{{- else -}}
+{{/* Degraded: the identity chip renders from the shortcode parameters
+     alone -- no remote fields exist. */}}
+{{- $data = merge $data (dict
+  "login" $requestedLogin
+  "identity" (dict
+    "login" $requestedLogin
+    "name" (or $nameOverride $requestedLogin)
+    "profileUrl" (printf "https://github.com/%s" $requestedLogin)
+  )
+) -}}
+{{- end -}}
+
+{{- return $data -}}

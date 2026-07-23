@@ -1,0 +1,150 @@
+{{/*
+  Builds the JSON request body for a GitHub GraphQL API call.
+
+  Inputs (context dict):
+  - .kind (string)   "snapshot" for the single full-profile query, or
+                     "years" for the all-time follow-up query.
+  - .login (string)  GitHub login, passed as the $login GraphQL variable
+                     (never string-interpolated into the query text, so no
+                     escaping concerns).
+  - .years (slice)   For kind "years": the contributionYears values from the
+                     snapshot response (JSON-decoded numbers). One aliased
+                     contributionsCollection block is emitted per year; each
+                     block spans one calendar year (January 1 through
+                     December 31), which stays inside the API's hard 1-year
+                     limit on the from/to span.
+
+  Returns: the JSON body string for resources.GetRemote (jsonify handles all
+  escaping, including the newlines inside the query text).
+
+  Design notes:
+  - The snapshot is ONE static query regardless of which sections render:
+    the whole query empirically costs 1 rate-limit point, a static shape
+    keeps the cache key stable per user, and section toggles then only
+    affect rendering, never fetching.
+  - contributionsCollection is called without from/to in the snapshot, which
+    yields the rolling ~1-year window ending now -- the same window GitHub's
+    own profile page shows.
+  - The four *ContributionsByRepository lists cap at maxRepositories: 100
+    (the API's hard ceiling); for extremely prolific accounts the
+    per-organization rollup therefore covers the top 100 repositories per
+    contribution type within the window.
+  - The all-time totals cannot be part of the snapshot because the year list
+    is only known from the snapshot's contributionYears; the "years" kind
+    exists for that second, opt-in (history="all") round trip.
+*/}}
+
+{{- $kind := .kind -}}
+{{- $login := .login -}}
+{{- $years := .years | default (slice) -}}
+
+{{- $query := "" -}}
+
+{{- if eq $kind "snapshot" -}}
+{{- $query = `query($login: String!) {
+  user(login: $login) {
+    login
+    databaseId
+    name
+    bio
+    company
+    location
+    pronouns
+    websiteUrl
+    avatarUrl(size: 200)
+    url
+    createdAt
+    isHireable
+    status { message emoji }
+    followers { totalCount }
+    following { totalCount }
+    socialAccounts(first: 10) { nodes { provider displayName url } }
+    organizations(first: 12) { totalCount nodes { login name url avatarUrl(size: 64) } }
+    pinnedItems(first: 6, types: [REPOSITORY]) {
+      nodes {
+        __typename
+        ... on Repository {
+          nameWithOwner
+          description
+          url
+          stargazerCount
+          forkCount
+          primaryLanguage { name }
+        }
+      }
+    }
+    repositories(first: 100, ownerAffiliations: [OWNER], isFork: false, orderBy: {field: STARGAZERS, direction: DESC}) {
+      totalCount
+      nodes {
+        nameWithOwner
+        stargazerCount
+        languages(first: 10, orderBy: {field: SIZE, direction: DESC}) { edges { size node { name } } }
+      }
+    }
+    contributionsCollection {
+      totalCommitContributions
+      totalIssueContributions
+      totalPullRequestContributions
+      totalPullRequestReviewContributions
+      totalRepositoryContributions
+      restrictedContributionsCount
+      contributionYears
+      startedAt
+      endedAt
+      contributionCalendar {
+        totalContributions
+        weeks { firstDay contributionDays { date contributionCount contributionLevel weekday } }
+      }
+      commitContributionsByRepository(maxRepositories: 100) {
+        repository { nameWithOwner owner { login __typename } }
+        contributions(first: 1) { totalCount }
+      }
+      issueContributionsByRepository(maxRepositories: 100) {
+        repository { nameWithOwner owner { login __typename } }
+        contributions(first: 1) { totalCount }
+      }
+      pullRequestContributionsByRepository(maxRepositories: 100) {
+        repository { nameWithOwner owner { login __typename } }
+        contributions(first: 1) { totalCount }
+      }
+      pullRequestReviewContributionsByRepository(maxRepositories: 100) {
+        repository { nameWithOwner owner { login __typename } }
+        contributions(first: 1) { totalCount }
+      }
+    }
+    repositoriesContributedTo(first: 100, includeUserRepositories: false, contributionTypes: [COMMIT, ISSUE, PULL_REQUEST, PULL_REQUEST_REVIEW]) {
+      totalCount
+      nodes {
+        nameWithOwner
+        description
+        url
+        stargazerCount
+        forkCount
+        primaryLanguage { name }
+        owner { login __typename }
+        languages(first: 10, orderBy: {field: SIZE, direction: DESC}) { edges { size node { name } } }
+      }
+    }
+  }
+}` -}}
+{{- else -}}
+{{/* kind "years": one aliased per-calendar-year block per contributionYears
+     entry, count fields only. JSON-decoded numbers arrive as floats, so each
+     year is cast to int before formatting; the cast is try-wrapped so a
+     malformed remote value skips its block instead of failing the build. */}}
+{{- $blocks := slice -}}
+{{- range $years -}}
+  {{- $y := 0 -}}
+  {{- with try (int .) -}}
+    {{- with .Value -}}
+      {{- $y = . -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if and (ge $y 2005) (le $y 2100) -}}
+    {{- $blocks = $blocks | append (printf `y%d: contributionsCollection(from: "%d-01-01T00:00:00Z", to: "%d-12-31T23:59:59Z") { totalCommitContributions totalIssueContributions totalPullRequestContributions totalPullRequestReviewContributions totalRepositoryContributions restrictedContributionsCount }` $y $y $y) -}}
+  {{- end -}}
+{{- end -}}
+{{- $query = printf "query($login: String!) { user(login: $login) { %s } }" (delimit $blocks " ") -}}
+{{- end -}}
+
+{{- return (jsonify (dict "query" $query "variables" (dict "login" $login))) -}}

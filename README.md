@@ -63,6 +63,10 @@ Reusable Hugo shortcode modules live under [`shortcodes/`](shortcodes/). Every o
 
 Renders a GitHub repository link in one of five display variants (`inline`, `card`, `stats`, `lang`, `hero`) with API-driven metadata, header-aware retries, and graceful degradation. See [`shortcodes/github-repo/README.md`](shortcodes/github-repo/README.md).
 
+### `shortcodes/github-profile`
+
+Renders a GitHub person-profile widget for presenting one's own activity and achievements: contribution totals, the contribution calendar (heatmap), per-organization contribution rollups, external-collaboration footprint, byte-weighted language shares, reviews given, and optional identity, pinned, membership, and social sections. Ten composable sections behind three presets (`compact`, `card`, `full`), one GraphQL request per profile by default, opt-in all-time history, streaks, merged-PR count, and a transparent activity score, with header-aware retries and graceful degradation. Requires `HUGO_GITHUB_TOKEN` (the GraphQL API has no anonymous tier). See [`shortcodes/github-profile/README.md`](shortcodes/github-profile/README.md).
+
 ### `shortcodes/hf-space`
 
 Renders a Hugging Face Space link in one of five display variants (`inline`, `card`, `wide`, `stats`, `hero`) with Hub API-driven metadata (emoji, SDK, hardware, likes, live status, gradient colors), header-aware retries, and graceful degradation. The sibling of `shortcodes/github-repo`. See [`shortcodes/hf-space/README.md`](shortcodes/hf-space/README.md).

@@ -1,0 +1,35 @@
+{{/*
+  Pinned repositories: the person's own "look at this first" curation, up to
+  the six GitHub allows.
+
+  Context: the render.html context dict (.d carries the normalized data).
+*/}}
+
+{{- $d := .d -}}
+{{- if gt (len $d.pinned) 0 -}}
+<section class="github-profile__section github-profile__section--pinned">
+  <ul class="github-profile__pinned" aria-label="{{ T "github_profile_pinned_label" | default "Pinned repositories" }}">
+    {{- range $d.pinned }}
+    <li class="github-profile__pinned-item"
+        data-repo="{{ .nameWithOwner }}"
+        data-stars="{{ .stars }}"
+        {{- with .language }}
+        data-lang="{{ . }}"
+        {{- end }}>
+      <a class="github-profile__repo-name" href="{{ .url }}" target="_blank" rel="noopener noreferrer">{{ .nameWithOwner }}</a>
+      {{- if gt .stars 0 }}
+      <span class="github-profile__repo-stat" data-metric="stars">
+        {{- partial "github-profile/icon.html" (dict "name" "star" "class" "github-profile__icon") }} {{ partial "github-profile/compact-number.html" .stars -}}
+      </span>
+      {{- end }}
+      {{- with .language }}
+      <span class="github-profile__repo-lang">{{ . }}</span>
+      {{- end }}
+      {{- with .description }}
+      <span class="github-profile__repo-description">{{ . }}</span>
+      {{- end }}
+    </li>
+    {{- end }}
+  </ul>
+</section>
+{{- end -}}
