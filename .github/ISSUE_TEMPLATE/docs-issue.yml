@@ -23,6 +23,7 @@ body:
         - modules/workbox/README.md
         - modules/idb/README.md
         - shortcodes/github-repo/README.md
+        - shortcodes/github-profile/README.md
         - shortcodes/hf-space/README.md
         - shortcodes/callout/README.md
         - shortcodes/youtube-embed/README.md

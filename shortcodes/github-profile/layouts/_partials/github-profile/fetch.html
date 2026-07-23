@@ -1,0 +1,390 @@
+{{/*
+  Fetches a person's GitHub profile snapshot via the GraphQL API with
+  retry-and-classify resilience in front of graceful degradation. When the
+  fetch cannot run or fails, the partial returns a dict with `apiOk: false`
+  and the renderer degrades to the identity chip.
+
+  Endpoints (in order; every later endpoint is skipped when a prerequisite
+  failed):
+  1. GraphQL snapshot -- ONE POST covering identity, socials, organizations,
+     pinned items, owned repositories with language bytes, the rolling-year
+     contributionsCollection (counts, calendar, per-repository lists), and
+     repositoriesContributedTo. This is the only request the default
+     configuration makes.
+  2. GraphQL year blocks -- only when history="all": a second POST with one
+     aliased calendar-year contributionsCollection block per contributionYears
+     entry (the year list is only known from the snapshot, which is why this
+     cannot be folded into request 1).
+  3. REST Search -- only when mergedPrs=true: GET /search/issues reading
+     total_count only, for the lifetime merged-PR count. Lives in the Search
+     API's own stricter 30-requests/minute bucket and degrades independently.
+
+  Retry machinery: identical to the sibling shortcodes/github-repo module
+  (see its fetch.html for the full rationale) -- 5 attempts, 30s per-attempt
+  timeout, 10s backoff slack, 120s wall-clock budget per endpoint, per-attempt
+  cache keys so a cached error response cannot poison later attempts,
+  early-break on provably-useless error classes, and a host-down circuit
+  breaker (hugo.Store sentinel, tripped only when NO attempt received any
+  HTTP status) so a full API outage costs the build roughly one budget
+  instead of one per call site. Constants are intentionally NOT parameters.
+
+  GraphQL-specific correctness: the GraphQL endpoint reports failures as
+  HTTP 200 with a {data, errors} envelope, and an unknown login arrives as a
+  null data.user (not a 404). The retry loop therefore only handles
+  TRANSPORT-level failures; after it succeeds, the envelope is inspected
+  exactly once -- an envelope-level failure is an authoritative API answer
+  that a retry within the same build cannot change, so it is classified and
+  degraded without re-entering the loop.
+
+  Because GraphQL has no anonymous tier, a missing HUGO_GITHUB_TOKEN means
+  no request is attempted at all: one build-deduplicated warning, immediate
+  identity-chip degradation.
+
+  Context expectations:
+  - .user (string)       GitHub login to fetch.
+  - .history (string)    "year" or "all".
+  - .mergedPrs (bool)    Whether to fetch the lifetime merged-PR count.
+  - .position (text.Position) Shortcode call position (used in warnings).
+
+  Returns (dict):
+  - .apiOk (bool)          Whether the snapshot resolved to a user object.
+  - .degradedReason (string) "" on success; otherwise "no-token",
+                           "host-down", or the failing errorClass
+                           ("not-found", "auth", "primary-rate-limit",
+                           "graphql", "network", ...).
+  - .user (map or nil)     The decoded data.user object when apiOk.
+  - .yearTotals (map or nil) The decoded data.user of the year-blocks query
+                           (keys y2019, y2020, ...); nil when history="year"
+                           or when that request degraded.
+  - .mergedPrCount (int)   Lifetime merged-PR total_count; -1 when not
+                           requested or degraded.
+*/}}
+
+{{- $user := .user -}}
+{{- $history := .history -}}
+{{- $wantMergedPrs := .mergedPrs -}}
+{{- $position := .position -}}
+
+{{- $result := dict
+  "apiOk" false
+  "degradedReason" ""
+  "user" nil
+  "yearTotals" nil
+  "mergedPrCount" -1
+-}}
+
+{{/* Resolve the token once. Hugo's default security policy only exposes
+     env vars matching ^HUGO_ or ^CI$, so the prefix is mandatory. */}}
+{{- $token := os.Getenv "HUGO_GITHUB_TOKEN" -}}
+
+{{- if not $token -}}
+  {{/* GraphQL has no anonymous tier, so there is nothing to attempt. Warn
+       once per build (hugo.Store sentinel), degrade to the identity chip. */}}
+  {{- $warnedKey := "github-profile:warned-no-token" -}}
+  {{- if not (hugo.Store.Get $warnedKey) -}}
+    {{- hugo.Store.Set $warnedKey true -}}
+    {{- warnf "[github-profile] HUGO_GITHUB_TOKEN is not set. The GitHub GraphQL API requires authentication for every request, so the shortcode renders only the identity chip. Set HUGO_GITHUB_TOKEN to a personal access token (a classic token with zero scopes suffices for public data). See %s" $position -}}
+  {{- end -}}
+  {{- $result = merge $result (dict "degradedReason" "no-token") -}}
+{{- else -}}
+
+{{/* Cache-key token fingerprint. GraphQL failures are HTTP 200 envelopes,
+     which Hugo's response cache stores as successes, so a response produced
+     by a rejected token would otherwise keep serving from cache after the
+     operator fixes the token. Varying the key by a short token digest makes
+     a token change take effect on the next build. */}}
+{{- $tokenFp := substr (md5 $token) 0 8 -}}
+
+{{/* Retry constants. Mirrors shortcodes/github-repo exactly. */}}
+{{- $attempts := 5 -}}
+{{- $perAttemptTimeoutSec := 30 -}}
+{{- $perAttemptTimeout := printf "%ds" $perAttemptTimeoutSec -}}
+{{- $backoffSlackSec := 10 -}}
+{{- $attemptReserveSec := add $perAttemptTimeoutSec $backoffSlackSec -}}
+{{- $overallBudgetSec := 120 -}}
+{{/* Gate arithmetic runs on a millisecond clock: integer-second deltas
+     truncate, and a pathological alignment could let a boundary attempt
+     slip past the cap by up to a second. */}}
+{{- $attemptReserveMs := mul $attemptReserveSec 1000 -}}
+{{- $overallBudgetMs := mul $overallBudgetSec 1000 -}}
+
+{{/* Early-break classes shared across the endpoint loops. */}}
+{{- $earlyBreakClasses := slice "primary-rate-limit" "auth" "not-found" -}}
+
+{{/* Host-down circuit-breaker sentinel, shared across every call site in
+     the build. Namespaced to this module so it cannot collide with the
+     github-repo sibling when both are imported. */}}
+{{- $hostDownKey := "github-profile:host-down:api.github.com" -}}
+
+{{- $graphqlUrl := "https://api.github.com/graphql" -}}
+
+{{/* ---------- Endpoint 1 of up to 3: GraphQL snapshot ---------- */}}
+{{- $hostDown := hugo.Store.Get $hostDownKey -}}
+{{- $startMs := now.UnixMilli -}}
+{{- $snapBody := partial "github-profile/build-query.html" (dict "kind" "snapshot" "login" $user) -}}
+{{- $snapResult := dict
+  "ok" false
+  "value" nil
+  "statusCode" 0
+  "headers" (dict)
+  "errorClass" "network"
+  "errorMessage" ""
+  "waitHintSeconds" 0
+-}}
+{{- $snapAttemptsUsed := 0 -}}
+{{- $snapSawResponse := false -}}
+{{- range $attempt := seq 1 $attempts -}}
+  {{- if $snapResult.ok -}}
+    {{/* Already succeeded; skip remaining attempts. */}}
+  {{- else if $hostDown -}}
+    {{/* Circuit breaker open: the host never responded to an earlier call
+         site this build, so degrade immediately instead of burning another
+         wall-clock budget. */}}
+  {{- else -}}
+    {{- $remainingMs := sub $overallBudgetMs (sub now.UnixMilli $startMs) -}}
+    {{- if lt $remainingMs $attemptReserveMs -}}
+      {{/* The remaining budget cannot fit a full attempt including the
+           deadline-blind backoff slack; stop so the budget stays a hard
+           ceiling. */}}
+    {{- else if and (gt $attempt 1) (in $earlyBreakClasses $snapResult.errorClass) -}}
+      {{/* Provably-useless class; further attempts within this build cannot succeed. */}}
+    {{- else if and (gt $attempt 1) (eq $snapResult.errorClass "secondary-rate-limit") (gt (mul $snapResult.waitHintSeconds 1000) $remainingMs) -}}
+      {{/* Secondary rate-limit reset window exceeds remaining budget. */}}
+    {{- else -}}
+      {{- $cacheKey := printf "github-profile:%s:snapshot:%s:attempt%d" $user $tokenFp $attempt -}}
+      {{- $snapResult = partial "github-profile/fetch-once.html" (dict
+        "url" $graphqlUrl
+        "method" "post"
+        "body" $snapBody
+        "cacheKey" $cacheKey
+        "token" $token
+        "timeout" $perAttemptTimeout
+      ) -}}
+      {{- $snapAttemptsUsed = $attempt -}}
+      {{- if ne $snapResult.statusCode 0 -}}
+        {{- $snapSawResponse = true -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Trip the circuit breaker only when NO attempt received any HTTP status
+     code -- a host that answered even once (with any status) is reachable,
+     and the problem is then the endpoint or the request, not the host. */}}
+{{- if and (not $hostDown) (not $snapResult.ok) (eq $snapResult.errorClass "network") (eq $snapResult.statusCode 0) (not $snapSawResponse) -}}
+  {{- hugo.Store.Set $hostDownKey true -}}
+{{- end -}}
+
+{{- if $snapResult.ok -}}
+  {{/* Transport succeeded; now inspect the GraphQL envelope exactly once.
+       A null data.user with errors[] is the API's authoritative failure
+       answer (unknown login, insufficient scopes, GraphQL-level rate
+       limit); a non-null user with a partial errors[] renders every
+       resolved field and warns once. */}}
+  {{- $env := $snapResult.value -}}
+  {{- $gqlErrors := slice -}}
+  {{- with index $env "errors" -}}
+    {{- $gqlErrors = . -}}
+  {{- end -}}
+  {{- $gqlUser := "" -}}
+  {{- $hasUser := false -}}
+  {{- with index $env "data" -}}
+    {{- with index . "user" -}}
+      {{- $gqlUser = . -}}
+      {{- $hasUser = true -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if $hasUser -}}
+    {{- if gt (len $gqlErrors) 0 -}}
+      {{- warnf "[github-profile] GitHub GraphQL returned partial data for user %q (%d error(s); first message: %q). Rendering the fields that resolved. See %s" $user (len $gqlErrors) (printf "%v" (index (index $gqlErrors 0) "message")) $position -}}
+    {{- end -}}
+    {{- $result = merge $result (dict "apiOk" true "user" $gqlUser) -}}
+  {{- else -}}
+    {{- $gqlClass := "graphql" -}}
+    {{- $gqlMessage := "GraphQL envelope carried no data.user" -}}
+    {{- if gt (len $gqlErrors) 0 -}}
+      {{- $first := index $gqlErrors 0 -}}
+      {{- with index $first "message" -}}
+        {{- $gqlMessage = printf "%v" . -}}
+      {{- end -}}
+      {{- $gqlType := "" -}}
+      {{- with index $first "type" -}}
+        {{- $gqlType = printf "%v" . -}}
+      {{- end -}}
+      {{- if eq $gqlType "NOT_FOUND" -}}
+        {{- $gqlClass = "not-found" -}}
+      {{- else if eq $gqlType "RATE_LIMITED" -}}
+        {{- $gqlClass = "primary-rate-limit" -}}
+      {{- else if in (slice "FORBIDDEN" "INSUFFICIENT_SCOPES") $gqlType -}}
+        {{- $gqlClass = "auth" -}}
+      {{- end -}}
+    {{- end -}}
+    {{- warnf "[github-profile] GitHub GraphQL rejected the profile query for user %q (errorClass=%s, message=%q). Rendering the identity chip. See %s" $user $gqlClass $gqlMessage $position -}}
+    {{- $result = merge $result (dict "degradedReason" $gqlClass) -}}
+  {{- end -}}
+{{- else if $hostDown -}}
+  {{- warnf "[github-profile] Skipping the GitHub API fetch for user %q: api.github.com was marked unreachable earlier in this build. Rendering the identity chip. See %s" $user $position -}}
+  {{- $result = merge $result (dict "degradedReason" "host-down") -}}
+{{- else -}}
+  {{- $guidanceHint := "see warning context for guidance" -}}
+  {{- with $snapResult.waitHintSeconds -}}
+    {{- $guidanceHint = printf "wait %d seconds and rebuild" . -}}
+  {{- end -}}
+  {{- warnf "[github-profile] Failed to fetch the profile of user %q after %d attempt(s) (errorClass=%s, statusCode=%d, message=%q). Hint: %s. See %s" $user $snapAttemptsUsed $snapResult.errorClass $snapResult.statusCode $snapResult.errorMessage $guidanceHint $position -}}
+  {{- $result = merge $result (dict "degradedReason" $snapResult.errorClass) -}}
+{{- end -}}
+
+{{/* ---------- Endpoint 2: calendar-year blocks (history=all only) ---------- */}}
+{{- if and (eq $history "all") $result.apiOk -}}
+  {{- $years := slice -}}
+  {{- with index $result.user "contributionsCollection" -}}
+    {{- with index . "contributionYears" -}}
+      {{- $years = . -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if gt (len $years) 0 -}}
+    {{- $yearsHostDown := hugo.Store.Get $hostDownKey -}}
+    {{- $yearsBody := partial "github-profile/build-query.html" (dict "kind" "years" "login" $user "years" $years) -}}
+    {{- $yearsStartMs := now.UnixMilli -}}
+    {{- $yearsResult := dict
+      "ok" false
+      "value" nil
+      "statusCode" 0
+      "headers" (dict)
+      "errorClass" "network"
+      "errorMessage" ""
+      "waitHintSeconds" 0
+    -}}
+    {{- $yearsAttemptsUsed := 0 -}}
+    {{- $yearsSawResponse := false -}}
+    {{- range $attempt := seq 1 $attempts -}}
+      {{- if $yearsResult.ok -}}
+        {{/* Already succeeded; skip remaining attempts. */}}
+      {{- else if $yearsHostDown -}}
+        {{/* Circuit breaker open; degrade immediately. */}}
+      {{- else -}}
+        {{- $remainingMs := sub $overallBudgetMs (sub now.UnixMilli $yearsStartMs) -}}
+        {{- if lt $remainingMs $attemptReserveMs -}}
+          {{/* The remaining budget cannot fit a full attempt including the
+               deadline-blind backoff slack. */}}
+        {{- else if and (gt $attempt 1) (in $earlyBreakClasses $yearsResult.errorClass) -}}
+          {{/* Provably-useless class. */}}
+        {{- else if and (gt $attempt 1) (eq $yearsResult.errorClass "secondary-rate-limit") (gt (mul $yearsResult.waitHintSeconds 1000) $remainingMs) -}}
+          {{/* Reset window exceeds remaining budget. */}}
+        {{- else -}}
+          {{- $cacheKey := printf "github-profile:%s:years:%s:attempt%d" $user $tokenFp $attempt -}}
+          {{- $yearsResult = partial "github-profile/fetch-once.html" (dict
+            "url" $graphqlUrl
+            "method" "post"
+            "body" $yearsBody
+            "cacheKey" $cacheKey
+            "token" $token
+            "timeout" $perAttemptTimeout
+          ) -}}
+          {{- $yearsAttemptsUsed = $attempt -}}
+          {{- if ne $yearsResult.statusCode 0 -}}
+            {{- $yearsSawResponse = true -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{- if and (not $yearsHostDown) (not $yearsResult.ok) (eq $yearsResult.errorClass "network") (eq $yearsResult.statusCode 0) (not $yearsSawResponse) -}}
+      {{- hugo.Store.Set $hostDownKey true -}}
+    {{- end -}}
+
+    {{- if $yearsResult.ok -}}
+      {{- $env := $yearsResult.value -}}
+      {{- with index $env "data" -}}
+        {{- with index . "user" -}}
+          {{- $result = merge $result (dict "yearTotals" .) -}}
+        {{- end -}}
+      {{- end -}}
+      {{- if not $result.yearTotals -}}
+        {{- warnf "[github-profile] The all-time history query for user %q returned no data; falling back to the rolling-year totals. See %s" $user $position -}}
+      {{- end -}}
+    {{- else if $yearsHostDown -}}
+      {{- warnf "[github-profile] Skipping the all-time history fetch for user %q: api.github.com was marked unreachable earlier in this build. Falling back to the rolling-year totals. See %s" $user $position -}}
+    {{- else -}}
+      {{- warnf "[github-profile] Failed to fetch the all-time history of user %q after %d attempt(s) (errorClass=%s, statusCode=%d, message=%q). Falling back to the rolling-year totals. See %s" $user $yearsAttemptsUsed $yearsResult.errorClass $yearsResult.statusCode $yearsResult.errorMessage $position -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---------- Endpoint 3: lifetime merged-PR count (mergedPrs=true only) ---------- */}}
+{{- if and $wantMergedPrs $result.apiOk -}}
+  {{- $searchHostDown := hugo.Store.Get $hostDownKey -}}
+  {{/* GitHub logins are restricted to alphanumerics and hyphens, so the
+       login needs no URL escaping; the + separators encode the spaces
+       between search qualifiers. total_count is authoritative even beyond
+       the Search API's 1,000-item retrieval cap, and it is the only field
+       read. */}}
+  {{- $searchUrl := printf "https://api.github.com/search/issues?q=author%%3A%s+is%%3Apr+is%%3Amerged&per_page=1" $user -}}
+  {{- $searchStartMs := now.UnixMilli -}}
+  {{- $searchResult := dict
+    "ok" false
+    "value" nil
+    "statusCode" 0
+    "headers" (dict)
+    "errorClass" "network"
+    "errorMessage" ""
+    "waitHintSeconds" 0
+  -}}
+  {{- $searchAttemptsUsed := 0 -}}
+  {{- $searchSawResponse := false -}}
+  {{- range $attempt := seq 1 $attempts -}}
+    {{- if $searchResult.ok -}}
+      {{/* Already succeeded; skip remaining attempts. */}}
+    {{- else if $searchHostDown -}}
+      {{/* Circuit breaker open; degrade immediately. */}}
+    {{- else -}}
+      {{- $remainingMs := sub $overallBudgetMs (sub now.UnixMilli $searchStartMs) -}}
+      {{- if lt $remainingMs $attemptReserveMs -}}
+        {{/* The remaining budget cannot fit a full attempt including the
+             deadline-blind backoff slack. */}}
+      {{- else if and (gt $attempt 1) (in $earlyBreakClasses $searchResult.errorClass) -}}
+        {{/* Provably-useless class. */}}
+      {{- else if and (gt $attempt 1) (eq $searchResult.errorClass "secondary-rate-limit") (gt (mul $searchResult.waitHintSeconds 1000) $remainingMs) -}}
+        {{/* Reset window exceeds remaining budget. */}}
+      {{- else -}}
+        {{- $cacheKey := printf "github-profile:%s:merged-prs:%s:attempt%d" $user $tokenFp $attempt -}}
+        {{- $searchResult = partial "github-profile/fetch-once.html" (dict
+          "url" $searchUrl
+          "cacheKey" $cacheKey
+          "token" $token
+          "timeout" $perAttemptTimeout
+        ) -}}
+        {{- $searchAttemptsUsed = $attempt -}}
+        {{- if ne $searchResult.statusCode 0 -}}
+          {{- $searchSawResponse = true -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- if and (not $searchHostDown) (not $searchResult.ok) (eq $searchResult.errorClass "network") (eq $searchResult.statusCode 0) (not $searchSawResponse) -}}
+    {{- hugo.Store.Set $hostDownKey true -}}
+  {{- end -}}
+
+  {{- if $searchResult.ok -}}
+    {{/* The count is remote-derived, so the cast is try-wrapped and a bad
+         value degrades to the metric being hidden instead of failing the
+         build. */}}
+    {{- with index $searchResult.value "total_count" -}}
+      {{- with try (int .) -}}
+        {{- with .Value -}}
+          {{- $result = merge $result (dict "mergedPrCount" .) -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- else if $searchHostDown -}}
+    {{- warnf "[github-profile] Skipping the merged-PR count fetch for user %q: api.github.com was marked unreachable earlier in this build. Hiding that metric. See %s" $user $position -}}
+  {{- else -}}
+    {{- warnf "[github-profile] Failed to fetch the merged-PR count for user %q after %d attempt(s) (errorClass=%s, statusCode=%d, message=%q). Hiding that metric; note the Search API has its own 30-requests/minute limit. See %s" $user $searchAttemptsUsed $searchResult.errorClass $searchResult.statusCode $searchResult.errorMessage $position -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Closes the token guard. */}}
+{{- end -}}
+
+{{- return $result -}}

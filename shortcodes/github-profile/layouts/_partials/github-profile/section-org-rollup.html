@@ -1,0 +1,48 @@
+{{/*
+  Per-organization contribution rollup: commits, issues, pull requests, and
+  reviews grouped by repository owner (the person's own account excluded) --
+  a composite GitHub itself never presents. Scoped to the snapshot's
+  rolling-year window and the API's top-100-repositories-per-type ceiling.
+
+  Context: the render.html context dict (.d carries the normalized data).
+*/}}
+
+{{- $d := .d -}}
+{{- if gt (len $d.orgRollup) 0 -}}
+<section class="github-profile__section github-profile__section--org-rollup">
+  <ul class="github-profile__org-rollup" aria-label="{{ T "github_profile_org_rollup_label" | default "Contributions by organization" }}">
+    {{- range $d.orgRollup }}
+    <li class="github-profile__org-roll"
+        data-org="{{ .login }}"
+        data-owner-type="{{ .type }}"
+        data-commits="{{ .commits }}"
+        data-issues="{{ .issues }}"
+        data-prs="{{ .prs }}"
+        data-reviews="{{ .reviews }}"
+        data-total="{{ .total }}">
+      <a class="github-profile__org-roll-name" href="https://github.com/{{ .login }}" target="_blank" rel="noopener noreferrer">{{ .login }}</a>
+      {{- if gt .commits 0 }}
+      <span class="github-profile__org-roll-stat" data-metric="commits">
+        {{- partial "github-profile/icon.html" (dict "name" "commit" "class" "github-profile__icon") }} {{ partial "github-profile/compact-number.html" .commits -}}
+      </span>
+      {{- end }}
+      {{- if gt .prs 0 }}
+      <span class="github-profile__org-roll-stat" data-metric="prs">
+        {{- partial "github-profile/icon.html" (dict "name" "pull-request" "class" "github-profile__icon") }} {{ partial "github-profile/compact-number.html" .prs -}}
+      </span>
+      {{- end }}
+      {{- if gt .issues 0 }}
+      <span class="github-profile__org-roll-stat" data-metric="issues">
+        {{- partial "github-profile/icon.html" (dict "name" "issue" "class" "github-profile__icon") }} {{ partial "github-profile/compact-number.html" .issues -}}
+      </span>
+      {{- end }}
+      {{- if gt .reviews 0 }}
+      <span class="github-profile__org-roll-stat" data-metric="reviews">
+        {{- partial "github-profile/icon.html" (dict "name" "review" "class" "github-profile__icon") }} {{ partial "github-profile/compact-number.html" .reviews -}}
+      </span>
+      {{- end }}
+    </li>
+    {{- end }}
+  </ul>
+</section>
+{{- end -}}

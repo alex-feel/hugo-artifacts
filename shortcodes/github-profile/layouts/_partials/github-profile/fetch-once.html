@@ -1,0 +1,217 @@
+{{/*
+  Performs a single HTTP attempt against the GitHub API and normalizes the
+  outcome into a stable result dict. This partial is the per-attempt unit
+  driven by the outer retry loops in `github-profile/fetch.html`. It is
+  transport-generic: the same contract serves the GraphQL endpoint (a POST
+  with a JSON body) and the REST Search endpoint (a plain GET).
+
+  Why this partial exists:
+  - Encapsulates the "build options + call resources.GetRemote inside try +
+    classify the failure" sequence shared by every endpoint this module
+    calls.
+  - Hides Hugo's `.Err.Cause.Data.{StatusCode,Body,Headers}` surface behind a
+    narrow output contract -- callers see only `ok`, `value`, `statusCode`,
+    `headers`, `errorClass`, `errorMessage`, `waitHintSeconds`.
+
+  Inputs (context dict):
+  - .url (string)         Full URL to fetch.
+  - .method (string)      "GET" or "post". Defaults to "GET".
+  - .body (string)        Request body for POST calls; empty for GET.
+  - .cacheKey (string)    Explicit Hugo cache key for resources.GetRemote.
+                          The caller (retry loop) supplies a per-attempt key
+                          so subsequent attempts bypass any error response
+                          cached by Hugo's httpcache.Transport on prior tries.
+  - .token (string)       Pre-resolved HUGO_GITHUB_TOKEN value, or empty.
+                          Resolved once by the caller so os.Getenv is not
+                          invoked repeatedly across retries.
+  - .timeout (string)     Per-request timeout in Go duration format
+                          (e.g., "30s"). Defaults to "30s" when empty.
+
+  Output (returned dict):
+  - .ok (bool)              true when the response was a non-202 2xx and its
+                             body decoded to a JSON object ({} counts; an
+                             array, blank, undecodable, null, or scalar body
+                             does not); false otherwise. For the GraphQL
+                             endpoint, HTTP-level ok does NOT yet mean the
+                             query succeeded: GraphQL failures arrive as a
+                             200 envelope with an errors[] array and a null
+                             data.user, which the CALLER inspects (see
+                             fetch.html) -- HTTP status alone is never
+                             trusted for GraphQL success.
+  - .value (any)             The decoded JSON object when .ok; nil otherwise.
+  - .statusCode (int)        HTTP status code. The actual 2xx status on the
+                             ok and parse paths; 0 for network failure (no
+                             response received); 404 for the nil branch of
+                             resources.GetRemote.
+  - .headers (map)           Selected response headers when responseHeaders
+                             was honored by Hugo. Empty dict on the nil-branch
+                             404 path (no .Data is exposed there).
+  - .errorClass (string)     Empty when .ok; "parse" for a 2xx response that
+                             is not a data-bearing JSON object; otherwise as
+                             set by github-profile/classify-error.html.
+  - .errorMessage (string)   Short diagnostic when not .ok; empty on success.
+  - .waitHintSeconds (int)   Wait-until-reset hint for rate-limit classes; 0
+                             elsewhere. See classify-error.html.
+
+  Side effects: none. The partial does not warnf -- diagnostic logging is
+  the responsibility of the outer retry loop, which has visibility into
+  attempt count, position, and remaining budget.
+*/}}
+
+{{- $url := .url -}}
+{{- $method := .method | default "GET" -}}
+{{- $body := .body | default "" -}}
+{{- $cacheKey := .cacheKey -}}
+{{- $token := .token -}}
+{{- $timeout := .timeout | default "30s" -}}
+
+{{/* Build request headers. The X-GitHub-Api-Version pin protects us against
+     future breaking changes; the Accept header opts into the JSON v3 schema
+     (harmless for GraphQL, required for REST). POST bodies are JSON. */}}
+{{- $headers := dict
+  "Accept" "application/vnd.github+json"
+  "X-GitHub-Api-Version" "2022-11-28"
+-}}
+{{- if $body -}}
+  {{- $headers = merge $headers (dict "Content-Type" "application/json") -}}
+{{- end -}}
+{{- if $token -}}
+  {{- $headers = merge $headers (dict "Authorization" (printf "Bearer %s" $token)) -}}
+{{- end -}}
+
+{{/* Request response headers we care about. responseHeaders (v0.143.0+) is
+     honored on both success and error paths -- on success it lets callers
+     see the remaining rate-limit budget proactively; on error it feeds the
+     classifier. Keys MUST match the canonical GitHub casing. */}}
+{{- $opts := dict
+  "method" $method
+  "headers" $headers
+  "key" $cacheKey
+  "timeout" $timeout
+  "responseHeaders" (slice
+    "X-RateLimit-Limit"
+    "X-RateLimit-Remaining"
+    "X-RateLimit-Reset"
+    "X-RateLimit-Used"
+    "X-RateLimit-Resource"
+    "Retry-After"
+  )
+-}}
+{{- if $body -}}
+  {{- $opts = merge $opts (dict "body" $body) -}}
+{{- end -}}
+
+{{/* Default result represents a failed attempt with no observable response
+     (e.g., DNS failure, build-host network drop). Specific branches below
+     overwrite this when more information is available. */}}
+{{- $result := dict
+  "ok" false
+  "value" nil
+  "statusCode" 0
+  "headers" (dict)
+  "errorClass" "network"
+  "errorMessage" "no response (network or timeout)"
+  "waitHintSeconds" 0
+-}}
+
+{{- with try (resources.GetRemote $url $opts) -}}
+  {{- with .Err -}}
+    {{/* Error path: extract HTTP status, headers, and body from
+         .Cause.Data. This surface is documented via Hugo's integration test
+         hugolib/resource_chain_test.go (TestResourceChainPostCSS). */}}
+    {{- $sc := 0 -}}
+    {{- $hdrs := dict -}}
+    {{- $errBody := "" -}}
+    {{- with .Cause -}}
+      {{- with .Data -}}
+        {{- with .StatusCode -}}
+          {{- $sc = . -}}
+        {{- end -}}
+        {{- with .Headers -}}
+          {{- $hdrs = . -}}
+        {{- end -}}
+        {{- with .Body -}}
+          {{- $errBody = . -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+    {{- $cls := partial "github-profile/classify-error.html" (dict
+      "statusCode" $sc
+      "headers" $hdrs
+      "body" $errBody
+    ) -}}
+    {{- $result = dict
+      "ok" false
+      "value" nil
+      "statusCode" $sc
+      "headers" $hdrs
+      "errorClass" $cls.errorClass
+      "errorMessage" $cls.errorMessage
+      "waitHintSeconds" $cls.waitHintSeconds
+    -}}
+  {{- else with .Value -}}
+    {{/* Success path. The raw body is decoded with an explicit JSON format
+         (no media-type inference). Success requires a decoded JSON OBJECT on
+         a non-202 status: both endpoints this module calls have object
+         semantics, so an array, blank, undecodable, null, or scalar body
+         classifies as a retryable "parse" failure instead of crashing a
+         consumer's field access or masquerading as data. The explicit kind
+         check matters because an empty string decodes to nil WITHOUT an
+         error and template truthiness would misread a valid {} as a
+         failure. */}}
+    {{- $raw := .Content -}}
+    {{- $sc := 200 -}}
+    {{- $sucHdrs := dict -}}
+    {{- with .Data -}}
+      {{- with .StatusCode -}}
+        {{- $sc = . -}}
+      {{- end -}}
+      {{- with .Headers -}}
+        {{- $sucHdrs = . -}}
+      {{- end -}}
+    {{- end -}}
+    {{- $decoded := "" -}}
+    {{- $decodedOk := false -}}
+    {{- if ne (trim $raw " \t\n\r") "" -}}
+      {{- $parsed := try (transform.Unmarshal (dict "format" "json") $raw) -}}
+      {{- if not $parsed.Err -}}
+        {{- $decoded = $parsed.Value -}}
+        {{- $decodedOk = true -}}
+      {{- end -}}
+    {{- end -}}
+    {{- if and $decodedOk (reflect.IsMap $decoded) (ne $sc 202) -}}
+      {{- $result = dict
+        "ok" true
+        "value" $decoded
+        "statusCode" $sc
+        "headers" $sucHdrs
+        "errorClass" ""
+        "errorMessage" ""
+        "waitHintSeconds" 0
+      -}}
+    {{- else -}}
+      {{- $result = dict
+        "ok" false
+        "value" nil
+        "statusCode" $sc
+        "headers" $sucHdrs
+        "errorClass" "parse"
+        "errorMessage" (printf "HTTP %d without a usable JSON payload" $sc)
+        "waitHintSeconds" 0
+      -}}
+    {{- end -}}
+  {{- else -}}
+    {{/* Nil branch: HTTP 404 (resources.GetRemote returns nil). */}}
+    {{- $result = dict
+      "ok" false
+      "value" nil
+      "statusCode" 404
+      "headers" (dict)
+      "errorClass" "not-found"
+      "errorMessage" "HTTP 404"
+      "waitHintSeconds" 0
+    -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $result -}}

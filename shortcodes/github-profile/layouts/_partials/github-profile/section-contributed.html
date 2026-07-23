@@ -1,0 +1,37 @@
+{{/*
+  Externally contributed repositories: repositories the person does NOT own,
+  ordered by stars -- the hardest-to-game collaboration evidence. Capped at
+  the twelve most starred.
+
+  Context: the render.html context dict (.d carries the normalized data).
+*/}}
+
+{{- $d := .d -}}
+{{- if gt (len $d.contributed) 0 -}}
+<section class="github-profile__section github-profile__section--contributed">
+  <ul class="github-profile__contributed" aria-label="{{ T "github_profile_contributed_label" | default "Contributes to" }}">
+    {{- range $d.contributed }}
+    <li class="github-profile__repo"
+        data-repo="{{ .nameWithOwner }}"
+        data-owner-type="{{ .ownerType }}"
+        data-stars="{{ .stars }}"
+        {{- with .language }}
+        data-lang="{{ . }}"
+        {{- end }}>
+      <a class="github-profile__repo-name" href="{{ .url }}" target="_blank" rel="noopener noreferrer">{{ .nameWithOwner }}</a>
+      {{- if gt .stars 0 }}
+      <span class="github-profile__repo-stat" data-metric="stars">
+        {{- partial "github-profile/icon.html" (dict "name" "star" "class" "github-profile__icon") }} {{ partial "github-profile/compact-number.html" .stars -}}
+      </span>
+      {{- end }}
+      {{- with .language }}
+      <span class="github-profile__repo-lang">{{ . }}</span>
+      {{- end }}
+      {{- with .description }}
+      <span class="github-profile__repo-description">{{ . }}</span>
+      {{- end }}
+    </li>
+    {{- end }}
+  </ul>
+</section>
+{{- end -}}

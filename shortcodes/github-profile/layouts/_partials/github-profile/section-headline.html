@@ -1,0 +1,61 @@
+{{/*
+  Headline metric strip: the numbers a reader scans first. Renders commits,
+  pull requests (the lifetime merged count when the merged-prs parameter
+  fetched one, otherwise the authored count with an honest label), the
+  external-collaboration footprint, and 90-day recency. Every metric carries
+  the raw integer in data-raw so sites can restyle, sort, or announce it.
+
+  Context: the render.html context dict (.d carries the normalized data).
+*/}}
+
+{{- $d := .d -}}
+<section class="github-profile__section github-profile__section--headline">
+  <span class="github-profile__metric" data-metric="commits" data-raw="{{ $d.totals.commits }}">
+    {{- partial "github-profile/icon.html" (dict "name" "commit" "class" "github-profile__icon") }}
+    <span class="github-profile__metric-value">{{ partial "github-profile/compact-number.html" $d.totals.commits }}</span>
+    <span class="github-profile__metric-label">{{ T "github_profile_metric_commits" | default "commits" }}</span>
+  </span>
+  {{- if ge $d.mergedPrCount 0 }}
+  <span class="github-profile__metric" data-metric="prs-merged" data-raw="{{ $d.mergedPrCount }}">
+    {{- partial "github-profile/icon.html" (dict "name" "pull-request" "class" "github-profile__icon") }}
+    <span class="github-profile__metric-value">{{ partial "github-profile/compact-number.html" $d.mergedPrCount }}</span>
+    <span class="github-profile__metric-label">{{ T "github_profile_metric_merged_prs" | default "merged pull requests" }}</span>
+  </span>
+  {{- else }}
+  <span class="github-profile__metric" data-metric="prs" data-raw="{{ $d.totals.prs }}">
+    {{- partial "github-profile/icon.html" (dict "name" "pull-request" "class" "github-profile__icon") }}
+    <span class="github-profile__metric-value">{{ partial "github-profile/compact-number.html" $d.totals.prs }}</span>
+    <span class="github-profile__metric-label">{{ T "github_profile_metric_prs" | default "pull requests (authored)" }}</span>
+  </span>
+  {{- end }}
+  {{- if gt $d.externalRepos 0 }}
+  <span class="github-profile__metric" data-metric="external-repos" data-raw="{{ $d.externalRepos }}">
+    {{- partial "github-profile/icon.html" (dict "name" "repo" "class" "github-profile__icon") }}
+    <span class="github-profile__metric-value">{{ partial "github-profile/compact-number.html" $d.externalRepos }}</span>
+    <span class="github-profile__metric-label">{{ T "github_profile_metric_external_repos" | default "external repositories" }}</span>
+  </span>
+  {{- end }}
+  {{- if gt $d.externalOrgs 0 }}
+  <span class="github-profile__metric" data-metric="external-orgs" data-raw="{{ $d.externalOrgs }}">
+    {{- partial "github-profile/icon.html" (dict "name" "org" "class" "github-profile__icon") }}
+    <span class="github-profile__metric-value">{{ partial "github-profile/compact-number.html" $d.externalOrgs }}</span>
+    <span class="github-profile__metric-label">{{ T "github_profile_metric_external_orgs" | default "organizations" }}</span>
+  </span>
+  {{- end }}
+  <span class="github-profile__metric" data-metric="recent-90d-days" data-raw="{{ $d.recentActive }}">
+    {{- partial "github-profile/icon.html" (dict "name" "issue" "class" "github-profile__icon") }}
+    <span class="github-profile__metric-value">{{ $d.recentActive }}</span>
+    <span class="github-profile__metric-label">{{ T "github_profile_metric_recent_days" | default "active days in the last 90" }}</span>
+  </span>
+  {{- with $d.rankLevel }}
+  <span class="github-profile__rank" data-rank-level="{{ . }}" data-rank-percentile="{{ $d.rankPercentile }}">
+    <span class="github-profile__metric-value">{{ . }}</span>
+    <span class="github-profile__metric-label">{{ T "github_profile_rank_label" | default "activity score" }}</span>
+  </span>
+  {{- end }}
+  {{- if gt $d.totals.restricted 0 }}
+  <span class="github-profile__floor-note" data-metric="restricted-count" data-raw="{{ $d.totals.restricted }}">
+    {{- T "github_profile_restricted_note" $d.totals.restricted | default (printf "plus %d private contributions" $d.totals.restricted) -}}
+  </span>
+  {{- end }}
+</section>

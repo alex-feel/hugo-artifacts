@@ -1,0 +1,39 @@
+# Hugo github-profile module -- English UI strings.
+# The module ships its full i18n surface from this directory. Every template lookup pipes
+# through `| default "<English>"`, so a site language without these keys still renders.
+# The plural-table keys are selected by Hugo's CLDR rules from an integer count.
+
+github_profile_attribution = "@{{ . }} on GitHub"
+github_profile_hireable = "Open to opportunities"
+github_profile_metric_commits = "commits"
+github_profile_metric_prs = "pull requests (authored)"
+github_profile_metric_merged_prs = "merged pull requests"
+github_profile_metric_reviews = "pull request reviews given"
+github_profile_metric_external_repos = "external repositories"
+github_profile_metric_external_orgs = "organizations"
+github_profile_metric_recent_days = "active days in the last 90"
+github_profile_streak_current = "current streak"
+github_profile_streak_longest = "longest streak"
+github_profile_languages_label = "Languages by code volume"
+github_profile_org_rollup_label = "Contributions by organization"
+github_profile_contributed_label = "Contributes to"
+github_profile_orgs_label = "Organizations"
+github_profile_pinned_label = "Pinned repositories"
+github_profile_socials_label = "Elsewhere"
+github_profile_rank_label = "activity score"
+
+[github_profile_member_years]
+one = "1 year on GitHub"
+other = "{{ .Count }} years on GitHub"
+
+[github_profile_calendar_label]
+one = "1 contribution"
+other = "{{ .Count }} contributions"
+
+[github_profile_restricted_note]
+one = "plus 1 private contribution"
+other = "plus {{ .Count }} private contributions"
+
+[github_profile_streak_days]
+one = "1 day"
+other = "{{ .Count }} days"

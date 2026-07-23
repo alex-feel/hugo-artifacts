@@ -1,0 +1,17 @@
+{{/*
+  Pull request reviews given -- a seniority and mentorship signal GitHub's
+  own profile buries. Rendered as a single metric.
+
+  Context: the render.html context dict (.d carries the normalized data).
+*/}}
+
+{{- $d := .d -}}
+{{- if gt $d.totals.reviews 0 -}}
+<section class="github-profile__section github-profile__section--reviews">
+  <span class="github-profile__metric" data-metric="reviews" data-raw="{{ $d.totals.reviews }}">
+    {{- partial "github-profile/icon.html" (dict "name" "review" "class" "github-profile__icon") }}
+    <span class="github-profile__metric-value">{{ partial "github-profile/compact-number.html" $d.totals.reviews }}</span>
+    <span class="github-profile__metric-label">{{ T "github_profile_metric_reviews" | default "pull request reviews given" }}</span>
+  </span>
+</section>
+{{- end -}}

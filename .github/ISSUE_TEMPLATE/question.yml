@@ -14,6 +14,7 @@ body:
         - [modules/images README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/images/README.md) -- Full images module reference
         - [modules/pwa README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/pwa/README.md) -- Full PWA module reference
         - [shortcodes/github-repo README](https://github.com/alex-feel/hugo-artifacts/blob/main/shortcodes/github-repo/README.md) -- GitHub-repo shortcode reference
+        - [shortcodes/github-profile README](https://github.com/alex-feel/hugo-artifacts/blob/main/shortcodes/github-profile/README.md) -- GitHub-profile shortcode reference
         - [CONTRIBUTING.md](https://github.com/alex-feel/hugo-artifacts/blob/main/CONTRIBUTING.md) -- Development setup and conventions
         - [CLAUDE.md](https://github.com/alex-feel/hugo-artifacts/blob/main/CLAUDE.md) -- Repository architectural rules
 
@@ -42,6 +43,7 @@ body:
         - Push notifications / VAPID / reference backends
         - Service worker / Workbox / idb
         - GitHub-repo shortcode
+        - GitHub-profile shortcode
         - HF Space shortcode
         - Callout shortcode
         - YouTube-embed shortcode

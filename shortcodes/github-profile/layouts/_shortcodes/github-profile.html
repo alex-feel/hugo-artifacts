@@ -1,0 +1,129 @@
+{{/*
+  Renders a GitHub person-profile widget: contribution activity, the
+  contribution calendar, per-organization rollups, language depth, and
+  optional identity/showcase sections, fetched at build time from the GitHub
+  GraphQL API.
+
+  Parameters:
+  - user (string, required): GitHub login of the person to present
+  - variant (string, optional): Section preset. One of: compact, card, full. Default: "card"
+  - sections (string, optional): Comma-separated section tokens overriding the
+    variant preset, rendered in the given order. Known tokens: identity,
+    headline, calendar, org-rollup, languages, reviews, contributed, orgs,
+    pinned, socials
+  - history (string, optional): Contribution window. "year" (rolling ~1-year
+    window, GitHub's own profile framing) or "all" (all-time totals summed
+    from per-year queries). Default: "year"
+  - show-streak (bool, optional): Compute and expose current/longest
+    contribution streaks on the calendar. Default: false
+  - show-rank (bool, optional): Compute the transparent activity score
+    (github-readme-stats formula, documented in the README). Default: false
+  - merged-prs (bool, optional): Fetch the lifetime merged-PR count via one
+    extra REST Search request. Default: false
+  - avatar (string, optional): Avatar handling in the identity section. One
+    of: fetch (build-time copy with placeholder fallback), hotlink, none.
+    Default: "fetch"
+  - name (string, optional): Display-name override (also used by the
+    degraded identity chip)
+  - attribution (bool, optional): Render the "@login on GitHub" source line.
+    Default: true
+  - class (string, optional): Additional CSS class(es) appended to the root element
+
+  Usage:
+    github-profile user="alex-feel"
+    github-profile user="alex-feel" variant="full" history="all"
+    github-profile user="alex-feel" sections="headline,calendar" show-streak="true"
+*/}}
+
+{{- $user := .Get "user" -}}
+{{- $variant := .Get "variant" | default "card" -}}
+{{- $sectionsRaw := .Get "sections" | default "" -}}
+{{- $history := .Get "history" | default "year" -}}
+{{- $showStreak := eq (lower (printf "%v" (.Get "show-streak" | default false))) "true" -}}
+{{- $showRank := eq (lower (printf "%v" (.Get "show-rank" | default false))) "true" -}}
+{{- $mergedPrs := eq (lower (printf "%v" (.Get "merged-prs" | default false))) "true" -}}
+{{- $avatar := .Get "avatar" | default "fetch" -}}
+{{- $name := .Get "name" | default "" -}}
+{{- $attribution := ne (lower (printf "%v" (.Get "attribution" | default true))) "false" -}}
+{{- $class := .Get "class" | default "" -}}
+
+{{/* Validate required user parameter. */}}
+{{- if not $user -}}
+  {{- errorf "The %q shortcode requires a 'user' parameter. See %s" .Name .Position -}}
+{{- end -}}
+
+{{/* Validate the login shape (GitHub allows alphanumerics and inner
+     hyphens, at most 39 characters). The login is interpolated into API
+     URLs, so an invalid value fails fast instead of producing a malformed
+     request. */}}
+{{- if not (findRE `^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$` $user) -}}
+  {{- errorf "The %q shortcode received invalid user %q. A GitHub login contains only alphanumerics and inner hyphens (at most 39 characters). See %s" .Name $user .Position -}}
+{{- end -}}
+
+{{/* Validate enum parameters against allowed values. */}}
+{{- $validVariants := slice "compact" "card" "full" -}}
+{{- if not (in $validVariants $variant) -}}
+  {{- errorf "The %q shortcode received invalid variant %q. Must be one of: compact, card, full. See %s" .Name $variant .Position -}}
+{{- end -}}
+{{- $validHistory := slice "year" "all" -}}
+{{- if not (in $validHistory $history) -}}
+  {{- errorf "The %q shortcode received invalid history %q. Must be one of: year, all. See %s" .Name $history .Position -}}
+{{- end -}}
+{{- $validAvatar := slice "fetch" "hotlink" "none" -}}
+{{- if not (in $validAvatar $avatar) -}}
+  {{- errorf "The %q shortcode received invalid avatar %q. Must be one of: fetch, hotlink, none. See %s" .Name $avatar .Position -}}
+{{- end -}}
+
+{{/* Resolve the section list: the variant preset, unless a sections CSV
+     overrides it. Unknown tokens warn and are dropped (permissive, so a
+     future token in older content degrades instead of breaking); an
+     override that leaves nothing falls back to the preset. */}}
+{{- $presets := dict
+  "compact" (slice "headline")
+  "card" (slice "headline" "calendar" "org-rollup" "languages" "reviews")
+  "full" (slice "identity" "headline" "calendar" "org-rollup" "languages" "reviews" "contributed" "orgs" "pinned" "socials")
+-}}
+{{- $knownSections := slice "identity" "headline" "calendar" "org-rollup" "languages" "reviews" "contributed" "orgs" "pinned" "socials" -}}
+{{- $sections := index $presets $variant -}}
+{{- with $sectionsRaw -}}
+  {{- $requested := slice -}}
+  {{- range split . "," -}}
+    {{- $token := trim . " " -}}
+    {{- if not $token -}}
+    {{- else if in $knownSections $token -}}
+      {{- $requested = $requested | append $token -}}
+    {{- else -}}
+      {{- warnf "[github-profile] Unknown section token %q ignored. Known tokens: %s. See %s" $token (delimit $knownSections ", ") $.Position -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if gt (len $requested) 0 -}}
+    {{- $sections = $requested -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Fetch and derive. */}}
+{{- $raw := partial "github-profile/fetch.html" (dict
+  "user" $user
+  "history" $history
+  "mergedPrs" $mergedPrs
+  "position" .Position
+) -}}
+{{- $data := partial "github-profile/derive.html" (dict
+  "raw" $raw
+  "requestedLogin" $user
+  "history" $history
+  "showStreak" $showStreak
+  "showRank" $showRank
+  "nameOverride" $name
+) -}}
+
+{{/* Dispatch to the renderer. */}}
+{{- partial "github-profile/render.html" (dict
+  "d" $data
+  "variant" $variant
+  "sections" $sections
+  "avatar" $avatar
+  "attribution" $attribution
+  "extraClass" $class
+  "position" .Position
+) -}}

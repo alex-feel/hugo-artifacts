@@ -1,0 +1,58 @@
+{{/*
+  Renders the widget root and dispatches to the active section partials.
+
+  Context expectations:
+  - .d (dict)            Normalized data from github-profile/derive.html.
+  - .variant (string)    compact, card, or full.
+  - .sections (slice)    Ordered section tokens to render.
+  - .avatar (string)     fetch, hotlink, or none (identity section only).
+  - .attribution (bool)  Whether to render the source line.
+  - .extraClass (string) Additional CSS classes for the root element.
+  - .position (text.Position) Shortcode call position (used in warnings).
+
+  Output: an <article> element with BEM class github-profile. Each active
+  section renders only when its data resolved, so partial API data omits a
+  section instead of breaking the widget. On full degradation the widget
+  renders the zero-API identity chip and carries the github-profile--degraded
+  modifier plus a data-state attribute naming the reason.
+*/}}
+
+{{- $d := .d -}}
+{{- $ctx := . -}}
+
+<article
+  class="github-profile github-profile--{{ .variant }}{{ if not $d.apiOk }} github-profile--degraded{{ end }}{{ with .extraClass }} {{ . }}{{ end }}"
+  data-user="{{ $d.login }}"
+  {{- if and $d.apiOk (gt $d.userId 0) }}
+  data-user-id="{{ $d.userId }}"
+  {{- end }}
+  data-variant="{{ .variant }}"
+  data-sections="{{ delimit .sections "," }}"
+  data-api-ok="{{ $d.apiOk }}"
+  {{- if $d.apiOk }}
+  data-history="{{ $d.historyEffective }}"
+  {{- else }}
+  data-state="{{ $d.degradedReason }}"
+  {{- end }}>
+  {{- if $d.apiOk -}}
+    {{- range .sections -}}
+      {{- partial (printf "github-profile/section-%s.html" .) $ctx -}}
+    {{- end -}}
+    {{- if $ctx.attribution -}}
+    <p class="github-profile__attribution">
+      <a href="{{ $d.identity.profileUrl }}" target="_blank" rel="noopener noreferrer">
+        {{- partial "github-profile/icon.html" (dict "name" "github" "class" "github-profile__icon") }} {{ T "github_profile_attribution" $d.login | default (printf "@%s on GitHub" $d.login) -}}
+      </a>
+    </p>
+    {{- end -}}
+  {{- else -}}
+    {{/* Degraded identity chip: renders entirely from the shortcode
+         parameters, spending no API budget. */}}
+    <p class="github-profile__degraded-chip">
+      <a href="{{ $d.identity.profileUrl }}" target="_blank" rel="noopener noreferrer">
+        {{- partial "github-profile/icon.html" (dict "name" "github" "class" "github-profile__icon") }} <span class="github-profile__name">{{ $d.identity.name }}</span>
+        {{- if ne $d.identity.name $d.login }} <span class="github-profile__login">@{{ $d.login }}</span>{{ end -}}
+      </a>
+    </p>
+  {{- end -}}
+</article>

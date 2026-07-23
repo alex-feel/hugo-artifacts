@@ -1,0 +1,25 @@
+{{/*
+  Language depth: byte-weighted shares aggregated across owned non-fork and
+  externally contributed repositories. The share reaches CSS only as
+  objective measured data (--github-profile-lang-share, a percentage), never
+  as a color choice.
+
+  Context: the render.html context dict (.d carries the normalized data).
+*/}}
+
+{{- $d := .d -}}
+{{- if gt (len $d.languages) 0 -}}
+<section class="github-profile__section github-profile__section--languages">
+  <ul class="github-profile__languages" aria-label="{{ T "github_profile_languages_label" | default "Languages by code volume" }}">
+    {{- range $d.languages }}
+    <li class="github-profile__lang"
+        data-lang="{{ .name }}"
+        data-pct="{{ .pct }}"
+        style="--github-profile-lang-share: {{ .pct }}%">
+      <span class="github-profile__lang-label">{{ .name }}</span>
+      <span class="github-profile__lang-pct">{{ .pct }}%</span>
+    </li>
+    {{- end }}
+  </ul>
+</section>
+{{- end -}}

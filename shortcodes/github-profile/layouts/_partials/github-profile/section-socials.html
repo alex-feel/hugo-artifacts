@@ -1,0 +1,22 @@
+{{/*
+  Verified social accounts from the GitHub profile, LinkedIn first (the
+  API's only structured LinkedIn pointer). The provider enum value is
+  exposed as data-provider for site-side icon or filter styling.
+
+  Context: the render.html context dict (.d carries the normalized data).
+*/}}
+
+{{- $d := .d -}}
+{{- if gt (len $d.socials) 0 -}}
+<section class="github-profile__section github-profile__section--socials">
+  <ul class="github-profile__socials" aria-label="{{ T "github_profile_socials_label" | default "Elsewhere" }}">
+    {{- range $d.socials }}
+    <li class="github-profile__social-item" data-provider="{{ .provider }}">
+      <a href="{{ .url }}" target="_blank" rel="noopener noreferrer">
+        {{- partial "github-profile/icon.html" (dict "name" "link" "class" "github-profile__icon") }} {{ or .displayName .url -}}
+      </a>
+    </li>
+    {{- end }}
+  </ul>
+</section>
+{{- end -}}

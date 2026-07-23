@@ -1,0 +1,78 @@
+{{/*
+  Identity strip: avatar, name, login, hireable badge, bio, and meta facts
+  (company, location, website, tenure, status). Off in the default card
+  preset because portfolio pages already present identity; available via
+  variant="full" or the sections parameter for standalone use.
+
+  Avatar handling follows the .avatar option: "fetch" copies the image at
+  build time (self-contained output; a failed fetch degrades to the person
+  icon placeholder), "hotlink" references GitHub's CDN directly, "none"
+  omits the element.
+
+  Context: the render.html context dict (.d carries the normalized data;
+  .avatar and .position come from the shortcode call).
+*/}}
+
+{{- $d := .d -}}
+{{- $identity := $d.identity -}}
+{{- $avatarMode := .avatar -}}
+{{- $position := .position -}}
+<section class="github-profile__section github-profile__section--identity">
+  {{- if and (ne $avatarMode "none") $identity.avatarUrl }}
+  {{- $avatarShown := false }}
+  {{- if eq $avatarMode "fetch" }}
+    {{- with try (resources.GetRemote $identity.avatarUrl (dict "key" (printf "github-profile:%s:avatar" $d.login))) }}
+      {{- with .Err }}
+        {{- warnf "[github-profile] Failed to fetch the avatar of user %q; rendering the placeholder. See %s" $d.login $position }}
+      {{- else with .Value }}
+        <img class="github-profile__avatar" src="{{ .RelPermalink }}" alt="{{ $identity.name }}" width="200" height="200" loading="lazy" decoding="async">
+        {{- $avatarShown = true }}
+      {{- else }}
+        {{- warnf "[github-profile] The avatar of user %q returned HTTP 404; rendering the placeholder. See %s" $d.login $position }}
+      {{- end }}
+    {{- end }}
+  {{- else }}
+    <img class="github-profile__avatar" src="{{ $identity.avatarUrl }}" alt="{{ $identity.name }}" width="200" height="200" loading="lazy" decoding="async">
+    {{- $avatarShown = true }}
+  {{- end }}
+  {{- if not $avatarShown }}
+  <span class="github-profile__avatar github-profile__avatar--placeholder">
+    {{- partial "github-profile/icon.html" (dict "name" "person" "class" "github-profile__icon") -}}
+  </span>
+  {{- end }}
+  {{- end }}
+  <span class="github-profile__name">{{ $identity.name }}</span>
+  <a class="github-profile__login" href="{{ $identity.profileUrl }}" target="_blank" rel="noopener noreferrer">@{{ $d.login }}</a>
+  {{- if $identity.hireable }}
+  <span class="github-profile__badge" data-badge="hireable">{{ T "github_profile_hireable" | default "Open to opportunities" }}</span>
+  {{- end }}
+  {{- with $identity.pronouns }}
+  <span class="github-profile__meta-item" data-meta="pronouns">{{ . }}</span>
+  {{- end }}
+  {{- with $identity.bio }}
+  <p class="github-profile__bio">{{ . }}</p>
+  {{- end }}
+  {{- with $identity.statusMessage }}
+  <p class="github-profile__status" data-meta="status">{{ with $identity.statusEmoji }}{{ . | htmlEscape | emojify }} {{ end }}{{ . }}</p>
+  {{- end }}
+  {{- with $identity.company }}
+  <span class="github-profile__meta-item" data-meta="company">
+    {{- partial "github-profile/icon.html" (dict "name" "briefcase" "class" "github-profile__icon") }} {{ . -}}
+  </span>
+  {{- end }}
+  {{- with $identity.location }}
+  <span class="github-profile__meta-item" data-meta="location">
+    {{- partial "github-profile/icon.html" (dict "name" "location" "class" "github-profile__icon") }} {{ . -}}
+  </span>
+  {{- end }}
+  {{- with $identity.websiteUrl }}
+  <span class="github-profile__meta-item" data-meta="website">
+    {{- partial "github-profile/icon.html" (dict "name" "link" "class" "github-profile__icon") }} <a href="{{ . }}" target="_blank" rel="noopener noreferrer">{{ . }}</a>
+  </span>
+  {{- end }}
+  {{- if gt $d.tenureYears 0 }}
+  <span class="github-profile__meta-item" data-meta="tenure" data-raw="{{ $d.tenureYears }}">
+    {{- partial "github-profile/icon.html" (dict "name" "github" "class" "github-profile__icon") }} {{ T "github_profile_member_years" $d.tenureYears | default (printf "%d years on GitHub" $d.tenureYears) -}}
+  </span>
+  {{- end }}
+</section>

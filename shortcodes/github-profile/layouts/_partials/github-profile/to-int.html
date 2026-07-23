@@ -1,0 +1,29 @@
+{{/*
+  Casts a remote-derived value to an integer, degrading to 0 on failure.
+
+  Context: any value (JSON-decoded numbers arrive as floats; missing fields
+  arrive as nil).
+
+  Returns an int. The cast is try-wrapped because every input is
+  remote-derived: an unparseable value degrades to 0 instead of failing the
+  build. NaN saturates int casts and non-finite values render garbage, so
+  anything non-finite (NaN is the one value unequal to itself) or outside a
+  plausible count range also degrades to 0.
+*/}}
+
+{{- $result := 0 -}}
+{{- $n := 0.0 -}}
+{{- $ok := false -}}
+{{- with try (float .) -}}
+  {{- if not .Err -}}
+    {{- $n = .Value -}}
+    {{- $ok = true -}}
+  {{- end -}}
+{{- end -}}
+{{- if and $ok (or (ne $n $n) (ge (math.Abs $n) 1e15)) -}}
+  {{- $ok = false -}}
+{{- end -}}
+{{- if $ok -}}
+  {{- $result = int $n -}}
+{{- end -}}
+{{- return $result -}}

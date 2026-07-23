@@ -1,0 +1,44 @@
+# Hugo github-profile module -- Russian UI strings.
+
+github_profile_attribution = "@{{ . }} на GitHub"
+github_profile_hireable = "Открыт к предложениям"
+github_profile_metric_commits = "коммитов"
+github_profile_metric_prs = "пул-реквестов (созданных)"
+github_profile_metric_merged_prs = "принятых пул-реквестов"
+github_profile_metric_reviews = "ревью пул-реквестов"
+github_profile_metric_external_repos = "внешних репозиториев"
+github_profile_metric_external_orgs = "организаций"
+github_profile_metric_recent_days = "активных дней за последние 90"
+github_profile_streak_current = "текущая серия"
+github_profile_streak_longest = "самая длинная серия"
+github_profile_languages_label = "Языки по объему кода"
+github_profile_org_rollup_label = "Вклад по организациям"
+github_profile_contributed_label = "Участвует в"
+github_profile_orgs_label = "Организации"
+github_profile_pinned_label = "Закрепленные репозитории"
+github_profile_socials_label = "Другие площадки"
+github_profile_rank_label = "оценка активности"
+
+[github_profile_member_years]
+one = "{{ .Count }} год на GitHub"
+few = "{{ .Count }} года на GitHub"
+many = "{{ .Count }} лет на GitHub"
+other = "{{ .Count }} лет на GitHub"
+
+[github_profile_calendar_label]
+one = "{{ .Count }} вклад"
+few = "{{ .Count }} вклада"
+many = "{{ .Count }} вкладов"
+other = "{{ .Count }} вкладов"
+
+[github_profile_restricted_note]
+one = "плюс {{ .Count }} приватный вклад"
+few = "плюс {{ .Count }} приватных вклада"
+many = "плюс {{ .Count }} приватных вкладов"
+other = "плюс {{ .Count }} приватных вкладов"
+
+[github_profile_streak_days]
+one = "{{ .Count }} день"
+few = "{{ .Count }} дня"
+many = "{{ .Count }} дней"
+other = "{{ .Count }} дней"

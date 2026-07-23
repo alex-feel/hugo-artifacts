@@ -64,6 +64,7 @@ body:
         - modules/workbox
         - modules/idb
         - shortcodes/github-repo
+        - shortcodes/github-profile
         - shortcodes/hf-space
         - shortcodes/callout
         - shortcodes/youtube-embed
