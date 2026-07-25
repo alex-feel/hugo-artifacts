@@ -188,7 +188,9 @@ Everything beyond raw API fields is computed at build time from data already fet
 
 ## Localization
 
-All UI strings resolve through i18n keys shipped in the module's `i18n/` directory (English and Russian included). Every lookup falls back to the English string, so a site language without translations still renders correctly. Override any key in the consuming site's own `i18n/<lang>.toml`. The plural-table keys select the `one`/`few`/`many`/`other` form from the integer count per the language's CLDR rules.
+All UI strings resolve through i18n keys shipped in the module's `i18n/` directory (English and Russian included). Every lookup falls back to the English string, so a site language without translations still renders correctly. Override any key in the consuming site's own `i18n/<lang>.toml`.
+
+Every plural-table key receives a map with two entries: `count` selects the `one`/`few`/`many`/`other` form per the language's CLDR rules, and `formatted` carries the same number already grouped for the locale. **Interpolate `{{ .formatted }}`, never `{{ .count }}`**, in both the shipped tables and any site override. Hugo's translation templates have no function map -- a table cannot call `lang.FormatNumber` itself (the lookup fails and silently falls back to the module default) -- so the module preformats the number and passes it in.
 
 | Key | English value | Used for |
 | --- | --- | --- |
@@ -197,13 +199,13 @@ All UI strings resolve through i18n keys shipped in the module's `i18n/` directo
 | `github_profile_metric_commits` / `_prs` / `_merged_prs` / `_reviews` | `commits` / `pull requests (authored)` / `merged pull requests` / `pull request reviews given` | Metric labels |
 | `github_profile_metric_external_repos` / `_external_orgs` | `external repositories` / `organizations` | Metric labels |
 | `github_profile_metric_recent_days` | `active days in the last 90` | Recency metric label |
-| `github_profile_member_years` | `{{ .Count }} years on GitHub` (plural forms) | Identity tenure line |
-| `github_profile_calendar_label` | `{{ .formatted }} contributions` (plural forms) | Calendar `aria-label`; receives a map with `count` (selects the plural form) and `formatted` (the locale-grouped total) |
+| `github_profile_member_years` | `{{ .formatted }} years on GitHub` (plural forms) | Identity tenure line |
+| `github_profile_calendar_label` | `{{ .formatted }} contributions` (plural forms) | Calendar `aria-label` |
 | `github_profile_calendar_unit` | `contributions` (plural forms) | Unit word in the visible calendar summary (the number renders separately, locale-formatted) |
 | `github_profile_calendar_period` | `last 12 months` | Window element in the visible calendar summary |
 | `github_profile_calendar_less` / `_more` | `Less` / `More` | Calendar legend labels |
-| `github_profile_restricted_note` | `plus {{ .Count }} private contributions` (plural forms) | Private-floor note |
-| `github_profile_streak_current` / `_longest` / `_days` | `current streak` / `longest streak` / `{{ .Count }} days` (plural forms) | Streak labels |
+| `github_profile_restricted_note` | `plus {{ .formatted }} private contributions` (plural forms) | Private-floor note |
+| `github_profile_streak_current` / `_longest` / `_days` | `current streak` / `longest streak` / `{{ .formatted }} days` (plural forms) | Streak labels |
 | `github_profile_languages_label` / `_org_rollup_label` / `_contributed_label` / `_orgs_label` / `_pinned_label` / `_socials_label` | `Languages by code volume` / `Contributions by organization` / `Contributes to` / `Organizations` / `Pinned repositories` / `Elsewhere` | Section `aria-label`s |
 | `github_profile_rank_label` | `activity score` | Activity score label |
 
@@ -217,10 +219,12 @@ Every element uses BEM naming under the `github-profile` block:
 
 - **Block:** `github-profile` (root `<article>` element)
 - **Modifiers:** `github-profile--compact`, `github-profile--card`, `github-profile--full`, `github-profile--degraded`
-- **Section wrappers:** `github-profile__section` plus `github-profile__section--<token>` per section
+- **Section wrappers:** `github-profile__section` plus `github-profile__section--<token>` per section, and `github-profile__section-title` for the list sections' visible heading
 - **Elements:** `github-profile__metric`, `github-profile__metric-value`, `github-profile__metric-label`, `github-profile__floor-note`, `github-profile__rank`, `github-profile__calendar`, `github-profile__calendar-summary`, `github-profile__calendar-total`, `github-profile__calendar-total-value`, `github-profile__calendar-total-unit`, `github-profile__calendar-period`, `github-profile__calendar-week`, `github-profile__calendar-day` (plus `--legend`), `github-profile__calendar-legend`, `github-profile__calendar-legend-label`, `github-profile__streak`, `github-profile__languages`, `github-profile__lang`, `github-profile__lang-label`, `github-profile__lang-pct`, `github-profile__org-rollup`, `github-profile__org-roll`, `github-profile__org-roll-name`, `github-profile__org-roll-stat`, `github-profile__contributed`, `github-profile__repo`, `github-profile__repo-name`, `github-profile__repo-stat`, `github-profile__repo-lang`, `github-profile__repo-description`, `github-profile__orgs`, `github-profile__org`, `github-profile__org-name`, `github-profile__pinned`, `github-profile__pinned-item`, `github-profile__socials`, `github-profile__social-item`, `github-profile__avatar` (plus `--placeholder`), `github-profile__identity-body`, `github-profile__name`, `github-profile__login`, `github-profile__badge`, `github-profile__bio`, `github-profile__status`, `github-profile__meta-item`, `github-profile__attribution`, `github-profile__attribution-icon`, `github-profile__attribution-login`, `github-profile__attribution-suffix`, `github-profile__degraded-chip`, `github-profile__icon`
 
-The calendar summary renders the total, the pluralized unit word, and the window as separate child elements with no separator baked in, so the site composes them (for example, a `·` via a `::before` on `github-profile__calendar-period`) or hides any of them. Its value and unit carry their own classes rather than the headline strip's `github-profile__metric-value` and `github-profile__metric-label`, because headline numbers are abbreviated (`1.5k`) while the calendar total is written in full with locale grouping (`6,759`) -- one site rule should not have to style both formats. Hiding the summary is safe for assistive technology: the grid keeps a self-sufficient accessible name carrying the same formatted total. The legend cells reuse `github-profile__calendar-day` with the same custom-property indirection as the grid, so the site's palette applies to them automatically; the `--legend` modifier and `aria-hidden` container distinguish them from data cells. In the identity section, `github-profile__identity-body` wraps every non-avatar field, so an avatar-beside-text layout is a single flex rule. In the attribution line, the icon, the `@login`, and the localized suffix are separate elements inside one anchor, so a site can split them across the line (for example, `display: flex; justify-content: space-between` on the anchor) or hide the suffix for a bare handle.
+The calendar summary renders the total, the pluralized unit word, and the window as separate child elements with no separator baked in, so the site composes them (for example, a `·` via a `::before` on `github-profile__calendar-period`) or hides any of them. Its value and unit carry their own classes rather than the headline strip's `github-profile__metric-value` and `github-profile__metric-label`, because headline numbers are abbreviated (`1.5k`) while the calendar total is written in full with locale grouping (`6,759`) -- one site rule should not have to style both formats. Hiding the summary is safe for assistive technology: the grid keeps a self-sufficient accessible name carrying the same formatted total. The legend cells reuse `github-profile__calendar-day` with the same custom-property indirection as the grid, so the site's palette applies to them automatically; the `--legend` modifier and `aria-hidden` container distinguish them from data cells. That inheritance covers color only, not size: both the grid cells and the legend swatches are `<span>` elements with no module-supplied box, and a grid cell gets its dimensions from whatever layout the site gives the week column, which the legend row does not share. Give the legend swatches their own box (for example `display: inline-block` plus the cell size) when styling them.
+
+Each list section (`org-rollup`, `languages`, `contributed`, `orgs`, `pinned`, `socials`) opens with a `github-profile__section-title` paragraph carrying the section's localized label and a `data-section` token, so a site styles real text instead of fabricating a heading from the list's `aria-label` with `attr()`. It is a neutral `<p>`, not a heading element, because the module cannot know the host page's outline level. It is `aria-hidden` because it restates verbatim the accessible name the adjacent list already carries; that is the module's rule for pure restatements (this title, the calendar legend), while text adding information its neighbor does not convey stays announced (the calendar summary). Hide it with CSS if the site supplies its own heading. In the identity section, `github-profile__identity-body` wraps every non-avatar field, so an avatar-beside-text layout is a single flex rule. In the attribution line, the icon, the `@login`, and the localized suffix are separate elements inside one anchor, so a site can split them across the line (for example, `display: flex; justify-content: space-between` on the anchor) or hide the suffix for a bare handle.
 
 ### CSS custom properties
 
@@ -265,6 +269,7 @@ Sites preferring attribute selectors can style `[data-level="FOURTH_QUARTILE"]` 
 | `data-date`, `data-count`, `data-level` | calendar days | ISO date, raw count, quartile enum (`NONE` ... `FOURTH_QUARTILE`) |
 | `data-level` | calendar legend cells | Quartile enum, one cell per level |
 | `data-legend` | calendar legend labels | `less`, `more` |
+| `data-section` | list-section titles | Section token (`org-rollup`, `languages`, `contributed`, `orgs`, `pinned`, `socials`) |
 | `data-lang`, `data-pct` | language items | Language name and share |
 | `data-org`, `data-owner-type`, `data-commits`, `data-issues`, `data-prs`, `data-reviews`, `data-total` | rollup items | Owner login, `Organization`/`User`, per-type and total counts |
 | `data-repo`, `data-stars`, `data-lang` | contributed/pinned items | Repository identification and stats |
@@ -300,6 +305,7 @@ shortcodes/github-profile/
         classify-error.html         # HTTP error -> (errorClass, waitHintSeconds, errorMessage)
         derive.html                 # Computed metrics (rollups, recency, shares, streaks, score)
         render.html                 # Root element + section dispatch + degraded chip
+        section-title.html          # Visible localized heading for the list sections
         section-identity.html       # Identity strip (avatar, name, meta)
         section-headline.html       # Metric strip
         section-calendar.html       # Contribution calendar

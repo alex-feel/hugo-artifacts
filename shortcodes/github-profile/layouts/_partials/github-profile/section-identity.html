@@ -77,7 +77,7 @@
   {{- end }}
   {{- if gt $d.tenureYears 0 }}
   <span class="github-profile__meta-item" data-meta="tenure" data-raw="{{ $d.tenureYears }}">
-    {{- partial "github-profile/icon.html" (dict "name" "github" "class" "github-profile__icon") }} {{ T "github_profile_member_years" $d.tenureYears | default (printf "%d years on GitHub" $d.tenureYears) -}}
+    {{- partial "github-profile/icon.html" (dict "name" "github" "class" "github-profile__icon") }} {{ T "github_profile_member_years" (dict "count" $d.tenureYears "formatted" (lang.FormatNumber 0 $d.tenureYears)) | default (printf "%d years on GitHub" $d.tenureYears) -}}
   </span>
   {{- end }}
   </div>

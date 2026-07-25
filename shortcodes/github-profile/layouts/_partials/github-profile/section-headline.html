@@ -54,8 +54,12 @@
   </span>
   {{- end }}
   {{- if gt $d.totals.restricted 0 }}
+  {{/* The count reaches i18n preformatted: translation templates have no
+       function map, so a site override cannot call lang.FormatNumber
+       itself and would otherwise print ungrouped digits. */}}
+  {{- $restrictedFormatted := lang.FormatNumber 0 $d.totals.restricted }}
   <span class="github-profile__floor-note" data-metric="restricted-count" data-raw="{{ $d.totals.restricted }}">
-    {{- T "github_profile_restricted_note" $d.totals.restricted | default (printf "plus %d private contributions" $d.totals.restricted) -}}
+    {{- T "github_profile_restricted_note" (dict "count" $d.totals.restricted "formatted" $restrictedFormatted) | default (printf "plus %s private contributions" $restrictedFormatted) -}}
   </span>
   {{- end }}
 </section>

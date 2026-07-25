@@ -8,6 +8,7 @@
 {{- $d := .d -}}
 {{- if gt (len $d.pinned) 0 -}}
 <section class="github-profile__section github-profile__section--pinned">
+  {{- partial "github-profile/section-title.html" (dict "token" "pinned" "key" "github_profile_pinned_label" "fallback" "Pinned repositories") }}
   <ul class="github-profile__pinned" aria-label="{{ T "github_profile_pinned_label" | default "Pinned repositories" }}">
     {{- range $d.pinned }}
     <li class="github-profile__pinned-item"

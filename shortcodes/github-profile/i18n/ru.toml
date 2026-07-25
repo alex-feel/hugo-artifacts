@@ -1,4 +1,6 @@
 # Hugo github-profile module -- Russian UI strings.
+# Plural tables receive `count` (form selection) and `formatted` (the locale-grouped
+# number); interpolate `{{ .formatted }}`, never `{{ .count }}`.
 
 github_profile_attribution_suffix = "на GitHub"
 github_profile_hireable = "Открыт к предложениям"
@@ -23,10 +25,10 @@ github_profile_socials_label = "Другие площадки"
 github_profile_rank_label = "оценка активности"
 
 [github_profile_member_years]
-one = "{{ .Count }} год на GitHub"
-few = "{{ .Count }} года на GitHub"
-many = "{{ .Count }} лет на GitHub"
-other = "{{ .Count }} лет на GitHub"
+one = "{{ .formatted }} год на GitHub"
+few = "{{ .formatted }} года на GitHub"
+many = "{{ .formatted }} лет на GitHub"
+other = "{{ .formatted }} лет на GitHub"
 
 [github_profile_calendar_label]
 one = "{{ .formatted }} вклад"
@@ -41,13 +43,13 @@ many = "вкладов"
 other = "вкладов"
 
 [github_profile_restricted_note]
-one = "плюс {{ .Count }} приватный вклад"
-few = "плюс {{ .Count }} приватных вклада"
-many = "плюс {{ .Count }} приватных вкладов"
-other = "плюс {{ .Count }} приватных вкладов"
+one = "плюс {{ .formatted }} приватный вклад"
+few = "плюс {{ .formatted }} приватных вклада"
+many = "плюс {{ .formatted }} приватных вкладов"
+other = "плюс {{ .formatted }} приватных вкладов"
 
 [github_profile_streak_days]
-one = "{{ .Count }} день"
-few = "{{ .Count }} дня"
-many = "{{ .Count }} дней"
-other = "{{ .Count }} дней"
+one = "{{ .formatted }} день"
+few = "{{ .formatted }} дня"
+many = "{{ .formatted }} дней"
+other = "{{ .formatted }} дней"
