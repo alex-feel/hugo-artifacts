@@ -217,8 +217,20 @@
   {{- $externalRepos = partial "github-profile/to-int.html" (index . "totalCount") -}}
   {{- $contribNodes = index . "nodes" | default (slice) -}}
 {{- end -}}
+{{/* Connection node lists ([Repository], [Organization], [PinnableItem],
+     [SocialAccount]) have NULLABLE items in the schema, and GitHub nulls
+     individual nodes the token cannot see (organization policy or SAML
+     restrictions). Indexing a nil entry yields an empty value rather than
+     erroring, so an unguarded range does not fail the build -- it appends
+     a phantom entry whose every field is empty, which renders as an
+     organization chip with no label pointing at the bare profile root, or
+     a social link with an empty href. Every range over a raw node list
+     therefore skips non-map items. The languages EDGE list needs no such
+     guard: a null edge yields size 0 and an empty name, which the
+     existing name-and-size filter below already drops. */}}
 {{- range $repoSet := slice $ownedNodes $contribNodes -}}
   {{- range $repoSet -}}
+    {{- if reflect.IsMap . -}}
     {{- with index . "languages" -}}
       {{- range index . "edges" | default (slice) -}}
         {{- $size := partial "github-profile/to-int.html" (index . "size") -}}
@@ -231,10 +243,13 @@
         {{- end -}}
       {{- end -}}
     {{- end -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 {{- range $ownedNodes -}}
-  {{- $ownedStars = add $ownedStars (partial "github-profile/to-int.html" (index . "stargazerCount")) -}}
+  {{- if reflect.IsMap . -}}
+    {{- $ownedStars = add $ownedStars (partial "github-profile/to-int.html" (index . "stargazerCount")) -}}
+  {{- end -}}
 {{- end -}}
 {{- $langTotal := 0 -}}
 {{- range $name, $bytes := $langBytes -}}
@@ -307,6 +322,7 @@
 {{- $externalOrgSeen := dict -}}
 {{- $externalOrgs := 0 -}}
 {{- range $contribNodes -}}
+  {{- if reflect.IsMap . -}}
   {{- $ownerLogin := "" -}}
   {{- $ownerType := "" -}}
   {{- with index . "owner" -}}
@@ -330,6 +346,7 @@
     "ownerLogin" $ownerLogin
     "ownerType" $ownerType
   ) -}}
+  {{- end -}}
 {{- end -}}
 {{- $contributed = sort $contributed "stars" "desc" -}}
 {{- if gt (len $contributed) 12 -}}
@@ -342,12 +359,14 @@
 {{- with index $user "organizations" -}}
   {{- $orgsTotal = partial "github-profile/to-int.html" (index . "totalCount") -}}
   {{- range index . "nodes" | default (slice) -}}
+    {{- if reflect.IsMap . -}}
     {{- $orgs = $orgs | append (dict
       "login" (printf "%v" (or (index . "login") ""))
       "name" (or (index . "name") "")
       "url" (or (index . "url") "")
       "avatarUrl" (or (index . "avatarUrl") "")
     ) -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 
@@ -355,7 +374,7 @@
 {{- $pinned := slice -}}
 {{- with index $user "pinnedItems" -}}
   {{- range index . "nodes" | default (slice) -}}
-    {{- if eq (printf "%v" (index . "__typename")) "Repository" -}}
+    {{- if and (reflect.IsMap .) (eq (printf "%v" (index . "__typename")) "Repository") -}}
       {{- $langName := "" -}}
       {{- with index . "primaryLanguage" -}}
         {{- $langName = printf "%v" (or (index . "name") "") -}}
@@ -376,6 +395,7 @@
 {{- $socialsRest := slice -}}
 {{- with index $user "socialAccounts" -}}
   {{- range index . "nodes" | default (slice) -}}
+    {{- if reflect.IsMap . -}}
     {{- $account := dict
       "provider" (printf "%v" (or (index . "provider") ""))
       "displayName" (or (index . "displayName") "")
@@ -385,6 +405,7 @@
       {{- $socialsLinkedIn = $socialsLinkedIn | append $account -}}
     {{- else -}}
       {{- $socialsRest = $socialsRest | append $account -}}
+    {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}

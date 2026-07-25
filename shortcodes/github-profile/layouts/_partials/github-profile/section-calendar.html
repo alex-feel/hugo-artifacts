@@ -8,16 +8,42 @@
   --github-profile-level-N token), so the consuming site owns the palette
   entirely, via either the tokens or [data-level] selectors.
 
+  A visible summary line precedes the grid (the locale-formatted total, a
+  pluralized unit word, and the window as separate elements, so the site
+  composes and separates them freely), and a less-to-more legend follows
+  it. The summary carries its own element classes rather than the headline
+  strip's metric classes: those numbers are abbreviated (1.5k) while this
+  one is written in full with locale grouping, so a single site rule must
+  not have to style both. The legend cells reuse the day-cell class and
+  custom-property indirection, so the site's palette applies to them
+  automatically; the legend is aria-hidden because it only re-states
+  visually what the grid's aria-label and the summary already announce.
+  The grid keeps a self-sufficient aria-label because a site may hide the
+  summary, in which case the label is the only announcement of the total.
+  The snapshot calendar always spans the rolling ~1-year window regardless
+  of the history parameter (only the headline totals switch to all-time),
+  so the window string is constant. A site that wants neither element hides
+  it with CSS.
+
   Context: the render.html context dict (.d carries the normalized data).
 */}}
 
 {{- $d := .d -}}
 {{- if gt (len $d.calendarWeeks) 0 -}}
 {{- $levelIndex := dict "NONE" 0 "FIRST_QUARTILE" 1 "SECOND_QUARTILE" 2 "THIRD_QUARTILE" 3 "FOURTH_QUARTILE" 4 -}}
+{{- $levelNames := slice "NONE" "FIRST_QUARTILE" "SECOND_QUARTILE" "THIRD_QUARTILE" "FOURTH_QUARTILE" -}}
+{{- $calendarFormatted := lang.FormatNumber 0 $d.calendarTotal -}}
 <section class="github-profile__section github-profile__section--calendar">
+  <p class="github-profile__calendar-summary">
+    <span class="github-profile__calendar-total" data-raw="{{ $d.calendarTotal }}">
+      <span class="github-profile__calendar-total-value">{{ $calendarFormatted }}</span>
+      <span class="github-profile__calendar-total-unit">{{ T "github_profile_calendar_unit" $d.calendarTotal | default (cond (eq $d.calendarTotal 1) "contribution" "contributions") }}</span>
+    </span>
+    <span class="github-profile__calendar-period">{{ T "github_profile_calendar_period" | default "last 12 months" }}</span>
+  </p>
   <div class="github-profile__calendar"
        role="img"
-       aria-label="{{ T "github_profile_calendar_label" $d.calendarTotal | default (printf "%d contributions" $d.calendarTotal) }}"
+       aria-label="{{ T "github_profile_calendar_label" (dict "count" $d.calendarTotal "formatted" $calendarFormatted) | default (printf "%s contributions" $calendarFormatted) }}"
        data-total="{{ $d.calendarTotal }}"
        {{- if ge $d.streakCurrent 0 }}
        data-current-streak="{{ $d.streakCurrent }}"
@@ -34,6 +60,15 @@
       {{- end }}
     </div>
     {{- end }}
+  </div>
+  <div class="github-profile__calendar-legend" aria-hidden="true">
+    <span class="github-profile__calendar-legend-label" data-legend="less">{{ T "github_profile_calendar_less" | default "Less" }}</span>
+    {{- range $level := $levelNames }}
+    <span class="github-profile__calendar-day github-profile__calendar-day--legend"
+          data-level="{{ $level }}"
+          style="--github-profile-day-level: var(--github-profile-level-{{ index $levelIndex $level }})"></span>
+    {{- end }}
+    <span class="github-profile__calendar-legend-label" data-legend="more">{{ T "github_profile_calendar_more" | default "More" }}</span>
   </div>
   {{- if ge $d.streakCurrent 0 }}
   <span class="github-profile__streak" data-streak="current" data-raw="{{ $d.streakCurrent }}">

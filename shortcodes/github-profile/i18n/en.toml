@@ -3,7 +3,7 @@
 # through `| default "<English>"`, so a site language without these keys still renders.
 # The plural-table keys are selected by Hugo's CLDR rules from an integer count.
 
-github_profile_attribution = "@{{ . }} on GitHub"
+github_profile_attribution_suffix = "on GitHub"
 github_profile_hireable = "Open to opportunities"
 github_profile_metric_commits = "commits"
 github_profile_metric_prs = "pull requests (authored)"
@@ -14,6 +14,9 @@ github_profile_metric_external_orgs = "organizations"
 github_profile_metric_recent_days = "active days in the last 90"
 github_profile_streak_current = "current streak"
 github_profile_streak_longest = "longest streak"
+github_profile_calendar_period = "last 12 months"
+github_profile_calendar_less = "Less"
+github_profile_calendar_more = "More"
 github_profile_languages_label = "Languages by code volume"
 github_profile_org_rollup_label = "Contributions by organization"
 github_profile_contributed_label = "Contributes to"
@@ -26,9 +29,18 @@ github_profile_rank_label = "activity score"
 one = "1 year on GitHub"
 other = "{{ .Count }} years on GitHub"
 
+# Passed a map with "count" (selects the plural form) and "formatted" (the
+# locale-grouped total), so the accessible name reads the same number the
+# visible summary shows.
 [github_profile_calendar_label]
-one = "1 contribution"
-other = "{{ .Count }} contributions"
+one = "{{ .formatted }} contribution"
+other = "{{ .formatted }} contributions"
+
+# The bare unit word for the visible summary, where the count itself renders
+# separately as a locale-formatted number.
+[github_profile_calendar_unit]
+one = "contribution"
+other = "contributions"
 
 [github_profile_restricted_note]
 one = "plus 1 private contribution"
