@@ -9,6 +9,10 @@
   icon placeholder), "hotlink" references GitHub's CDN directly, "none"
   omits the element.
 
+  The non-avatar fields sit inside a github-profile__identity-body wrapper,
+  so an avatar-beside-text-column layout is one flex rule away for the
+  consuming site.
+
   Context: the render.html context dict (.d carries the normalized data;
   .avatar and .position come from the shortcode call).
 */}}
@@ -41,6 +45,7 @@
   </span>
   {{- end }}
   {{- end }}
+  <div class="github-profile__identity-body">
   <span class="github-profile__name">{{ $identity.name }}</span>
   <a class="github-profile__login" href="{{ $identity.profileUrl }}" target="_blank" rel="noopener noreferrer">@{{ $d.login }}</a>
   {{- if $identity.hireable }}
@@ -75,4 +80,5 @@
     {{- partial "github-profile/icon.html" (dict "name" "github" "class" "github-profile__icon") }} {{ T "github_profile_member_years" $d.tenureYears | default (printf "%d years on GitHub" $d.tenureYears) -}}
   </span>
   {{- end }}
+  </div>
 </section>

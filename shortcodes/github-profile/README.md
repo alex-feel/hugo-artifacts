@@ -72,7 +72,7 @@ The `sections` parameter overrides the preset with a comma-separated token list,
 | --- | --- |
 | `identity` | Avatar, name, login, hireable badge, pronouns, bio, status, company, location, website, tenure |
 | `headline` | Metric strip: commits, pull requests, external repositories and organizations, 90-day recency |
-| `calendar` | Contribution calendar (heatmap) with per-day counts and quartile levels |
+| `calendar` | Contribution calendar (heatmap) with per-day counts and quartile levels, a visible locale-formatted summary (total, unit, window), and a less-to-more legend |
 | `org-rollup` | Per-organization contribution rollup: commits, issues, pull requests, reviews per owner |
 | `languages` | Byte-weighted language shares across owned and contributed repositories |
 | `reviews` | Pull request reviews given |
@@ -113,7 +113,7 @@ The module calls the GitHub GraphQL API, which requires authentication for every
 
 ### Setting up a token
 
-1. [Create a personal access token](https://github.com/settings/tokens). A classic token with **zero scopes** suffices: scopes gate access to private data, not the rate-limit tier, and the widget reads only public data. If a fine-grained token does not return another person's public data, fall back to a classic zero-scope token.
+1. [Create a personal access token](https://github.com/settings/tokens). A classic token with **zero scopes** suffices: scopes gate access to private data, not the rate-limit tier, and the widget reads only public data. Prefer it over a fine-grained token: an organization can restrict which fine-grained tokens may reach its resources, and a restricted token gets that organization's repository data withheld from the response rather than returned as public -- the widget then renders without the per-organization rollup (see Resilience and Retries). A classic zero-scope token is not subject to those per-organization restrictions.
 2. Set the environment variable before running Hugo:
 
 ```bash
@@ -127,12 +127,12 @@ When `HUGO_GITHUB_TOKEN` is unset, the module emits a single warn-only preflight
 
 ## Rate limits
 
-The GraphQL primary limit for a personal access token is 5,000 points per hour, and the module's snapshot query costs 1 point, so even a site rendering dozens of profiles consumes about 1 percent of the hourly budget per build.
+The GraphQL primary limit for a personal access token is 5,000 points per hour, and the module's snapshot query costs 2 points (measured), so even a site rendering dozens of profiles consumes a few percent of the hourly budget per build.
 
 | Configuration | Requests per rendered profile |
 | --- | --- |
-| defaults | 1 GraphQL POST (cost: 1 point) |
-| `history="all"` | 2 GraphQL POSTs (the year list is only known from the first response) |
+| defaults | 1 GraphQL POST (cost: 2 points) |
+| `history="all"` | 2 GraphQL POSTs, 3 points total (the year list is only known from the first response, and the year-blocks query costs 1) |
 | `merged-prs="true"` | +1 REST Search GET (its own bucket: 30 requests/minute) |
 | `avatar="fetch"` with `identity` active | +1 image GET to GitHub's avatar CDN (not the API budget) |
 
@@ -142,7 +142,9 @@ The Search API bucket is the tightest real constraint: a build rendering more th
 
 Each API call is wrapped in the same outer retry loop with header-aware error classification as the sibling [`github-repo`](../github-repo/) module: 5 attempts per endpoint, 30s per-attempt timeout, a 120s wall-clock budget per endpoint, per-attempt cache keys so a cached error response cannot poison later attempts, early breaks on provably-useless error classes (`primary-rate-limit`, `auth`, `not-found`, and a `secondary-rate-limit` whose reset exceeds the remaining budget), and a host-down circuit breaker (`hugo.Store` sentinel) so a full API outage costs the build roughly one budget instead of one per call site. The constants are baked into `fetch.html` and are not exposed as parameters. See the `github-repo` README for the full class taxonomy and rationale; this module reuses the contract with `github-profile:`-namespaced store keys.
 
-One correctness rule is GraphQL-specific: the GraphQL endpoint reports failures as HTTP 200 with a `{data, errors}` envelope, and an unknown login arrives as a null `data.user`, not a 404. The retry loop therefore handles only transport-level failures; after it succeeds, the envelope is inspected exactly once, and an envelope-level failure (unknown user, insufficient scopes, GraphQL rate limit) is classified and degraded without retrying -- it is an authoritative API answer that a retry within the same build cannot change. HTTP status alone is never trusted.
+One correctness rule is GraphQL-specific: the GraphQL endpoint reports failures as HTTP 200 with a `{data, errors}` envelope, and an unknown login arrives as a null user block, not a 404. The retry loop therefore handles only transport-level failures; after it succeeds, the envelope is inspected exactly once, and an envelope-level failure (unknown user, insufficient scopes, GraphQL rate limit) is classified and degraded without retrying -- it is an authoritative API answer that a retry within the same build cannot change. HTTP status alone is never trusted.
+
+The snapshot also isolates the blast radius of organization token policies structurally: it queries the user through two aliased `user()` blocks in the same POST, with the four per-repository contribution lists in their own block. Those lists are the only place where a repository object hangs off a fully non-null schema path (`ContributionsCollection!` to `[XContributionsByRepository!]!` to `repository: Repository!`), so a repository the token may not read cannot be nulled in isolation there -- the null propagates up to the whole user. Everywhere else, repositories and organizations arrive as items of nullable node lists, where a restricted entry nulls only itself. Isolating the lists behind their own alias therefore stops the propagation at that alias, and the widget still renders everything except the per-organization rollup. The split is data-equivalent to a single-block query at the same 2-point cost.
 
 ### Interplay with Hugo's render timeout
 
@@ -160,7 +162,8 @@ When a fetch cannot run or exhausts its retries, the module does not break the b
 - **`history="all"` follow-up failure:** totals fall back to the rolling-year window; `data-history` stays `year`.
 - **`merged-prs` failure:** the merged-PR metric is hidden; the authored-PR count renders with its honest label.
 - **Avatar fetch failure:** the placeholder person icon renders instead of the image.
-- **Partial GraphQL data:** a resolved `data.user` with a non-empty `errors` array renders every section whose data resolved and warns once; a section whose data is missing is omitted, never broken.
+- **Organization-restricted token:** when an organization policy withholds the per-repository contribution lists (their aliased query block arrives null), the widget renders every other section and warns once; only the per-organization rollup is omitted.
+- **Partial GraphQL data:** a resolved user block with a non-empty `errors` array renders every section whose data resolved and warns once; a section whose data is missing -- including individual repository, organization, or pinned-item nodes the token cannot see, which the API returns as null entries -- is omitted or skipped, never broken.
 
 ## Computed Metrics
 
@@ -189,13 +192,16 @@ All UI strings resolve through i18n keys shipped in the module's `i18n/` directo
 
 | Key | English value | Used for |
 | --- | --- | --- |
-| `github_profile_attribution` | `@{{ . }} on GitHub` | Source line (`{{ . }}` is the login) |
+| `github_profile_attribution_suffix` | `on GitHub` | Source line suffix after the `@login` element |
 | `github_profile_hireable` | `Open to opportunities` | Identity hireable badge |
 | `github_profile_metric_commits` / `_prs` / `_merged_prs` / `_reviews` | `commits` / `pull requests (authored)` / `merged pull requests` / `pull request reviews given` | Metric labels |
 | `github_profile_metric_external_repos` / `_external_orgs` | `external repositories` / `organizations` | Metric labels |
 | `github_profile_metric_recent_days` | `active days in the last 90` | Recency metric label |
 | `github_profile_member_years` | `{{ .Count }} years on GitHub` (plural forms) | Identity tenure line |
-| `github_profile_calendar_label` | `{{ .Count }} contributions` (plural forms) | Calendar `aria-label` |
+| `github_profile_calendar_label` | `{{ .formatted }} contributions` (plural forms) | Calendar `aria-label`; receives a map with `count` (selects the plural form) and `formatted` (the locale-grouped total) |
+| `github_profile_calendar_unit` | `contributions` (plural forms) | Unit word in the visible calendar summary (the number renders separately, locale-formatted) |
+| `github_profile_calendar_period` | `last 12 months` | Window element in the visible calendar summary |
+| `github_profile_calendar_less` / `_more` | `Less` / `More` | Calendar legend labels |
 | `github_profile_restricted_note` | `plus {{ .Count }} private contributions` (plural forms) | Private-floor note |
 | `github_profile_streak_current` / `_longest` / `_days` | `current streak` / `longest streak` / `{{ .Count }} days` (plural forms) | Streak labels |
 | `github_profile_languages_label` / `_org_rollup_label` / `_contributed_label` / `_orgs_label` / `_pinned_label` / `_socials_label` | `Languages by code volume` / `Contributions by organization` / `Contributes to` / `Organizations` / `Pinned repositories` / `Elsewhere` | Section `aria-label`s |
@@ -212,7 +218,9 @@ Every element uses BEM naming under the `github-profile` block:
 - **Block:** `github-profile` (root `<article>` element)
 - **Modifiers:** `github-profile--compact`, `github-profile--card`, `github-profile--full`, `github-profile--degraded`
 - **Section wrappers:** `github-profile__section` plus `github-profile__section--<token>` per section
-- **Elements:** `github-profile__metric`, `github-profile__metric-value`, `github-profile__metric-label`, `github-profile__floor-note`, `github-profile__rank`, `github-profile__calendar`, `github-profile__calendar-week`, `github-profile__calendar-day`, `github-profile__streak`, `github-profile__languages`, `github-profile__lang`, `github-profile__lang-label`, `github-profile__lang-pct`, `github-profile__org-rollup`, `github-profile__org-roll`, `github-profile__org-roll-name`, `github-profile__org-roll-stat`, `github-profile__contributed`, `github-profile__repo`, `github-profile__repo-name`, `github-profile__repo-stat`, `github-profile__repo-lang`, `github-profile__repo-description`, `github-profile__orgs`, `github-profile__org`, `github-profile__org-name`, `github-profile__pinned`, `github-profile__pinned-item`, `github-profile__socials`, `github-profile__social-item`, `github-profile__avatar` (plus `--placeholder`), `github-profile__name`, `github-profile__login`, `github-profile__badge`, `github-profile__bio`, `github-profile__status`, `github-profile__meta-item`, `github-profile__attribution`, `github-profile__degraded-chip`, `github-profile__icon`
+- **Elements:** `github-profile__metric`, `github-profile__metric-value`, `github-profile__metric-label`, `github-profile__floor-note`, `github-profile__rank`, `github-profile__calendar`, `github-profile__calendar-summary`, `github-profile__calendar-total`, `github-profile__calendar-total-value`, `github-profile__calendar-total-unit`, `github-profile__calendar-period`, `github-profile__calendar-week`, `github-profile__calendar-day` (plus `--legend`), `github-profile__calendar-legend`, `github-profile__calendar-legend-label`, `github-profile__streak`, `github-profile__languages`, `github-profile__lang`, `github-profile__lang-label`, `github-profile__lang-pct`, `github-profile__org-rollup`, `github-profile__org-roll`, `github-profile__org-roll-name`, `github-profile__org-roll-stat`, `github-profile__contributed`, `github-profile__repo`, `github-profile__repo-name`, `github-profile__repo-stat`, `github-profile__repo-lang`, `github-profile__repo-description`, `github-profile__orgs`, `github-profile__org`, `github-profile__org-name`, `github-profile__pinned`, `github-profile__pinned-item`, `github-profile__socials`, `github-profile__social-item`, `github-profile__avatar` (plus `--placeholder`), `github-profile__identity-body`, `github-profile__name`, `github-profile__login`, `github-profile__badge`, `github-profile__bio`, `github-profile__status`, `github-profile__meta-item`, `github-profile__attribution`, `github-profile__attribution-icon`, `github-profile__attribution-login`, `github-profile__attribution-suffix`, `github-profile__degraded-chip`, `github-profile__icon`
+
+The calendar summary renders the total, the pluralized unit word, and the window as separate child elements with no separator baked in, so the site composes them (for example, a `·` via a `::before` on `github-profile__calendar-period`) or hides any of them. Its value and unit carry their own classes rather than the headline strip's `github-profile__metric-value` and `github-profile__metric-label`, because headline numbers are abbreviated (`1.5k`) while the calendar total is written in full with locale grouping (`6,759`) -- one site rule should not have to style both formats. Hiding the summary is safe for assistive technology: the grid keeps a self-sufficient accessible name carrying the same formatted total. The legend cells reuse `github-profile__calendar-day` with the same custom-property indirection as the grid, so the site's palette applies to them automatically; the `--legend` modifier and `aria-hidden` container distinguish them from data cells. In the identity section, `github-profile__identity-body` wraps every non-avatar field, so an avatar-beside-text layout is a single flex rule. In the attribution line, the icon, the `@login`, and the localized suffix are separate elements inside one anchor, so a site can split them across the line (for example, `display: flex; justify-content: space-between` on the anchor) or hide the suffix for a bare handle.
 
 ### CSS custom properties
 
@@ -252,8 +260,11 @@ Sites preferring attribute selectors can style `[data-level="FOURTH_QUARTILE"]` 
 | `data-state` | root (degraded only) | Degradation reason (`no-token`, `not-found`, `primary-rate-limit`, ...) |
 | `data-metric`, `data-raw` | metrics | Metric token and unformatted integer |
 | `data-total` | calendar, orgs list | Total contributions / total memberships |
+| `data-raw` | calendar summary total | Unformatted integer total (the visible text is locale-formatted) |
 | `data-current-streak`, `data-longest-streak` | calendar (opt-in) | Streak day counts |
 | `data-date`, `data-count`, `data-level` | calendar days | ISO date, raw count, quartile enum (`NONE` ... `FOURTH_QUARTILE`) |
+| `data-level` | calendar legend cells | Quartile enum, one cell per level |
+| `data-legend` | calendar legend labels | `less`, `more` |
 | `data-lang`, `data-pct` | language items | Language name and share |
 | `data-org`, `data-owner-type`, `data-commits`, `data-issues`, `data-prs`, `data-reviews`, `data-total` | rollup items | Owner login, `Organization`/`User`, per-type and total counts |
 | `data-repo`, `data-stars`, `data-lang` | contributed/pinned items | Repository identification and stats |

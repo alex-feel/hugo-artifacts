@@ -1,6 +1,6 @@
 # Hugo github-profile module -- Russian UI strings.
 
-github_profile_attribution = "@{{ . }} на GitHub"
+github_profile_attribution_suffix = "на GitHub"
 github_profile_hireable = "Открыт к предложениям"
 github_profile_metric_commits = "коммитов"
 github_profile_metric_prs = "пул-реквестов (созданных)"
@@ -11,6 +11,9 @@ github_profile_metric_external_orgs = "организаций"
 github_profile_metric_recent_days = "активных дней за последние 90"
 github_profile_streak_current = "текущая серия"
 github_profile_streak_longest = "самая длинная серия"
+github_profile_calendar_period = "за последние 12 месяцев"
+github_profile_calendar_less = "Меньше"
+github_profile_calendar_more = "Больше"
 github_profile_languages_label = "Языки по объему кода"
 github_profile_org_rollup_label = "Вклад по организациям"
 github_profile_contributed_label = "Участвует в"
@@ -26,10 +29,16 @@ many = "{{ .Count }} лет на GitHub"
 other = "{{ .Count }} лет на GitHub"
 
 [github_profile_calendar_label]
-one = "{{ .Count }} вклад"
-few = "{{ .Count }} вклада"
-many = "{{ .Count }} вкладов"
-other = "{{ .Count }} вкладов"
+one = "{{ .formatted }} вклад"
+few = "{{ .formatted }} вклада"
+many = "{{ .formatted }} вкладов"
+other = "{{ .formatted }} вкладов"
+
+[github_profile_calendar_unit]
+one = "вклад"
+few = "вклада"
+many = "вкладов"
+other = "вкладов"
 
 [github_profile_restricted_note]
 one = "плюс {{ .Count }} приватный вклад"

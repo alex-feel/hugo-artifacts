@@ -19,9 +19,26 @@
 
   Design notes:
   - The snapshot is ONE static query regardless of which sections render:
-    the whole query empirically costs 1 rate-limit point, a static shape
-    keeps the cache key stable per user, and section toggles then only
+    the whole query empirically costs 2 rate-limit points, a static shape
+    keeps the response cacheable per user, and section toggles then only
     affect rendering, never fetching.
+  - The snapshot queries the user through TWO aliased user() fields (core
+    and byRepo) in the same POST. The four *ContributionsByRepository lists
+    are the only place where a REPOSITORY object hangs off a fully non-null
+    path (ContributionsCollection! -> [XContributionsByRepository!]! ->
+    repository: Repository!), so a repository the token may not read -- a
+    fine-grained token an organization's policy rejects, or SAML
+    enforcement -- cannot be nulled in isolation there: the null propagates
+    up to the whole user object. Isolating those lists behind their own
+    aliased user field stops the propagation at that alias, so the core
+    block still resolves and the widget renders everything except the
+    per-organization rollup. Everywhere else, repositories and
+    organizations arrive as items of NULLABLE node lists ([Repository],
+    [Organization], [PinnableItem]), where a restricted entry nulls only
+    itself. (Other requested chains are non-null too -- the contribution
+    calendar is one -- but they carry no access-controlled object, so
+    nothing in them can be withheld.) The split is data-equivalent to the
+    single-block query at identical rate-limit cost (verified empirically).
   - contributionsCollection is called without from/to in the snapshot, which
     yields the rolling ~1-year window ending now -- the same window GitHub's
     own profile page shows.
@@ -42,7 +59,7 @@
 
 {{- if eq $kind "snapshot" -}}
 {{- $query = `query($login: String!) {
-  user(login: $login) {
+  core: user(login: $login) {
     login
     databaseId
     name
@@ -95,6 +112,23 @@
         totalContributions
         weeks { firstDay contributionDays { date contributionCount contributionLevel weekday } }
       }
+    }
+    repositoriesContributedTo(first: 100, includeUserRepositories: false, contributionTypes: [COMMIT, ISSUE, PULL_REQUEST, PULL_REQUEST_REVIEW]) {
+      totalCount
+      nodes {
+        nameWithOwner
+        description
+        url
+        stargazerCount
+        forkCount
+        primaryLanguage { name }
+        owner { login __typename }
+        languages(first: 10, orderBy: {field: SIZE, direction: DESC}) { edges { size node { name } } }
+      }
+    }
+  }
+  byRepo: user(login: $login) {
+    contributionsCollection {
       commitContributionsByRepository(maxRepositories: 100) {
         repository { nameWithOwner owner { login __typename } }
         contributions(first: 1) { totalCount }
@@ -110,19 +144,6 @@
       pullRequestReviewContributionsByRepository(maxRepositories: 100) {
         repository { nameWithOwner owner { login __typename } }
         contributions(first: 1) { totalCount }
-      }
-    }
-    repositoriesContributedTo(first: 100, includeUserRepositories: false, contributionTypes: [COMMIT, ISSUE, PULL_REQUEST, PULL_REQUEST_REVIEW]) {
-      totalCount
-      nodes {
-        nameWithOwner
-        description
-        url
-        stargazerCount
-        forkCount
-        primaryLanguage { name }
-        owner { login __typename }
-        languages(first: 10, orderBy: {field: SIZE, direction: DESC}) { edges { size node { name } } }
       }
     }
   }

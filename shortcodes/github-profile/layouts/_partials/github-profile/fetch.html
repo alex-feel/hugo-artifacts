@@ -6,11 +6,15 @@
 
   Endpoints (in order; every later endpoint is skipped when a prerequisite
   failed):
-  1. GraphQL snapshot -- ONE POST covering identity, socials, organizations,
-     pinned items, owned repositories with language bytes, the rolling-year
-     contributionsCollection (counts, calendar, per-repository lists), and
-     repositoriesContributedTo. This is the only request the default
-     configuration makes.
+  1. GraphQL snapshot -- ONE POST carrying two aliased user() blocks: "core"
+     (identity, socials, organizations, pinned items, owned repositories
+     with language bytes, the rolling-year contribution counts and calendar,
+     and repositoriesContributedTo) and "byRepo" (the four per-repository
+     contribution lists, isolated because they reach a repository object
+     through a fully non-null path, which would otherwise propagate an
+     organization-policy rejection into a null user -- see
+     build-query.html). This is the only request the default configuration
+     makes.
   2. GraphQL year blocks -- only when history="all": a second POST with one
      aliased calendar-year contributionsCollection block per contributionYears
      entry (the year list is only known from the snapshot, which is why this
@@ -30,11 +34,12 @@
 
   GraphQL-specific correctness: the GraphQL endpoint reports failures as
   HTTP 200 with a {data, errors} envelope, and an unknown login arrives as a
-  null data.user (not a 404). The retry loop therefore only handles
+  null data.core (not a 404). The retry loop therefore only handles
   TRANSPORT-level failures; after it succeeds, the envelope is inspected
   exactly once -- an envelope-level failure is an authoritative API answer
   that a retry within the same build cannot change, so it is classified and
-  degraded without re-entering the loop.
+  degraded without re-entering the loop. A resolved core block with a null
+  byRepo block renders everything except the per-organization rollup.
 
   Because GraphQL has no anonymous tier, a missing HUGO_GITHUB_TOKEN means
   no request is attempted at all: one build-deduplicated warning, immediate
@@ -52,7 +57,8 @@
                            "host-down", or the failing errorClass
                            ("not-found", "auth", "primary-rate-limit",
                            "graphql", "network", ...).
-  - .user (map or nil)     The decoded data.user object when apiOk.
+  - .user (map or nil)     When apiOk: the decoded data.core object with the
+                           byRepo lists grafted into contributionsCollection.
   - .yearTotals (map or nil) The decoded data.user of the year-blocks query
                            (keys y2019, y2020, ...); nil when history="year"
                            or when that request degraded.
@@ -92,7 +98,11 @@
      which Hugo's response cache stores as successes, so a response produced
      by a rejected token would otherwise keep serving from cache after the
      operator fixes the token. Varying the key by a short token digest makes
-     a token change take effect on the next build. */}}
+     a token change take effect on the next build. Each endpoint's key also
+     carries a digest of its request body (or URL for the GET), because the
+     "key" option REPLACES Hugo's URL+options hash entirely: without the
+     digest, a module update that changes the query shape would keep reading
+     the old-shape cached envelope until the consumer's cache expires. */}}
 {{- $tokenFp := substr (md5 $token) 0 8 -}}
 
 {{/* Retry constants. Mirrors shortcodes/github-repo exactly. */}}
@@ -151,7 +161,7 @@
     {{- else if and (gt $attempt 1) (eq $snapResult.errorClass "secondary-rate-limit") (gt (mul $snapResult.waitHintSeconds 1000) $remainingMs) -}}
       {{/* Secondary rate-limit reset window exceeds remaining budget. */}}
     {{- else -}}
-      {{- $cacheKey := printf "github-profile:%s:snapshot:%s:attempt%d" $user $tokenFp $attempt -}}
+      {{- $cacheKey := printf "github-profile:%s:snapshot:%s:%s:attempt%d" $user $tokenFp (substr (md5 $snapBody) 0 8) $attempt -}}
       {{- $snapResult = partial "github-profile/fetch-once.html" (dict
         "url" $graphqlUrl
         "method" "post"
@@ -177,10 +187,12 @@
 
 {{- if $snapResult.ok -}}
   {{/* Transport succeeded; now inspect the GraphQL envelope exactly once.
-       A null data.user with errors[] is the API's authoritative failure
+       A null data.core with errors[] is the API's authoritative failure
        answer (unknown login, insufficient scopes, GraphQL-level rate
-       limit); a non-null user with a partial errors[] renders every
-       resolved field and warns once. */}}
+       limit); a resolved core block renders. The byRepo block is grafted
+       into core's contributionsCollection when it resolved; when an
+       organization policy nulled it, the widget renders without the
+       per-organization rollup and warns once. */}}
   {{- $env := $snapResult.value -}}
   {{- $gqlErrors := slice -}}
   {{- with index $env "errors" -}}
@@ -188,20 +200,48 @@
   {{- end -}}
   {{- $gqlUser := "" -}}
   {{- $hasUser := false -}}
+  {{- $byRepoCC := "" -}}
+  {{- $hasByRepo := false -}}
   {{- with index $env "data" -}}
-    {{- with index . "user" -}}
+    {{- with index . "core" -}}
       {{- $gqlUser = . -}}
       {{- $hasUser = true -}}
     {{- end -}}
+    {{- with index . "byRepo" -}}
+      {{- with index . "contributionsCollection" -}}
+        {{- $byRepoCC = . -}}
+        {{- $hasByRepo = true -}}
+      {{- end -}}
+    {{- end -}}
   {{- end -}}
   {{- if $hasUser -}}
-    {{- if gt (len $gqlErrors) 0 -}}
-      {{- warnf "[github-profile] GitHub GraphQL returned partial data for user %q (%d error(s); first message: %q). Rendering the fields that resolved. See %s" $user (len $gqlErrors) (printf "%v" (index (index $gqlErrors 0) "message")) $position -}}
+    {{- if $hasByRepo -}}
+      {{- $coreCC := dict -}}
+      {{- with index $gqlUser "contributionsCollection" -}}
+        {{- $coreCC = . -}}
+      {{- end -}}
+      {{- range $listKey := slice "commitContributionsByRepository" "issueContributionsByRepository" "pullRequestContributionsByRepository" "pullRequestReviewContributionsByRepository" -}}
+        {{- with index $byRepoCC $listKey -}}
+          {{- $coreCC = merge $coreCC (dict $listKey .) -}}
+        {{- end -}}
+      {{- end -}}
+      {{- $gqlUser = merge $gqlUser (dict "contributionsCollection" $coreCC) -}}
+      {{- if gt (len $gqlErrors) 0 -}}
+        {{- warnf "[github-profile] GitHub GraphQL returned partial data for user %q (%d error(s); first message: %q). Rendering the fields that resolved. See %s" $user (len $gqlErrors) (printf "%v" (index (index $gqlErrors 0) "message")) $position -}}
+      {{- end -}}
+    {{- else -}}
+      {{- $byRepoMessage := "no error detail" -}}
+      {{- if gt (len $gqlErrors) 0 -}}
+        {{- with index (index $gqlErrors 0) "message" -}}
+          {{- $byRepoMessage = printf "%v" . -}}
+        {{- end -}}
+      {{- end -}}
+      {{- warnf "[github-profile] GitHub GraphQL withheld the per-repository contribution lists for user %q (typically an organization policy restricting the token; message: %q). Rendering without the per-organization rollup. See %s" $user $byRepoMessage $position -}}
     {{- end -}}
     {{- $result = merge $result (dict "apiOk" true "user" $gqlUser) -}}
   {{- else -}}
     {{- $gqlClass := "graphql" -}}
-    {{- $gqlMessage := "GraphQL envelope carried no data.user" -}}
+    {{- $gqlMessage := "GraphQL envelope carried no user data" -}}
     {{- if gt (len $gqlErrors) 0 -}}
       {{- $first := index $gqlErrors 0 -}}
       {{- with index $first "message" -}}
@@ -272,7 +312,7 @@
         {{- else if and (gt $attempt 1) (eq $yearsResult.errorClass "secondary-rate-limit") (gt (mul $yearsResult.waitHintSeconds 1000) $remainingMs) -}}
           {{/* Reset window exceeds remaining budget. */}}
         {{- else -}}
-          {{- $cacheKey := printf "github-profile:%s:years:%s:attempt%d" $user $tokenFp $attempt -}}
+          {{- $cacheKey := printf "github-profile:%s:years:%s:%s:attempt%d" $user $tokenFp (substr (md5 $yearsBody) 0 8) $attempt -}}
           {{- $yearsResult = partial "github-profile/fetch-once.html" (dict
             "url" $graphqlUrl
             "method" "post"
@@ -347,7 +387,7 @@
       {{- else if and (gt $attempt 1) (eq $searchResult.errorClass "secondary-rate-limit") (gt (mul $searchResult.waitHintSeconds 1000) $remainingMs) -}}
         {{/* Reset window exceeds remaining budget. */}}
       {{- else -}}
-        {{- $cacheKey := printf "github-profile:%s:merged-prs:%s:attempt%d" $user $tokenFp $attempt -}}
+        {{- $cacheKey := printf "github-profile:%s:merged-prs:%s:%s:attempt%d" $user $tokenFp (substr (md5 $searchUrl) 0 8) $attempt -}}
         {{- $searchResult = partial "github-profile/fetch-once.html" (dict
           "url" $searchUrl
           "cacheKey" $cacheKey
