@@ -9,6 +9,7 @@
 {{- $d := .d -}}
 {{- if gt (len $d.socials) 0 -}}
 <section class="github-profile__section github-profile__section--socials">
+  {{- partial "github-profile/section-title.html" (dict "token" "socials" "key" "github_profile_socials_label" "fallback" "Elsewhere") }}
   <ul class="github-profile__socials" aria-label="{{ T "github_profile_socials_label" | default "Elsewhere" }}">
     {{- range $d.socials }}
     <li class="github-profile__social-item" data-provider="{{ .provider }}">

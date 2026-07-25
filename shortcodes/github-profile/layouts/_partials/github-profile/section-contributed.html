@@ -9,6 +9,7 @@
 {{- $d := .d -}}
 {{- if gt (len $d.contributed) 0 -}}
 <section class="github-profile__section github-profile__section--contributed">
+  {{- partial "github-profile/section-title.html" (dict "token" "contributed" "key" "github_profile_contributed_label" "fallback" "Contributes to") }}
   <ul class="github-profile__contributed" aria-label="{{ T "github_profile_contributed_label" | default "Contributes to" }}">
     {{- range $d.contributed }}
     <li class="github-profile__repo"

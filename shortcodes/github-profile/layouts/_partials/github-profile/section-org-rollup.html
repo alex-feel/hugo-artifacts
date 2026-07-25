@@ -10,6 +10,7 @@
 {{- $d := .d -}}
 {{- if gt (len $d.orgRollup) 0 -}}
 <section class="github-profile__section github-profile__section--org-rollup">
+  {{- partial "github-profile/section-title.html" (dict "token" "org-rollup" "key" "github_profile_org_rollup_label" "fallback" "Contributions by organization") }}
   <ul class="github-profile__org-rollup" aria-label="{{ T "github_profile_org_rollup_label" | default "Contributions by organization" }}">
     {{- range $d.orgRollup }}
     <li class="github-profile__org-roll"

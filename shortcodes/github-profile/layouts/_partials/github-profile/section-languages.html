@@ -10,6 +10,7 @@
 {{- $d := .d -}}
 {{- if gt (len $d.languages) 0 -}}
 <section class="github-profile__section github-profile__section--languages">
+  {{- partial "github-profile/section-title.html" (dict "token" "languages" "key" "github_profile_languages_label" "fallback" "Languages by code volume") }}
   <ul class="github-profile__languages" aria-label="{{ T "github_profile_languages_label" | default "Languages by code volume" }}">
     {{- range $d.languages }}
     <li class="github-profile__lang"

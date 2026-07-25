@@ -1,0 +1,24 @@
+{{/*
+  Visible heading for a list section, so a consuming site styles real text
+  instead of fabricating a label from the list's aria-label with CSS
+  attr(). Rendered as a neutral <p> rather than a heading element because
+  the module cannot know the host page's outline level; the site styles it
+  as its own kicker or hides it with CSS.
+
+  The element is aria-hidden because it restates, verbatim, the accessible
+  name the adjacent list already carries -- announcing both would repeat
+  the same words twice. That is the module's rule for pure restatements
+  (this title, the calendar legend); text carrying information the
+  neighboring element does NOT convey stays announced (the calendar
+  summary, which adds the window and a locale-formatted total).
+
+  Context expectations:
+  - .token (string)    Section token, exposed as data-section.
+  - .key (string)      i18n key for the label.
+  - .fallback (string) English fallback when no translation resolves.
+*/}}
+
+{{- $label := T .key | default .fallback -}}
+{{- with $label }}
+<p class="github-profile__section-title" data-section="{{ $.token }}" aria-hidden="true">{{ . }}</p>
+{{- end -}}

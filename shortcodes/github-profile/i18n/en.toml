@@ -1,7 +1,10 @@
 # Hugo github-profile module -- English UI strings.
 # The module ships its full i18n surface from this directory. Every template lookup pipes
 # through `| default "<English>"`, so a site language without these keys still renders.
-# The plural-table keys are selected by Hugo's CLDR rules from an integer count.
+# Every plural table receives a map: `count` selects the form per Hugo's CLDR rules, and
+# `formatted` carries the same number already grouped for the locale. Always interpolate
+# `{{ .formatted }}`, never `{{ .count }}` -- i18n templates have no function map, so a
+# translation cannot format a number itself and raw digits would print ungrouped.
 
 github_profile_attribution_suffix = "on GitHub"
 github_profile_hireable = "Open to opportunities"
@@ -27,7 +30,7 @@ github_profile_rank_label = "activity score"
 
 [github_profile_member_years]
 one = "1 year on GitHub"
-other = "{{ .Count }} years on GitHub"
+other = "{{ .formatted }} years on GitHub"
 
 # Passed a map with "count" (selects the plural form) and "formatted" (the
 # locale-grouped total), so the accessible name reads the same number the
@@ -44,8 +47,8 @@ other = "contributions"
 
 [github_profile_restricted_note]
 one = "plus 1 private contribution"
-other = "plus {{ .Count }} private contributions"
+other = "plus {{ .formatted }} private contributions"
 
 [github_profile_streak_days]
 one = "1 day"
-other = "{{ .Count }} days"
+other = "{{ .formatted }} days"

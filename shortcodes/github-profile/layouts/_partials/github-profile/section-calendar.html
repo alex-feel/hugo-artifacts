@@ -73,11 +73,11 @@
   {{- if ge $d.streakCurrent 0 }}
   <span class="github-profile__streak" data-streak="current" data-raw="{{ $d.streakCurrent }}">
     <span class="github-profile__metric-label">{{ T "github_profile_streak_current" | default "current streak" }}</span>
-    <span class="github-profile__metric-value">{{ T "github_profile_streak_days" $d.streakCurrent | default (printf "%d days" $d.streakCurrent) }}</span>
+    <span class="github-profile__metric-value">{{ T "github_profile_streak_days" (dict "count" $d.streakCurrent "formatted" (lang.FormatNumber 0 $d.streakCurrent)) | default (printf "%d days" $d.streakCurrent) }}</span>
   </span>
   <span class="github-profile__streak" data-streak="longest" data-raw="{{ $d.streakLongest }}">
     <span class="github-profile__metric-label">{{ T "github_profile_streak_longest" | default "longest streak" }}</span>
-    <span class="github-profile__metric-value">{{ T "github_profile_streak_days" $d.streakLongest | default (printf "%d days" $d.streakLongest) }}</span>
+    <span class="github-profile__metric-value">{{ T "github_profile_streak_days" (dict "count" $d.streakLongest "formatted" (lang.FormatNumber 0 $d.streakLongest)) | default (printf "%d days" $d.streakLongest) }}</span>
   </span>
   {{- end }}
 </section>

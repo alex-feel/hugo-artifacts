@@ -10,6 +10,7 @@
 {{- $d := .d -}}
 {{- if gt (len $d.orgs) 0 -}}
 <section class="github-profile__section github-profile__section--orgs">
+  {{- partial "github-profile/section-title.html" (dict "token" "orgs" "key" "github_profile_orgs_label" "fallback" "Organizations") }}
   <ul class="github-profile__orgs" aria-label="{{ T "github_profile_orgs_label" | default "Organizations" }}" data-total="{{ $d.orgsTotal }}">
     {{- range $d.orgs }}
     <li class="github-profile__org"
