@@ -8,7 +8,7 @@
 // always on is indistinguishable from one that works unless both are checked.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {configuredDir, linkRels, warnCount, PAGES} from './helpers.js';
+import {configuredDir, linkRels, rawHtml, warnCount, PAGES} from './helpers.js';
 
 const markdownAlternates = (rel, dir) =>
   linkRels(rel, dir).filter((l) => l.rel === 'alternate' && l.type === 'text/markdown');
@@ -98,6 +98,27 @@ test('an unregistered [seo.links] key warns exactly once and emits no tag', () =
     assert.ok(
       !rels.some((r) => r === 'not_a_real_relation' || r === 'not-a-real-relation'),
       'an unregistered relation must never be emitted as a bare token',
+    );
+  }
+});
+
+test('the unset build emits nothing at all at the alternates call site', () => {
+  // Regression lock for a defect the pre/post byte-identity gate caught: the
+  // call site originally left a blank line behind on every page of every
+  // consuming site, because an untrimmed comment preserved the newline before
+  // it. The partial must contribute NOTHING when unconfigured -- not even
+  // whitespace -- so the head stays byte-identical to a build from before the
+  // partial existed. It is called immediately after feed discovery, so the
+  // bytes following the feed link are the exact witness.
+  for (const [name, rel] of Object.entries(PAGES)) {
+    const head = /<head>([\s\S]*?)<\/head>/.exec(rawHtml(rel))?.[1] ?? '';
+    const feed = head.indexOf('rss&#43;xml');
+    if (feed === -1) continue;
+    const after = head.slice(head.indexOf('>', feed) + 1);
+    assert.match(
+      after,
+      /^\n\n\S/,
+      `${name}: exactly one blank line must follow the feed link, as it did before the partial existed`,
     );
   }
 });
