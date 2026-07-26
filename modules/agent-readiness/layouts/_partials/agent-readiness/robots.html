@@ -1,0 +1,76 @@
+{{/*
+  agent-readiness/robots.html -- renderer (RENDERER tier).
+
+  Purpose: emit the whole robots.txt body -- the catch-all group carrying the
+  Content-Signal declaration, one group per configured AI-crawler token
+  resolved through the shipped registry, any verbatim extra lines, and the
+  Sitemap directive.
+
+  Defaults are permissive BY CONSTRUCTION: with no configuration at all the
+  output is `User-agent: *` / `Allow: /` / `Sitemap: …`. Every restriction is
+  opt-in, because a Disallow shipped as a module default would deindex a
+  consumer's site on the build after they imported the module.
+
+  Expected context (dict):
+  - .page (Page) - The home page (robots.txt renders from it).
+  - .cfg  (dict) - The resolved config from agent-readiness/config.html,
+    resolved with site_only: true (every robots key is SITE-SCOPED).
+
+  Return value: none. This partial renders.
+
+  Emission order: the catch-all group, then one group per token, then the
+  verbatim extra lines, then a blank line and Sitemap. Content-Signal sits
+  INSIDE the User-agent: * group, per the contentsignals.org convention.
+*/}}
+
+{{- $cfg := .cfg -}}
+{{- $robots := $cfg.robots -}}
+{{- $data := index hugo.Data "agent-readiness" | default dict -}}
+{{- $registry := index $data "bots" | default dict -}}
+
+{{- if and $cfg.enable $robots.enable -}}
+{{- /* ---- Catch-all group ---- */ -}}
+User-agent: *
+{{ with $robots.content_signal }}Content-Signal: {{ . }}
+{{ end -}}
+{{- range $robots.allow | default slice }}Allow: {{ . }}
+{{ end -}}
+{{- range $robots.disallow | default slice }}Disallow: {{ . }}
+{{ end -}}
+
+{{- /* ---- One group per configured token ---- An unknown key is skipped
+       with one deduplicated warning, never emitted as a literal: a registry
+       key in a User-agent: line matches no crawler and silently does
+       nothing, which is strictly worse than the group being absent. */ -}}
+{{- range $key := $robots.bots | default slice -}}
+  {{- $k := lower (trim (printf "%v" $key) " \t\n\r") -}}
+  {{- $entry := index $registry $k -}}
+  {{- $token := "" -}}
+  {{- if reflect.IsMap $entry -}}{{- $token = printf "%v" ($entry.token | default "") -}}{{- end -}}
+  {{- if $token }}
+User-agent: {{ $token }}
+{{ range $robots.bots_allow | default slice }}Allow: {{ . }}
+{{ end -}}
+{{- range $robots.bots_disallow | default slice }}Disallow: {{ . }}
+{{ end -}}
+  {{- else -}}
+    {{- partial "agent-readiness/lib/warn.html" (dict
+        "key" (printf "agent-readiness:warn:unknown-bot:%s" $k)
+        "message" (printf "[agent-readiness] Ignoring the unknown robots bot key %q: no such entry in data/agent-readiness/bots.toml, and emitting the key itself as a User-agent token would match no crawler. Use one of the registry keys, or add your own entry by shadowing that data file in your site." $k)) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* ---- Verbatim extra lines ---- Emitted exactly as authored, so a
+       consumer can express any directive this module does not model. */ -}}
+{{- range $robots.extra | default slice }}
+{{ . }}
+{{- end }}
+
+{{- /* ---- Sitemap ---- Built with absURL rather than a hardcoded absolute
+       URL, so development and production builds agree and a subpath baseURL
+       is honored. */ -}}
+{{- if $robots.sitemap }}
+
+Sitemap: {{ "sitemap.xml" | absURL }}
+{{- end }}
+{{- end -}}
