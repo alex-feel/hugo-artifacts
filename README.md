@@ -43,6 +43,10 @@ Universal client-side site search: a per-language JSON index emitted at build ti
 
 Universal build-time image module: one `{{ partial "images/image.html" (dict "page" . "src" "..." "alt" "...") }}` call (or the `image` shortcode, or plain Markdown `![...]()` via the shipped render hook) emits style-agnostic BEM `<picture>` markup with width-descriptor srcsets that never upscale, WebP plus original-format fallback (AVIF opt-in on Hugo 0.163.0+), guaranteed `width`/`height` for zero layout shift, strict alt discipline, figure/caption/credit surfaces, JS-free dominant-color and blur placeholders, light/dark variant pairs for both OS-preference and class-based togglers, art direction, gallery rendering, and a PhotoSwipe-compatible lightbox enablement contract. Zero CSS, zero JavaScript, a four-tier configuration cascade under `params.img`, and graceful degradation on every unprocessable source. See [`modules/images/README.md`](modules/images/README.md).
 
+### `modules/agent-readiness`
+
+Universal agent-readiness module: the agent-facing representations of a site your HTML already describes, all driven by one shared page-selection filter so they can never disagree -- a generated `robots.txt` with a 21-token AI-crawler registry and a `Content-Signal` declaration, per-page Markdown twins built from `.RenderShortcodes` with a duplicate-key-safe YAML front matter, an `llms.txt` link index, an aggregated `/about.md` facts document that is complete by construction rather than truncated, and a `/.well-known/agent-skills/` discovery index whose SHA-256 digests are computed from the exact bytes it republishes. Zero CSS, zero JavaScript, zero visual surface; a four-tier configuration cascade under `params.agent`; graceful degradation on every misconfiguration and every failed remote fetch. See [`modules/agent-readiness/README.md`](modules/agent-readiness/README.md).
+
 ### `modules/pwa`
 
 Consumer-facing Progressive Web App module: web app manifest, RealFaviconGenerator icon set, Workbox-powered service worker, install prompt, and push subscription wiring. See [`modules/pwa/README.md`](modules/pwa/README.md).

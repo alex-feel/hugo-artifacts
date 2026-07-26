@@ -1,0 +1,28 @@
+{{/*
+  agent-readiness/lib/warn.html -- INTERNAL (lib tier).
+
+  Purpose: single funnel for every module warning, deduplicated per build via
+  a hugo.Store sentinel, so a misconfiguration repeated across hundreds of
+  pages surfaces exactly once. The get-then-set below is not atomic and Hugo
+  renders pages in parallel, so the sentinel is best-effort: concurrent first
+  callers can each pass the check. Hugo's logger suppresses byte-identical
+  statements, which closes the gap for any message that is identical across
+  callers; a message embedding per-caller context (a position or page path)
+  accepts that it can rarely surface more than once. The module never breaks
+  a build over agent-readiness configuration: every surface degrades to a
+  smaller correct document rather than failing, because a build that stops
+  over a robots token typo is worse than a robots.txt missing one group.
+
+  Expected context (dict):
+  - .key     (string) - Deduplication key, unique per warning class and
+    offending value, e.g. "agent-readiness:warn:unknown-bot:gptbotx".
+  - .message (string) - Complete, actionable warning text, already formatted
+    and "[agent-readiness]"-prefixed by the caller.
+
+  Return value: none. Side effect: at most one warnf per key per build.
+*/}}
+
+{{- if not (hugo.Store.Get .key) -}}
+  {{- hugo.Store.Set .key true -}}
+  {{- warnf "%s" .message -}}
+{{- end -}}

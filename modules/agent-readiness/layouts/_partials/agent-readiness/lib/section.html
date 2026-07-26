@@ -1,0 +1,36 @@
+{{/*
+  agent-readiness/lib/section.html -- INTERNAL (lib tier).
+
+  Purpose: normalize ONE authored section identifier to the single canonical
+  form the shared page filter matches against. Section identifiers reach this
+  module in two authored shapes and both must resolve identically: the
+  top-level `sections` allow-list is authored path-shaped (`/blog`, `blog/`),
+  while the per-entry `section` values under [[llms.sections]] and
+  [[facts.sections]] are authored as bare names (`section = "blog"`). Running
+  both through this one routine is what keeps them equivalent -- an
+  unnormalized mismatch renders an empty H2 with no warning, no error and
+  exit 0, which is the quietest failure this module can have.
+
+  Normalization, matching modules/search/layouts/_partials/search/config.html
+  exactly: trim surrounding whitespace, lowercase (Page.Path is always
+  lowercase, so a capitalized entry like "Blog" would otherwise silently empty
+  the scope), strip one optional leading and one optional trailing slash, then
+  prefix with "/". So blog, /blog, blog/, /blog/ and Blog all become /blog.
+
+  The "mainSections" sentinel is NOT expanded here: it expands to zero or more
+  entries, while this partial returns exactly one string. config.html handles
+  that expansion around this call.
+
+  Expected context: the raw authored value (any type; stringified here).
+
+  Return value: the normalized "/section" string, or "" when the input is
+  empty or is only slashes. ONE terminal return.
+*/}}
+
+{{- $e := lower (trim (printf "%v" .) " \t\n\r") -}}
+{{- $out := "" -}}
+{{- with strings.TrimSuffix "/" (strings.TrimPrefix "/" $e) -}}
+  {{- $out = printf "/%s" . -}}
+{{- end -}}
+
+{{- return $out -}}

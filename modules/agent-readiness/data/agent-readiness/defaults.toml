@@ -1,0 +1,130 @@
+# Consumer-facing defaults for the agent-readiness module.
+#
+# Every key can be overridden, from lowest to highest precedence:
+#   1. this file (module defaults)
+#   2. site config:       [params.agent]
+#   3. page front matter: agent: (map)
+#   4. call-site args:    {{ partial "agent-readiness/…" (dict "page" . "<key>" <value>) }}
+# Presence wins at every tier, so an explicit false or empty value overrides
+# the tier below it. Keys marked SITE-SCOPED shape site-wide artifacts
+# (robots.txt, llms.txt, about.md, the skills index) and are honored at
+# tiers 1 and 2 only.
+
+# --- Master switch (SITE-SCOPED) ---
+# Site-scoped deliberately: every surface must select the same page set, and
+# a page-tier `agent.enable = false` would drop that page's twin while
+# leaving it listed in llms.txt and about.md. The per-page opt-out is
+# `agent: false` / `agent: {exclude: true}`, which the shared page filter
+# honors on every surface at once.
+enable = true
+
+# --- Shared page selection (SITE-SCOPED) ---
+# Section allow-list; empty indexes every regular page.
+sections = []
+# Skip pages whose `robots` front matter contains "noindex".
+exclude_noindex = true
+# Skip the dedicated search page (its body is UI chrome, not content).
+exclude_search_page = true
+search_page_path = "/search"
+
+# --- robots.txt (SITE-SCOPED) ---
+[robots]
+enable = true
+# Directives for the catch-all User-agent: * group.
+allow = ["/"]
+disallow = []
+# Content Signals declaration placed inside the User-agent: * group.
+# Empty emits no line. Grammar: "search=yes, ai-train=yes, ai-input=yes".
+# NOT an IETF standard -- see the README.
+content_signal = ""
+# Named tokens from data/agent-readiness/bots.toml, each emitted as its own group.
+bots = []
+# Directives applied to every group named in `bots`.
+bots_allow = ["/"]
+bots_disallow = []
+# Verbatim lines appended after the last group, before Sitemap.
+extra = []
+sitemap = true
+
+# --- Markdown twins ---
+[markdown]
+enable = true
+# Emit the leading YAML front-matter block.
+front_matter = true
+# Emit `canonical:` pointing at the page's HTML URL.
+canonical = true
+# Emit `last_updated:` (ISO date from .Lastmod) when it differs from `date`.
+last_updated = true
+# Emit `license:` (one URL line) immediately before the always-last canonical.
+license = false
+# Append a trailing sitemap section linking the site map or llms.txt.
+sitemap_section = true
+sitemap_section_target = "llms"   # "llms" | "sitemap" | "none"
+
+# --- Per-section front-matter field maps ---
+# Consumer-declared and intentionally empty here: the vocabulary is
+# site-specific. Shape: [frontmatter.<section>] keys = ["a", "b"].
+# Do NOT list title, description, date, last_updated, or license: the builder
+# emits those itself and skips (with a warning) any per-section key that
+# repeats one.
+[frontmatter]
+
+# --- llms.txt ---
+[llms]
+enable = true
+title = ""     # falls back to site.Title
+summary = ""   # the required one-line blockquote
+notes = ""     # optional free prose after the blockquote
+# Link the Markdown twin when the page has one, else the HTML permalink.
+link_markdown = true
+# Emit one "> Content licensed under [name](url)." line after the summary.
+license = false
+# Ordered sections; each becomes an H2. Shape:
+#   [[llms.sections]] name = "Blog"  section = "blog"  limit = 0
+sections = []
+# Links an agent may drop when shortening context. Shape:
+#   [[llms.optional]] name = "…"  url = "/…"  note = "…"
+optional = []
+
+# --- /about.md (aggregated facts document) ---
+[facts]
+enable = true
+title = ""     # falls back to the agent_facts_title i18n string, then site.Title
+summary = ""   # optional one-line blockquote under the H1
+# Link each entry's Markdown twin alongside its HTML URL.
+link_markdown = true
+# Ordered complete listings; each becomes an H2 and lists EVERY page the
+# shared filter admits for that section -- never a first-N window. Shape:
+#   [[facts.sections]] name = "Skills"  section = "skills"
+sections = []
+# Trailing pointer to llms.txt and the sitemap.
+sitemap_section = true
+
+  # Identity rows, read from a real content page so they cannot drift.
+  [facts.identity]
+  page = "/"
+  # Shape: [[facts.identity.rows]] label = "Role"  key = "main_subtitle"
+  rows = []
+
+  # Contact channels, read from a real content page's front matter.
+  [facts.contact]
+  page = ""            # empty omits the contact section entirely
+  key = "channels"     # front-matter key holding the array of channels
+  label_field = "label"
+  value_field = "value"
+  url_field = "href"
+
+# --- /.well-known/agent-skills/ ---
+[skills_index]
+enable = true
+schema = "https://schemas.agentskills.io/discovery/0.2.0/schema.json"
+# Consumer-declared array of tables; empty emits NO file at all. Shape:
+#   [[params.agent.skills]] name = "…" description = "…" source = "<pinned raw URL>"
+
+# --- Content license (SITE-SCOPED) ---
+# Identity of the license covering the site's editorial content. Empty
+# values emit nothing, so this table is inert until a consumer fills it.
+[license]
+name = ""     # human label, e.g. "CC BY 4.0"
+url = ""      # absolute deed or legal-code URL
+spdx = ""     # SPDX identifier, e.g. "CC-BY-4.0"; reserved for consumers

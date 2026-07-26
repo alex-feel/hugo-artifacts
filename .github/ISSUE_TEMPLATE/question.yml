@@ -12,6 +12,7 @@ body:
         - [modules/social-share README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/social-share/README.md) -- Full social-share module reference
         - [modules/search README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/search/README.md) -- Full search module reference
         - [modules/images README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/images/README.md) -- Full images module reference
+        - [modules/agent-readiness README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/agent-readiness/README.md) -- Full agent-readiness module reference
         - [modules/pwa README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/pwa/README.md) -- Full PWA module reference
         - [shortcodes/github-repo README](https://github.com/alex-feel/hugo-artifacts/blob/main/shortcodes/github-repo/README.md) -- GitHub-repo shortcode reference
         - [shortcodes/github-profile README](https://github.com/alex-feel/hugo-artifacts/blob/main/shortcodes/github-profile/README.md) -- GitHub-profile shortcode reference
@@ -39,6 +40,7 @@ body:
         - Social-share module configuration (params.social_share.*)
         - Search module configuration (params.search.* / search front matter)
         - Images module configuration (params.img.* / img front matter)
+        - Agent-readiness module configuration (params.agent.* / agent front matter)
         - PWA module configuration (params.pwa.*)
         - Push notifications / VAPID / reference backends
         - Service worker / Workbox / idb
