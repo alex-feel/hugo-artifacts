@@ -8,6 +8,11 @@ channels:
   - label: 'Repository'
     value: 'example/fixture'
     href: 'https://example.invalid/fixture'
+  # A non-http scheme, so the site-relative resolution cannot be implemented
+  # as "prepend the baseURL to everything".
+  - label: 'Email'
+    value: 'hello@fixture.example'
+    href: 'mailto:hello@fixture.example'
   - label: 'No URL'
     value: 'A channel carrying no href at all'
 ---

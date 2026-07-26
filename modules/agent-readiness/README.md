@@ -62,7 +62,7 @@ Values resolve through a four-tier cascade, highest precedence first:
 
 Presence wins at every tier, so an explicit `false` or empty value overrides the tier below it. Nested maps (`robots`, `markdown`, `llms`, `facts`, `skills_index`, `frontmatter`, `license`) merge tier by tier rather than replacing, so overriding one key inside `[params.agent.markdown]` keeps the shipped values for the rest. Slice-valued keys are replaced, never combined.
 
-**SITE-SCOPED keys are honored at the defaults and `[params.agent]` tiers only**, because they shape site-wide artifacts that must select the same page set no matter which page renders them: `enable`, `sections`, `exclude_noindex`, `exclude_search_page`, `search_page_path`, `skills`, and the whole `robots` and `license` tables.
+**SITE-SCOPED keys are honored at the defaults and `[params.agent]` tiers only**, because they shape site-wide artifacts that must select the same page set no matter which page renders them: `enable`, `sections`, `exclude_noindex`, `exclude_search_page`, `search_page_path`, `skills`, `markdown.enable`, and the whole `robots` and `license` tables. Setting one of them lower down is a no-op and warns once; `markdown.enable` is site-scoped for the same reason as the master switch, since `llms.txt` and `about.md` link a twin's URL without re-deriving that switch per page, so a page able to suppress only its own twin would still be listed with a URL that 404s. To remove a single page from every agent surface at once, use `agent: false` in its front matter.
 
 ### Top-level keys
 
@@ -167,7 +167,9 @@ Twins never enter `sitemap.xml`: Hugo's sitemap enumerates pages and emits one `
 
 ### Body source
 
-The body is `.RenderShortcodes` -- shortcodes expanded to their output, the surrounding Markdown left as Markdown. It is the only one of Hugo's four content accessors that yields a document that is both valid Markdown prose and complete: `.RawContent` leaves every shortcode call as unexpanded literal text, `.Content` renders the surrounding Markdown to HTML as well (an HTML document with a `.md` extension), and `.Plain` strips every tag and destroys headings, lists, links, and code fences. Hugo has no HTML-to-Markdown template function, so this is not the best of four options -- it is the only correct one.
+The body is `.RenderShortcodes` -- shortcodes expanded to their output, the surrounding Markdown left as Markdown. It is the only one of Hugo's four content accessors that yields a document that is both valid Markdown prose and complete: `.RawContent` leaves every shortcode call as unexpanded literal text, `.Content` renders the surrounding Markdown to HTML as well (an HTML document with a `.md` extension), and `.Plain` strips every tag and destroys headings, lists, links, and code fences.
+
+Reconstructing Markdown from `.Content` is possible -- `transform.HTMLToMarkdown` exists as of Hugo v0.151.0 -- but it is the wrong tool here: it is still flagged experimental with an API that may change, and it would put the twin through a lossy Markdown to HTML to Markdown round trip whose output is a converter's opinion of the source rather than the source. `.RenderShortcodes` never leaves Markdown in the first place, so no round trip and no experimental dependency is needed.
 
 **The documented consequence:** a twin of a shortcode-heavy page contains raw HTML blocks inline. That is valid CommonMark -- raw HTML is a first-class block type that every conformant parser passes through -- and for a page whose entire value is a rendered widget, the widget markup _is_ the content. Smoke-test one such page rather than discovering it later.
 
@@ -241,6 +243,10 @@ note = 'Every published URL.'
 ```
 
 The document is: exactly one H1 line, a blockquote summary, an optional blockquote license line, optional prose, one H2 per configured section listing `- [name](url): note` items, and a final `## Optional` heading. `Optional` is a protocol token fixed by the convention and is deliberately not translated.
+
+**Every URL is absolute**, including the ones you write in `[[params.agent.llms.optional]]`: a site-relative value there is resolved against the `baseURL`, while anything carrying a scheme (`https:`, `mailto:`, `tel:`) or a protocol-relative `//` prefix passes through untouched. This file is routinely ingested detached from the URL it was fetched from, where a bare `/sitemap.xml` has no origin to resolve against. `/about.md` follows the same rule.
+
+**A section entry needs both `section` and `name`, and is skipped with a warning without them.** Both omissions fail invisibly otherwise. An empty `section` matches _every_ page, because the prefix test degenerates to "starts with `/`" -- so a single `sections =` for `section =` typo would publish the whole site under one heading and look deliberate. An entry with no `name` has no H2 to open, so its bullets land under the previous entry's heading, where every Markdown parser reads them as that section's links.
 
 The `mediaType` is `text/plain`, not `text/markdown`, and that is deliberate: `text/markdown`'s suffixes are `md, mdown, markdown`, so it would publish `llms.md`. `root` is deliberately unset, so a multilingual site gets `/llms.txt` and `/ru/llms.txt` rather than one path every language overwrites.
 
@@ -324,7 +330,9 @@ Three consequences a consumer must understand:
 
 The index also gates on `site.Language.IsDefault`, because this format sets `root = true`, which pins one path for every language; a multilingual site emits the index once, from the default language.
 
-Field rules, validated before the fetch so a malformed entry costs no round trip: `name` is 1-64 characters of lowercase alphanumerics and hyphens with no leading, trailing, or consecutive hyphen (it becomes a published path segment); `description` is 1-1024 characters and should be copied verbatim from the skill's own `description` front matter rather than paraphrased; `source` must be absolute.
+Field rules, validated before the fetch so a malformed entry costs no round trip: `name` is 1-64 characters of lowercase alphanumerics and hyphens with no leading, trailing, or consecutive hyphen (it becomes a published path segment) and must be **unique** across the array; `description` is 1-1024 characters and should be copied verbatim from the skill's own `description` front matter rather than paraphrased; `source` must be absolute.
+
+Uniqueness is enforced for the same reason the digest is: the name is the sole path segment a skill is republished under, so two entries sharing one would resolve to a single published file carrying whichever bytes were copied last, while the index advertised two entries with two different digests for it. At least one of those digests could not match the bytes served at its own URL -- which a verifying agent is entitled to read as tampering. The duplicate is skipped with a warning rather than published.
 
 ### Index length is a curation decision, not a completeness metric
 

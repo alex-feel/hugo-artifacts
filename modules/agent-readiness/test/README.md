@@ -1,6 +1,6 @@
 # agent-readiness module test suite
 
-Node build-output assertions for `modules/agent-readiness`, run against the files that three Hugo builds publish. The module ships zero JavaScript, so there is no browser behavior to test and the suite carries no Playwright dependency.
+Node build-output assertions for `modules/agent-readiness`, run against the files that four Hugo builds publish. The module ships zero JavaScript, so there is no browser behavior to test and the suite carries no Playwright dependency.
 
 ## Running
 
@@ -14,7 +14,7 @@ or, on Windows:
 modules\agent-readiness\test\run-tests.cmd
 ```
 
-Both runners validate the shipped data files, perform the repository's pre-launch Hugo process check, build all three fixtures, fail hard on any `deprecat`, `ERROR`, or `found no layout file` line in any build log, and then run the assertions.
+Both runners validate the shipped data files, perform the repository's pre-launch Hugo process check, build all four fixtures, fail hard on any `deprecat`, `ERROR`, or `found no layout file` line in any build log, and then run the assertions.
 
 > **These specs need network access.** The Agent Skills specs exercise a real build-time `resources.GetRemote`, because the digest guarantee -- that the advertised hash matches the bytes actually served -- cannot be proven without one. On a run with no network, the module correctly omits every skill and emits no index file at all, and the first skills spec reports that as the cause rather than as a mysterious missing file.
 
@@ -22,13 +22,16 @@ Both runners validate the shipped data files, perform the repository's pre-launc
 
 `tests/00-data.spec.js` runs on its own, **before either fixture is built**. A malformed `data/agent-readiness/*.toml` otherwise surfaces as an opaque Hugo build failure at some unrelated template, leaving the reader to work backwards to the registry. Run first, it is reported as itself.
 
-## Three builds
+## Four builds
 
 | Build | Fixture | Environment | What it proves |
 | --- | --- | --- | --- |
 | baseline | `fixture/` | default | Every `[params.agent.license]` key is unset and both switches are off, so no twin carries a `license:` line and `llms.txt` carries no license line. This is what proves the license surfaces are inert until a consumer opts in. |
 | configured | `fixture/` | `configured` | The license table is filled and both switches are on, so every license surface appears exactly once. |
+| minimal | `fixture/` | `minimal` | Almost nothing is configured, which is the shape a consumer gets on import. It is the only build that can reach the unconfigured `robots.txt`, the zero-skills gate, and a facts document with no sections. |
 | shadow | `fixture-shadow/` | default | The fixture ships its own `layouts/robots.txt`, proving the documented silent-override hazard. |
+
+The `minimal` build exists because the other two deliberately configure **everything**, which left three of Plan A's acceptance criteria -- all of them about the _unconfigured_ case -- with no build to be asserted against. That gap is not hypothetical: the `robots.txt` defect fixed in `d0bdfe7` was in exactly the default shape, and the whole suite stayed green through it.
 
 ## What the fixtures cover
 
@@ -61,9 +64,11 @@ Re-run the assertions alone against existing builds with:
 ```bash
 FIXTURE_PUBLIC=fixture/public/baseline \
 FIXTURE_PUBLIC_CONFIGURED=fixture/public/configured \
+FIXTURE_PUBLIC_MINIMAL=fixture/public/minimal \
 FIXTURE_PUBLIC_SHADOW=fixture-shadow/public \
 HUGO_BUILD_LOG=hugo-build.log \
 HUGO_BUILD_LOG_CONFIGURED=hugo-build-configured.log \
+HUGO_BUILD_LOG_MINIMAL=hugo-build-minimal.log \
 HUGO_BUILD_LOG_SHADOW=hugo-build-shadow.log \
 npm test
 ```

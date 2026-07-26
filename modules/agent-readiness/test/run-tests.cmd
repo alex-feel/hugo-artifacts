@@ -1,7 +1,7 @@
 @echo off
-rem Validates the shipped data files, then builds THREE fixture sites with
+rem Validates the shipped data files, then builds FOUR fixture sites with
 rem hugo (builds, not servers: no port binding, and a finite build exits by
-rem itself) and runs the Node build-output assertion suite against all three.
+rem itself) and runs the Node build-output assertion suite against all four.
 rem Windows mirror of run-tests.sh: data check first, pre-launch process
 rem check, then a hard fail on any deprecation, error, or missing-layout line
 rem in any build log.
@@ -27,6 +27,7 @@ if not errorlevel 1 (
 
 set LOG_FILE=%~dp0hugo-build.log
 set LOG_FILE_CONFIGURED=%~dp0hugo-build-configured.log
+set LOG_FILE_MINIMAL=%~dp0hugo-build-minimal.log
 set LOG_FILE_SHADOW=%~dp0hugo-build-shadow.log
 
 pushd "%~dp0fixture"
@@ -44,6 +45,13 @@ if errorlevel 1 (
   popd
   exit /b 1
 )
+hugo -e minimal --gc --logLevel info --cleanDestinationDir --destination public\minimal > "%LOG_FILE_MINIMAL%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(minimal^):
+  type "%LOG_FILE_MINIMAL%"
+  popd
+  exit /b 1
+)
 popd
 
 pushd "%~dp0fixture-shadow"
@@ -56,7 +64,7 @@ if errorlevel 1 (
 )
 popd
 
-for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_SHADOW%") do (
+for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_MINIMAL%" "%LOG_FILE_SHADOW%") do (
   findstr /I "deprecat" %%L >nul 2>&1
   if not errorlevel 1 (
     echo Hugo reported deprecations in %%L:
@@ -79,9 +87,11 @@ for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_SHADOW%") do (
 
 set FIXTURE_PUBLIC=%~dp0fixture\public\baseline
 set FIXTURE_PUBLIC_CONFIGURED=%~dp0fixture\public\configured
+set FIXTURE_PUBLIC_MINIMAL=%~dp0fixture\public\minimal
 set FIXTURE_PUBLIC_SHADOW=%~dp0fixture-shadow\public
 set HUGO_BUILD_LOG=%LOG_FILE%
 set HUGO_BUILD_LOG_CONFIGURED=%LOG_FILE_CONFIGURED%
+set HUGO_BUILD_LOG_MINIMAL=%LOG_FILE_MINIMAL%
 set HUGO_BUILD_LOG_SHADOW=%LOG_FILE_SHADOW%
 for /f "tokens=2 delims=v " %%v in ('hugo version') do (
   set HUGO_VERSION_RAW=%%v

@@ -109,6 +109,38 @@
   {{- $maps = merge $maps (dict $k $m) -}}
 {{- end -}}
 
+{{/* ---- markdown.enable is SITE-SCOPED ---- It is the one key inside an
+     all-tiers map that governs whether an ARTIFACT EXISTS rather than what
+     that artifact contains, and existence is exactly what the surfaces have
+     to agree about. llms.txt and about.md resolve a twin's URL from the
+     page's own output formats, so a page tier able to suppress its own twin
+     would leave that page listed with a URL that 404s -- the same
+     disagreement that made the master switch site-scoped. Nothing is lost,
+     because the per-page opt-out that KEEPS every surface in agreement
+     already exists: `agent: false` in front matter drops the page from
+     page-list.html and from the twin together. Every other markdown key
+     governs twin CONTENT and stays settable at all four tiers. */}}
+{{- $mdSite := dict -}}
+{{- with index $defaults "markdown" -}}{{- if reflect.IsMap . -}}{{- $mdSite = merge $mdSite . -}}{{- end -}}{{- end -}}
+{{- with index $sitep "markdown" -}}{{- if reflect.IsMap . -}}{{- $mdSite = merge $mdSite . -}}{{- end -}}{{- end -}}
+{{- if ne (index $mdSite "enable") nil -}}
+  {{- $maps = merge $maps (dict "markdown" (dict "enable" (index $mdSite "enable"))) -}}
+{{- end -}}
+
+{{/* A lower tier setting it is a silent no-op otherwise, which is the quiet
+     failure class this module exists to avoid, so say so once. */}}
+{{- if not $siteOnly -}}
+  {{- range slice $pagep $args -}}
+    {{- with index . "markdown" -}}
+      {{- if and (reflect.IsMap .) (isset . "enable") -}}
+        {{- partial "agent-readiness/lib/warn.html" (dict
+            "key" "agent-readiness:warn:page-tier-markdown-enable"
+            "message" "[agent-readiness] Ignoring a page-level or call-site `markdown.enable`: the key is SITE-SCOPED, because a page that suppressed only its own twin would still be listed in llms.txt and about.md with a URL that 404s. To exclude one page from every agent surface at once, set `agent: false` in its front matter; to turn the twins off site-wide, set [params.agent.markdown] enable = false.") -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
 {{/* ---- Boolean normalization ---- Any tier may deliver a real bool, a
      string, or an integer form; stringify once so every shape compares
      alike. A key absent from every tier normalizes to false, which is why

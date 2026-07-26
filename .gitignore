@@ -18,6 +18,11 @@ node_modules/
 test-results/
 playwright-report/
 
+# Static overlay builds a test runner produces and removes; tracked here so an
+# interrupted run cannot leave an untracked build tree behind.
+.opensearch-hostile/
+.opensearch-off/
+
 # IDE
 .idea/
 .vscode/

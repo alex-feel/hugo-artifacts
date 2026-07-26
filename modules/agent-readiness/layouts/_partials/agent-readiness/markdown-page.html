@@ -6,20 +6,21 @@
 
   MEMBERSHIP: the twin emits NOTHING AT ALL for a page the shared filter
   excludes, so the twin surface can never disagree with robots.txt, llms.txt
-  and about.md about which pages of the site exist. Hugo still creates the
-  file (the output format is wired per page kind), but it is empty, which is
-  the honest representation of a page that opted out.
+  and about.md about which pages of the site exist. A template that renders
+  no bytes makes Hugo publish no file for that format, so an excluded page
+  ends up with no index.md beside its index.html rather than an empty one --
+  which is what 02-twins.spec.js asserts.
 
   BODY SOURCE: .RenderShortcodes, which is the only one of Hugo's four
   content accessors that yields a document that is simultaneously valid
   Markdown prose and complete. .RawContent leaves every shortcode call as the
   literal, unexpanded call text; .Content renders the surrounding Markdown to
   HTML too, producing an HTML document with a .md extension; .Plain strips
-  every tag
-  and destroys headings, lists, links and code fences. There is no
-
-  HTML-to-Markdown template function in Hugo, so this is not merely the best
-  of four -- it is the only correct one.
+  every tag and destroys headings, lists, links and code fences.
+  Reconstructing Markdown from .Content is possible -- transform.HTMLToMarkdown
+  exists as of v0.151.0 -- but it is still experimental and would put the twin
+  through a lossy Markdown-to-HTML-to-Markdown round trip, so the accessor
+  that never leaves Markdown wins on both counts.
 
   The documented consequence: a twin of a shortcode-heavy page contains raw
   HTML blocks inline. That is valid CommonMark, and for a page whose entire
@@ -85,32 +86,51 @@
 
     {{/* Trailing pointer section. The target is resolved through the home
          page's output formats rather than a hardcoded path, so a subpath
-         baseURL or a language prefix is honored. */}}
-    {{- if and $md.sitemap_section (ne $md.sitemap_section_target "none") -}}
+         baseURL or a language prefix is honored, and it is emitted as an
+         ABSOLUTE URL because a twin is routinely read detached from the site
+         it came from, where a relative path has no base to resolve against.
+
+         The configured target is case-folded and trimmed before it is
+         matched. Every other enumerated value in this module is normalized
+         the same way, and here an unnormalized miss is invisible: "LLMS"
+         would match no branch, leave the target empty and emit nothing at
+         all, with no warning and exit 0. An unrecognized value now says so
+         once rather than silently dropping the section. */}}
+    {{- $wanted := lower (trim (printf "%v" ($md.sitemap_section_target | default "llms")) " \t\n\r") -}}
+    {{- if and $md.sitemap_section (ne $wanted "none") -}}
       {{- $target := "" -}}
       {{- $label := "" -}}
-      {{- if eq $md.sitemap_section_target "llms" -}}
+      {{- if eq $wanted "llms" -}}
         {{- with site.Home.OutputFormats.Get "llmstxt" -}}
-          {{- $target = .RelPermalink -}}
+          {{- $target = .Permalink -}}
           {{- $label = "llms.txt" -}}
         {{- else -}}
           {{- partial "agent-readiness/lib/warn.html" (dict
               "key" "agent-readiness:warn:sitemap-section-no-llmstxt"
               "message" "[agent-readiness] The Markdown twins are configured with sitemap_section_target = \"llms\", but the llmstxt output format is not wired to the home page, so the trailing pointer section is omitted. Add 'llmstxt' to your existing [outputs] home list -- the config list replaces the ENTIRE default home list, so keep every format you already wire there -- or set sitemap_section_target to \"sitemap\" or \"none\".") -}}
         {{- end -}}
-      {{- else if eq $md.sitemap_section_target "sitemap" -}}
+      {{- else if eq $wanted "sitemap" -}}
         {{- with site.Home.OutputFormats.Get "sitemap" -}}
-          {{- $target = .RelPermalink -}}
+          {{- $target = .Permalink -}}
         {{- else -}}
           {{- $target = "sitemap.xml" | absURL -}}
         {{- end -}}
         {{- $label = "sitemap.xml" -}}
+      {{- else -}}
+        {{- partial "agent-readiness/lib/warn.html" (dict
+            "key" (printf "agent-readiness:warn:unknown-sitemap-target:%s" $wanted)
+            "message" (printf "[agent-readiness] Ignoring the unrecognized markdown.sitemap_section_target %q and omitting the twins' trailing pointer section. Use \"llms\", \"sitemap\", or \"none\"." $wanted)) -}}
       {{- end -}}
-      {{- with $target }}
 
-## {{ $cfg.i18n.sitemap_heading }}
-
-- [{{ $label }}]({{ . }})
+      {{/* Assembled with an explicit terminating newline rather than written
+           inline: the closing trim marker of an inline block eats the final
+           newline, and a text document ends with one -- the same standard
+           robots.txt, llms.txt and about.md are held to. safeHTML because
+           this partial is in the .html namespace while the twin is plain
+           text, so an ampersand in the URL would otherwise become an
+           entity. */}}
+      {{- with $target -}}
+        {{- printf "\n\n## %s\n\n- [%s](%s)\n" $cfg.i18n.sitemap_heading $label . | safeHTML -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}

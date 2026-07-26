@@ -7,9 +7,11 @@ import {
   exists,
   publicDir,
   configuredDir,
+  minimalDir,
   publishedTwins,
   markdownLinks,
   sectionsWithTopLevelBullets,
+  siteRelative,
   urlResolves,
 } from './helpers.js';
 
@@ -40,21 +42,41 @@ test('both authored section shapes produce a non-empty item list', () => {
   }
 });
 
-test('llms.txt items link the Markdown twins', () => {
+test('llms.txt items link the Markdown twins by ABSOLUTE URL', () => {
+  // Plan A Step 4.2 specifies `.Permalink`, not `.RelPermalink`, and the
+  // reason is the document's whole purpose: llms.txt is ingested by agents
+  // that routinely hold it detached from the URL they fetched it from, where
+  // a relative path has no origin to resolve against. Asserting only the
+  // `/index.md` suffix would pass for either form, so the origin is asserted
+  // explicitly.
   const sections = sectionsWithTopLevelBullets(read('llms.txt'));
+  let checked = 0;
   for (const bullets of sections.values()) {
     for (const line of bullets) {
       const [link] = markdownLinks(line);
-      if (!link || link.url.startsWith('/sitemap')) continue;
+      if (!link || /\/sitemap/.test(link.url)) continue;
+      assert.match(link.url, /^https:\/\/fixture\.example\//, `${link.url} must be absolute`);
       assert.match(link.url, /\/index\.md$/, `${link.url} should be the twin URL`);
+      checked += 1;
     }
   }
+  assert.ok(checked > 0, 'the fixture must produce at least one item to check');
 });
 
 test('every URL in llms.txt resolves to a published file', () => {
   for (const {url} of markdownLinks(read('llms.txt'))) {
     assert.ok(urlResolves(url), `llms.txt links ${url}, which is not published`);
   }
+});
+
+test('llms.txt emits no relative URL anywhere, including consumer-declared ones', () => {
+  // The page items are the module's own; the Optional entries and the license
+  // line are values a consumer writes in config. Both reach the same document,
+  // so both are held to the same rule -- an agent holding this file has no
+  // origin to resolve a bare /path against.
+  const text = read('llms.txt');
+  assert.ok(!/\]\(\/[^)]*\)/.test(text), 'no site-relative link may survive into llms.txt');
+  assert.ok(!/\]\(\/[^)]*\)/.test(read('llms.txt', configuredDir)), 'nor in the configured build');
 });
 
 test('llms.txt carries the Optional section', () => {
@@ -122,8 +144,35 @@ test('the identity block renders configured labels, and omits absent keys', () =
 
 test('the contact block reads the real contact page, including a URL-less entry', () => {
   const text = read('about.md');
-  assert.match(text, /^- Email form: \[Contact form\]\(\/contact\/\)$/m);
+  // The fixture authors this href site-relative, as a contact page naturally
+  // would; the document resolves it, because about.md is read detached from
+  // the site far more often than on it.
+  assert.match(text, /^- Email form: \[Contact form\]\(https:\/\/fixture\.example\/contact\/\)$/m);
   assert.match(text, /^- No URL: A channel carrying no href at all$/m);
+});
+
+test('a contact href carrying its own scheme is passed through untouched', () => {
+  // Resolving only the site-relative form is the whole point: absURL applied
+  // to mailto: or tel: would corrupt it into a site URL.
+  const text = read('about.md');
+  assert.match(text, /^- Email: \[hello@fixture\.example\]\(mailto:hello@fixture\.example\)$/m);
+});
+
+test('with facts.sections empty, the document keeps identity and contact and emits no section H2', () => {
+  // Plan A Step 5.3's acceptance verbatim: "With [params.agent.facts]
+  // sections = [], the document emits its identity and contact blocks and no
+  // section H2, without error." Neither of the other environments can reach
+  // that state, because both configure sections.
+  const text = read('about.md', minimalDir);
+  const headings = text.split('\n').filter((l) => l.startsWith('## '));
+
+  assert.ok(headings.includes('## Identity'), 'the identity block survives');
+  assert.ok(headings.includes('## Contact'), 'the contact block survives');
+  for (const gone of ['## Blog', '## Projects']) {
+    assert.ok(!headings.includes(gone), `${gone} must not appear with no sections configured`);
+  }
+  assert.match(text, /^# /m, 'the document still opens with its H1');
+  assert.ok(text.endsWith('\n'), 'a text document ends with a newline');
 });
 
 test('the present sentinel renders as prose in the facts document', () => {
@@ -132,11 +181,17 @@ test('the present sentinel renders as prose in the facts document', () => {
   assert.match(read('about.md'), /^ {2}- period_to: present$/m);
 });
 
-test('every URL in about.md resolves to a published file', () => {
+test('every on-site URL in about.md resolves to a published file', () => {
+  // Off-site links and non-http schemes (mailto:, tel:) are consumer-authored
+  // destinations this module neither owns nor publishes; only what claims to
+  // be on this site has to exist on it.
+  let checked = 0;
   for (const {url} of markdownLinks(read('about.md'))) {
-    if (url.startsWith('http') && !url.startsWith('https://fixture.example')) continue;
+    if (!url.startsWith('https://fixture.example')) continue;
     assert.ok(urlResolves(url), `about.md links ${url}, which is not published`);
+    checked += 1;
   }
+  assert.ok(checked > 0, 'the fixture must produce at least one on-site link to check');
 });
 
 test('CROSS-SURFACE: the twin set equals the set llms.txt lists', () => {
@@ -147,10 +202,12 @@ test('CROSS-SURFACE: the twin set equals the set llms.txt lists', () => {
     [...sectionsWithTopLevelBullets(read('llms.txt')).values()]
       .flat()
       .map((line) => markdownLinks(line)[0]?.url)
-      .filter((u) => u && u.endsWith('/index.md')),
+      .filter((u) => u && u.endsWith('/index.md'))
+      .map(siteRelative),
   );
   const published = new Set(publishedTwins(publicDir));
 
+  assert.ok(listed.size > 0, 'the fixture must list at least one twin');
   for (const url of listed) {
     assert.ok(published.has(url), `llms.txt lists ${url}, which has no published twin`);
   }
@@ -159,5 +216,9 @@ test('CROSS-SURFACE: the twin set equals the set llms.txt lists', () => {
 test('the trailing pointer section resolves through the output formats', () => {
   const text = read('about.md');
   assert.match(text, /^## Sitemap$/m);
-  assert.match(text, /\[llms\.txt\]\(\/llms\.txt\)/);
+  assert.match(text, /\[llms\.txt\]\(https:\/\/fixture\.example\/llms\.txt\)/);
+  assert.ok(
+    !/\]\(\/[^)]*\)/.test(text),
+    'about.md must not mix relative URLs into a document whose sitemap pointer can only be absolute',
+  );
 });

@@ -120,6 +120,8 @@ The URL template is derived from the same `page_path` value every other surface 
 
 The document is emitted once, from the default language: its output format sets `root = true`, which pins one published path, and a per-language document would overwrite it with the last writer winning.
 
+Every value the document interpolates -- the site title in `ShortName` and `Description`, and both `Url` templates -- is escaped with `transform.XMLEscape`. The output format sets `isPlainText = true`, which selects Go's `text/template` so the HTML escaper cannot mangle the markup, and `text/template` escapes nothing at all; a site titled `R&D Notes` would otherwise publish a bare ampersand as an undefined entity reference and no conformant XML parser would accept the document. The 16- and 1024-character caps are applied **before** escaping, so they count real characters and can never bisect an entity.
+
 **Audience note, stated plainly.** Browser-toolbar search autodiscovery is largely dead in modern Chrome and Firefox UI, so the realistic consumers are agents and crawlers that still honor `rel="search"`. This is a low-value, low-cost addition; it should not gate anything. Pair it with the `seo` module's `[seo.links] search` key to emit the matching `<link rel="search">`.
 
 ## Language handling

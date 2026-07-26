@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
-# Validates the shipped data files, then builds THREE fixture sites with hugo
+# Validates the shipped data files, then builds FOUR fixture sites with hugo
 # (builds, not servers: no port binding, and a finite build exits by itself)
-# and runs the Node build-output assertion suite against all three.
+# and runs the Node build-output assertion suite against all four.
 #
 # The data-file check runs FIRST, before any build. That ordering is the
 # point: a malformed registry otherwise surfaces as an opaque Hugo failure at
 # some unrelated template, and the reader has to work backwards to it.
 #
-# The three builds:
+# The four builds:
 #   baseline   -- every content-license key unset, proving the license
 #                 surfaces are inert until a consumer opts in;
 #   configured -- the license table filled and both switches on;
+#   minimal    -- almost nothing configured, which is the shape a consumer
+#                 gets on import and the only one that can reach the
+#                 unconfigured robots.txt, the zero-skills gate and the
+#                 sectionless facts document;
 #   shadow     -- a fixture shipping its own layouts/robots.txt, proving the
 #                 documented silent-override hazard.
 #
@@ -27,12 +31,13 @@ FIXTURE_DIR="$HERE/fixture"
 SHADOW_DIR="$HERE/fixture-shadow"
 LOG_FILE="$HERE/hugo-build.log"
 LOG_FILE_CONFIGURED="$HERE/hugo-build-configured.log"
+LOG_FILE_MINIMAL="$HERE/hugo-build-minimal.log"
 LOG_FILE_SHADOW="$HERE/hugo-build-shadow.log"
 
 # The logs are retained after a successful run so the documented re-run recipe
 # can read them; they are gitignored at the repo root. Only an interrupt
 # discards them mid-run.
-trap 'rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_SHADOW"' INT TERM
+trap 'rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_SHADOW"' INT TERM
 
 cd "$HERE"
 
@@ -82,13 +87,16 @@ build() {
 
 build "$FIXTURE_DIR" "" public/baseline "$LOG_FILE"
 build "$FIXTURE_DIR" configured public/configured "$LOG_FILE_CONFIGURED"
+build "$FIXTURE_DIR" minimal public/minimal "$LOG_FILE_MINIMAL"
 build "$SHADOW_DIR" "" public "$LOG_FILE_SHADOW"
 
 export FIXTURE_PUBLIC="$FIXTURE_DIR/public/baseline"
 export FIXTURE_PUBLIC_CONFIGURED="$FIXTURE_DIR/public/configured"
+export FIXTURE_PUBLIC_MINIMAL="$FIXTURE_DIR/public/minimal"
 export FIXTURE_PUBLIC_SHADOW="$SHADOW_DIR/public"
 export HUGO_BUILD_LOG="$LOG_FILE"
 export HUGO_BUILD_LOG_CONFIGURED="$LOG_FILE_CONFIGURED"
+export HUGO_BUILD_LOG_MINIMAL="$LOG_FILE_MINIMAL"
 export HUGO_BUILD_LOG_SHADOW="$LOG_FILE_SHADOW"
 HUGO_VERSION="$(hugo version | sed -E 's/^hugo v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
 export HUGO_VERSION

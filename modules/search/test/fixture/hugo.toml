@@ -15,9 +15,12 @@ title = "Search Fixture"
 
 # The one irreducible consumer wiring step: the searchindex output format on
 # the home page. The config list replaces the entire default home list, so
-# html and rss are kept.
+# html and rss are kept. `opensearch` is wired here AND switched on below,
+# because the OpenSearch document needs both: the format has to be requested
+# for the page, and the module's own default keeps it off until a consumer
+# opts in.
 [outputs]
-  home = ['html', 'rss', 'searchindex']
+  home = ['html', 'rss', 'searchindex', 'opensearch']
 
 [params]
 description = "Hugo search module Playwright validation fixture site."
@@ -47,6 +50,9 @@ show_tags = true
 show_categories = true
 show_image = true
 group_by_section = true
+# Dotted, matching the boost.* convention above it: a bare [table] header here
+# would swallow every flat key that follows into that table.
+opensearch.enable = true
 
 [module]
 

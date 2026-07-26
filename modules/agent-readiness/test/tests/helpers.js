@@ -1,12 +1,15 @@
 /* global process */
 // Shared helpers for the build-output assertion specs.
 //
-// The runner exports three published trees, and all three are load-bearing:
+// The runner exports four published trees, and all four are load-bearing:
 // FIXTURE_PUBLIC (every content-license key unset), FIXTURE_PUBLIC_CONFIGURED
-// (the license table filled and both switches on), and FIXTURE_PUBLIC_SHADOW
-// (a fixture that ships its own layouts/robots.txt). It also exports the
-// captured build logs, so warning-count assertions read what Hugo actually
-// said rather than re-deriving it.
+// (the license table filled and both switches on), FIXTURE_PUBLIC_MINIMAL
+// (almost nothing configured -- the shape a consumer gets on import, and the
+// only one that reaches the unconfigured robots.txt, the zero-skills gate and
+// the sectionless facts document), and FIXTURE_PUBLIC_SHADOW (a fixture that
+// ships its own layouts/robots.txt). It also exports the captured build logs,
+// so warning-count assertions read what Hugo actually said rather than
+// re-deriving it.
 import {readFileSync, existsSync, readdirSync, statSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {resolve, join, dirname} from 'node:path';
@@ -19,6 +22,7 @@ export const publicDir = resolve(process.env.FIXTURE_PUBLIC ?? 'fixture/public/b
 export const configuredDir = resolve(
   process.env.FIXTURE_PUBLIC_CONFIGURED ?? 'fixture/public/configured',
 );
+export const minimalDir = resolve(process.env.FIXTURE_PUBLIC_MINIMAL ?? 'fixture/public/minimal');
 export const shadowDir = resolve(process.env.FIXTURE_PUBLIC_SHADOW ?? 'fixture-shadow/public');
 
 export function read(rel, dir = publicDir) {
@@ -29,14 +33,21 @@ export function exists(rel, dir = publicDir) {
   return existsSync(join(dir, rel));
 }
 
-// Resolves a site-relative URL to its published file path, tolerating both
-// the directory form (/blog/post/) and the file form (/blog/post/index.md).
-export function publishedPath(url, dir = publicDir) {
-  const clean = url
+// Strips the origin, query and fragment from a URL, leaving the site-relative
+// path. The module emits ABSOLUTE URLs in its machine-read documents, while
+// the published tree is addressed by path, so comparisons between the two go
+// through here rather than through an ad-hoc regex per spec.
+export function siteRelative(url) {
+  return url
     .split('?')[0]
     .split('#')[0]
     .replace(/^https?:\/\/[^/]+/, '');
-  const rel = clean.replace(/^\//, '');
+}
+
+// Resolves a site-relative URL to its published file path, tolerating both
+// the directory form (/blog/post/) and the file form (/blog/post/index.md).
+export function publishedPath(url, dir = publicDir) {
+  const rel = siteRelative(url).replace(/^\//, '');
   const direct = join(dir, rel);
   if (existsSync(direct) && statSync(direct).isFile()) return direct;
   const indexed = join(dir, rel, 'index.html');
@@ -102,6 +113,7 @@ export function buildLog(which = 'baseline') {
   const key = {
     baseline: 'HUGO_BUILD_LOG',
     configured: 'HUGO_BUILD_LOG_CONFIGURED',
+    minimal: 'HUGO_BUILD_LOG_MINIMAL',
     shadow: 'HUGO_BUILD_LOG_SHADOW',
   }[which];
   const p = process.env[key];

@@ -47,6 +47,12 @@ extra = []
 sitemap = true
 
 # --- Markdown twins ---
+# Every key here is settable at all four tiers EXCEPT `enable`, which is
+# SITE-SCOPED for the same reason the master switch is: it governs whether the
+# twin FILE EXISTS, and llms.txt and about.md link a twin's URL without
+# re-deriving this switch per page, so a page able to suppress its own twin
+# would still be listed with a URL that 404s. Per-page opt-out is `agent:
+# false`. The remaining keys govern twin CONTENT and are page-settable.
 [markdown]
 enable = true
 # Emit the leading YAML front-matter block.

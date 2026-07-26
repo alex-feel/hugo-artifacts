@@ -1,11 +1,29 @@
 // Phase 2 -- the generated robots.txt, and the shadowing hazard.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {read, exists, shadowDir, warnCount, moduleRoot} from './helpers.js';
+import {read, exists, minimalDir, shadowDir, warnCount, moduleRoot} from './helpers.js';
 import {existsSync} from 'node:fs';
 import {join} from 'node:path';
 
 const robots = () => read('robots.txt');
+
+test('the DEFAULT robots.txt is byte-exact', () => {
+  // Regression lock for the defect commit d0bdfe7 fixed: with no bots, no
+  // extra lines and no Content-Signal -- the commonest shape of all, and the
+  // one a consumer gets on import -- the document emitted a doubled blank
+  // line and no trailing newline. That fix shipped with no test, because
+  // both existing environments deliberately configure everything.
+  //
+  // Asserted as whole-file equality on purpose. The Sitemap assertion further
+  // down uses an /m regex, whose ^ and $ are line anchors, so it passes
+  // identically with one blank line, two blank lines, or none, and with or
+  // without a terminating newline -- it cannot see this class of defect at
+  // all. Only byte equality can.
+  assert.equal(
+    read('robots.txt', minimalDir),
+    'User-agent: *\nAllow: /\n\nSitemap: https://fixture.example/sitemap.xml\n',
+  );
+});
 
 test('the catch-all group carries the Content-Signal line inside it', () => {
   const text = robots();

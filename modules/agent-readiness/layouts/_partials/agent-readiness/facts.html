@@ -97,48 +97,68 @@
   {{- $all := partial "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) -}}
   {{- range $entry := $facts.sections | default slice -}}
     {{- $section := $entry.section | default "" -}}
-    {{- $items := slice -}}
-    {{- range $all -}}
-      {{- $p := .Path -}}
-      {{- if or (eq $p $section) (hasPrefix $p (printf "%s/" $section)) (eq (printf "/%s" .Section) $section) -}}
-        {{- $items = $items | append . -}}
-      {{- end -}}
-    {{- end -}}
-    {{- with $entry.name -}}
-      {{- $lines = $lines | append "" | append (printf "## %s" .) | append "" -}}
-    {{- end -}}
-    {{- $sectionKey := strings.TrimPrefix "/" $section -}}
-    {{- $map := index $cfg.frontmatter $sectionKey -}}
-    {{- range $item := $items -}}
-      {{/* One TOP-LEVEL bullet per page: the count of these is the assertion
-           the fixture makes against the filter's page count. */}}
-      {{- $bullet := printf "- [%s](%s)" $item.Title $item.RelPermalink -}}
-      {{- if $facts.link_markdown -}}
-        {{- with $item.OutputFormats.Get "markdown" -}}
-          {{- $bullet = printf "%s ([Markdown](%s))" $bullet .RelPermalink -}}
+    {{- $name := $entry.name | default "" -}}
+
+    {{/* Refused rather than rendered, for the reasons llms.html states at
+         the same point: an empty `section` matches every page because the
+         prefix test degenerates to hasPrefix .Path "/", and a nameless entry
+         has no H2, so its bullets would be read as belonging to the section
+         above it. Both surfaces share the machinery, so they share the
+         guard. */}}
+    {{- if not $section -}}
+      {{- partial "agent-readiness/lib/warn.html" (dict
+          "key" (printf "agent-readiness:warn:facts-section-empty:%s" $name)
+          "message" (printf "[agent-readiness] Skipping the [[params.agent.facts.sections]] entry named %q: its `section` is empty, and an empty section matches every page, so the entry would list the whole site under one heading. Set `section` to a section path such as '/projects' -- note the key is `section`, singular." $name)) -}}
+    {{- else if not $name -}}
+      {{- partial "agent-readiness/lib/warn.html" (dict
+          "key" (printf "agent-readiness:warn:facts-section-unnamed:%s" $section)
+          "message" (printf "[agent-readiness] Skipping the [[params.agent.facts.sections]] entry for %q: it has no `name`, so it has no H2 of its own and its entries would be read as belonging to the section above it. Give the entry a `name`." $section)) -}}
+    {{- else -}}
+      {{- $items := slice -}}
+      {{- range $all -}}
+        {{- $p := .Path -}}
+        {{- if or (eq $p $section) (hasPrefix $p (printf "%s/" $section)) (eq (printf "/%s" .Section) $section) -}}
+          {{- $items = $items | append . -}}
         {{- end -}}
       {{- end -}}
-      {{- $lines = $lines | append $bullet -}}
+      {{- $lines = $lines | append "" | append (printf "## %s" $name) | append "" -}}
+      {{- range $item := $items -}}
+        {{/* One TOP-LEVEL bullet per page: the count of these is the
+             assertion the fixture makes against the filter's page count.
+             Absolute, like every other URL this document emits. */}}
+        {{- $bullet := printf "- [%s](%s)" $item.Title $item.Permalink -}}
+        {{- if $facts.link_markdown -}}
+          {{- with $item.OutputFormats.Get "markdown" -}}
+            {{- $bullet = printf "%s ([Markdown](%s))" $bullet .Permalink -}}
+          {{- end -}}
+        {{- end -}}
+        {{- $lines = $lines | append $bullet -}}
 
-      {{/* Nested bullets: the same per-section field maps the twins use, so
-           the two surfaces describe each page with one vocabulary. Indented
-           two spaces so a top-level bullet count stays unambiguous. */}}
-      {{- if reflect.IsMap $map -}}
-        {{- range $key := ($map.keys | default slice) -}}
-          {{- $k := lower (trim (printf "%v" $key) " \t\n\r") -}}
-          {{- if $k -}}
-            {{- $v := index $item.Params $k -}}
-            {{- if ne $v nil -}}
-              {{- $s := "" -}}
-              {{- if reflect.IsSlice $v -}}
-                {{- $parts := slice -}}
-                {{- range $v -}}{{- $parts = $parts | append (printf "%v" .) -}}{{- end -}}
-                {{- $s = delimit $parts ", " -}}
-              {{- else -}}
-                {{- $s = printf "%v" $v -}}
-              {{- end -}}
-              {{- with $s -}}
-                {{- $lines = $lines | append (printf "  - %s: %s" $k .) -}}
+        {{/* Nested bullets: the same per-section field map the twins use,
+             looked up the SAME way they look it up -- off the page's own
+             .Section, exactly as markdown-front-matter.html does. Keying it
+             off the configured section path instead would silently read no
+             vocabulary for a nested entry such as section = 'docs/guides',
+             whose twins key on 'docs'. One page, one vocabulary, one
+             lookup. */}}
+        {{- $map := index $cfg.frontmatter (lower $item.Section) -}}
+        {{- if reflect.IsMap $map -}}
+          {{- range $key := ($map.keys | default slice) -}}
+            {{- $k := lower (trim (printf "%v" $key) " \t\n\r") -}}
+            {{- if $k -}}
+              {{- $v := index $item.Params $k -}}
+              {{- if ne $v nil -}}
+                {{- $s := "" -}}
+                {{- if reflect.IsSlice $v -}}
+                  {{- $parts := slice -}}
+                  {{- range $v -}}{{- $parts = $parts | append (printf "%v" .) -}}{{- end -}}
+                  {{- $s = delimit $parts ", " -}}
+                {{- else -}}
+                  {{- $s = printf "%v" $v -}}
+                {{- end -}}
+                {{- with $s -}}
+                  {{- $lines = $lines | append (printf "  - %s: %s" $k .) -}}
+                {{- end -}}
               {{- end -}}
             {{- end -}}
           {{- end -}}
@@ -162,6 +182,16 @@
             {{- $label := printf "%v" (index . (lower ($contact.label_field | default "label")) | default "") -}}
             {{- $value := printf "%v" (index . (lower ($contact.value_field | default "value")) | default "") -}}
             {{- $url := printf "%v" (index . (lower ($contact.url_field | default "href")) | default "") -}}
+            {{/* A site-relative href authored on the contact page is
+                 resolved to absolute; anything carrying a scheme
+                 (https:, mailto:, tel:) and any protocol-relative value is
+                 passed through untouched. about.md is read detached from the
+                 site far more often than it is read on it, and a bare
+                 /contact/ resolves against whatever origin the reader
+                 happens to be on. */}}
+            {{- if and (hasPrefix $url "/") (not (hasPrefix $url "//")) -}}
+              {{- $url = $url | absURL -}}
+            {{- end -}}
             {{- if or $label $value $url -}}
               {{- $text := $value | default $label -}}
               {{- $line := "" -}}
@@ -184,15 +214,17 @@
 
   {{/* 6. Trailing pointer section, resolved through the home page's output
          formats rather than hardcoded paths, so a subpath baseURL or a
-         language prefix is honored. */}}
+         language prefix is honored. Every pointer is absolute: the sitemap
+         fallback below can only be built with absURL, so emitting the others
+         relative would put two URL forms in one list of two items. */}}
   {{- if $facts.sitemap_section -}}
     {{- $pointers := slice -}}
     {{- with site.Home.OutputFormats.Get "llmstxt" -}}
-      {{- $pointers = $pointers | append (printf "- [llms.txt](%s)" .RelPermalink) -}}
+      {{- $pointers = $pointers | append (printf "- [llms.txt](%s)" .Permalink) -}}
     {{- end -}}
     {{- $sitemapURL := "sitemap.xml" | absURL -}}
     {{- with site.Home.OutputFormats.Get "sitemap" -}}
-      {{- $sitemapURL = .RelPermalink -}}
+      {{- $sitemapURL = .Permalink -}}
     {{- end -}}
     {{- $pointers = $pointers | append (printf "- [sitemap.xml](%s)" $sitemapURL) -}}
     {{- $lines = $lines | append "" | append (printf "## %s" $cfg.i18n.sitemap_heading) | append "" -}}

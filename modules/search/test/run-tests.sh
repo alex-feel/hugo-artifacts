@@ -3,12 +3,21 @@
 # Follows the repository's hugo process lifecycle rule: pre-launch process
 # check, a deprecation gate on the server log, and belt-and-suspenders
 # cleanup (the trap kills the tracked pid AND pkills stray hugo children).
+#
+# Two STATIC builds run first, before the server starts. They exist because
+# the OpenSearch document has states the single served fixture cannot be in at
+# once -- a hostile site title, which proves the document escapes what it
+# interpolates, and the default-off gate, which is what every consumer gets
+# until they opt in. Both are plain builds, so they cost a second and bind no
+# port.
 set -euo pipefail
 
 PORT="${PORT:-1515}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FIXTURE_DIR="$HERE/fixture"
 LOG_FILE="$HERE/.hugo-server.log"
+OPENSEARCH_HOSTILE_DIR="$HERE/.opensearch-hostile"
+OPENSEARCH_OFF_DIR="$HERE/.opensearch-off"
 
 # Git Bash on Windows ships neither pgrep nor pkill, so both lifecycle steps
 # fall back to the Windows-native tasklist/taskkill equivalents there;
@@ -36,6 +45,7 @@ cleanup() {
   fi
   kill_stray_hugo
   rm -f "$LOG_FILE"
+  rm -rf "$OPENSEARCH_HOSTILE_DIR" "$OPENSEARCH_OFF_DIR"
 }
 trap cleanup EXIT INT TERM
 
@@ -43,6 +53,19 @@ if hugo_running; then
   echo "A hugo process is already running; stop it first (pkill hugo, or taskkill /F /IM hugo.exe on Windows)." >&2
   exit 1
 fi
+
+# ---- Static overlay builds, before the server binds anything ----
+static_build() {
+  local overlay="$1" dest="$2"
+  (cd "$FIXTURE_DIR" && hugo --config "hugo.toml,$overlay" --quiet --cleanDestinationDir \
+    --destination "$dest") || {
+    echo "Static overlay build failed ($overlay)." >&2
+    exit 1
+  }
+}
+static_build config-opensearch-hostile.toml "$OPENSEARCH_HOSTILE_DIR"
+static_build config-opensearch-off.toml "$OPENSEARCH_OFF_DIR"
+export OPENSEARCH_HOSTILE_DIR OPENSEARCH_OFF_DIR
 
 (cd "$FIXTURE_DIR" && hugo server --port "$PORT" --bind 127.0.0.1 --logLevel info >"$LOG_FILE" 2>&1) &
 HUGO_PID=$!

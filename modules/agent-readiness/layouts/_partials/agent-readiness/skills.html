@@ -41,6 +41,16 @@
 {{- $cfg := .cfg -}}
 {{- $entries := slice -}}
 
+{{/* Names must be unique because each one is the sole path segment the
+     SKILL.md is republished under. Two entries sharing a name resolve to one
+     published path carrying whichever bytes were copied last, while the index
+     advertises TWO entries with two different digests -- so at least one
+     advertised digest cannot match the bytes served at its own URL, which is
+     precisely the guarantee this file exists to make. A verifying agent
+     treats that as tampering, so the duplicate is refused rather than
+     published. */}}
+{{- $seenNames := newScratch -}}
+
 {{- range $skill := $cfg.skills | default slice -}}
   {{- if reflect.IsMap $skill -}}
     {{- $name := trim (printf "%v" ($skill.name | default "")) " \t\n\r" -}}
@@ -59,6 +69,17 @@
       {{- partial "agent-readiness/lib/warn.html" (dict
           "key" (printf "agent-readiness:warn:skill-name-length:%s" $name)
           "message" (printf "[agent-readiness] Skipping the agent skill %q: name must be 1-64 characters." $name)) -}}
+    {{- end -}}
+
+    {{- if $valid -}}
+      {{- if $seenNames.Get $name -}}
+        {{- $valid = false -}}
+        {{- partial "agent-readiness/lib/warn.html" (dict
+            "key" (printf "agent-readiness:warn:skill-duplicate:%s" $name)
+            "message" (printf "[agent-readiness] Skipping a second agent skill named %q: the name is the published path segment, so both entries would resolve to /.well-known/agent-skills/%s/SKILL.md while the index advertised two different digests for it, and at least one would not match the bytes served there. Give each skill a distinct name." $name $name)) -}}
+      {{- else -}}
+        {{- $seenNames.Set $name true -}}
+      {{- end -}}
     {{- end -}}
 
     {{- if $valid -}}

@@ -6,10 +6,38 @@
 // reports that as the cause rather than as a mysterious missing file.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {read, exists, publicDir, publishedPath, sha256File, warnCount} from './helpers.js';
+import {
+  read,
+  exists,
+  minimalDir,
+  publicDir,
+  publishedPath,
+  sha256File,
+  warnCount,
+} from './helpers.js';
 
 const INDEX = '.well-known/agent-skills/index.json';
 const index = () => JSON.parse(read(INDEX));
+
+test('with no skills declared, NO file is emitted at all', () => {
+  // Plan A Step 6.4's acceptance, and the module's own stated reason for the
+  // gate: an empty JSON shell published at a .well-known path is a claim of a
+  // capability that does not exist, which is worse than no file. Zero
+  // configured skills is also the DEFAULT state for every consumer who
+  // imports the module without writing [[params.agent.skills]], so this is
+  // the commonest case, not an edge one.
+  //
+  // The gate is a single template construct. Without this assertion, deleting
+  // it would ship the empty shell with the whole suite still green.
+  assert.ok(
+    !exists(INDEX, minimalDir),
+    'a build declaring no skills must publish no index.json whatsoever',
+  );
+  assert.ok(
+    !exists('.well-known/agent-skills', minimalDir),
+    'and no .well-known/agent-skills directory either',
+  );
+});
 
 test('the index is published at the nested well-known path', () => {
   assert.ok(
