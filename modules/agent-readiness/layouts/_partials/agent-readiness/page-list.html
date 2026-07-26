@@ -1,47 +1,45 @@
 {{/*
   agent-readiness/page-list.html -- INTERNAL (resolver tier).
 
-  Purpose: THE shared page-selection filter. Every surface this module
-  publishes -- the Markdown twins, llms.txt, about.md -- resolves membership
-  through this one partial, which is the whole reason the module ships as one
-  adoption decision rather than five: without it, a section excluded from one
-  surface and not another would make the site advertise in llms.txt a URL its
-  own twins never emit.
+  Purpose: THE shared page-selection filter. Every surface that ENUMERATES
+  pages -- llms.txt, about.md, and the twin membership test for regular
+  pages -- resolves membership through this one partial, which is the whole
+  reason the module ships as one adoption decision rather than five: without
+  it, a section excluded from one surface and not another would make the site
+  advertise in llms.txt a URL its own twins never emit.
 
   Filters, applied in this order:
     1. Master switch -- cfg.enable false returns an empty slice.
     2. Section allow-list, matched at SEGMENT boundaries so `docs` never
        matches /docs-internal/. An empty allow-list admits every regular page.
-    3. Per-page opt-out: the map form `agent: {exclude: true}` and the bare
-       `agent: false` shorthand. Any other non-map value warns once and is
-       ignored. This is the module's ONLY per-page opt-out: Hugo's
-       front-matter `outputs` field APPENDS to the configured outputs for a
-       page kind rather than replacing them, so `outputs: ['HTML']` cannot
-       subtract a config-level `markdown` and silently does nothing.
-    4. The dedicated search page, when cfg.exclude_search_page is true. Its
-       body is UI chrome, not content. Overridable per page with an explicit
-       `agent: {exclude: false}` (presence wins).
-    5. Pages whose `robots` front matter contains "noindex", when
-       cfg.exclude_noindex is true. Same explicit-override escape.
-    6. Duplicate permalinks -- the first page wins and each collision warns
+    3. The per-page rules, delegated to agent-readiness/lib/page-excluded.html
+       so the twin renderer applies exactly the same ones to the home and
+       section pages, which are not regular pages and so never appear here.
+    4. Duplicate permalinks -- the first page wins and each collision warns
        once. A newScratch sentinel is used rather than a dict accumulator
        because Go's merge folds map keys case-insensitively, so a
        case-variant permalink would swallow a later true duplicate's
        sentinel along with its warning.
 
+  SCOPE: this ranges site.RegularPages, so it never contains the home page or
+  a section list page. That is deliberate -- those pages are not members of
+  an enumeration, they are the containers of one -- and it is why
+  markdown-page.html tests them through lib/page-excluded.html directly
+  instead of asking for membership here.
+
   Expected context (dict):
   - .page (Page) - The calling page, used only for diagnostics.
   - .cfg  (dict) - The resolved config from agent-readiness/config.html.
 
-  Return value: the ordered slice of Pages every surface agrees on (possibly
-  empty). ONE terminal return.
+  Return value: the ordered slice of Pages every enumerating surface agrees
+  on (possibly empty). ONE terminal return.
 */}}
 
 {{- $cfg := .cfg -}}
 {{- $pages := slice -}}
 
 {{- if $cfg.enable -}}
-  {{/* The dedicated search page is resolved once, by path, rather than
+  {{/* The dedicated search page is resolved ONCE, by path, rather than
        compared as a string per page: site.GetPage honors the language tree
        and any url front matter, which a raw path comparison would not. */}}
   {{- $searchPagePath := "" -}}
@@ -71,42 +69,14 @@
       {{- end -}}
     {{- end -}}
 
-    {{/* 3. Per-page opt-out. */}}
-    {{- $pagep := .Params.agent -}}
-    {{- $excludeSet := false -}}
-    {{- $exclude := false -}}
-    {{- if reflect.IsMap $pagep -}}
-      {{- if isset $pagep "exclude" -}}
-        {{- $excludeSet = true -}}
-        {{- $exclude = in (slice "true" "1" "yes" "on") (lower (printf "%v" (index $pagep "exclude"))) -}}
-      {{- end -}}
-    {{- else if ne $pagep nil -}}
-      {{- if in (slice "false" "0" "no" "off") (lower (printf "%v" $pagep)) -}}
-        {{- $excludeSet = true -}}
-        {{- $exclude = true -}}
-      {{- else -}}
-        {{- partial "agent-readiness/lib/warn.html" (dict
-            "key" (printf "agent-readiness:warn:nonmap-config:%s" .RelPermalink)
-            "message" (printf "[agent-readiness] Ignoring the agent front matter value on %s: expected a map (or the bare `agent: false` opt-out shorthand), got %v." .RelPermalink $pagep)) -}}
-      {{- end -}}
-    {{- end -}}
-    {{- if $exclude -}}{{- $keep = false -}}{{- end -}}
-
-    {{/* 4. The dedicated search page. */}}
-    {{- if and $keep $searchPagePath (eq .Path $searchPagePath) -}}
-      {{- if not (and $excludeSet (not $exclude)) -}}
+    {{/* 3. The shared per-page rules. */}}
+    {{- if $keep -}}
+      {{- if partial "agent-readiness/lib/page-excluded.html" (dict "page" . "cfg" $cfg "search_page_path" $searchPagePath) -}}
         {{- $keep = false -}}
       {{- end -}}
     {{- end -}}
 
-    {{/* 5. A page hidden from crawlers stays out of the agent surfaces too. */}}
-    {{- if and $keep $cfg.exclude_noindex (in (lower (printf "%v" (.Params.robots | default ""))) "noindex") -}}
-      {{- if not (and $excludeSet (not $exclude)) -}}
-        {{- $keep = false -}}
-      {{- end -}}
-    {{- end -}}
-
-    {{/* 6. Duplicate permalinks: two pages published to one URL would be
+    {{/* 4. Duplicate permalinks: two pages published to one URL would be
            listed twice in llms.txt and about.md while only one twin exists
            on disk, so the first wins and the collision is reported. */}}
     {{- if $keep -}}

@@ -1,0 +1,82 @@
+{{/*
+  agent-readiness/lib/page-excluded.html -- INTERNAL (lib tier).
+
+  Purpose: decide whether ONE page opts out of the agent surfaces. This is
+  the single implementation of the per-page rules, shared by
+  agent-readiness/page-list.html (which applies it to every regular page
+  while enumerating) and by agent-readiness/markdown-page.html (which applies
+  it to the home and section pages, which are not regular pages and so never
+  appear in an enumeration at all). Duplicating these three rules across the
+  two call sites is precisely how a twin surface drifts out of agreement with
+  llms.txt, so they live here once.
+
+  Rules, in order:
+    1. The per-page opt-out: the map form `agent: {exclude: true}` and the
+       bare `agent: false` shorthand. Any other non-map value warns once and
+       is ignored. This is the module's ONLY per-page opt-out, because Hugo's
+       front-matter `outputs` field APPENDS to the configured outputs for a
+       page kind rather than replacing them.
+    2. The dedicated search page, when cfg.exclude_search_page is true.
+    3. A `robots` front matter containing "noindex", when cfg.exclude_noindex
+       is true.
+
+  Rules 2 and 3 are overridable per page with an explicit
+  `agent: {exclude: false}`, because presence wins at every tier in this
+  module and an author who says "index this one anyway" means it.
+
+  The section allow-list is deliberately NOT here: it scopes ENUMERATION and
+  is applied by the caller, which is what lets the home page carry a twin on
+  a site whose allow-list names only some sections.
+
+  Expected context (dict):
+  - .page           (Page)   The page to test.
+  - .cfg            (dict)   The resolved config.
+  - .search_page_path (string) The resolved .Path of the dedicated search
+    page, or "" when none was resolved. Passed in rather than resolved here
+    so a caller ranging hundreds of pages performs the site.GetPage once.
+
+  Return value: true when the page is excluded. ONE terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $cfg := .cfg -}}
+{{- $searchPagePath := .search_page_path | default "" -}}
+
+{{- $excludeSet := false -}}
+{{- $exclude := false -}}
+
+{{- $pagep := $page.Params.agent -}}
+{{- if reflect.IsMap $pagep -}}
+  {{- if isset $pagep "exclude" -}}
+    {{- $excludeSet = true -}}
+    {{- $exclude = in (slice "true" "1" "yes" "on") (lower (printf "%v" (index $pagep "exclude"))) -}}
+  {{- end -}}
+{{- else if ne $pagep nil -}}
+  {{- if in (slice "false" "0" "no" "off") (lower (printf "%v" $pagep)) -}}
+    {{- $excludeSet = true -}}
+    {{- $exclude = true -}}
+  {{- else -}}
+    {{- partial "agent-readiness/lib/warn.html" (dict
+        "key" (printf "agent-readiness:warn:nonmap-config:%s" $page.RelPermalink)
+        "message" (printf "[agent-readiness] Ignoring the agent front matter value on %s: expected a map (or the bare `agent: false` opt-out shorthand), got %v." $page.RelPermalink $pagep)) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $result := $exclude -}}
+
+{{/* An explicit `exclude: false` overrides rules 2 and 3, never rule 1. */}}
+{{- $explicitlyIncluded := and $excludeSet (not $exclude) -}}
+
+{{- if not $result -}}
+  {{- if and $cfg.exclude_search_page $searchPagePath (eq $page.Path $searchPagePath) -}}
+    {{- if not $explicitlyIncluded -}}{{- $result = true -}}{{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if not $result -}}
+  {{- if and $cfg.exclude_noindex (in (lower (printf "%v" ($page.Params.robots | default ""))) "noindex") -}}
+    {{- if not $explicitlyIncluded -}}{{- $result = true -}}{{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $result -}}
