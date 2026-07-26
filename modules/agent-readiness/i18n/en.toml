@@ -16,8 +16,7 @@
 # Heading of the trailing pointer section in a Markdown twin and in about.md.
 agent_sitemap_heading = "Sitemap"
 
-# H1 fallback for about.md when [params.agent.facts] title is unset and the
-# site has no title.
+# H1 fallback for about.md when [params.agent.facts] title is unset.
 agent_facts_title = "About"
 
 # H2 of the identity block in about.md.

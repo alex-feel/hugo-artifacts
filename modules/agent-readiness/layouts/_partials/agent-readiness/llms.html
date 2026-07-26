@@ -1,0 +1,134 @@
+{{/*
+  agent-readiness/llms.html -- renderer (RENDERER tier).
+
+  Purpose: render /llms.txt, the llmstxt.org link index.
+
+  What this file is and is not: it is a LINK INDEX and carries no facts of
+  its own. The facts document (about.md) is the surface that answers "who is
+  this and what have they done"; this one answers "what pages exist and where
+  are their machine-readable forms". llmstxt.org is a community convention
+  with no registration authority and no confirmed major-crawler consumer --
+  see the README, which says so plainly rather than presenting the file as an
+  SEO or citation lever.
+
+  The value it does carry is that it is build-generated from the SAME page
+  collection as every other surface, through agent-readiness/page-list.html,
+  so it cannot drift stale and cannot list a URL the twins never emit.
+
+  Structure, per the convention:
+    1. Exactly one `# ` H1.
+    2. A `> ` one-line blockquote summary (omitted rather than emitted hollow).
+    3. An optional `> ` license line, placed after the summary and before the
+       first `## `.
+    4. Optional free prose.
+    5. One `## ` H2 per configured section, each listing `- [name](url): note`.
+    6. A final `## Optional` H2.
+
+  `Optional` is a protocol token fixed by the convention and is deliberately
+  NOT translated.
+
+  The document is assembled as a slice of lines and emitted once, rather than
+  written inline with whitespace-trimming markers: this file's output is
+  whitespace-significant plain text, and line assembly is the only way to
+  keep blank-line placement exact and reviewable.
+
+  Expected context (dict):
+  - .page (Page) - The home page.
+  - .cfg  (dict) - The resolved config from agent-readiness/config.html.
+
+  Return value: none. This partial renders.
+*/}}
+
+{{- $page := .page -}}
+{{- $cfg := .cfg -}}
+{{- $llms := $cfg.llms -}}
+
+{{- if and $cfg.enable $llms.enable -}}
+  {{- $lines := slice -}}
+
+  {{/* 1. Exactly one H1. */}}
+  {{- $lines = $lines | append (printf "# %s" ($llms.title | default site.Title)) -}}
+
+  {{/* 2. The one-line summary. */}}
+  {{- with $llms.summary -}}
+    {{- $lines = $lines | append "" | append (printf "> %s" .) -}}
+  {{- end -}}
+
+  {{/* 3. The license line. Composed as [name](url) and guarded on BOTH
+         fields: guarding on url alone would publish a Markdown link with an
+         empty label the moment a consumer set url without name. */}}
+  {{- if and $llms.license $cfg.license.url -}}
+    {{- if $cfg.license.name -}}
+      {{- $lines = $lines | append "" | append (printf "> Content licensed under [%s](%s)." $cfg.license.name $cfg.license.url) -}}
+    {{- else -}}
+      {{- partial "agent-readiness/lib/warn.html" (dict
+          "key" "agent-readiness:warn:license-name-missing"
+          "message" "[agent-readiness] Skipping the llms.txt license line: [params.agent.license] url is set but name is empty, and the line is composed as [name](url), so emitting it would publish a Markdown link with an empty label. Set both name and url, or leave the whole table empty.") -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* 4. Optional free prose. */}}
+  {{- with $llms.notes -}}
+    {{- $lines = $lines | append "" | append . -}}
+  {{- end -}}
+
+  {{/* 5. One H2 per configured section. Membership comes from the shared
+         filter, so llms.txt can never list a page the twins and robots.txt
+         disagree about. Each entry's `section` value arrived here already
+         normalized by config.html, so a bare name and a slashed form resolve
+         identically -- an unnormalized mismatch would render an empty H2
+         with no warning, no error and exit 0. */}}
+  {{- $all := partial "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) -}}
+  {{- range $entry := $llms.sections | default slice -}}
+    {{- $section := $entry.section | default "" -}}
+    {{- $items := slice -}}
+    {{- range $all -}}
+      {{- $p := .Path -}}
+      {{- if or (eq $p $section) (hasPrefix $p (printf "%s/" $section)) (eq (printf "/%s" .Section) $section) -}}
+        {{- $items = $items | append . -}}
+      {{- end -}}
+    {{- end -}}
+    {{- $limit := int ($entry.limit | default 0) -}}
+    {{- if and (gt $limit 0) (gt (len $items) $limit) -}}
+      {{- $items = first $limit $items -}}
+    {{- end -}}
+    {{- with $entry.name -}}
+      {{- $lines = $lines | append "" | append (printf "## %s" .) | append "" -}}
+    {{- end -}}
+    {{- range $items -}}
+      {{- $url := .RelPermalink -}}
+      {{- if $llms.link_markdown -}}
+        {{- with .OutputFormats.Get "markdown" -}}{{- $url = .RelPermalink -}}{{- end -}}
+      {{- end -}}
+      {{- $item := printf "- [%s](%s)" .Title $url -}}
+      {{- with .Description -}}{{- $item = printf "%s: %s" $item . -}}{{- end -}}
+      {{- $lines = $lines | append $item -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* 6. The Optional section: links an agent may drop when shortening
+         context. Emitted only when the consumer declared at least one entry
+         carrying a url, because an empty H2 claims a section that is not
+         there. */}}
+  {{- $optional := slice -}}
+  {{- range $llms.optional | default slice -}}
+    {{- if reflect.IsMap . -}}
+      {{- $u := printf "%v" (.url | default "") -}}
+      {{- if $u -}}
+        {{- $item := printf "- [%s](%s)" (.name | default $u) $u -}}
+        {{- with .note -}}{{- $item = printf "%s: %s" $item . -}}{{- end -}}
+        {{- $optional = $optional | append $item -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- with $optional -}}
+    {{- $lines = $lines | append "" | append "## Optional" | append "" -}}
+    {{- range . -}}{{- $lines = $lines | append . -}}{{- end -}}
+  {{- end -}}
+
+  {{/* safeHTML because this partial lives in the .html template namespace
+       while llms.txt is a standalone plain-text document: without it every
+       ampersand and angle bracket in a page title would be HTML-escaped
+       into an entity in a file that is not HTML. */}}
+  {{- printf "%s\n" (delimit $lines "\n") | safeHTML -}}
+{{- end -}}

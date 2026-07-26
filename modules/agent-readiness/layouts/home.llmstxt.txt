@@ -1,0 +1,2 @@
+{{- $cfg := partial "agent-readiness/config.html" (dict "page" . "args" dict) -}}
+{{- partial "agent-readiness/llms.html" (dict "page" . "cfg" $cfg) -}}

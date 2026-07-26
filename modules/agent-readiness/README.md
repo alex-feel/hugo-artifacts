@@ -212,6 +212,124 @@ The fix belongs in the CI build command -- fetch the full history before buildin
 
 Use `agent: false`, never `outputs: ['HTML']`. See [Per-page opt-out](#per-page-opt-out) above for why the `outputs` route silently does nothing.
 
+## llms.txt
+
+Publishes `/llms.txt` through the module's `llmstxt` output format, wired by adding `llmstxt` to `[outputs] home`.
+
+> **What this file is worth, stated plainly.** [llmstxt.org](https://llmstxt.org/) is a **community convention with no registration authority and no confirmed major-crawler consumer**. Independent analyses have found no measurable citation benefit. It must not be presented as an SEO, AEO, or citation lever, and this module does not present it as one.
+
+Its real value here is narrower and real: the file is build-generated from the **same page collection** as `robots.txt`, the twins, and `/about.md`, through the one shared filter, so it cannot drift stale and cannot advertise a URL the twins never emit. It is a link index that points at the machine-readable forms; it carries no facts of its own -- the facts document does that.
+
+```toml
+[params.agent.llms]
+enable = true
+title = ''             # falls back to site.Title
+summary = ''           # the one-line blockquote
+notes = ''             # optional free prose
+link_markdown = true   # link the twin rather than the HTML page
+license = false
+
+[[params.agent.llms.sections]]
+name = 'Blog'
+section = 'blog'
+limit = 0              # 0 = complete
+
+[[params.agent.llms.optional]]
+name = 'Sitemap'
+url = '/sitemap.xml'
+note = 'Every published URL.'
+```
+
+The document is: exactly one H1 line, a blockquote summary, an optional blockquote license line, optional prose, one H2 per configured section listing `- [name](url): note` items, and a final `## Optional` heading. `Optional` is a protocol token fixed by the convention and is deliberately not translated.
+
+The `mediaType` is `text/plain`, not `text/markdown`, and that is deliberate: `text/markdown`'s suffixes are `md, mdown, markdown`, so it would publish `llms.md`. `root` is deliberately unset, so a multilingual site gets `/llms.txt` and `/ru/llms.txt` rather than one path every language overwrites.
+
+The module ships **no `llms-full.txt`**: it duplicates page bodies the twins already publish at stable URLs, and carries real drift cost with no confirmed consumer.
+
+## The facts document (`/about.md`)
+
+Publishes `/about.md` through the `agentfacts` output format, wired by adding `agentfacts` to `[outputs] home`.
+
+This is the one-fetch answer to "who is this, what can they do, what have they built, and how do I reach them". The twins answer "what does this page say"; `llms.txt` is a link index carrying no facts; and a home-page twin inherits whatever truncation the home template applies, because a typical home page renders first-N previews. None of the three answers the question in one fetch, complete.
+
+**Facts sections have no `limit` key, by design.** A truncated facts index answers the question wrongly while appearing to answer it. Every page the shared filter admits for a section is listed.
+
+The document **fabricates nothing**. Every value originates in front matter or config that already exists; there is no default text for an absent field and no inferred value anywhere. The identity rows and contact channels are read from **real content pages** named in config rather than retyped into config, so the document cannot drift away from the site it describes. A row whose key is absent from its page is omitted silently -- a missing optional fact is not an error.
+
+```toml
+[params.agent.facts]
+enable = true
+title = ''
+summary = ''
+link_markdown = true
+sitemap_section = true
+
+[[params.agent.facts.sections]]
+name = 'Projects'
+section = 'projects'          # no limit key: complete by design
+
+[params.agent.facts.identity]
+page = '/'
+
+[[params.agent.facts.identity.rows]]
+label = 'Role'
+key = 'main_subtitle'
+
+[params.agent.facts.contact]
+page = '/contact'
+key = 'channels'
+label_field = 'label'
+value_field = 'value'
+url_field = 'href'
+```
+
+Each section entry emits one **top-level** bullet per page carrying its title, HTML URL, and twin URL, then one indented bullet per key in the same `[params.agent.frontmatter.<section>]` map the twins use -- so both surfaces describe a page with one vocabulary. The `present` sentinel is rendered here as the prose it is, deliberately unlike the twin front matter, which omits it: this document is read as prose, and "present" is a true and useful thing to say about an open-ended range.
+
+### Exactly one producer of `/about.md` per site
+
+A consuming site that ships its own facts document at `/about.md` must **not** also list `agentfacts` in `outputs.home`. The two would collide on one published path, with the last writer winning and **no build error**.
+
+The module's renderer is deliberately simpler than a site-specific one: it groups nothing, applies no sentinel-omission rules, and links no external artifacts. A consumer whose vocabulary needs grouping or sentinel handling should write its own output format and leave `agentfacts` unwired.
+
+The published path collides with a consumer's own content only if that consumer publishes a page to exactly `about.md` at the site root, which requires `uglyURLs` plus a root-level `about` page; a conventional `content/about.md` publishes to `about/index.html` and does not collide.
+
+## Agent Skills index
+
+Publishes `/.well-known/agent-skills/index.json`, plus one republished `/.well-known/agent-skills/<name>/SKILL.md` per indexed skill, through the `agentskills` output format.
+
+> **Draft status.** The Agent Skills **discovery layer** (v0.2.0) is a Cloudflare-authored **draft RFC that may change incompatibly**. The `SKILL.md` format underneath it is the mature layer and is unaffected. This module is released on a `v0.x` line for exactly that reason, and `skills_index.schema` is a config key so a consumer can point at a newer schema without a module change.
+
+```toml
+[params.agent.skills_index]
+enable = true
+schema = 'https://schemas.agentskills.io/discovery/0.2.0/schema.json'
+
+[[params.agent.skills]]
+name = 'my-skill'
+description = '<verbatim from the SKILL.md description front matter>'
+source = 'https://raw.githubusercontent.com/owner/repo/<commit SHA>/skills/my-skill/SKILL.md'
+```
+
+### The digest contract
+
+Each `source` is fetched at build time and **republished same-origin**, and the `sha256` digest is computed from the bytes of that published copy -- not from an upstream snapshot. There is no separate hashing step to fall out of sync, so the advertised hash and the served bytes can never disagree.
+
+Three consequences a consumer must understand:
+
+- **Pin `source` to a commit SHA, never a branch ref.** A branch moves, and a moved branch means the digest published last build describes bytes that have since changed.
+- **A build-time remote fetch runs inside the consuming site's render clock** and counts against its build timeout budget.
+- **An entry whose digest does not match the served bytes fails closed** for any agent that verifies it, which is strictly worse than publishing nothing. Every failure path therefore omits the entry: a fetch error, an HTTP 404 (which `resources.GetRemote` reports as a nil resource rather than an error), or a field-validation failure each emit one deduplicated warning and drop that skill.
+
+**With zero valid skills, no file is emitted at all.** An empty JSON shell at a `.well-known` path is a claim of a capability that does not exist.
+
+The index also gates on `site.Language.IsDefault`, because this format sets `root = true`, which pins one path for every language; a multilingual site emits the index once, from the default language.
+
+Field rules, validated before the fetch so a malformed entry costs no round trip: `name` is 1-64 characters of lowercase alphanumerics and hyphens with no leading, trailing, or consecutive hyphen (it becomes a published path segment); `description` is 1-1024 characters and should be copied verbatim from the skill's own `description` front matter rather than paraphrased; `source` must be absolute.
+
+### Index length is a curation decision, not a completeness metric
+
+The module accepts any number of entries and imposes no minimum. A consuming site should publish only the skills a fetching agent can **actually use on its own**: a repository holding several `SKILL.md` artifacts may correctly publish exactly one, and an artifact that is a component of a larger environment configuration is meaningless standalone and belongs out of the index. Record the exclusion and its reason in your own documentation, so the gap between the repository's artifact count and the index length reads as a decision rather than a defect.
+
 ## i18n
 
 The module authors exactly four user-facing strings, all of them headings in generated documents. English and Russian ship with the module; every lookup carries an English fallback, so a site whose language ships no translation still renders a real heading rather than an empty string.
@@ -247,6 +365,9 @@ modules/agent-readiness/
 │   ├── home.markdown.md
 │   ├── page.markdown.md
 │   ├── section.markdown.md
+│   ├── home.llmstxt.txt
+│   ├── home.agentfacts.md
+│   ├── home.agentskills.json
 │   └── _partials/
 │       └── agent-readiness/
 │           ├── config.html
@@ -254,6 +375,9 @@ modules/agent-readiness/
 │           ├── robots.html
 │           ├── markdown-front-matter.html
 │           ├── markdown-page.html
+│           ├── llms.html
+│           ├── facts.html
+│           ├── skills.html
 │           └── lib/
 │               ├── page-excluded.html
 │               ├── section.html

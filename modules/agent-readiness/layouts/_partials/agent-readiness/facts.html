@@ -1,0 +1,207 @@
+{{/*
+  agent-readiness/facts.html -- renderer (RENDERER tier).
+
+  Purpose: render /about.md, the aggregated facts document -- the one-fetch
+  answer to "who is this, what can they do, what have they built, and how do
+  I reach them".
+
+  Why this surface exists at all. Per-page twins answer "what does this page
+  say". llms.txt is a link index and carries no facts. And a home-page twin
+  inherits whatever truncation the home template applies, because a typical
+  home page renders first-N previews. None of the three answers the question
+  in ONE fetch, complete. This document does, and it is assembly rather than
+  duplication: it lists facts that already exist in front matter, never page
+  bodies (that would be llms-full.txt, a declared non-goal).
+
+  COMPLETE BY CONSTRUCTION: a facts section has NO `limit` key, by design.
+  A truncated facts index answers the question wrongly while appearing to
+  answer it, which is worse than not shipping one. The fixture asserts that
+  each section's top-level bullet count numerically EQUALS the shared
+  filter's page count for that section.
+
+  It fabricates nothing. Every value originates in front matter or config
+  that already exists; there is no default text for an absent field and no
+  inferred value anywhere. The identity rows and the contact channels are
+  read from REAL content pages named in config rather than retyped into
+  config, so the document cannot drift away from the site it describes.
+
+  The `present` sentinel is rendered here as the prose it is, deliberately
+  unlike the Markdown twin front matter, which omits it: this document is
+  read as prose, and "present" is a true and useful thing to say about an
+  open-ended range.
+
+  Structure: H1, summary, identity block, one H2 per configured section,
+  contact block, trailing pointer section.
+
+  Expected context (dict):
+  - .page (Page) - The home page.
+  - .cfg  (dict) - The resolved config from agent-readiness/config.html.
+
+  Return value: none. This partial renders.
+*/}}
+
+{{- $page := .page -}}
+{{- $cfg := .cfg -}}
+{{- $facts := $cfg.facts -}}
+
+{{- if and $cfg.enable $facts.enable -}}
+  {{- $lines := slice -}}
+
+  {{/* 1. Exactly one H1. */}}
+  {{- $lines = $lines | append (printf "# %s" ($facts.title | default $cfg.i18n.facts_title | default site.Title)) -}}
+
+  {{/* 2. Optional one-line summary. */}}
+  {{- with $facts.summary -}}
+    {{- $lines = $lines | append "" | append (printf "> %s" .) -}}
+  {{- end -}}
+
+  {{/* 3. Identity block, read from a real content page so it cannot drift.
+         A row whose key is absent from that page is omitted SILENTLY: a
+         missing optional fact is not an error, and inventing a placeholder
+         would be fabrication. */}}
+  {{- $identity := $facts.identity | default dict -}}
+  {{- $identityRows := $identity.rows | default slice -}}
+  {{- if $identityRows -}}
+    {{- with site.GetPage ($identity.page | default "/") -}}
+      {{- $idPage := . -}}
+      {{- $rendered := slice -}}
+      {{- range $identityRows -}}
+        {{- if reflect.IsMap . -}}
+          {{- $k := lower (trim (printf "%v" (.key | default "")) " \t\n\r") -}}
+          {{/* The label is captured HERE, before any inner `with` rebinds the
+               dot: inside a partial `$` is the partial's own context dict,
+               never the range item, so reaching for the label from within the
+               value block would silently render the key instead. */}}
+          {{- $label := printf "%v" (.label | default $k) -}}
+          {{- if $k -}}
+            {{- $v := index $idPage.Params $k -}}
+            {{- if ne $v nil -}}
+              {{- with printf "%v" $v -}}
+                {{- $rendered = $rendered | append (printf "- **%s**: %s" $label .) -}}
+              {{- end -}}
+            {{- end -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+      {{- with $rendered -}}
+        {{- $lines = $lines | append "" | append (printf "## %s" $cfg.i18n.facts_identity_heading) | append "" -}}
+        {{- range . -}}{{- $lines = $lines | append . -}}{{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* 4. One H2 per configured section, COMPLETE. Membership comes from the
+         shared filter, so this document lists exactly the pages the twins
+         emit and llms.txt links. Each entry's `section` value arrived here
+         already normalized by config.html. */}}
+  {{- $all := partial "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) -}}
+  {{- range $entry := $facts.sections | default slice -}}
+    {{- $section := $entry.section | default "" -}}
+    {{- $items := slice -}}
+    {{- range $all -}}
+      {{- $p := .Path -}}
+      {{- if or (eq $p $section) (hasPrefix $p (printf "%s/" $section)) (eq (printf "/%s" .Section) $section) -}}
+        {{- $items = $items | append . -}}
+      {{- end -}}
+    {{- end -}}
+    {{- with $entry.name -}}
+      {{- $lines = $lines | append "" | append (printf "## %s" .) | append "" -}}
+    {{- end -}}
+    {{- $sectionKey := strings.TrimPrefix "/" $section -}}
+    {{- $map := index $cfg.frontmatter $sectionKey -}}
+    {{- range $item := $items -}}
+      {{/* One TOP-LEVEL bullet per page: the count of these is the assertion
+           the fixture makes against the filter's page count. */}}
+      {{- $bullet := printf "- [%s](%s)" $item.Title $item.RelPermalink -}}
+      {{- if $facts.link_markdown -}}
+        {{- with $item.OutputFormats.Get "markdown" -}}
+          {{- $bullet = printf "%s ([Markdown](%s))" $bullet .RelPermalink -}}
+        {{- end -}}
+      {{- end -}}
+      {{- $lines = $lines | append $bullet -}}
+
+      {{/* Nested bullets: the same per-section field maps the twins use, so
+           the two surfaces describe each page with one vocabulary. Indented
+           two spaces so a top-level bullet count stays unambiguous. */}}
+      {{- if reflect.IsMap $map -}}
+        {{- range $key := ($map.keys | default slice) -}}
+          {{- $k := lower (trim (printf "%v" $key) " \t\n\r") -}}
+          {{- if $k -}}
+            {{- $v := index $item.Params $k -}}
+            {{- if ne $v nil -}}
+              {{- $s := "" -}}
+              {{- if reflect.IsSlice $v -}}
+                {{- $parts := slice -}}
+                {{- range $v -}}{{- $parts = $parts | append (printf "%v" .) -}}{{- end -}}
+                {{- $s = delimit $parts ", " -}}
+              {{- else -}}
+                {{- $s = printf "%v" $v -}}
+              {{- end -}}
+              {{- with $s -}}
+                {{- $lines = $lines | append (printf "  - %s: %s" $k .) -}}
+              {{- end -}}
+            {{- end -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* 5. Contact block, read from a real content page's front-matter array.
+         An entry carrying none of the three configured fields is skipped;
+         nothing here is retyped into config, so the block cannot contradict
+         the contact page. */}}
+  {{- $contact := $facts.contact | default dict -}}
+  {{- with $contact.page -}}
+    {{- with site.GetPage . -}}
+      {{- $channels := index .Params (lower ($contact.key | default "channels")) -}}
+      {{- $rendered := slice -}}
+      {{- if reflect.IsSlice $channels -}}
+        {{- range $channels -}}
+          {{- if reflect.IsMap . -}}
+            {{- $label := printf "%v" (index . (lower ($contact.label_field | default "label")) | default "") -}}
+            {{- $value := printf "%v" (index . (lower ($contact.value_field | default "value")) | default "") -}}
+            {{- $url := printf "%v" (index . (lower ($contact.url_field | default "href")) | default "") -}}
+            {{- if or $label $value $url -}}
+              {{- $text := $value | default $label -}}
+              {{- $line := "" -}}
+              {{- if $url -}}
+                {{- $line = printf "- %s: [%s](%s)" ($label | default $text) $text $url -}}
+              {{- else -}}
+                {{- $line = printf "- %s: %s" ($label | default $text) $text -}}
+              {{- end -}}
+              {{- $rendered = $rendered | append $line -}}
+            {{- end -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+      {{- with $rendered -}}
+        {{- $lines = $lines | append "" | append (printf "## %s" $cfg.i18n.facts_contact_heading) | append "" -}}
+        {{- range . -}}{{- $lines = $lines | append . -}}{{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* 6. Trailing pointer section, resolved through the home page's output
+         formats rather than hardcoded paths, so a subpath baseURL or a
+         language prefix is honored. */}}
+  {{- if $facts.sitemap_section -}}
+    {{- $pointers := slice -}}
+    {{- with site.Home.OutputFormats.Get "llmstxt" -}}
+      {{- $pointers = $pointers | append (printf "- [llms.txt](%s)" .RelPermalink) -}}
+    {{- end -}}
+    {{- $sitemapURL := "sitemap.xml" | absURL -}}
+    {{- with site.Home.OutputFormats.Get "sitemap" -}}
+      {{- $sitemapURL = .RelPermalink -}}
+    {{- end -}}
+    {{- $pointers = $pointers | append (printf "- [sitemap.xml](%s)" $sitemapURL) -}}
+    {{- $lines = $lines | append "" | append (printf "## %s" $cfg.i18n.sitemap_heading) | append "" -}}
+    {{- range $pointers -}}{{- $lines = $lines | append . -}}{{- end -}}
+  {{- end -}}
+
+  {{/* safeHTML because this partial lives in the .html template namespace
+       while about.md is a standalone plain-text document: without it every
+       ampersand and angle bracket in a page title would be HTML-escaped
+       into an entity in a file that is not HTML. */}}
+  {{- printf "%s\n" (delimit $lines "\n") | safeHTML -}}
+{{- end -}}

@@ -1,0 +1,30 @@
+{{- /*
+  home.agentskills.json -- the Agent Skills discovery index.
+
+  Publishes /.well-known/agent-skills/index.json alongside one republished
+  /.well-known/agent-skills/<name>/SKILL.md per indexed skill.
+
+  FOUR GATES, and the file is emitted only when all four pass:
+    1. cfg.enable            -- the module master switch.
+    2. cfg.skills_index.enable
+    3. a NON-EMPTY resolved skill slice. With zero skills configured, or with
+       every configured skill failing validation or its fetch, NO FILE IS
+       EMITTED AT ALL. An empty JSON shell at a .well-known path is a claim
+       of a capability that does not exist, and is worse than a 404.
+    4. site.Language.IsDefault -- this format sets root = true, which pins
+       ONE path for every language, so a non-default language would overwrite
+       the default language's file. A multilingual site emits the index once,
+       from the default language.
+
+  The whole document is ONE Go dict serialized with a single jsonify call --
+  never hand-assembled JSON. noHTMLEscape is safe and smaller for a
+  standalone .json file; this envelope must not be inlined into a <script>
+  tag as-is.
+*/ -}}
+{{- $cfg := partial "agent-readiness/config.html" (dict "page" . "site_only" true) -}}
+{{- if and $cfg.enable $cfg.skills_index.enable site.Language.IsDefault -}}
+  {{- $skills := partial "agent-readiness/skills.html" (dict "page" . "cfg" $cfg) -}}
+  {{- with $skills -}}
+    {{- dict "$schema" $cfg.skills_index.schema "skills" . | jsonify (dict "noHTMLEscape" true "indent" "  ") -}}
+  {{- end -}}
+{{- end -}}
