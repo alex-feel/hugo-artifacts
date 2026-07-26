@@ -98,11 +98,11 @@
               "digest" (printf "sha256:%s" (crypto.SHA256 $copied.Content))
           ) -}}
         {{- else -}}
-          {{/* An HTTP 404 is not an error to resources.GetRemote: it yields
-               a nil resource, which lands here. */}}
+          {{/* An HTTP 404 is not a failure to resources.GetRemote: it
+               yields a nil resource, which lands here. */}}
           {{- partial "agent-readiness/lib/warn.html" (dict
               "key" (printf "agent-readiness:warn:skill-missing:%s" $name)
-              "message" (printf "[agent-readiness] Omitting the agent skill %q from the index: %s returned no resource (an HTTP 404 is reported this way rather than as an error). Check the pinned commit SHA and the path." $name $source)) -}}
+              "message" (printf "[agent-readiness] Omitting the agent skill %q from the index: %s returned no resource (an HTTP 404 arrives as an absent resource rather than as a failure). Check the pinned commit SHA and the path." $name $source)) -}}
         {{- end -}}
       {{- end -}}
     {{- end -}}

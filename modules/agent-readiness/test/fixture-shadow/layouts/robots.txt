@@ -1,0 +1,3 @@
+# AGENT-READINESS-SHADOW-SENTINEL
+User-agent: ShadowFixtureOnly
+Disallow: /shadowed/
