@@ -261,3 +261,9 @@
     {{- end -}}
   {{- end -}}
 {{- end }}
+
+{{/* ---- Alternate representations and static link relations ---- Emitted
+     LAST, after feed discovery, so the feed block above is unchanged. Both
+     surfaces are opt-in and emit nothing when [seo.alternates] and
+     [seo.links] are unset. */}}
+{{- partial "seo/alternates.html" . -}}

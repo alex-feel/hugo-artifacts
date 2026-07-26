@@ -1,0 +1,13 @@
+{{/* A deliberately SEPARATE root baseof: the consuming site shape this
+     mirrors calls seo/head.html from its own promo baseof, so the fixture
+     proves the head surface is identical on that path too. */}}
+<!doctype html>
+<html lang="{{ site.Language.Locale }}">
+  <head>
+    <meta charset="utf-8" />
+    {{ partial "seo/head.html" . }}
+  </head>
+  <body>
+    <div class="promo">{{ block "main" . }}{{ end }}</div>
+  </body>
+</html>

@@ -165,6 +165,17 @@ The full annotated surface:
   # --- Feed discovery ---
   [params.seo.feed]
     enable            = true               # Emit <link rel="alternate" type="application/rss+xml"> for the page's (or its section's) RSS output, if any. Default: true.
+
+  # --- Alternate representations (opt-in allow-list) ---
+  [params.seo.alternates]
+    formats           = ['markdown']       # Emit <link rel="alternate"> for these output formats when the page carries them. An ALLOW-LIST, never a blanket range: ranging every alternate would advertise /searchindex.json and /manifest.webmanifest as page alternates. Unset emits nothing.
+
+  # --- Static link relations (IANA-registered, fixed sitewide targets) ---
+  [params.seo.links]
+    privacy_policy    = "/privacy-policy/" # <link rel="privacy-policy"> (RFC 6903 section 4).
+    author            = "/authors/jane/"   # <link rel="author"> (WHATWG HTML).
+    search            = "/opensearch.xml"  # <link rel="search" type="application/opensearchdescription+xml"> (OpenSearch).
+    license           = "https://creativecommons.org/licenses/by/4.0/"  # <link rel="license"> (WHATWG HTML). Emitted on every page the module's head runs on, because a content license is constant sitewide.
 ```
 
 ### Top-level keys (`params.seo.*`)
@@ -174,6 +185,7 @@ The full annotated surface:
 | `enable` | bool | `true` | Global kill switch. `false` emits nothing anywhere. |
 | `title_suffix` | string | `""` | Appended to `<title>` only, never to `og:title` or `headline`. The home page never gets the suffix. |
 | `description` | string | `""` | Site-wide fallback description, last link of the description chain. |
+| `content_license` | string | `""` | Absolute URL of the license covering the site's editorial content. When set, emits `"license"` on the `WebPage`, `CollectionPage` and article-class (`Article` / `BlogPosting` / `NewsArticle`) nodes. `license` is a schema.org `CreativeWork` property, so it is valid on those and on nothing else the module emits -- it is deliberately NOT attached to `Person`, `Organization`, `WebSite` or `BreadcrumbList`. Unset emits nothing. |
 | `default_image` | string | `""` | Site-wide image fallback. Resource path (`assets/` or `static/`) or absolute URL. Applied only when no page-level image resolves. |
 | `image_alt` | string | `""` | Default `og:image:alt` when a page image resolves no alt of its own. |
 | `image_params` | array | `[]` | Names of extra top-level front-matter params (e.g. `["tile_image"]`) whose values (string or list per key) join the page-image candidates -- after `seo.images`/`seo.image`/`meta_image`, before native `images`. |
@@ -224,6 +236,8 @@ The full annotated surface:
 | `[params.seo.verification]` | `google`, `bing`, `baidu`, `facebook`, `pinterest`, `mastodon` | Site-verification meta tags (`mastodon` emits a `<link rel="me">`). Deprecated alias: `params.site_verification.*`. |
 | `[params.seo.types]` | `default` (shipped `""`), `[params.seo.types.sections]` map | Content-type dispatch. `default` shipped UNSET so arbitrary pages get no content node; the sections map assigns a JSON-LD type per top-level section. |
 | `[params.seo.feed]` | `enable` (default `true`) | Feed-discovery `<link rel="alternate" type="application/rss+xml">` for the page's or its section's RSS output. |
+| `[params.seo.alternates]` | `formats` (list of output-format names) | Opt-in allow-list of alternate REPRESENTATIONS of the current page, emitted as `<link rel="alternate" type="...">`. Never a blanket range over `.AlternativeOutputFormats`, which would mislabel `/searchindex.json` and `/manifest.webmanifest` as page alternates. Unset emits nothing. |
+| `[params.seo.links]` | `privacy_policy`, `author`, `search`, `license` | IANA-registered link relations whose target is a fixed sitewide URL. Only these four keys are recognized: RFC 8288 permits an un-prefixed relation name only when it is registered, so any other key warns once and is skipped rather than emitted as a bare token no client can interpret. Site-relative values are resolved to absolute. |
 
 ### Deprecated site-param aliases
 
@@ -522,7 +536,11 @@ Three documented override tiers plus a config-level suppression switch, so you c
 
 1. **Same-name override of any module partial** (no guard needed): Hugo's template precedence makes your `layouts/_partials/seo/<same path>.html` win over the module's. The partials form three tiers so the target is obvious -- override a RENDERER (`seo/head-meta.html`, `seo/head-jsonld.html`) to change what is output, a RESOLVER (`seo/resolve/images.html`, `seo/resolve/robots.html`) to change how a value is chosen, or a NODE BUILDER (`seo/jsonld/product.html`) to reshape exactly one schema type. Each file has one responsibility, so an override never forces reimplementing anything else. Internal partial names are stable within a major version.
 2. **Additive head hook:** author `layouts/_partials/seo/head-extra.html`. The module calls it behind a `templates.Exists` guard and passes the full `$ctx` (`{page, seo}`), so extra `<meta>`/`<link>` tags (app-store cards, additional verification, alternate feeds) can reuse the already-resolved title, description, images, and `@id`s. Purely additive, runs last, zero cost until you create the file.
-3. **JSON-LD node hook:** author `layouts/_partials/seo/jsonld-extra.html` that RETURNS a slice of node dicts. The module appends them to its node list before serialization, so you can add FAQPage/Course/Recipe nodes with correct `@id` cross-linking (referencing `$ctx.seo.ids.webpage`, `.organization`, etc.) without the module shipping those builders -- extra `<script>` blocks in separate mode, extra `@graph` members in graph mode. Returned dicts must be container-agnostic (no `@context`).
+3. **JSON-LD node hook:** author `layouts/_partials/seo/jsonld-extra.html` that RETURNS a slice of node dicts. The module appends them to its node list before serialization, so you can add FAQPage/Course/Recipe nodes with correct `@id` cross-linking (referencing `$ctx.seo.ids.webpage`, `.organization`, `.person`, etc.) without the module shipping those builders -- extra `<script>` blocks in separate mode, extra `@graph` members in graph mode. Returned dicts must be container-agnostic (no `@context`).
+
+   `$ctx.seo.ids` carries six keys: `website`, `organization`, `webpage`, `breadcrumb`, `content`, and `person`. `person` is the site-owner Person anchor, resolved from the author page located by `[seo.author] path_prefix` plus the urlized `[seo.author] name`. Its value is CONSTANT across the site -- byte-identical on the author page and on an unrelated blog post -- so a hook can reference it without hand-building the string and watching it desynchronize when the author slug or the fragment convention changes. It is the empty string when no author page resolves, so guard with `with`.
+
+   **`person` and `organization` are DIFFERENT anchors, even when `[seo.organization] type = 'Person'`.** The publisher node keeps the `#organization` anchor while the author's `ProfilePage` `mainEntity` keeps `#person`. Conflating them would describe one human as two entities in the graph.
 
 Plus the config switch `params.seo.disable[]` (a slice of node-type names, e.g. `["VideoObject", "BreadcrumbList"]`): the zero-code way to say "emit everything except X".
 
@@ -587,6 +605,7 @@ modules/seo/
         head.html                          # PUBLIC ENTRY (renderer). Resolves $seo once, renders head-meta + head-jsonld, then the guarded head-extra hook.
         context.html                       # Resolver-of-resolvers. Returns the canonical $seo dict consumed by every downstream partial.
         head-meta.html                     # Renderer. Classic head: title, description, canonical, robots, hreflang, OG (+type extras), Twitter, verification, feed discovery.
+        alternates.html                    # Renderer. Alternate representations (opt-in allow-list) plus the static IANA link relations. Called from head-meta.html after feed discovery; emits nothing when [seo.alternates] and [seo.links] are unset.
         head-jsonld.html                   # Renderer/dispatcher. Collects node dicts from jsonld/* + the jsonld-extra hook, emits separate <script> blocks (default) or one @graph block.
         resolve/
           title.html                       # Returns {title, titleFull} via the title fallback chain.

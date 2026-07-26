@@ -54,7 +54,7 @@
     {{- end -}}
     {{- $main := dict
       "@type" $entityType
-      "@id" (printf "%s#person" $page.Permalink)
+      "@id" (partial "seo/resolve/id.html" (dict "page" $page "kind" "person"))
       "name" $name
     -}}
 

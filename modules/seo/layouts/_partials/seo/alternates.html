@@ -1,0 +1,100 @@
+{{/*
+  seo/alternates.html -- renderer (RENDERER tier).
+
+  Purpose: emit two head surfaces the module previously had no home for --
+  alternate REPRESENTATIONS of the current page, and the IANA-registered link
+  relations whose target is a fixed sitewide URL.
+
+  Called from head-meta.html immediately AFTER the feed-discovery block, so
+  feed emission is unchanged.
+
+  Expected context: $ctx = {page, seo} as assembled by seo/head.html.
+
+  Return value: none. This partial renders.
+
+  Both surfaces are entirely opt-in: with [seo.alternates] and [seo.links]
+  unset, this partial emits nothing at all and the head is byte-identical to
+  a build without it.
+
+  ---- Surface one: alternate representations ----
+
+  Driven by an EXPLICIT ALLOW-LIST, never a blanket range over
+  .AlternativeOutputFormats:
+
+      [seo.alternates]
+      formats = ['markdown']
+
+  A blanket range would advertise /searchindex.json and
+  /manifest.webmanifest as page alternates, which is exactly why
+  head-meta.html narrows its own feed emission to the RSS format. That
+  filter is correct and stays; this is a second, separately-gated emitter.
+
+  Without this, a site publishing Markdown twins publishes them and never
+  links them.
+
+  ---- Surface two: static link relations ----
+
+      [seo.links]
+      privacy_policy = '/privacy-policy/'
+      author         = '/authors/jane-doe/'
+      search         = '/opensearch.xml'
+      license        = 'https://creativecommons.org/licenses/by/4.0/'
+
+  Only these four keys are recognized. RFC 8288 permits an un-prefixed
+  relation name only when it is IANA-registered; anything else requires a
+  full extension URI, so an unrecognized key warns once and is SKIPPED
+  rather than emitted as a bare token that no client can interpret.
+
+  Deliberately absent, each rejected on the merits: `terms-of-service` (no
+  such page on a site that has not published one), `describedby` (targets
+  POWDER description resources from an effectively extinct effort), `index`
+  (an HTML 4.01 relic with no unambiguous referent), `related` (expresses
+  exactly one undifferentiated target, a strict downgrade from a labeled
+  cross-link graph), `hub` (requires a genuinely running WebSub hub, and
+  advertising one without it silently breaks every subscriber), and
+  `sitemap` (never an IANA-registered relation at all -- the standard
+  channel is the robots.txt Sitemap directive).
+*/}}
+
+{{- $page := .page -}}
+{{- $seo := .seo -}}
+
+{{/* ---- Alternate representations ---- */}}
+{{- $formats := $page.Param "seo.alternates.formats" -}}
+{{- if reflect.IsSlice $formats -}}
+  {{- range $formats -}}
+    {{- $name := trim (printf "%v" .) " \t\n\r" -}}
+    {{- with $name -}}
+      {{- with $page.OutputFormats.Get . }}
+<link rel="alternate" type="{{ .MediaType.Type }}" href="{{ .Permalink }}">
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---- Static link relations ---- Emission is unconditional on the
+     configured value being non-empty, on every page this module's head runs
+     on, because each of these targets is constant sitewide. */}}
+{{- $links := $page.Param "seo.links" -}}
+{{- if reflect.IsMap $links -}}
+  {{- $ogSiteName := $page.Param "seo.organization.name" | default ($page.Param "seo.website.name") | default site.Title -}}
+  {{- range $key, $value := $links -}}
+    {{- $k := lower (trim (printf "%v" $key) " \t\n\r") -}}
+    {{- $v := trim (printf "%v" $value) " \t\n\r" -}}
+    {{- if $v -}}
+      {{- if eq $k "privacy_policy" }}
+<link rel="privacy-policy" href="{{ $v | absURL }}">
+      {{- else if eq $k "author" }}
+<link rel="author" href="{{ $v | absURL }}">
+      {{- else if eq $k "license" }}
+<link rel="license" href="{{ $v | absURL }}">
+      {{- else if eq $k "search" }}
+<link rel="search" type="application/opensearchdescription+xml" title="{{ $ogSiteName }}" href="{{ $v | absURL }}">
+      {{- else -}}
+        {{- partial "seo/lib/warn.html" (dict
+            "key" (printf "seo:warn:unknown-link-rel:%s" $k)
+            "message" (printf "[seo] Ignoring the unknown [seo.links] key %q: only privacy_policy, author, search and license are recognized. RFC 8288 allows an un-prefixed relation name only when it is IANA-registered, so emitting %q as a bare token would produce a relation no client can interpret." $k $k)) -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}

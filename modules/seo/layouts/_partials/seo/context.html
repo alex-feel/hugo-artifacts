@@ -17,6 +17,13 @@
     dateModified, dateCreated, locale, lang, robots, robotsBots, ogType,
     typeSet, authors, ids, isHome, is404, emitJsonld.
 
+  $seo.ids carries six keys: website, organization, webpage, breadcrumb,
+  content, and person. `person` and `organization` are DIFFERENT anchors even
+  when [seo.organization] type = 'Person': the publisher node keeps the
+  #organization anchor while the author's ProfilePage mainEntity keeps
+  #person, so a consumer does not accidentally create two Person entities for
+  one human.
+
   Exactly ONE terminal return.
 */}}
 
@@ -76,12 +83,40 @@
 {{- with $typesDict.typeSet -}}
   {{- $contentId = partial "seo/resolve/id.html" (dict "page" $page "kind" "content" "type" (index . 0)) -}}
 {{- end -}}
+{{/* The site-owner Person anchor. Resolved from the AUTHOR PAGE, not from
+     the current page, so the value is CONSTANT across the site -- the same
+     string on the author page and on an unrelated blog post. That constancy
+     is load-bearing: a page-derived value would break the partialCached
+     cache-safety invariant jsonld/organization.html documents for the
+     publisher builder. The author page is located the same way
+     resolve/author.html locates one, through seo.author.path_prefix plus the
+     urlized seo.author.name, so a consumer emitting Person-graph nodes
+     through the jsonld-extra hook no longer has to hand-build the anchor and
+     watch it desynchronize when the slug or the fragment convention changes.
+     When no author page resolves the key is the empty string; consumers
+     guard with `with`. */}}
+{{- $personId := "" -}}
+{{- $authorPrefix := $page.Param "seo.author.path_prefix" | default "/authors/" -}}
+{{- with $page.Param "seo.author.name" -}}
+  {{- $authorPath := printf "%s%s" $authorPrefix (urlize .) -}}
+  {{- $authorPage := site.GetPage $authorPath -}}
+  {{- if not $authorPage -}}
+    {{- with hugo.Sites.Default -}}
+      {{- $authorPage = .GetPage $authorPath -}}
+    {{- end -}}
+  {{- end -}}
+  {{- with $authorPage -}}
+    {{- $personId = partial "seo/resolve/id.html" (dict "page" . "kind" "person") -}}
+  {{- end -}}
+{{- end -}}
+
 {{- $ids := dict
   "website" (partial "seo/resolve/id.html" (dict "page" $page "kind" "website"))
   "organization" (partial "seo/resolve/id.html" (dict "page" $page "kind" "organization"))
   "webpage" (partial "seo/resolve/id.html" (dict "page" $page "kind" "webpage"))
   "breadcrumb" (partial "seo/resolve/id.html" (dict "page" $page "kind" "breadcrumb"))
   "content" $contentId
+  "person" $personId
 -}}
 
 {{/* emitJsonld gate. Default true. Suppressed only when:

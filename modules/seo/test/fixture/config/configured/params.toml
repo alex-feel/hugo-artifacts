@@ -1,0 +1,18 @@
+# The `configured` environment adds exactly the three Phase 7 config blocks,
+# so the suite can compare a configured build against the baseline one and
+# prove both halves of the contract: the surfaces appear when configured, and
+# nothing appears when they are not.
+[seo]
+  content_license = 'https://creativecommons.org/licenses/by/4.0/'
+
+  [seo.alternates]
+    formats = ['markdown']
+
+  [seo.links]
+    privacy_policy = '/privacy-policy/'
+    author = '/authors/jane-doe/'
+    search = '/opensearch.xml'
+    license = 'https://creativecommons.org/licenses/by/4.0/'
+    # Deliberately not an IANA-registered relation: proves the warn-and-skip
+    # path emits no tag rather than a bare token no client can interpret.
+    not_a_real_relation = '/nowhere/'

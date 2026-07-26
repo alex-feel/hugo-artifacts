@@ -81,6 +81,7 @@ jobs:
             modules/social-share/test/fixture
             modules/search/test/fixture
             modules/images/test/fixture
+            modules/seo/test/fixture
             modules/agent-readiness/test/fixture
             modules/agent-readiness/test/fixture-shadow
           )
