@@ -11,16 +11,20 @@
   opt-in, because a Disallow shipped as a module default would deindex a
   consumer's site on the build after they imported the module.
 
+  The document is assembled as a slice of lines and emitted once, rather than
+  written inline with whitespace-trimming markers. robots.txt is a
+  line-oriented format whose group separation is blank-line significant, and
+  line assembly is the only way to keep that exact and reviewable across
+  every combination of configured and unconfigured keys -- the inline form
+  emitted a doubled blank line in the commonest case of all, a site with no
+  bot groups and no extra lines.
+
   Expected context (dict):
   - .page (Page) - The home page (robots.txt renders from it).
   - .cfg  (dict) - The resolved config from agent-readiness/config.html,
     resolved with site_only: true (every robots key is SITE-SCOPED).
 
   Return value: none. This partial renders.
-
-  Emission order: the catch-all group, then one group per token, then the
-  verbatim extra lines, then a blank line and Sitemap. Content-Signal sits
-  INSIDE the User-agent: * group, per the contentsignals.org convention.
 */}}
 
 {{- $cfg := .cfg -}}
@@ -29,48 +33,65 @@
 {{- $registry := index $data "bots" | default dict -}}
 
 {{- if and $cfg.enable $robots.enable -}}
-{{- /* ---- Catch-all group ---- */ -}}
-User-agent: *
-{{ with $robots.content_signal }}Content-Signal: {{ . }}
-{{ end -}}
-{{- range $robots.allow | default slice }}Allow: {{ . }}
-{{ end -}}
-{{- range $robots.disallow | default slice }}Disallow: {{ . }}
-{{ end -}}
+  {{- $lines := slice -}}
 
-{{- /* ---- One group per configured token ---- An unknown key is skipped
-       with one deduplicated warning, never emitted as a literal: a registry
-       key in a User-agent: line matches no crawler and silently does
-       nothing, which is strictly worse than the group being absent. */ -}}
-{{- range $key := $robots.bots | default slice -}}
-  {{- $k := lower (trim (printf "%v" $key) " \t\n\r") -}}
-  {{- $entry := index $registry $k -}}
-  {{- $token := "" -}}
-  {{- if reflect.IsMap $entry -}}{{- $token = printf "%v" ($entry.token | default "") -}}{{- end -}}
-  {{- if $token }}
-User-agent: {{ $token }}
-{{ range $robots.bots_allow | default slice }}Allow: {{ . }}
-{{ end -}}
-{{- range $robots.bots_disallow | default slice }}Disallow: {{ . }}
-{{ end -}}
-  {{- else -}}
-    {{- partial "agent-readiness/lib/warn.html" (dict
-        "key" (printf "agent-readiness:warn:unknown-bot:%s" $k)
-        "message" (printf "[agent-readiness] Ignoring the unknown robots bot key %q: no such entry in data/agent-readiness/bots.toml, and emitting the key itself as a User-agent token would match no crawler. Use one of the registry keys, or add your own entry by shadowing that data file in your site." $k)) -}}
+  {{/* The catch-all group. Content-Signal sits INSIDE it, per the
+       contentsignals.org convention. */}}
+  {{- $lines = $lines | append "User-agent: *" -}}
+  {{- with $robots.content_signal -}}
+    {{- $lines = $lines | append (printf "Content-Signal: %s" .) -}}
   {{- end -}}
-{{- end -}}
+  {{- range $robots.allow | default slice -}}
+    {{- $lines = $lines | append (printf "Allow: %s" .) -}}
+  {{- end -}}
+  {{- range $robots.disallow | default slice -}}
+    {{- $lines = $lines | append (printf "Disallow: %s" .) -}}
+  {{- end -}}
 
-{{- /* ---- Verbatim extra lines ---- Emitted exactly as authored, so a
-       consumer can express any directive this module does not model. */ -}}
-{{- range $robots.extra | default slice }}
-{{ . }}
-{{- end }}
+  {{/* One group per configured token, each separated by exactly one blank
+       line. An unknown key is skipped with one deduplicated warning, never
+       emitted as a literal: a registry key in a User-agent line matches no
+       crawler and silently does nothing, which is strictly worse than the
+       group being absent. */}}
+  {{- range $key := $robots.bots | default slice -}}
+    {{- $k := lower (trim (printf "%v" $key) " \t\n\r") -}}
+    {{- $entry := index $registry $k -}}
+    {{- $token := "" -}}
+    {{- if reflect.IsMap $entry -}}{{- $token = printf "%v" ($entry.token | default "") -}}{{- end -}}
+    {{- if $token -}}
+      {{- $lines = $lines | append "" | append (printf "User-agent: %s" $token) -}}
+      {{- range $robots.bots_allow | default slice -}}
+        {{- $lines = $lines | append (printf "Allow: %s" .) -}}
+      {{- end -}}
+      {{- range $robots.bots_disallow | default slice -}}
+        {{- $lines = $lines | append (printf "Disallow: %s" .) -}}
+      {{- end -}}
+    {{- else -}}
+      {{- partial "agent-readiness/lib/warn.html" (dict
+          "key" (printf "agent-readiness:warn:unknown-bot:%s" $k)
+          "message" (printf "[agent-readiness] Ignoring the unknown robots bot key %q: no such entry in data/agent-readiness/bots.toml, and emitting the key itself as a User-agent token would match no crawler. Use one of the registry keys, or add your own entry by shadowing that data file in your site." $k)) -}}
+    {{- end -}}
+  {{- end -}}
 
-{{- /* ---- Sitemap ---- Built with absURL rather than a hardcoded absolute
-       URL, so development and production builds agree and a subpath baseURL
-       is honored. */ -}}
-{{- if $robots.sitemap }}
+  {{/* Verbatim extra lines, so a consumer can express any directive this
+       module does not model. */}}
+  {{- with $robots.extra -}}
+    {{- $lines = $lines | append "" -}}
+    {{- range . -}}
+      {{- $lines = $lines | append (printf "%v" .) -}}
+    {{- end -}}
+  {{- end -}}
 
-Sitemap: {{ "sitemap.xml" | absURL }}
-{{- end }}
+  {{/* Sitemap, built with absURL rather than a hardcoded absolute URL, so
+       development and production builds agree and a subpath baseURL is
+       honored. */}}
+  {{- if $robots.sitemap -}}
+    {{- $lines = $lines | append "" | append (printf "Sitemap: %s" ("sitemap.xml" | absURL)) -}}
+  {{- end -}}
+
+  {{/* safeHTML because this partial lives in the .html template namespace
+       while robots.txt is a plain-text document: without it a directive
+       containing an ampersand would be HTML-escaped into an entity. The
+       trailing newline is deliberate -- a text file ends with one. */}}
+  {{- printf "%s\n" (delimit $lines "\n") | safeHTML -}}
 {{- end -}}
