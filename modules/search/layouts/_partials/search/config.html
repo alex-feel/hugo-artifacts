@@ -220,6 +220,15 @@
   {{- with $args.boost -}}{{- if reflect.IsMap . -}}{{- $boost = merge $boost . -}}{{- end -}}{{- end -}}
 {{- end -}}
 
+{{/* OpenSearch: a nested map merged tier by tier like boost, so a consumer
+     overriding one key keeps the shipped values for the rest. SITE-SCOPED --
+     the document is one published file per site, not a per-page surface --
+     so only the defaults and site tiers are read. */}}
+{{- $opensearch := dict -}}
+{{- with $defaults.opensearch -}}{{- if reflect.IsMap . -}}{{- $opensearch = merge $opensearch . -}}{{- end -}}{{- end -}}
+{{- with $sitep.opensearch -}}{{- if reflect.IsMap . -}}{{- $opensearch = merge $opensearch . -}}{{- end -}}{{- end -}}
+{{- $opensearch = merge $opensearch (dict "enable" (in (slice "true" "1" "yes" "on") (lower (printf "%v" ($opensearch.enable | default false))))) -}}
+
 {{/* Hotkey grammar (case-insensitive): zero or more modifiers from mod,
      ctrl, alt, shift joined with "+", ending in exactly one key -- a single
      printable character or a named key like f1. Empty disables the hotkey;
@@ -343,6 +352,7 @@
   "hotkey" $hotkey
   "hotkey_tokens" $hotkeyTokens
   "page_path" $pagePath
+  "opensearch" $opensearch
   "index_url" $indexURL
   "page_url" $pageURL
   "page_found" $pageFound

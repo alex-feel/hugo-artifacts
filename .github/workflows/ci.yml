@@ -70,6 +70,7 @@ jobs:
             modules/social-share
             modules/search
             modules/images
+            modules/agent-readiness
             shortcodes/github-repo
             shortcodes/github-profile
             shortcodes/hf-space
@@ -80,6 +81,9 @@ jobs:
             modules/social-share/test/fixture
             modules/search/test/fixture
             modules/images/test/fixture
+            modules/seo/test/fixture
+            modules/agent-readiness/test/fixture
+            modules/agent-readiness/test/fixture-shadow
           )
           for leaf in "${leaves[@]}"; do
             echo "::group::go mod edit -fmt -print -- ${leaf}/go.mod"
@@ -100,7 +104,7 @@ jobs:
           # github.com/jakearchibald/idb (both non-Go-aware), which cannot be
           # resolved by Hugo's module fetcher without consumer-side
           # replacements documented in modules/pwa/README.md Installation.
-          for m in modules/seo modules/social-share modules/search modules/images shortcodes/github-repo shortcodes/github-profile shortcodes/hf-space shortcodes/callout shortcodes/youtube-embed shortcodes/arxiv-paper; do
+          for m in modules/seo modules/social-share modules/search modules/images modules/agent-readiness shortcodes/github-repo shortcodes/github-profile shortcodes/hf-space shortcodes/callout shortcodes/youtube-embed shortcodes/arxiv-paper; do
             echo "::group::hugo mod graph -- ${m}"
             ( cd "${m}" && hugo mod graph )
             echo "::endgroup::"

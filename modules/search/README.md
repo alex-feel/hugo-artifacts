@@ -102,6 +102,26 @@ Inclusion rules, in order: the index ranges over regular pages only (sections, t
 
 Warnings worth knowing: `hugo server -D` indexes drafts locally; `disableKinds = ['home']` silently kills the home-wired index; taxonomy, term, and section pages are deliberately not indexed.
 
+## OpenSearch description document
+
+Opt-in, **default off**. When enabled, the module publishes `/opensearch.xml`, an [OpenSearch 1.1](https://github.com/dewitt/opensearch) description document that declares this site's search endpoint and its query contract, so a client honoring `rel="search"` can discover it.
+
+```toml
+[params.search]
+  opensearch.enable = true
+
+[outputs]
+  home = ['html', 'rss', 'searchindex', 'opensearch']
+```
+
+Both lines are required. Hugo REPLACES the `[outputs]` list per page kind rather than merging it, so restate every format already wired there -- dropping `searchindex` would silently delete the search corpus itself.
+
+The URL template is derived from the same `page_path` value every other surface of this module uses for the search page, so the advertised query contract cannot drift out of sync with the real one. That is precisely why this document belongs to the search module: only the owner of the `/search/?q=` contract can keep a second declaration of it honest.
+
+The document is emitted once, from the default language: its output format sets `root = true`, which pins one published path, and a per-language document would overwrite it with the last writer winning.
+
+**Audience note, stated plainly.** Browser-toolbar search autodiscovery is largely dead in modern Chrome and Firefox UI, so the realistic consumers are agents and crawlers that still honor `rel="search"`. This is a low-value, low-cost addition; it should not gate anything. Pair it with the `seo` module's `[seo.links] search` key to emit the matching `<link rel="search">`.
+
 ## Language handling
 
 Every term -- at indexing time and at query time, symmetrically -- runs through the same pipeline: Unicode NFC normalization, lowercasing, `ё` -> `е` folding, a conservative per-language stopword check (~25 pure function words per language; disable with `stopwords = false`, extend with `stopwords_extra`), and language-aware stemming: Cyrillic terms go to the Russian Snowball stemmer, Latin terms (after diacritics folding, so `café` matches `cafe`) to the English Porter2 stemmer, and everything else passes through normalized. Terms shorter than 3 characters skip stemming. Because folding is symmetric and single-valued, exact-diacritic forms cannot receive a rank preference -- results are correct, only the preference is absent.
@@ -241,7 +261,7 @@ The Playwright suite under [`test/`](test/) validates the module against the mul
 modules/search/
 ├── go.mod                              # module path + pinned MiniSearch upstream
 ├── go.sum                              # checksum pin for the vendored MiniSearch upstream
-├── hugo.toml                           # searchindex output format + vendor mount
+├── hugo.toml                           # searchindex + opensearch output formats, the OpenSearch media type, and the vendor mount
 ├── README.md
 ├── assets/
 │   ├── js/
@@ -266,6 +286,7 @@ modules/search/
 │   └── ru.toml
 ├── layouts/
 │   ├── home.searchindex.json           # the per-language index template
+│   ├── home.opensearch.xml             # the OpenSearch description document (opt-in, default off)
 │   ├── _shortcodes/
 │   │   └── search.html
 │   └── _partials/

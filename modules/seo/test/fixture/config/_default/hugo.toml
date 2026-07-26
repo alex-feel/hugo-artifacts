@@ -1,0 +1,43 @@
+# Baseline configuration: the three Phase 7 config blocks -- [seo.alternates],
+# [seo.links] and [seo] content_license -- are deliberately ABSENT here, so a
+# default build proves the additive change is inert when unconfigured. The
+# `configured` environment adds them.
+baseURL = 'https://seo-fixture.example/'
+title = 'SEO Fixture'
+locale = 'en-us'
+
+# page gains a markdown output so the alternates allow-list has a real
+# representation to advertise. section restates rss, which Hugo would
+# otherwise drop when the key is introduced.
+[outputs]
+  home = ['html', 'rss']
+  section = ['html', 'rss']
+  page = ['html', 'markdown']
+
+[module]
+
+  [module.hugoVersion]
+    min = "0.160.0"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/seo"
+
+[params]
+
+  [params.seo]
+    description = 'A fixture site for the seo module.'
+
+    [params.seo.organization]
+      name = 'Jane Doe'
+      type = 'Person'
+
+    # The site-owner author page is located from these two values, which is
+    # how the person anchor resolves without any page-derived input.
+    [params.seo.author]
+      path_prefix = '/authors/'
+      name = 'Jane Doe'
+
+    [params.seo.types]
+      [params.seo.types.sections]
+        blog = 'BlogPosting'
+        authors = 'ProfilePage'

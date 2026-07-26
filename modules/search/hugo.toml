@@ -1,4 +1,24 @@
+[mediaTypes]
+
+  # OpenSearch description documents have their own registered media type.
+  # Its suffix is `xml`, so the opensearch output format below publishes
+  # opensearch.xml. Declaring a media type is additive: Hugo's built-in set
+  # is untouched, and application/xml keeps its own suffix.
+  [mediaTypes."application/opensearchdescription+xml"]
+    suffixes = ['xml']
+
 [outputFormats]
+
+  # Publishes /opensearch.xml. isPlainText switches to text/template so Go's
+  # HTML auto-escaping cannot mangle the XML. notAlternative keeps it out of
+  # .AlternativeOutputFormats: it is a site-level document, not a
+  # representation of the home page. root pins it to the publish root.
+  [outputFormats.opensearch]
+    mediaType = 'application/opensearchdescription+xml'
+    baseName = 'opensearch'
+    isPlainText = true
+    notAlternative = true
+    root = true
 
   # Emits the per-language search index at /searchindex.json (home page).
   # A dedicated format rather than the built-in json format: it gives the

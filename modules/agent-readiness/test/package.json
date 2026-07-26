@@ -1,0 +1,14 @@
+{
+  "name": "agent-readiness-module-tests",
+  "private": true,
+  "type": "module",
+  "description": "Build-output assertion suite for the agent-readiness Hugo module, run against the published files that three hugo builds produce: the fixture with every content-license key unset, the same fixture with them set, and a shadowing fixture that ships its own layouts/robots.txt. The module ships zero JavaScript, so there is no browser behavior to test.",
+  "scripts": {
+    "test": "node --test \"tests/*.spec.js\"",
+    "test:data": "node --test \"tests/00-data.spec.js\""
+  },
+  "devDependencies": {
+    "smol-toml": "^1.3.1",
+    "yaml": "^2.6.1"
+  }
+}

@@ -1,0 +1,207 @@
+{{/*
+  agent-readiness/config.html -- INTERNAL (resolver tier).
+
+  Purpose: resolves the module's entire configuration through the four-tier
+  cascade, so every surface renders from one consistent dict and no
+  downstream partial re-derives a value. Precedence, highest first:
+  call-site args > page front matter (agent map) > site params
+  ([params.agent]) > data/agent-readiness/defaults.toml. Presence wins at
+  every tier (isset, not truthiness), so an explicit false or empty value
+  overrides the tier below it.
+
+  SITE-SCOPED keys are honored at the defaults and site tiers ONLY, because
+  they shape site-wide artifacts (robots.txt, llms.txt, about.md, the skills
+  index) that must select the same page set no matter which page renders
+  them: `enable`, `sections`, `exclude_noindex`, `exclude_search_page`,
+  `search_page_path`, `skills`, and the whole `robots` and `license` maps.
+  The per-page opt-out is deliberately NOT one of these -- it is the page's
+  own `agent: false` / `agent: {exclude: true}`, which the shared page filter
+  honors on every surface at once.
+
+  Nested maps merge tier by tier rather than replacing, so a consumer
+  overriding one key inside [params.agent.markdown] keeps the shipped values
+  for the rest. Hugo's merge is a recursive deep merge with the rightmost map
+  winning, which is why each tier is merged on top of the accumulator in
+  order. Slices are REPLACED by merge, never combined -- that is the intended
+  semantics for every slice-valued key here (a consumer declaring `bots`
+  means exactly those bots).
+
+  Section identifiers are normalized through agent-readiness/lib/section.html,
+  the ONE routine both the top-level allow-list and the per-entry
+  [[llms.sections]] / [[facts.sections]] values pass through, so a bare name
+  and a slashed form resolve identically at every call site. The per-entry
+  values are normalized HERE and handed downstream already canonical, so no
+  renderer re-derives them.
+
+  Expected context (dict):
+  - .page      (Page) - The current page (already validated by the caller).
+  - .args      (map)  - Call-site arguments (possibly empty).
+  - .site_only (bool) - True when called from a site-wide artifact template
+    (robots.txt): resolves the defaults and site tiers only and skips the
+    page and call-site tiers entirely.
+
+  Return value: one dict carrying every resolved key the renderers need --
+  the normalized scalars, the seven nested maps, the pre-normalized llms and
+  facts section entries, the skills slice, and the i18n map. ONE terminal
+  return.
+*/}}
+
+{{- $page := .page -}}
+{{- $args := .args | default dict -}}
+{{- $siteOnly := .site_only | default false -}}
+
+{{- $data := index hugo.Data "agent-readiness" | default dict -}}
+{{- $defaults := index $data "defaults" | default dict -}}
+{{- if not $defaults -}}
+  {{- partial "agent-readiness/lib/warn.html" (dict
+      "key" "agent-readiness:warn:missing-defaults"
+      "message" "[agent-readiness] data/agent-readiness/defaults.toml was not found; the module is not mounted correctly, so only explicitly configured values apply.") -}}
+{{- end -}}
+
+{{/* Tier values collapse to an empty map when they are not maps, so the
+     isset chains below stay safe. A page front matter value of bare
+     `agent: false` (or its string forms) is the documented per-page opt-out
+     shorthand, not a shape error; any other non-map value is ignored here
+     and warned about by agent-readiness/page-list.html, which is the one
+     place that sees every page. */}}
+{{- $sitep := site.Params.agent -}}
+{{- if not (reflect.IsMap $sitep) -}}{{- $sitep = dict -}}{{- end -}}
+{{- $pagep := dict -}}
+{{- if not $siteOnly -}}
+  {{- $pagep = $page.Params.agent -}}
+  {{- if not (reflect.IsMap $pagep) -}}
+    {{- if in (slice "false" "0" "no" "off") (lower (printf "%v" $pagep)) -}}
+      {{- $pagep = dict "exclude" true -}}
+    {{- else -}}
+      {{- $pagep = dict -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---- Scalar cascade ---- Site-scoped keys stop at the site tier; the
+     remaining keys run through all four tiers. */}}
+{{- $cascade := dict -}}
+{{- $siteScoped := slice "enable" "sections" "exclude_noindex" "exclude_search_page" "search_page_path" "skills" -}}
+{{- range $k := $siteScoped -}}
+  {{- $v := index $defaults $k -}}
+  {{- if isset $sitep $k -}}{{- $v = index $sitep $k -}}{{- end -}}
+  {{- if ne $v nil -}}{{- $cascade = merge $cascade (dict $k $v) -}}{{- end -}}
+{{- end -}}
+
+{{/* ---- Nested-map cascade ---- robots and license are SITE-SCOPED and stop
+     at the site tier no matter how this partial was called; the rest run
+     through all four tiers when the caller is not site-scoped. */}}
+{{- $maps := dict -}}
+{{- range $k := slice "robots" "license" -}}
+  {{- $m := dict -}}
+  {{- with index $defaults $k -}}{{- if reflect.IsMap . -}}{{- $m = merge $m . -}}{{- end -}}{{- end -}}
+  {{- with index $sitep $k -}}{{- if reflect.IsMap . -}}{{- $m = merge $m . -}}{{- end -}}{{- end -}}
+  {{- $maps = merge $maps (dict $k $m) -}}
+{{- end -}}
+{{- range $k := slice "markdown" "llms" "facts" "skills_index" "frontmatter" -}}
+  {{- $m := dict -}}
+  {{- with index $defaults $k -}}{{- if reflect.IsMap . -}}{{- $m = merge $m . -}}{{- end -}}{{- end -}}
+  {{- with index $sitep $k -}}{{- if reflect.IsMap . -}}{{- $m = merge $m . -}}{{- end -}}{{- end -}}
+  {{- if not $siteOnly -}}
+    {{- with index $pagep $k -}}{{- if reflect.IsMap . -}}{{- $m = merge $m . -}}{{- end -}}{{- end -}}
+    {{- with index $args $k -}}{{- if reflect.IsMap . -}}{{- $m = merge $m . -}}{{- end -}}{{- end -}}
+  {{- end -}}
+  {{- $maps = merge $maps (dict $k $m) -}}
+{{- end -}}
+
+{{/* ---- Boolean normalization ---- Any tier may deliver a real bool, a
+     string, or an integer form; stringify once so every shape compares
+     alike. A key absent from every tier normalizes to false, which is why
+     defaults.toml declares every boolean explicitly. */}}
+{{- $enable := in (slice "true" "1" "yes" "on") (lower (printf "%v" ($cascade.enable | default false))) -}}
+{{- $excludeNoindex := in (slice "true" "1" "yes" "on") (lower (printf "%v" ($cascade.exclude_noindex | default false))) -}}
+{{- $excludeSearchPage := in (slice "true" "1" "yes" "on") (lower (printf "%v" ($cascade.exclude_search_page | default false))) -}}
+
+{{- $boolKeys := dict
+  "robots" (slice "enable" "sitemap")
+  "markdown" (slice "enable" "front_matter" "canonical" "last_updated" "license" "sitemap_section")
+  "llms" (slice "enable" "link_markdown" "license")
+  "facts" (slice "enable" "link_markdown" "sitemap_section")
+  "skills_index" (slice "enable")
+-}}
+{{- range $mapName, $keys := $boolKeys -}}
+  {{- $m := index $maps $mapName -}}
+  {{- range $k := $keys -}}
+    {{- $m = merge $m (dict $k (in (slice "true" "1" "yes" "on") (lower (printf "%v" (index $m $k | default false))))) -}}
+  {{- end -}}
+  {{- $maps = merge $maps (dict $mapName $m) -}}
+{{- end -}}
+
+{{/* ---- Section allow-list ---- Slice or comma-separated string; each entry
+     is normalized through lib/section.html. The sentinel "mainSections" (any
+     case) expands to site.MainSections, which is why that branch sits here
+     rather than inside the single-value normalizer. */}}
+{{- $rawSections := $cascade.sections | default (slice) -}}
+{{- if not (reflect.IsSlice $rawSections) -}}
+  {{- $rawSections = split (printf "%v" $rawSections) "," -}}
+{{- end -}}
+{{- $sections := slice -}}
+{{- range $rawSections -}}
+  {{- $e := lower (trim (printf "%v" .) " \t\n\r") -}}
+  {{- if eq $e "mainsections" -}}
+    {{- range site.MainSections -}}
+      {{- with partial "agent-readiness/lib/section.html" . -}}
+        {{- $sections = $sections | append . -}}
+      {{- end -}}
+    {{- end -}}
+  {{- else -}}
+    {{- with partial "agent-readiness/lib/section.html" . -}}
+      {{- $sections = $sections | append . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $searchPagePath := trim (printf "%v" ($cascade.search_page_path | default "/search")) " " -}}
+{{- if not $searchPagePath -}}{{- $searchPagePath = "/search" -}}{{- end -}}
+
+{{/* ---- Pre-normalized per-entry section identifiers ---- Every
+     [[llms.sections]] and [[facts.sections]] entry's `section` value goes
+     through the SAME routine as the allow-list above, so `section = "blog"`
+     and `section = "/blog/"` reach page-list.html identically. Downstream
+     renderers therefore never normalize and cannot drift from this. Entries
+     that are not maps are dropped rather than crashing the range. */}}
+{{- $llms := index $maps "llms" -}}
+{{- $llmsSections := slice -}}
+{{- range ($llms.sections | default slice) -}}
+  {{- if reflect.IsMap . -}}
+    {{- $llmsSections = $llmsSections | append (merge . (dict "section" (partial "agent-readiness/lib/section.html" (.section | default "")))) -}}
+  {{- end -}}
+{{- end -}}
+{{- $llms = merge $llms (dict "sections" $llmsSections) -}}
+{{- $maps = merge $maps (dict "llms" $llms) -}}
+
+{{- $facts := index $maps "facts" -}}
+{{- $factsSections := slice -}}
+{{- range ($facts.sections | default slice) -}}
+  {{- if reflect.IsMap . -}}
+    {{- $factsSections = $factsSections | append (merge . (dict "section" (partial "agent-readiness/lib/section.html" (.section | default "")))) -}}
+  {{- end -}}
+{{- end -}}
+{{- $facts = merge $facts (dict "sections" $factsSections) -}}
+{{- $maps = merge $maps (dict "facts" $facts) -}}
+
+{{/* ---- i18n ---- Resolved ONCE here through the repository's
+     English-default idiom, so a site whose language ships no translation
+     still renders a real heading rather than an empty string, and no
+     renderer calls T itself. */}}
+{{- $i18n := dict
+  "sitemap_heading" (T "agent_sitemap_heading" | default "Sitemap")
+  "facts_title" (T "agent_facts_title" | default "About")
+  "facts_identity_heading" (T "agent_facts_identity_heading" | default "Identity")
+  "facts_contact_heading" (T "agent_facts_contact_heading" | default "Contact")
+-}}
+
+{{- return (merge $maps (dict
+  "enable" $enable
+  "sections" $sections
+  "exclude_noindex" $excludeNoindex
+  "exclude_search_page" $excludeSearchPage
+  "search_page_path" $searchPagePath
+  "skills" ($cascade.skills | default slice)
+  "i18n" $i18n
+)) -}}

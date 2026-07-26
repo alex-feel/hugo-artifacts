@@ -6,7 +6,7 @@ Thumbs.db
 public/
 resources/
 .hugo_build.lock
-hugo-build.log
+hugo-build*.log
 
 # Go
 vendor/

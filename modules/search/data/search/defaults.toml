@@ -149,6 +149,17 @@ worker = true
 # per-page backend (BACKEND-SCOPED).
 cache = "auto"
 
+# --- OpenSearch description document (SITE-SCOPED) ---
+
+# Publish /opensearch.xml, an OpenSearch description document pointing at
+# this site's search page. Default OFF: it adds a published URL and an
+# [outputs] home entry, and browser-toolbar autodiscovery is largely dead in
+# modern Chrome and Firefox UI, so the realistic audience is agents and
+# crawlers that still honor rel="search". Dotted key, NOT an [opensearch]
+# table, for the same reason boost.* is dotted: a mid-file table header
+# would swallow every flat key below it.
+opensearch.enable = false
+
 # --- Kill switch ---
 
 # Master switch: false disables every surface and empties the index.

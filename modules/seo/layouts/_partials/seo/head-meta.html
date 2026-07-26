@@ -261,3 +261,10 @@
     {{- end -}}
   {{- end -}}
 {{- end }}
+{{- /* ---- Alternate representations and static link relations ---- Emitted
+     LAST, after feed discovery, so the feed block above is unchanged. Both
+     surfaces are opt-in and emit NOTHING when [seo.alternates] and
+     [seo.links] are unset -- including no whitespace: the markers below are
+     trimmed so that an unconfigured head is byte-identical to one built
+     before this partial existed. */ -}}
+{{- partial "seo/alternates.html" . }}

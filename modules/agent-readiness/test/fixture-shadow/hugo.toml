@@ -1,0 +1,30 @@
+# The SHADOWING fixture. It is configured exactly like the default fixture's
+# robots surface -- module imported, enableRobotsTXT true, a content_signal
+# and a bots list -- and then ships its own layouts/robots.txt.
+#
+# Its whole purpose is to prove the hazard the module README warns about: a
+# site-level layouts/robots.txt WINS over the module's with no warning, no
+# build error, and nothing that --printPathWarnings surfaces. The assertion
+# is that public/robots.txt contains ONLY the sentinel and none of the
+# module's output, so a consumer who forgets to delete their own file gets a
+# silently disabled generator rather than a merged one.
+baseURL = 'https://shadow.example/'
+title = 'Agent Readiness Shadow Fixture'
+locale = 'en-us'
+enableRobotsTXT = true
+
+[module]
+
+  [module.hugoVersion]
+    min = "0.160.0"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/agent-readiness"
+
+[params]
+
+  [params.agent]
+
+    [params.agent.robots]
+      content_signal = "search=yes, ai-train=yes, ai-input=yes"
+      bots = ['gptbot', 'claudebot']

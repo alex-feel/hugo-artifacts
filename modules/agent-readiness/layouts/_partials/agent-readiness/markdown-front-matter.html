@@ -1,0 +1,136 @@
+{{/*
+  agent-readiness/markdown-front-matter.html -- INTERNAL (builder tier).
+
+  Purpose: build the complete YAML front-matter block of a Markdown twin --
+  the opening `---`, the fields, and the closing `---` -- as one string.
+
+  EVERY VALUE IS EMITTED THROUGH jsonify. This is the load-bearing choice of
+  the whole builder: JSON is a strict subset of YAML 1.2, so
+  `{{ $key }}: {{ $value | jsonify }}` produces a valid YAML mapping entry
+  for every possible value -- a title containing a colon, a description
+  containing a `#`, a list of tags, a nested map -- with no quoting logic and
+  no escaping hazard. Hand-quoting is where hand-rolled front-matter emitters
+  break.
+
+  Field order, fixed:
+    1. title                        (always)
+    2. description                  (when non-empty)
+    3. date                         (when set, RFC 3339)
+    4. last_updated                 (when enabled and .Lastmod differs from .Date)
+    5. the per-section keys from cfg.frontmatter.<section>, in declared order
+    6. license                      (when enabled and cfg.license.url is set)
+    7. canonical                    (always last, when enabled)
+
+  DUPLICATE-KEY GUARD: the builder tracks the keys it has already emitted and
+  SKIPS any per-section key that repeats one, warning once per
+  <section>/<key> pair. This is not optional politeness. YAML 1.2 makes two
+  equal keys in the same mapping node an error: strict parsers reject the
+  whole document and lenient ones silently keep one value, so a single
+  duplicated `title` would make every twin in that section unreadable to
+  exactly the tooling the twins exist for.
+
+  Absent keys are OMITTED rather than emitted as an empty string or null. A
+  key whose value is the string sentinel `present` is likewise omitted: it is
+  a display convention for an open-ended date range, and the literal string
+  is not a date and must never reach a machine surface. That suppression
+  applies to this front-matter surface only -- the facts document renders it
+  as the prose it is.
+
+  Expected context (dict):
+  - .page (Page) - The page whose twin is being built.
+  - .cfg  (dict) - The resolved config from agent-readiness/config.html.
+
+  Return value: the complete front-matter block as a string, or "" when
+  cfg.markdown.front_matter is false. ONE terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $cfg := .cfg -}}
+{{- $md := $cfg.markdown -}}
+{{- $out := "" -}}
+
+{{- if $md.front_matter -}}
+  {{- $lines := slice -}}
+  {{- $emitted := slice -}}
+
+  {{/* 1. title -- always, so every twin has at least one field. */}}
+  {{- $lines = $lines | append (printf "title: %s" ($page.Title | jsonify (dict "noHTMLEscape" true))) -}}
+  {{- $emitted = $emitted | append "title" -}}
+
+  {{/* 2. description */}}
+  {{- with $page.Description -}}
+    {{- $lines = $lines | append (printf "description: %s" (. | jsonify (dict "noHTMLEscape" true))) -}}
+  {{- end -}}
+  {{- $emitted = $emitted | append "description" -}}
+
+  {{/* 3. date -- RFC 3339, so the value is machine-comparable. */}}
+  {{- if not $page.Date.IsZero -}}
+    {{- $lines = $lines | append (printf "date: %s" ($page.Date.Format "2006-01-02T15:04:05Z07:00" | jsonify (dict "noHTMLEscape" true))) -}}
+  {{- end -}}
+  {{- $emitted = $emitted | append "date" -}}
+
+  {{/* 4. last_updated -- the ISO calendar date from .Lastmod, emitted only
+         when it actually differs from .Date, because a last_updated equal to
+         date is noise. See the README for the accuracy precondition: this
+         value is a real per-file git date only when the consuming site sets
+         enableGitInfo = true AND its build environment has full per-file
+         commit history. */}}
+  {{- if $md.last_updated -}}
+    {{- if and (not $page.Lastmod.IsZero) (ne ($page.Lastmod.Format "2006-01-02T15:04:05Z07:00") ($page.Date.Format "2006-01-02T15:04:05Z07:00")) -}}
+      {{- $lines = $lines | append (printf "last_updated: %s" ($page.Lastmod.Format "2006-01-02" | jsonify (dict "noHTMLEscape" true))) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $emitted = $emitted | append "last_updated" -}}
+
+  {{/* Reserve the two trailing keys BEFORE the per-section loop runs, so a
+       section map listing `license` or `canonical` is caught by the same
+       duplicate guard as one listing `title`. */}}
+  {{- $emitted = $emitted | append "license" -}}
+  {{- $emitted = $emitted | append "canonical" -}}
+
+  {{/* 5. Per-section keys, in the order the consumer declared them. */}}
+  {{- $section := lower $page.Section -}}
+  {{- $map := index $cfg.frontmatter $section -}}
+  {{- if reflect.IsMap $map -}}
+    {{- range $key := ($map.keys | default slice) -}}
+      {{- $k := lower (trim (printf "%v" $key) " \t\n\r") -}}
+      {{- if $k -}}
+        {{- if in $emitted $k -}}
+          {{- partial "agent-readiness/lib/warn.html" (dict
+              "key" (printf "agent-readiness:warn:duplicate-frontmatter-key:%s/%s" $section $k)
+              "message" (printf "[agent-readiness] Skipping the %q key in [params.agent.frontmatter.%s]: the Markdown twin builder already emits it, and two equal keys in one YAML mapping make the whole front-matter block invalid to strict parsers. Remove it from the section map -- title, description, date, last_updated, license and canonical are always emitted for you." $k $section)) -}}
+        {{- else -}}
+          {{- $v := index $page.Params $k -}}
+          {{- if ne $v nil -}}
+            {{/* The `present` sentinel is a display convention, not a date:
+                 omit it rather than writing the literal string into a
+                 machine surface. */}}
+            {{- if ne (lower (trim (printf "%v" $v) " \t\n\r")) "present" -}}
+              {{- $lines = $lines | append (printf "%s: %s" $k ($v | jsonify (dict "noHTMLEscape" true))) -}}
+              {{- $emitted = $emitted | append $k -}}
+            {{- end -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* 6. license -- one URL line, immediately before the always-last
+         canonical. Inert unless the consumer both enables the switch and
+         fills the license table. */}}
+  {{- if and $md.license $cfg.license.url -}}
+    {{- $lines = $lines | append (printf "license: %s" ($cfg.license.url | jsonify (dict "noHTMLEscape" true))) -}}
+  {{- end -}}
+
+  {{/* 7. canonical -- ALWAYS last. Inside a markdown-format template
+         .Permalink already returns the page's HTML URL, because the built-in
+         markdown output format sets permalinkable = false, so this line is
+         free and correct with no extra resolution. */}}
+  {{- if $md.canonical -}}
+    {{- $lines = $lines | append (printf "canonical: %s" ($page.Permalink | jsonify (dict "noHTMLEscape" true))) -}}
+  {{- end -}}
+
+  {{- $out = printf "---\n%s\n---\n" (delimit $lines "\n") -}}
+{{- end -}}
+
+{{- return $out -}}

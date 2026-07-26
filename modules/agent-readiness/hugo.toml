@@ -1,0 +1,45 @@
+[outputFormats]
+
+  # Publishes /llms.txt (llmstxt.org convention). text/plain is deliberate:
+  # its suffix is `txt`, so the file is llms.txt; text/markdown would publish
+  # llms.md because its suffixes are md, mdown, markdown. text/plain is also
+  # the Content-Type the convention specifies, so no header override is needed.
+  # `root` is intentionally NOT set: leaving it false publishes one file per
+  # language tree (/llms.txt, /ru/llms.txt), mirroring the search module's
+  # searchindex format, instead of having every language overwrite one path.
+  [outputFormats.llmstxt]
+    mediaType = 'text/plain'
+    baseName = 'llms'
+    isPlainText = true
+    notAlternative = true
+
+  # Publishes /about.md, the one-fetch facts index. text/markdown's first
+  # suffix is `md`, so baseName 'about' publishes about.md. `root` is
+  # intentionally NOT set, so a multilingual site gets /about.md and
+  # /ru/about.md rather than one overwritten path. notAlternative keeps it
+  # out of .AlternativeOutputFormats: it is a site-level document, not a
+  # representation of the home page.
+  [outputFormats.agentfacts]
+    mediaType = 'text/markdown'
+    baseName = 'about'
+    isPlainText = true
+    notAlternative = true
+
+  # Publishes /.well-known/agent-skills/index.json. A nested `path` is
+  # accepted (verified on Hugo v0.160.1) even though the documentation
+  # describes `path` as the first path segment. isPlainText is mandatory or
+  # Go's html/template mangles the JSON. notAlternative keeps it out of
+  # .AlternativeOutputFormats. root pins the path irrespective of the
+  # carrier page.
+  [outputFormats.agentskills]
+    mediaType = 'application/json'
+    path = '.well-known/agent-skills'
+    baseName = 'index'
+    isPlainText = true
+    notAlternative = true
+    root = true
+
+[module]
+
+  [module.hugoVersion]
+    min = "0.160.0"

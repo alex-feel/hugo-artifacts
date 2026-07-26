@@ -1,0 +1,112 @@
+{{/*
+  agent-readiness/skills.html -- INTERNAL (resolver tier).
+
+  Purpose: resolve the ordered slice of Agent Skills index entries, and
+  manufacture the digest guarantee that makes the index worth publishing.
+
+  THE DIGEST CONTRACT. Each entry's `source` is fetched at build time and
+  REPUBLISHED same-origin at /.well-known/agent-skills/<name>/SKILL.md. The
+  digest is then computed from the bytes of that published copy, not from an
+  upstream snapshot, so the advertised hash and the served bytes can never
+  disagree -- there is no separate hashing step to fall out of sync. An entry
+  whose digest does not match the bytes an agent fetches FAILS CLOSED for any
+  agent that verifies it, which is strictly worse than publishing nothing, so
+  every failure path here omits the entry rather than guessing.
+
+  Three outcomes per configured skill, all handled:
+    - the fetch errors (network, DNS, TLS) -- try catches it, one warning,
+      omit;
+    - the fetch returns nothing (an HTTP 404 is NOT an error to
+      resources.GetRemote, it yields a nil resource) -- one warning, omit;
+    - the fetch succeeds -- copy, publish, hash.
+
+  Field validation runs BEFORE the fetch, so a malformed entry costs no
+  network round trip: `name` is 1-64 characters of lowercase alphanumerics
+  and hyphens with no leading, trailing or consecutive hyphen (it becomes a
+  published path segment); `description` is 1-1024 characters; `source` must
+  be absolute.
+
+  Pin every `source` to a COMMIT SHA, never a branch ref: a branch moves, and
+  a moved branch means the digest published last build describes bytes that
+  have since changed.
+
+  Expected context (dict):
+  - .page (Page) - The home page.
+  - .cfg  (dict) - The resolved config from agent-readiness/config.html.
+
+  Return value: the ordered slice of validated, fetched, published entry
+  dicts (possibly empty). ONE terminal return.
+*/}}
+
+{{- $cfg := .cfg -}}
+{{- $entries := slice -}}
+
+{{- range $skill := $cfg.skills | default slice -}}
+  {{- if reflect.IsMap $skill -}}
+    {{- $name := trim (printf "%v" ($skill.name | default "")) " \t\n\r" -}}
+    {{- $description := trim (printf "%v" ($skill.description | default "")) " \t\n\r" -}}
+    {{- $source := trim (printf "%v" ($skill.source | default "")) " \t\n\r" -}}
+    {{- $valid := true -}}
+
+    {{/* name: a published path segment, so the rules are strict. */}}
+    {{- if not (findRE `^[a-z0-9]+(-[a-z0-9]+)*$` $name) -}}
+      {{- $valid = false -}}
+      {{- partial "agent-readiness/lib/warn.html" (dict
+          "key" (printf "agent-readiness:warn:skill-name:%s" $name)
+          "message" (printf "[agent-readiness] Skipping the agent skill %q: name must be lowercase alphanumerics and hyphens, with no leading, trailing or consecutive hyphen, because it becomes a published path segment under /.well-known/agent-skills/." $name)) -}}
+    {{- else if gt (strings.RuneCount $name) 64 -}}
+      {{- $valid = false -}}
+      {{- partial "agent-readiness/lib/warn.html" (dict
+          "key" (printf "agent-readiness:warn:skill-name-length:%s" $name)
+          "message" (printf "[agent-readiness] Skipping the agent skill %q: name must be 1-64 characters." $name)) -}}
+    {{- end -}}
+
+    {{- if $valid -}}
+      {{- if or (eq $description "") (gt (strings.RuneCount $description) 1024) -}}
+        {{- $valid = false -}}
+        {{- partial "agent-readiness/lib/warn.html" (dict
+            "key" (printf "agent-readiness:warn:skill-description:%s" $name)
+            "message" (printf "[agent-readiness] Skipping the agent skill %q: description must be 1-1024 characters. Copy it verbatim from the skill's own description front matter rather than paraphrasing it." $name)) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{- if $valid -}}
+      {{- if not (or (hasPrefix $source "https://") (hasPrefix $source "http://")) -}}
+        {{- $valid = false -}}
+        {{- partial "agent-readiness/lib/warn.html" (dict
+            "key" (printf "agent-readiness:warn:skill-source:%s" $name)
+            "message" (printf "[agent-readiness] Skipping the agent skill %q: source must be an absolute http(s) URL, pinned to a commit SHA rather than a branch ref, so the published digest describes bytes that cannot change." $name)) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{- if $valid -}}
+      {{/* try, never the deprecated remote-resource .Err method. */}}
+      {{- with try (resources.GetRemote $source) -}}
+        {{- with .Err -}}
+          {{- partial "agent-readiness/lib/warn.html" (dict
+              "key" (printf "agent-readiness:warn:skill-fetch:%s" $name)
+              "message" (printf "[agent-readiness] Omitting the agent skill %q from the index: fetching %s failed (%s). The index never carries an entry with a missing or guessed digest, because a digest that does not match the served bytes fails closed for any verifying agent." $name $source .)) -}}
+        {{- else with .Value -}}
+          {{/* Republish same-origin, then hash the published copy. Calling
+               .RelPermalink is also what triggers publication. */}}
+          {{- $copied := resources.Copy (printf "/.well-known/agent-skills/%s/SKILL.md" $name) . -}}
+          {{- $entries = $entries | append (dict
+              "name" $name
+              "type" "skill-md"
+              "description" $description
+              "url" $copied.RelPermalink
+              "digest" (printf "sha256:%s" (crypto.SHA256 $copied.Content))
+          ) -}}
+        {{- else -}}
+          {{/* An HTTP 404 is not a failure to resources.GetRemote: it
+               yields a nil resource, which lands here. */}}
+          {{- partial "agent-readiness/lib/warn.html" (dict
+              "key" (printf "agent-readiness:warn:skill-missing:%s" $name)
+              "message" (printf "[agent-readiness] Omitting the agent skill %q from the index: %s returned no resource (an HTTP 404 arrives as an absent resource rather than as a failure). Check the pinned commit SHA and the path." $name $source)) -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $entries -}}

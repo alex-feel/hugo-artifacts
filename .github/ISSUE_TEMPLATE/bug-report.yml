@@ -60,6 +60,7 @@ body:
         - modules/social-share
         - modules/search
         - modules/images
+        - modules/agent-readiness
         - modules/pwa
         - modules/workbox
         - modules/idb

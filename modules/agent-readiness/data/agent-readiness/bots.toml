@@ -1,0 +1,31 @@
+# Registry of AI and agent crawler user-agent tokens, current as of mid-2026.
+# A consuming site writes bots = ['gptbot', 'claudebot'] rather than raw
+# strings, so a vendor rename is a module update rather than a site edit.
+# A consuming site's own data/agent-readiness/bots.toml SHADOWS this file.
+#
+# Two retired Anthropic tokens are deliberately ABSENT and must not be added:
+# Claude-Web and anthropic-ai match nothing today. A third caution: the token
+# Google-Extended is a robots.txt CONTROL token only -- it is never a crawler
+# user-agent, and it must never be confused with Googlebot.
+
+gptbot                = { token = "GPTBot",              vendor = "OpenAI" }
+oai_searchbot         = { token = "OAI-SearchBot",       vendor = "OpenAI" }
+chatgpt_user          = { token = "ChatGPT-User",        vendor = "OpenAI" }
+oai_adsbot            = { token = "OAI-AdsBot",          vendor = "OpenAI" }
+claudebot             = { token = "ClaudeBot",           vendor = "Anthropic" }
+claude_user           = { token = "Claude-User",         vendor = "Anthropic" }
+claude_searchbot      = { token = "Claude-SearchBot",    vendor = "Anthropic" }
+google_extended       = { token = "Google-Extended",     vendor = "Google" }
+perplexitybot         = { token = "PerplexityBot",       vendor = "Perplexity" }
+perplexity_user       = { token = "Perplexity-User",     vendor = "Perplexity" }
+applebot_extended     = { token = "Applebot-Extended",   vendor = "Apple" }
+meta_externalagent    = { token = "Meta-ExternalAgent",  vendor = "Meta" }
+meta_externalfetcher  = { token = "Meta-ExternalFetcher", vendor = "Meta" }
+amazonbot             = { token = "Amazonbot",           vendor = "Amazon" }
+bytespider            = { token = "Bytespider",          vendor = "ByteDance" }
+ccbot                 = { token = "CCBot",               vendor = "Common Crawl" }
+diffbot               = { token = "Diffbot",             vendor = "Diffbot" }
+cohere_ai             = { token = "cohere-ai",           vendor = "Cohere" }
+timpibot              = { token = "Timpibot",            vendor = "Timpi" }
+omgilibot             = { token = "Omgilibot",           vendor = "Webz.io" }
+imagesiftbot          = { token = "ImagesiftBot",        vendor = "Imagesift" }

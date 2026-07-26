@@ -1,0 +1,117 @@
+{{/*
+  agent-readiness/markdown-page.html -- renderer (RENDERER tier).
+
+  Purpose: render one Markdown twin -- the front-matter block, the page body,
+  and an optional trailing pointer section.
+
+  MEMBERSHIP: the twin emits NOTHING AT ALL for a page the shared filter
+  excludes, so the twin surface can never disagree with robots.txt, llms.txt
+  and about.md about which pages of the site exist. Hugo still creates the
+  file (the output format is wired per page kind), but it is empty, which is
+  the honest representation of a page that opted out.
+
+  BODY SOURCE: .RenderShortcodes, which is the only one of Hugo's four
+  content accessors that yields a document that is simultaneously valid
+  Markdown prose and complete. .RawContent leaves every shortcode call as the
+  literal, unexpanded call text; .Content renders the surrounding Markdown to
+  HTML too, producing an HTML document with a .md extension; .Plain strips
+  every tag
+  and destroys headings, lists, links and code fences. There is no
+
+  HTML-to-Markdown template function in Hugo, so this is not merely the best
+  of four -- it is the only correct one.
+
+  The documented consequence: a twin of a shortcode-heavy page contains raw
+  HTML blocks inline. That is valid CommonMark, and for a page whose entire
+  value is a rendered widget the widget markup IS the content.
+
+  Relative links inside the body need no rewriting: index.md sits in the same
+  published directory as index.html, so every relative reference resolves
+  identically from either.
+
+  Expected context (dict):
+  - .page (Page) - The page whose twin is being rendered.
+  - .cfg  (dict) - The resolved config from agent-readiness/config.html.
+
+  Return value: none. This partial renders.
+*/}}
+
+{{- $page := .page -}}
+{{- $cfg := .cfg -}}
+{{- $md := $cfg.markdown -}}
+
+{{- if and $cfg.enable $md.enable -}}
+  {{/* MEMBERSHIP, by kind. A regular page must appear in the shared
+       enumeration, which is what keeps the twin set identical to the set
+       llms.txt and about.md list. The home page and a section list page are
+       never in that enumeration -- site.RegularPages excludes them, because
+       they are the containers of an enumeration rather than members of one
+       -- so they are tested against the same per-page rules directly. The
+       section allow-list still applies to a section page (a site scoping its
+       agent surface to /blog does not want a /projects/ section twin), but
+       never to the home page, which is the site root rather than a section
+       member. */}}
+  {{- $included := false -}}
+  {{- if eq $page.Kind "page" -}}
+    {{- range partial "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) -}}
+      {{- if eq .Path $page.Path -}}{{- $included = true -}}{{- end -}}
+    {{- end -}}
+  {{- else -}}
+    {{- $searchPagePath := "" -}}
+    {{- if $cfg.exclude_search_page -}}
+      {{- with site.GetPage $cfg.search_page_path -}}
+        {{- $searchPagePath = .Path -}}
+      {{- end -}}
+    {{- end -}}
+    {{- $included = not (partial "agent-readiness/lib/page-excluded.html" (dict "page" $page "cfg" $cfg "search_page_path" $searchPagePath)) -}}
+    {{- if and $included $cfg.sections (eq $page.Kind "section") -}}
+      {{- $inScope := false -}}
+      {{- $p := $page.Path -}}
+      {{- range $cfg.sections -}}
+        {{- if or (eq $p .) (hasPrefix $p (printf "%s/" .)) -}}{{- $inScope = true -}}{{- end -}}
+      {{- end -}}
+      {{- $included = $inScope -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- if $included -}}
+    {{/* safeHTML because this partial lives in the .html template namespace
+         while the twin it feeds is a standalone plain-text document: without
+         it, the builder's quotes come out as &#34; and every front-matter
+         block is unparseable. .RenderShortcodes below needs no such marking
+         because it already returns template.HTML. */}}
+    {{- partial "agent-readiness/markdown-front-matter.html" (dict "page" $page "cfg" $cfg) | safeHTML -}}
+    {{- $page.RenderShortcodes -}}
+
+    {{/* Trailing pointer section. The target is resolved through the home
+         page's output formats rather than a hardcoded path, so a subpath
+         baseURL or a language prefix is honored. */}}
+    {{- if and $md.sitemap_section (ne $md.sitemap_section_target "none") -}}
+      {{- $target := "" -}}
+      {{- $label := "" -}}
+      {{- if eq $md.sitemap_section_target "llms" -}}
+        {{- with site.Home.OutputFormats.Get "llmstxt" -}}
+          {{- $target = .RelPermalink -}}
+          {{- $label = "llms.txt" -}}
+        {{- else -}}
+          {{- partial "agent-readiness/lib/warn.html" (dict
+              "key" "agent-readiness:warn:sitemap-section-no-llmstxt"
+              "message" "[agent-readiness] The Markdown twins are configured with sitemap_section_target = \"llms\", but the llmstxt output format is not wired to the home page, so the trailing pointer section is omitted. Add 'llmstxt' to your existing [outputs] home list -- the config list replaces the ENTIRE default home list, so keep every format you already wire there -- or set sitemap_section_target to \"sitemap\" or \"none\".") -}}
+        {{- end -}}
+      {{- else if eq $md.sitemap_section_target "sitemap" -}}
+        {{- with site.Home.OutputFormats.Get "sitemap" -}}
+          {{- $target = .RelPermalink -}}
+        {{- else -}}
+          {{- $target = "sitemap.xml" | absURL -}}
+        {{- end -}}
+        {{- $label = "sitemap.xml" -}}
+      {{- end -}}
+      {{- with $target }}
+
+## {{ $cfg.i18n.sitemap_heading }}
+
+- [{{ $label }}]({{ . }})
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}

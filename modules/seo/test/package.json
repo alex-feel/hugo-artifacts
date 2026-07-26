@@ -1,0 +1,12 @@
+{
+  "name": "seo-module-tests",
+  "private": true,
+  "type": "module",
+  "description": "Build-output assertion suite for the seo Hugo module, run against the static HTML that two hugo builds of ./fixture produce -- one with the alternates, link-relation and content-license config blocks unset, one with them set. The module ships zero JavaScript, so there is no browser behavior to test.",
+  "scripts": {
+    "test": "node --test \"tests/*.spec.js\""
+  },
+  "devDependencies": {
+    "node-html-parser": "^7.0.1"
+  }
+}

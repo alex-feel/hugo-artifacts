@@ -23,6 +23,13 @@
 //     test DATA (paralleling the .prettierignore exclusion): bare URLs inside
 //     shortcode arguments, javascript: destinations, and attribute blocks
 //     whose line structure is semantically load-bearing.
+//   - **/layouts/**/*.md files are Hugo TEMPLATES, not Markdown documents:
+//     Hugo's output-format template naming is [kind].[format].[suffix], so a
+//     Markdown-emitting template is necessarily named *.md (page.markdown.md,
+//     home.agentfacts.md). Their content is Go template syntax whose braces,
+//     comment delimiters and unindented headings are not prose and must not
+//     be restyled -- linting them reports on the generator rather than on
+//     anything a reader ever sees.
 //   - test-results/ and playwright-report/ are Playwright-generated output
 //     (error-context snapshots, HTML reports) that any module's test suite
 //     can leave behind after a failed run; they are tool artifacts, never
@@ -46,6 +53,7 @@
     "modules/pwa/test/README.md",
     "modules/pwa/test/IOS_MANUAL_MATRIX.md",
     "modules/images/test/fixture/content/**",
+    "**/layouts/**/*.md",
     "**/test-results/**",
     "**/playwright-report/**",
   ],

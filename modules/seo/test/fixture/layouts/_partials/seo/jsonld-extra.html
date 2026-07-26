@@ -1,0 +1,19 @@
+{{/*
+  The tier-3 JSON-LD extension hook, in the shape a consuming site uses it:
+  it receives $ctx = {page, seo} and returns a SLICE of node dicts.
+
+  Its whole job in this fixture is to publish $seo.ids.person into the
+  emitted graph, so the suite can assert that the anchor is byte-identical on
+  the author page and on an unrelated blog post, and that it equals the
+  ProfilePage mainEntity @id. Before the module exposed the key, a consumer
+  had to hand-build this string and watch it desynchronize silently.
+*/}}
+{{- $ctx := . -}}
+{{- $nodes := slice -}}
+{{- $nodes = $nodes | append (dict
+    "@type" "Thing"
+    "@id" (printf "%s#fixture-person-probe" $ctx.page.Permalink)
+    "name" "person-id-probe"
+    "description" (printf "%v" $ctx.seo.ids.person)
+) -}}
+{{- return $nodes -}}

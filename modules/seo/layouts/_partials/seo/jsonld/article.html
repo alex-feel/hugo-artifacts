@@ -154,6 +154,15 @@
     {{- $node = merge $node (dict "sameAs" .) -}}
   {{- end -}}
 
+  {{/* license -- a schema.org CreativeWork property, so it is valid on this
+       node and on nothing else this module emits. Deliberately NOT attached
+       to Person, Organization, WebSite or BreadcrumbList: a license
+       describes a creative work, not an entity or a navigational aid.
+       Inert until [seo] content_license is set. */}}
+  {{- with $page.Param "seo.content_license" -}}
+    {{- $node = merge $node (dict "license" .) -}}
+  {{- end -}}
+
   {{- $result = $node -}}
 {{- end -}}
 

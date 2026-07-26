@@ -1,0 +1,46 @@
+{{- /*
+  home.opensearch.xml -- the OpenSearch description document.
+
+  Publishes /opensearch.xml, which lets a client that honors rel="search"
+  discover this site's search endpoint and its query contract.
+
+  GATED OFF BY DEFAULT. [search.opensearch] enable must be true, because the
+  document adds a published URL and an [outputs] home entry that a consumer
+  should opt into deliberately. It is also gated on the module's own master
+  switch: advertising a search endpoint on a site whose search is disabled
+  would point clients at a page that cannot answer them.
+
+  The URL template is derived from $cfg.page_url -- the SAME value every
+  other surface of this module uses for the search page -- so the advertised
+  query contract can never drift out of sync with the real one. That is the
+  whole reason this document belongs to the search module rather than to a
+  site or to another module: only the owner of the /search/?q= contract can
+  keep a second declaration of it honest.
+
+  root = true pins one path for every language, so the document is emitted
+  once, from the default language. A per-language document would overwrite
+  the same path, with the last writer winning.
+
+  The OpenSearch 1.1 specification caps ShortName at 16 characters and
+  Description at 1024; both are truncated here rather than emitted
+  over-length, because an over-length value makes the whole document invalid
+  to a strict consumer.
+*/ -}}
+{{- $cfg := partial "search/config.html" (dict "page" . "args" dict) -}}
+{{- if and $cfg.enable $cfg.opensearch.enable site.Language.IsDefault -}}
+  {{- $shortName := site.Title | default (T "search_label" | default "Search") -}}
+  {{- $description := printf "%s - %s" site.Title (T "search_label" | default "Search this site") -}}
+  {{- $template := printf "%s?q={searchTerms}" ($cfg.page_url | absURL) -}}
+  {{- $self := "" -}}
+  {{- with .OutputFormats.Get "opensearch" -}}{{- $self = .Permalink -}}{{- end -}}
+  {{- printf "%s\n" `<?xml version="1.0" encoding="UTF-8"?>` | safeHTML -}}
+<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
+  <ShortName>{{ substr $shortName 0 16 }}</ShortName>
+  <Description>{{ substr $description 0 1024 }}</Description>
+  <InputEncoding>UTF-8</InputEncoding>
+  <Url type="text/html" method="get" template="{{ $template }}" />
+  {{- with $self }}
+  <Url type="application/opensearchdescription+xml" rel="self" template="{{ . }}" />
+  {{- end }}
+</OpenSearchDescription>
+{{- end -}}
