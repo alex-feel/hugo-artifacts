@@ -123,6 +123,8 @@ Warnings are emitted for:
 - a duplicate permalink across two pages;
 - a per-section front-matter key that collides with a key the twin builder emits itself;
 - an `[[llms.sections]]` or `[[facts.sections]]` entry with an empty `section`, with no `name`, or matching no page -- each is skipped rather than published, because all three otherwise produce a plausible-looking document with the wrong contents;
+- a bare value where a table belongs, in ANY array-of-tables key (`skills`, `llms.sections`, `llms.optional`, `facts.sections`, `facts.identity.rows`, and a contact page's channels) -- skipped rather than dropped, because a dropped entry publishes a surface indistinguishable from one the consumer never configured;
+- a scalar written for a consumer sub-table (`facts.identity`, `facts.contact`) -- the whole block is ignored, because `[params.agent.facts] contact = '/contact'` is the natural mis-write of `[params.agent.facts.contact] page = '/contact'`;
 - a `markdown.sitemap_section_target` that is not `llms`, `sitemap`, or `none`, and a `sitemap_section_target = 'llms'` whose `llmstxt` format is not wired to the home page;
 - a `[params.agent.license]` with a `url` but no `name`, where the `llms.txt` line would render an empty link label;
 - a skill whose remote source could not be fetched, whose fields are invalid, or whose `name` repeats another entry's;

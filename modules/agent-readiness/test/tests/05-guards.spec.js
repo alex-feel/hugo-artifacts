@@ -12,6 +12,8 @@ import {
   exists,
   badtablesDir,
   edgeDir,
+  minimalDir,
+  publishedTwins,
   llmsoffDir,
   notwinsDir,
   offDir,
@@ -236,6 +238,28 @@ test('a non-map `agent:` front-matter value warns rather than being interpreted'
   assert.equal(warnCount(/expected a map/), 1);
 });
 
+// ---- The shipped default allow-list ----
+
+test('an EMPTY sections allow-list admits every regular page', () => {
+  // The shipped default, and until this build it was reachable by nothing:
+  // every environment inherited the two sections _default configures, so the
+  // `{{- if $cfg.sections -}}` gate was always true. A regression making the
+  // empty list admit NOTHING would have shipped with the suite green.
+  const twins = publishedTwins(minimalDir);
+  for (const rel of [
+    '/blog/post-one/index.md',
+    '/projects/alpha/index.md',
+    '/contact/index.md',
+    '/scoped-keys/index.md',
+  ]) {
+    assert.ok(twins.includes(rel), `${rel} must be admitted when sections is empty`);
+  }
+  // The per-page rules still apply -- empty means "no section filter", not
+  // "no filter at all".
+  assert.ok(!twins.includes('/blog/excluded/index.md'), 'agent: false still excludes');
+  assert.ok(!twins.includes('/blog/noindexed/index.md'), 'robots: noindex still excludes');
+});
+
 // ---- The master switch ----
 
 test('enable = false emits no agent surface at all', () => {
@@ -334,31 +358,46 @@ test('a non-numeric limit is reported and read as complete', () => {
   assert.equal(bad.length, 3, 'and listed COMPLETE, which is what limit = 0 means');
 });
 
+test('a bare value in ANY array-of-tables key is refused, not dropped', () => {
+  // The scalar coercion cannot see these: `skills = ['my-skill']` is a real
+  // slice, so it passes IsSlice untouched and every entry then fails the
+  // entry-must-be-a-table test. Dropped silently each one publishes a surface
+  // that is byte-indistinguishable from "the consumer configured nothing" --
+  // no index at all, no `## Optional` heading, no `## Identity` block, a
+  // missing contact channel.
+  assert.equal(warnCount(/params\.agent\.skills\]\] entry/, 'badtables'), 2);
+  assert.equal(warnCount(/llms\.optional\]\] entry/, 'badtables'), 1);
+  assert.equal(warnCount(/identity\.rows\]\] entry/, 'badtables'), 2);
+  assert.equal(warnCount(/contact channel/, 'badtables'), 2);
+});
+
 test('a scalar written for a consumer sub-table is refused, not evaluated', () => {
   // `[params.agent.facts] contact = '/contact'` is the natural mis-write of
   // `[params.agent.facts.contact] page = '/contact'`. Hugo's `default`
   // substitutes only on a FALSY value, so the string reached facts.html and
   // `.page` was evaluated as a field on a string -- a hard build stop, in a
   // module the consumer does not own.
-  assert.equal(warnCount(/facts\] contact expects a table/, 'badtables'), 1);
-  // Degraded to "not configured": the document still publishes, without the
-  // block that could not be read.
+  // The scalar sub-table shape lives in `edge`; `badtables` now carries the
+  // bare-string-array shapes instead, so this asserts the degraded OUTPUT
+  // both produce: a document that still publishes, minus the block that
+  // could not be read.
   const about = read('about.md', badtablesDir);
-  assert.ok(!about.includes('## Contact'), 'the unreadable block is omitted');
+  assert.ok(!about.includes('## Contact'), 'no channel survived, so no block');
+  assert.ok(!about.includes('## Identity'), 'no row survived, so no block');
   assert.match(about, /^# /m, 'the rest of the document is intact');
+  assert.ok(!exists('.well-known/agent-skills/index.json', badtablesDir));
 });
 
-test('scalars written for the two array-of-tables keys are refused', () => {
-  // Both are ranged raw downstream, so both stopped the build.
-  assert.equal(
-    warnCount(/\[\[params\.agent\.skills\]\] expects an array of tables/, 'badtables'),
-    1,
-  );
-  assert.equal(warnCount(/identity\] rows expects an array of tables/, 'badtables'), 1);
-  assert.ok(
-    !exists('.well-known/agent-skills/index.json', badtablesDir),
-    'a refused skills value publishes no index',
-  );
+test('a scalar written for a consumer sub-table is refused, not evaluated', () => {
+  // `[params.agent.facts] identity = '/'` is the natural mis-write of
+  // `[params.agent.facts.identity] page = '/'`. Hugo's `default` substitutes
+  // only on a FALSY value, so the string reached facts.html and `.rows` was
+  // evaluated as a field on a string -- a hard build stop, inside a module
+  // the consumer does not own.
+  assert.equal(warnCount(/facts\] identity expects a table/, 'llmsoff'), 1);
+  const about = read('about.md', llmsoffDir);
+  assert.ok(!about.includes('## Identity'), 'the unreadable block is omitted');
+  assert.match(about, /^# /m, 'the rest of the document still publishes');
 });
 
 test('a bare value where a section table belongs is refused, not dropped', () => {

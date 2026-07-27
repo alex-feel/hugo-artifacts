@@ -146,7 +146,7 @@
       {{- end -}}
 
       {{/* positiveNotes / negativeNotes as ItemList of ListItem. */}}
-      {{- with $data.positive_notes -}}
+      {{- with partial "seo/lib/as-list.html" $data.positive_notes -}}
         {{- $items := slice -}}
         {{- $pos := 0 -}}
         {{- range . -}}
@@ -157,7 +157,7 @@
           {{- $node = merge $node (dict "positiveNotes" (dict "@type" "ItemList" "itemListElement" .)) -}}
         {{- end -}}
       {{- end -}}
-      {{- with $data.negative_notes -}}
+      {{- with partial "seo/lib/as-list.html" $data.negative_notes -}}
         {{- $items := slice -}}
         {{- $pos := 0 -}}
         {{- range . -}}

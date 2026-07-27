@@ -175,7 +175,7 @@
            as its string form (name). */}}
       {{- $clips := slice -}}
       {{- $clipPos := 0 -}}
-      {{- range $video.clips -}}
+      {{- range partial "seo/lib/as-list.html" $video.clips -}}
         {{- $clipPos = add $clipPos 1 -}}
         {{- if not (reflect.IsMap .) -}}
           {{- partial "seo/lib/warn.html" (dict

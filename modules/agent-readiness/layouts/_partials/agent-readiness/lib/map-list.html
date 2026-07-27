@@ -1,0 +1,40 @@
+{{/*
+  agent-readiness/lib/map-list.html -- utility (LIB tier).
+
+  Purpose: return a consumer-authored value as a slice of MAPS, safe both to
+  `range` and to dereference inside that range.
+
+  The module's several array-of-tables keys -- `[[params.agent.skills]]`,
+  `[[llms.sections]]`, `[[facts.sections]]`, `[[facts.identity.rows]]`, and a
+  contact page's `channels` -- all break the same two ways. Written as a bare
+  scalar the value is not rangeable at all, which stops the build; written as
+  a real slice of bare strings it ranges fine and every entry then fails the
+  map test, so the entries vanish and the surface publishes as though the
+  consumer had configured nothing.
+
+  Filtering to maps closes both, and absorbs the third authoring mistake for
+  these keys: writing ONE table directly where a LIST of tables belongs. That
+  arrives as a bare map, and the single entry the consumer meant is what they
+  get.
+
+  This returns the surviving maps only. A caller that wants to REPORT the
+  dropped entries keeps its own `else` arm on the map test, which is the right
+  division: the entries are gone either way, but only the caller knows which
+  configuration key to name in the warning.
+
+  Expected context: the value (the dot, not a dict). Any type.
+
+  Return value: a slice whose every element is a map. ONE terminal return.
+*/}}
+
+{{- $out := slice -}}
+
+{{- if ne . nil -}}
+  {{- if reflect.IsMap . -}}
+    {{- $out = slice . -}}
+  {{- else if reflect.IsSlice . -}}
+    {{- $out = . -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $out -}}

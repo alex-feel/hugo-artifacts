@@ -1,0 +1,46 @@
+{{/*
+  seo/lib/as-map-list.html -- internal utility.
+
+  Purpose: return a consumer-authored value as a slice of MAPS, safe both to
+  `range` and to dereference inside that range.
+
+  WHY IT IS SEPARATE FROM as-list.html: several keys here are lists of TABLES
+  -- `contact_point`, `certifications`, `clips`, `interaction_statistic`,
+  `seo.authors` -- and their loop bodies read `.name`, `.contact_type` and so
+  on. Coercing a scalar into a ONE-ITEM slice, which is what as-list.html does
+  and is right for a list of strings, would only move the abort one level in:
+  `range` would succeed and `.name` would then be evaluated as a field on a
+  string, which stops the build just the same. Filtering to maps closes both
+  levels at once.
+
+  It also absorbs the commonest authoring mistake for these keys: writing ONE
+  table directly ([params.seo.organization.contact_point] name = ...) where a
+  LIST of tables belongs ([[params.seo.organization.contact_point]]). That
+  arrives as a bare map, and the single entry the consumer meant is exactly
+  what they get.
+
+  Behavior: nil becomes an empty slice; a map becomes a one-item slice holding
+  it; a slice keeps only its map entries and drops the rest; anything else
+  becomes an empty slice. The caller decides whether a dropped entry deserves
+  a warning -- most of these surfaces simply omit an unusable node.
+
+  Expected context: the value (the dot, not a dict). Any type.
+
+  Return value: a slice whose every element is a map. ONE terminal return.
+*/}}
+
+{{- $out := slice -}}
+
+{{- if ne . nil -}}
+  {{- if reflect.IsMap . -}}
+    {{- $out = slice . -}}
+  {{- else if reflect.IsSlice . -}}
+    {{- range . -}}
+      {{- if reflect.IsMap . -}}
+        {{- $out = $out | append . -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $out -}}

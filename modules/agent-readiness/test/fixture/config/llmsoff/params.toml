@@ -15,3 +15,12 @@
 
   [agent.llms]
     enable = false
+
+  # A scalar written for a consumer-authored SUB-TABLE, carried here because
+  # the two builds that would otherwise host it need their own facts blocks
+  # intact. `[params.agent.facts] identity = '/'` is the natural mis-write of
+  # `[params.agent.facts.identity] page = '/'`, and Hugo's `default`
+  # substitutes only on a FALSY value -- so the string survived to facts.html,
+  # `.rows` was evaluated as a field on a string, and the build stopped.
+  [agent.facts]
+    identity = '/'

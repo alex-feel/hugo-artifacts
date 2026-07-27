@@ -79,7 +79,8 @@
 {{/* ---- Static link relations ---- Emission is unconditional on the
      configured value being non-empty, on every page this module's head runs
      on, because each of these targets is constant sitewide. */}}
-{{- $links := $page.Param "seo.links" -}}
+{{- with $page.Param "seo.links" -}}
+{{- $links := . -}}
 {{- if reflect.IsMap $links -}}
   {{- $ogSiteName := $page.Param "seo.organization.name" | default ($page.Param "seo.website.name") | default site.Title -}}
   {{- range $key, $value := $links -}}
@@ -107,4 +108,15 @@
       {{- end -}}
     {{- end -}}
   {{- end -}}
+{{- else -}}
+  {{/* Set but not a table -- the bracket array-of-tables form, say. Gating
+       silently would lose rel="license", rel="author", rel="search" and
+       rel="privacy-policy" from every page, which is the same
+       behaves-exactly-like-unset failure this file rejects for `formats`
+       twenty lines above. The else nests INSIDE the `with`, so the unset
+       case stays silent. */}}
+  {{- partial "seo/lib/warn.html" (dict
+      "key" "seo:warn:links-not-a-table"
+      "message" (printf "[seo] Ignoring [seo.links]: it expects a table of relation name to URL, but was given %q. Write it as [params.seo.links] with one key per relation." (printf "%v" $links))) -}}
+{{- end -}}
 {{- end -}}

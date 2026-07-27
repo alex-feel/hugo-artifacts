@@ -25,9 +25,9 @@
 #   edge       -- a subpath baseURL plus the misconfigurations no other build
 #                 reaches (license url without name, an unrecognized
 #                 sitemap_section_target, colliding permalinks);
-#   off        -- the master switch and every surface switch false while all
-#                 four formats stay wired, the only shape that exercises the
-#                 `enable` conjunct in any renderer;
+#   off        -- the master switch ALONE, false, while all four formats stay
+#                 wired; setting the surface switches too would mask the
+#                 conjunct this build exists to lock;
 #   badtables  -- the section arrays written as bare strings instead of arrays
 #                 of tables, which TOML cannot express alongside the real
 #                 tables and so needs a build of its own;

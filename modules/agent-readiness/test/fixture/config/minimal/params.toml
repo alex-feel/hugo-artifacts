@@ -20,6 +20,13 @@
 # Everything else is inherited from config/_default, so the content, the module
 # import and the outputs wiring stay in one place.
 [agent]
+  # The SHIPPED DEFAULT allow-list, which no build reached: _default sets two
+  # sections and every other environment inherits them, so `{{- if
+  # $cfg.sections -}}` in page-list.html was always true and a regression
+  # making the empty list admit nothing would ship with the suite green.
+  # Empty must admit EVERY regular page.
+  sections = []
+
   # Emptied, not removed: an environment overlay merges over the default, so an
   # absent key would inherit the three skills _default declares.
   skills = []

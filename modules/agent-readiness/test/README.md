@@ -33,7 +33,7 @@ Both runners validate the shipped data files, perform the repository's pre-launc
 | multilingual | `fixture/` | `multilingual` | Two languages, the only shape in which the agent-skills index's `site.Language.IsDefault` gate does anything at all. |
 | llmsoff | `fixture/` | `llmsoff` | `llms.txt` switched off while `llmstxt` stays wired. The counterpart of `notwins` for the other document the twins and `about.md` point at. |
 | edge | `fixture/` | `edge` | A **subpath** `baseURL`, plus the misconfigurations no other build reaches: a license `url` with no `name`, an unrecognized `sitemap_section_target`, and two pages publishing to one URL. |
-| off | `fixture/` | `off` | The master switch and every surface switch false, with all four formats still wired. The only shape that exercises the `enable` conjunct in any renderer. |
+| off | `fixture/` | `off` | The master switch alone, false, with all four formats still wired. Setting the surface switches too would MASK the conjunct: every renderer gates on one, so deleting `$cfg.enable` from four of six would then change no byte. |
 | badtables | `fixture/` | `badtables` | The section arrays written as bare strings instead of arrays of tables, plus a scalar written for a consumer sub-table. TOML cannot express those alongside the real tables, so they need a build of their own. |
 | shadow | `fixture-shadow/` | default | The fixture ships its own `layouts/robots.txt`, proving the documented silent-override hazard. |
 

@@ -100,14 +100,14 @@
     {{- $keywords = delimit . ", " -}}
   {{- end -}}
   {{- if not $keywords -}}
-    {{- with $page.Params.tags -}}
+    {{- with partial "seo/lib/as-list.html" $page.Params.tags -}}
       {{- $keywords = delimit . ", " -}}
     {{- end -}}
   {{- end -}}
   {{- if not $keywords -}}
-    {{- with $page.Param "seo.keywords" -}}
+    {{- with partial "seo/lib/as-list.html" ($page.Param "seo.keywords") -}}
       {{- $keywords = delimit . ", " -}}
-    {{- else with site.Params.metadata.keywords -}}
+    {{- else with partial "seo/lib/as-list.html" site.Params.metadata.keywords -}}
       {{- $keywords = delimit . ", " -}}
     {{- end -}}
   {{- end -}}
@@ -117,7 +117,11 @@
 
   {{/* articleSection: first category -> .Section. */}}
   {{- $section := "" -}}
-  {{- with $page.Params.categories -}}
+  {{/* Coerced like the OG surface in head-meta.html: `delimit` and `index`
+       do NOT reject a string, they iterate it BYTE-WISE, so `tags: hugo`
+       published articleSection as an integer and keywords as a list of byte
+       codes -- silently, to Google and to every AI crawler. */}}
+  {{- with partial "seo/lib/as-list.html" $page.Params.categories -}}
     {{- if gt (len .) 0 -}}
       {{- $section = index . 0 -}}
     {{- end -}}

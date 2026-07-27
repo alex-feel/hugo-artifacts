@@ -3,14 +3,16 @@
 // degrades to a deduplicated warnf and a safe fallback, so a broken schema
 // declaration costs you one rich result, never the site."
 //
-// Go's `range` accepts only an array, slice, map, chan or int, and `index`
-// rejects a string, so a value documented as a list but written as a bare
-// scalar aborted template execution and stopped the consuming site's build.
-// The scalar form is not exotic: Hugo front matter accepts `tags: hugo`, and
-// many sites write it that way, so the failure landed on ordinary content.
+// One authoring mistake, two failure shapes. `range` REJECTS a string, so an
+// uncoerced value there aborted the consuming site's build. `index` and
+// `delimit` ACCEPT it and iterate it BYTE-WISE, so an uncoerced value there
+// published integers -- which is the quieter and worse failure, and the one
+// that actually shipped. The scalar form is not exotic: Hugo front matter
+// accepts `tags: hugo`, and many sites write it that way, so both landed on
+// ordinary content.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {rawHtml, PAGES} from './helpers.js';
+import {graph, rawHtml, PAGES} from './helpers.js';
 
 test('a page writing tags and categories as bare scalars builds and emits them', () => {
   // That the suite reaches this assertion at all is half the point: before
@@ -26,4 +28,30 @@ test('the scalar page emits exactly one tag, not one per character', () => {
   const tags = [...rawHtml(PAGES.scalarTaxonomies).matchAll(/article:tag" content="([^"]*)"/g)];
   assert.equal(tags.length, 1);
   assert.equal(tags[0][1], 'single-tag');
+});
+
+test('the JSON-LD node carries the scalar taxonomies as VALUES, not byte codes', () => {
+  // The sharpest form of this defect class, and the one that shipped: Hugo's
+  // `delimit` and `index` do not reject a string, they iterate it BYTE-WISE.
+  // So `tags: hugo` published `"keywords": "104, 117, 103, 111"` and
+  // `articleSection` as an integer -- to Google and to every AI crawler,
+  // silently, exit 0. The OG surface on the same page was correct throughout,
+  // which is exactly why nothing caught it.
+  const nodes = graph(PAGES.scalarTaxonomies).filter((n) => n['@type'] === 'BlogPosting');
+  assert.equal(nodes.length, 1);
+  assert.equal(nodes[0].keywords, 'single-tag');
+  assert.equal(nodes[0].articleSection, 'single-category');
+});
+
+test('no JSON-LD value anywhere is a bare byte code', () => {
+  // A regression net for the whole class rather than the two known keys.
+  for (const [name, rel] of Object.entries(PAGES)) {
+    for (const node of graph(rel)) {
+      for (const [key, value] of Object.entries(node)) {
+        if (typeof value === 'number' && value >= 32 && value <= 126) {
+          assert.fail(`${name}: ${node['@type']}.${key} is ${value}, which looks byte-wise`);
+        }
+      }
+    }
+  }
 });

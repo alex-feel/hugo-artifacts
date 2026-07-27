@@ -55,7 +55,7 @@
 
 {{/* 3. Native .Params.images; resolve/image.html resolves each entry as a
      bundle resource, a global resource, or a path/URL. */}}
-{{- with $page.Params.images -}}
+{{- with partial "seo/lib/as-list.html" $page.Params.images -}}
   {{- range . -}}
     {{- $candidates = $candidates | append . -}}
   {{- end -}}

@@ -136,9 +136,14 @@
   {{- end }}
   {{/* categories and tags go through seo/lib/as-list.html because Hugo front
        matter accepts the bare scalar form -- `tags: hugo`, `categories: notes`
-       -- and many sites write it. `index` on a string and `range` over one
-       both abort template execution, which would stop the consuming site's
-       build over ordinary content. */}}
+       -- and many sites write it.
+
+       Two different failures, one cause: `range` REJECTS a string and stops
+       the build, while `index` and `delimit` ACCEPT it and iterate it
+       byte-wise, publishing integers. The second is worse because it is
+       silent -- it shipped `"keywords": "104, 117, 103, 111"` to Google from
+       the JSON-LD builder while this surface was already correct. Coerce
+       before all three. */}}
   {{- $section := "" -}}
   {{- with partial "seo/lib/as-list.html" $page.Params.categories -}}
     {{- $section = index . 0 -}}

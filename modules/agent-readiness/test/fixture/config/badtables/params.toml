@@ -12,23 +12,28 @@
 # no section listings: exit 0, zero warnings, documents that look deliberate.
 [agent]
 
-  # A scalar where an array of tables belongs. Ranged raw downstream, so
-  # without coercion it stops the build.
-  skills = 'not-an-array-of-tables'
+  # A REAL slice of bare strings. The scalar coercion cannot see it -- the
+  # value passes reflect.IsSlice -- and every entry then fails the
+  # entry-must-be-a-table test. Dropped silently it publishes no index at all,
+  # which is byte-indistinguishable from the documented zero-skills state.
+  skills = ['my-skill', 'another-skill']
 
   [agent.llms]
     sections = ['blog', 'projects']
+    # The same bare-string-array shape on the optional entries: dropped
+    # silently it removes the whole `## Optional` heading.
+    optional = ['sitemap']
 
   [agent.facts]
     sections = ['blog']
 
-  # A scalar written for a consumer-authored SUB-TABLE -- the natural mis-write
-  # of [params.agent.facts.contact] page = '/contact'. Hugo's `default`
-  # substitutes only on a FALSY value, so the string survived to facts.html and
-  # `.page` was evaluated as a field on a string, stopping the build.
-  contact = '/contact'
+  # The contact page below carries bare-string channels.
+  [agent.facts.contact]
+    page = '/contact-bare'
+    key = 'channels'
 
   [agent.facts.identity]
     page = '/'
-    # The same shape one level deeper, on an array-of-tables key.
-    rows = 'not-an-array-of-tables'
+    # Bare strings inside a real slice. Dropped silently they withhold the
+    # entire `## Identity` block of the one-fetch facts document.
+    rows = ['role', 'based_in']

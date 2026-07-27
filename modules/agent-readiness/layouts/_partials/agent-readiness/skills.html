@@ -127,6 +127,14 @@
         {{- end -}}
       {{- end -}}
     {{- end -}}
+  {{- else -}}
+    {{/* A bare value inside a REAL slice -- `skills = ['my-skill']` instead of
+         [[params.agent.skills]] tables. The upstream scalar coercion cannot
+         see it, and dropped silently it publishes no index at all, which is
+         byte-indistinguishable from the documented zero-skills state. */}}
+    {{- partial "agent-readiness/lib/warn.html" (dict
+        "key" (printf "agent-readiness:warn:skill-not-a-table:%v" $skill)
+        "message" (printf "[agent-readiness] Skipping the [[params.agent.skills]] entry %q: an entry must be a table with name, description and source, not a bare value." (printf "%v" $skill))) -}}
   {{- end -}}
 {{- end -}}
 

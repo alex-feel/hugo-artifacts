@@ -185,6 +185,12 @@
         {{- with .note -}}{{- $item = printf "%s: %s" $item . -}}{{- end -}}
         {{- $optional = $optional | append $item -}}
       {{- end -}}
+    {{- else -}}
+      {{/* A bare value inside a real slice. Dropped silently it removes the
+           whole `## Optional` heading, which reads as a deliberate omission. */}}
+      {{- partial "agent-readiness/lib/warn.html" (dict
+          "key" (printf "agent-readiness:warn:optional-not-a-table:%v" .)
+          "message" (printf "[agent-readiness] Skipping the [[params.agent.llms.optional]] entry %q: an entry must be a table with `name` and `url`, not a bare value." (printf "%v" .))) -}}
     {{- end -}}
   {{- end -}}
   {{- with $optional -}}

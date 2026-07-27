@@ -100,13 +100,13 @@
   {{/* sameAs[]: seo.organization.same_as unioned with absolute-URL values
        from seo.social.*, deduped. */}}
   {{- $sameAs := slice -}}
-  {{- with $org.same_as -}}
+  {{- with partial "seo/lib/as-list.html" $org.same_as -}}
     {{- range . -}}
       {{- $sameAs = $sameAs | append . -}}
     {{- end -}}
   {{- end -}}
   {{- with $site.Params.seo.social -}}
-    {{- range $k, $v := . -}}
+    {{- range $k, $v := (cond (reflect.IsMap .) . dict) -}}
       {{- with $v -}}
         {{- $s := string . -}}
         {{- if or (hasPrefix $s "http://") (hasPrefix $s "https://") -}}
@@ -166,7 +166,7 @@
     {{- end -}}
 
     {{/* contactPoint[] (repeatable ContactPoint). */}}
-    {{- with $org.contact_point -}}
+    {{- with partial "seo/lib/as-map-list.html" $org.contact_point -}}
       {{- $points := slice -}}
       {{- range . -}}
         {{- $cp := dict "@type" "ContactPoint" -}}

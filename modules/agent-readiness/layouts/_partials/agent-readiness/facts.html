@@ -82,6 +82,12 @@
               {{- $rendered = $rendered | append (printf "- **%s**: %s" $label .) -}}
             {{- end -}}
           {{- end -}}
+        {{- else -}}
+          {{/* A bare value inside a real slice. Dropped silently it withholds
+               the whole `## Identity` block of the one-fetch facts document. */}}
+          {{- partial "agent-readiness/lib/warn.html" (dict
+              "key" (printf "agent-readiness:warn:identity-row-not-a-table:%v" .)
+              "message" (printf "[agent-readiness] Skipping the [[params.agent.facts.identity.rows]] entry %q: a row must be a table with `label` and `key`, not a bare value." (printf "%v" .))) -}}
         {{- end -}}
       {{- end -}}
       {{- with $rendered -}}
@@ -181,9 +187,12 @@
     {{- with site.GetPage . -}}
       {{- $channels := index .Params (lower ($contact.key | default "channels")) -}}
       {{- $rendered := slice -}}
-      {{- if reflect.IsSlice $channels -}}
-        {{- range $channels -}}
-          {{- if reflect.IsMap . -}}
+      {{/* Coerced rather than gated on IsSlice: gating made a mis-typed value
+           behave exactly like an absent contact page. The per-entry map test
+           below keeps its own else arm, so a bare entry inside a real slice
+           is reported rather than vanishing. */}}
+      {{- range partial "agent-readiness/lib/map-list.html" $channels -}}
+        {{- if reflect.IsMap . -}}
             {{- $label := printf "%v" (index . (lower ($contact.label_field | default "label")) | default "") -}}
             {{- $value := printf "%v" (index . (lower ($contact.value_field | default "value")) | default "") -}}
             {{- $url := printf "%v" (index . (lower ($contact.url_field | default "href")) | default "") -}}
@@ -211,7 +220,12 @@
               {{- end -}}
               {{- $rendered = $rendered | append $line -}}
             {{- end -}}
-          {{- end -}}
+        {{- else -}}
+          {{/* A bare value inside a real slice. Dropped silently it removes
+               the channel from the contact block with no signal. */}}
+          {{- partial "agent-readiness/lib/warn.html" (dict
+              "key" (printf "agent-readiness:warn:contact-channel-not-a-table:%v" .)
+              "message" (printf "[agent-readiness] Skipping the contact channel %q: a channel must be a table carrying the configured label, value and href fields, not a bare value." (printf "%v" .))) -}}
         {{- end -}}
       {{- end -}}
       {{- with $rendered -}}

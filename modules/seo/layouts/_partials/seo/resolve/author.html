@@ -42,14 +42,14 @@
   {{/* 1. Inline objects, used verbatim; keep only entries that carry a name so
        every descriptor's own keys (url, type, same_as, job_title, image,
        description, twitter) pass straight through. */}}
-  {{- range $inline -}}
+  {{- range partial "seo/lib/as-map-list.html" $inline -}}
     {{- if (index . "name") -}}
       {{- $authors = $authors | append . -}}
     {{- end -}}
   {{- end -}}
 {{- else if $slugs -}}
   {{/* 2. Native author slugs resolved against the author-page section. */}}
-  {{- range $slug := $slugs -}}
+  {{- range $slug := partial "seo/lib/as-list.html" $slugs -}}
     {{- $descriptor := dict -}}
     {{- $path := printf "%s%s" $prefix $slug -}}
     {{/* Resolve in the current language first, then fall back to the

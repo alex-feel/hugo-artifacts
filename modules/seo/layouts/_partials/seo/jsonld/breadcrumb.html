@@ -74,7 +74,13 @@
   {{- with partial "seo/lib/as-list.html" ($page.Param "seo.breadcrumb_trails") -}}
     {{- $n := 1 -}}
     {{- range . -}}
-      {{- $trail := . -}}
+      {{/* The INNER level is coerced too. Coercing only the outer value moved
+           the abort one level down: `breadcrumb_trails = 'Docs'` became the
+           one-item list ["Docs"], whose entry is the string "Docs" -- len 4,
+           so the >= 2 gate passed and the range below iterated a string. A
+           trail is a list of {name, url} tables, so map-filtering closes both
+           levels and also absorbs a single table written directly. */}}
+      {{- $trail := partial "seo/lib/as-map-list.html" . -}}
       {{- $n = add $n 1 -}}
       {{- if ge (len $trail) 2 -}}
         {{- $elements := slice -}}

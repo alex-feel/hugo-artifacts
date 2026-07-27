@@ -218,7 +218,7 @@
     {{- end -}}
 
     {{/* hasCertification[] (max 10). */}}
-    {{- with $prod.certifications -}}
+    {{- with partial "seo/lib/as-map-list.html" $prod.certifications -}}
       {{- $certs := slice -}}
       {{- range $i, $c := . -}}
         {{- if lt $i 10 -}}

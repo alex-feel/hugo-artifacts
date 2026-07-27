@@ -1,4 +1,4 @@
-# The `off` environment: the master switch and every surface switch set false,
+# The `off` environment: the master switch alone, set false,
 # with all four output formats still wired in [outputs].
 #
 # It exists because `enable` was, until this build, reachable by nothing. The
