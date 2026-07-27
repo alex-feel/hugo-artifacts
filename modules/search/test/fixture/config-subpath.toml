@@ -1,0 +1,22 @@
+# Overlay for a STATIC build (hugo --config hugo.toml,config-subpath.toml).
+#
+# Two things at once, because they are the same defect:
+#
+#   1. A baseURL that carries a PATH. Hugo resolves a leading-slash value
+#      against the host root, DISCARDING that path -- for relURL and
+#      relLangURL exactly as for absURL -- so at a domain root, which every
+#      other build here uses, a correct implementation and a broken one emit
+#      identical bytes.
+#
+#   2. A page_path pointing at a page that does NOT exist. That is the only
+#      way to reach the fallback branch in search/config.html: with the page
+#      present, page_url comes from .RelPermalink, which already carries the
+#      baseURL path and hides the bug.
+#
+# Together they make the fallback emit a link that must still live under
+# /docs/. The module warns about the missing page, which is expected here.
+baseURL = 'https://example.org/docs/'
+
+[params]
+  [params.search]
+    page_path = '/no-such-search-page'

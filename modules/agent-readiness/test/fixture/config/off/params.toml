@@ -12,14 +12,10 @@
 # The page-tier `agent: {enable: false}` in content/scoped-keys.md cannot
 # stand in for this: that key is SITE-SCOPED, so it is discarded with a
 # warning, which is exactly what its own spec asserts.
+# ONLY the master switch. Setting the surface switches too would MASK what
+# this build exists to prove: every renderer gates on a conjunction, so with
+# robots.enable / facts.enable / skills_index.enable also false, deleting
+# `$cfg.enable` from those renderers would change no published byte and the
+# build would lock nothing.
 [agent]
   enable = false
-
-  [agent.robots]
-    enable = false
-
-  [agent.facts]
-    enable = false
-
-  [agent.skills_index]
-    enable = false

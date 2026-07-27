@@ -18,6 +18,7 @@ if not errorlevel 1 (
 
 set OPENSEARCH_HOSTILE_DIR=%~dp0.opensearch-hostile
 set OPENSEARCH_OFF_DIR=%~dp0.opensearch-off
+set SUBPATH_DIR=%~dp0.subpath
 
 pushd "%~dp0fixture"
 hugo --config hugo.toml,config-opensearch-hostile.toml --quiet --cleanDestinationDir --destination "%OPENSEARCH_HOSTILE_DIR%"
@@ -29,6 +30,12 @@ if errorlevel 1 (
 hugo --config hugo.toml,config-opensearch-off.toml --quiet --cleanDestinationDir --destination "%OPENSEARCH_OFF_DIR%"
 if errorlevel 1 (
   echo Static overlay build failed ^(opensearch off^).
+  popd
+  exit /b 1
+)
+hugo --config hugo.toml,config-subpath.toml --quiet --cleanDestinationDir --destination "%SUBPATH_DIR%"
+if errorlevel 1 (
+  echo Static overlay build failed ^(subpath^).
   popd
   exit /b 1
 )
@@ -69,4 +76,5 @@ taskkill /F /IM hugo.exe >nul 2>&1
 del "%~dp0.hugo-server.log" >nul 2>&1
 rd /s /q "%OPENSEARCH_HOSTILE_DIR%" >nul 2>&1
 rd /s /q "%OPENSEARCH_OFF_DIR%" >nul 2>&1
+rd /s /q "%SUBPATH_DIR%" >nul 2>&1
 exit /b %EXITCODE%

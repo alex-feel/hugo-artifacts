@@ -87,6 +87,7 @@ export function warnCount(pattern, which = 'baseline') {
 
 // Every page the fixture builds, in both trees.
 export const PAGES = {
+  scalarTaxonomies: 'blog/scalar-taxonomies/index.html',
   home: 'index.html',
   page: 'page/index.html',
   blogSection: 'blog/index.html',

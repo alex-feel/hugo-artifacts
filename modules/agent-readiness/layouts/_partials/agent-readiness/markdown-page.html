@@ -84,11 +84,13 @@
     {{- partial "agent-readiness/markdown-front-matter.html" (dict "page" $page "cfg" $cfg) | safeHTML -}}
     {{- $page.RenderShortcodes -}}
 
-    {{/* Trailing pointer section. The target is resolved through the home
-         page's output formats rather than a hardcoded path, so a subpath
-         baseURL or a language prefix is honored, and it is emitted as an
-         ABSOLUTE URL because a twin is routinely read detached from the site
-         it came from, where a relative path has no base to resolve against.
+    {{/* Trailing pointer section, emitted as an ABSOLUTE URL because a twin
+         is routinely read detached from the site it came from, where a
+         relative path has no base to resolve against.
+
+         llms.txt IS a home output format and resolves through it. `sitemap`
+         is NOT -- it is a page KIND -- so that lookup never matches and the
+         absURL fallback always wins.
 
          The configured target is case-folded and trimmed before it is
          matched. Every other enumerated value in this module is normalized

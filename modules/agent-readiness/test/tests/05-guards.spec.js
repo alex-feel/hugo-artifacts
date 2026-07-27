@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import {
   read,
   exists,
+  badtablesDir,
   edgeDir,
   llmsoffDir,
   notwinsDir,
@@ -331,6 +332,52 @@ test('a non-numeric limit is reported and read as complete', () => {
   const bad = sectionsWithTopLevelBullets(read('llms.txt', edgeDir)).get('Bad Limit');
   assert.ok(bad && bad.length > 0, 'the section is still listed');
   assert.equal(bad.length, 3, 'and listed COMPLETE, which is what limit = 0 means');
+});
+
+test('a scalar written for a consumer sub-table is refused, not evaluated', () => {
+  // `[params.agent.facts] contact = '/contact'` is the natural mis-write of
+  // `[params.agent.facts.contact] page = '/contact'`. Hugo's `default`
+  // substitutes only on a FALSY value, so the string reached facts.html and
+  // `.page` was evaluated as a field on a string -- a hard build stop, in a
+  // module the consumer does not own.
+  assert.equal(warnCount(/facts\] contact expects a table/, 'badtables'), 1);
+  // Degraded to "not configured": the document still publishes, without the
+  // block that could not be read.
+  const about = read('about.md', badtablesDir);
+  assert.ok(!about.includes('## Contact'), 'the unreadable block is omitted');
+  assert.match(about, /^# /m, 'the rest of the document is intact');
+});
+
+test('scalars written for the two array-of-tables keys are refused', () => {
+  // Both are ranged raw downstream, so both stopped the build.
+  assert.equal(
+    warnCount(/\[\[params\.agent\.skills\]\] expects an array of tables/, 'badtables'),
+    1,
+  );
+  assert.equal(warnCount(/identity\] rows expects an array of tables/, 'badtables'), 1);
+  assert.ok(
+    !exists('.well-known/agent-skills/index.json', badtablesDir),
+    'a refused skills value publishes no index',
+  );
+});
+
+test('a bare value where a section table belongs is refused, not dropped', () => {
+  // `sections = ['blog']` is a real slice, so the scalar coercion passes it
+  // through and every string entry then fails the entry-must-be-a-table test.
+  // Dropped silently -- which is what shipped -- it publishes an llms.txt with
+  // an H1 and no sections at all: exit 0, no warning, a deliberate-looking
+  // document.
+  assert.equal(warnCount(/llms\.sections\]\] entry/, 'badtables'), 2, 'blog and projects');
+  assert.equal(warnCount(/facts\.sections\]\] entry/, 'badtables'), 1);
+
+  for (const doc of ['llms.txt', 'about.md']) {
+    const text = read(doc, badtablesDir);
+    assert.match(text, /^# /m, 'the document still publishes');
+    assert.ok(
+      !/^## (Blog|Projects)$/m.test(text),
+      `${doc} must carry no section heading built from an unreadable entry`,
+    );
+  }
 });
 
 test('a scalar written where a section vocabulary belongs is coerced', () => {

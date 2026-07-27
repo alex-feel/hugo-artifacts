@@ -59,15 +59,19 @@
 {{- $page := .page -}}
 {{- $seo := .seo -}}
 
-{{/* ---- Alternate representations ---- */}}
-{{- $formats := $page.Param "seo.alternates.formats" -}}
-{{- if reflect.IsSlice $formats -}}
-  {{- range $formats -}}
-    {{- $name := trim (printf "%v" .) " \t\n\r" -}}
-    {{- with $name -}}
-      {{- with $page.OutputFormats.Get . }}
+{{/* ---- Alternate representations ---- Coerced through as-list.html rather
+     than gated on IsSlice: gating made `formats = 'markdown'` behave exactly
+     like unset, so the twins were published and never linked -- silently
+     disabling the one surface this partial exists to provide.
+
+     Both comment markers are trimmed. An untrimmed comment preserves the
+     newline before it, which is precisely the stray blank line the
+     regression lock in 01-alternates.spec.js was written to catch. */ -}}
+{{- range partial "seo/lib/as-list.html" ($page.Param "seo.alternates.formats") -}}
+  {{- $name := trim (printf "%v" .) " \t\n\r" -}}
+  {{- with $name -}}
+    {{- with $page.OutputFormats.Get . }}
 <link rel="alternate" type="{{ .MediaType.Type }}" href="{{ .Permalink }}">
-      {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}

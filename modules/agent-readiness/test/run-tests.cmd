@@ -1,7 +1,7 @@
 @echo off
-rem Validates the shipped data files, then builds NINE fixture sites with
+rem Validates the shipped data files, then builds TEN fixture sites with
 rem hugo (builds, not servers: no port binding, and a finite build exits by
-rem itself) and runs the Node build-output assertion suite against all nine.
+rem itself) and runs the Node build-output assertion suite against all ten.
 rem Windows mirror of run-tests.sh: data check first, pre-launch process
 rem check, then a hard fail on any deprecation, error, or missing-layout line
 rem in any build log.
@@ -33,6 +33,7 @@ set LOG_FILE_MULTILINGUAL=%~dp0hugo-build-multilingual.log
 set LOG_FILE_LLMSOFF=%~dp0hugo-build-llmsoff.log
 set LOG_FILE_EDGE=%~dp0hugo-build-edge.log
 set LOG_FILE_OFF=%~dp0hugo-build-off.log
+set LOG_FILE_BADTABLES=%~dp0hugo-build-badtables.log
 set LOG_FILE_SHADOW=%~dp0hugo-build-shadow.log
 
 pushd "%~dp0fixture"
@@ -92,6 +93,13 @@ if errorlevel 1 (
   popd
   exit /b 1
 )
+hugo -e badtables --gc --logLevel info --cleanDestinationDir --destination public\badtables > "%LOG_FILE_BADTABLES%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(badtables^):
+  type "%LOG_FILE_BADTABLES%"
+  popd
+  exit /b 1
+)
 popd
 
 pushd "%~dp0fixture-shadow"
@@ -104,7 +112,7 @@ if errorlevel 1 (
 )
 popd
 
-for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_MINIMAL%" "%LOG_FILE_NOTWINS%" "%LOG_FILE_MULTILINGUAL%" "%LOG_FILE_LLMSOFF%" "%LOG_FILE_EDGE%" "%LOG_FILE_OFF%" "%LOG_FILE_SHADOW%") do (
+for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_MINIMAL%" "%LOG_FILE_NOTWINS%" "%LOG_FILE_MULTILINGUAL%" "%LOG_FILE_LLMSOFF%" "%LOG_FILE_EDGE%" "%LOG_FILE_OFF%" "%LOG_FILE_BADTABLES%" "%LOG_FILE_SHADOW%") do (
   findstr /I "deprecat" %%L >nul 2>&1
   if not errorlevel 1 (
     echo Hugo reported deprecations in %%L:
@@ -133,6 +141,7 @@ set FIXTURE_PUBLIC_MULTILINGUAL=%~dp0fixture\public\multilingual
 set FIXTURE_PUBLIC_LLMSOFF=%~dp0fixture\public\llmsoff
 set FIXTURE_PUBLIC_EDGE=%~dp0fixture\public\edge
 set FIXTURE_PUBLIC_OFF=%~dp0fixture\public\off
+set FIXTURE_PUBLIC_BADTABLES=%~dp0fixture\public\badtables
 set FIXTURE_PUBLIC_SHADOW=%~dp0fixture-shadow\public
 set HUGO_BUILD_LOG=%LOG_FILE%
 set HUGO_BUILD_LOG_CONFIGURED=%LOG_FILE_CONFIGURED%
@@ -142,6 +151,7 @@ set HUGO_BUILD_LOG_MULTILINGUAL=%LOG_FILE_MULTILINGUAL%
 set HUGO_BUILD_LOG_LLMSOFF=%LOG_FILE_LLMSOFF%
 set HUGO_BUILD_LOG_EDGE=%LOG_FILE_EDGE%
 set HUGO_BUILD_LOG_OFF=%LOG_FILE_OFF%
+set HUGO_BUILD_LOG_BADTABLES=%LOG_FILE_BADTABLES%
 set HUGO_BUILD_LOG_SHADOW=%LOG_FILE_SHADOW%
 for /f "tokens=2 delims=v " %%v in ('hugo version') do (
   set HUGO_VERSION_RAW=%%v
@@ -157,4 +167,6 @@ popd
 
 rem The logs are retained (gitignored at the repo root) so the documented
 rem re-run recipe can read them without rebuilding.
+rem Belt-and-suspenders cleanup, mirroring modules/search/test/run-tests.cmd.
+taskkill /F /IM hugo.exe >nul 2>&1
 exit /b %EXITCODE%

@@ -221,11 +221,15 @@
     {{- end -}}
   {{- end -}}
 
-  {{/* 6. Trailing pointer section, resolved through the home page's output
-         formats rather than hardcoded paths, so a subpath baseURL or a
-         language prefix is honored. Every pointer is absolute: the sitemap
-         fallback below can only be built with absURL, so emitting the others
-         relative would put two URL forms in one list of two items. */}}
+  {{/* 6. Trailing pointer section. Every pointer is absolute, so the document
+         stays usable when it is read detached from the site.
+
+         llms.txt IS a home output format and resolves through it. `sitemap`
+         is NOT -- it is a page KIND -- so the OutputFormats lookup below
+         never matches and the absURL fallback always wins. The lookup is
+         kept because it costs nothing and would start working if Hugo ever
+         exposed the sitemap that way; the fallback is what actually runs,
+         and it carries the baseURL path but no language prefix. */}}
   {{- if $facts.sitemap_section -}}
     {{- $pointers := slice -}}
     {{/* llms.enable is consulted as well as the format being wired: the

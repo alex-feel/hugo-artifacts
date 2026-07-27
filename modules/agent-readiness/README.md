@@ -445,7 +445,7 @@ modules/agent-readiness/
 │               ├── page-excluded.html
 │               ├── section.html
 │               └── warn.html
-├── test/                       # Validation suite: nine Hugo fixture builds plus Node build-output assertions. See test/README.md.
+├── test/                       # Validation suite: ten Hugo fixture builds plus Node build-output assertions. See test/README.md.
 ├── go.mod
 ├── hugo.toml
 └── README.md

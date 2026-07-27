@@ -18,6 +18,7 @@ FIXTURE_DIR="$HERE/fixture"
 LOG_FILE="$HERE/.hugo-server.log"
 OPENSEARCH_HOSTILE_DIR="$HERE/.opensearch-hostile"
 OPENSEARCH_OFF_DIR="$HERE/.opensearch-off"
+SUBPATH_DIR="$HERE/.subpath"
 
 # Git Bash on Windows ships neither pgrep nor pkill, so both lifecycle steps
 # fall back to the Windows-native tasklist/taskkill equivalents there;
@@ -45,7 +46,7 @@ cleanup() {
   fi
   kill_stray_hugo
   rm -f "$LOG_FILE"
-  rm -rf "$OPENSEARCH_HOSTILE_DIR" "$OPENSEARCH_OFF_DIR"
+  rm -rf "$OPENSEARCH_HOSTILE_DIR" "$OPENSEARCH_OFF_DIR" "$SUBPATH_DIR"
 }
 trap cleanup EXIT INT TERM
 
@@ -65,7 +66,8 @@ static_build() {
 }
 static_build config-opensearch-hostile.toml "$OPENSEARCH_HOSTILE_DIR"
 static_build config-opensearch-off.toml "$OPENSEARCH_OFF_DIR"
-export OPENSEARCH_HOSTILE_DIR OPENSEARCH_OFF_DIR
+static_build config-subpath.toml "$SUBPATH_DIR"
+export OPENSEARCH_HOSTILE_DIR OPENSEARCH_OFF_DIR SUBPATH_DIR
 
 (cd "$FIXTURE_DIR" && hugo server --port "$PORT" --bind 127.0.0.1 --logLevel info >"$LOG_FILE" 2>&1) &
 HUGO_PID=$!

@@ -1,0 +1,34 @@
+# The `badtables` environment: the section arrays written as bare strings
+# instead of arrays of tables.
+#
+# It needs its own environment because TOML cannot mix an `[[a.b]]`
+# array-of-tables header with inline values under the same key -- the bare form
+# has to REPLACE the whole array, which no other environment can afford.
+#
+# `sections = ['blog']` is a real slice, so it passes the scalar coercion
+# untouched; every string entry then fails the entry-must-be-a-table test.
+# Dropped silently -- which is what shipped until this build existed -- it
+# publishes an llms.txt with an H1 and no sections at all, and an about.md with
+# no section listings: exit 0, zero warnings, documents that look deliberate.
+[agent]
+
+  # A scalar where an array of tables belongs. Ranged raw downstream, so
+  # without coercion it stops the build.
+  skills = 'not-an-array-of-tables'
+
+  [agent.llms]
+    sections = ['blog', 'projects']
+
+  [agent.facts]
+    sections = ['blog']
+
+  # A scalar written for a consumer-authored SUB-TABLE -- the natural mis-write
+  # of [params.agent.facts.contact] page = '/contact'. Hugo's `default`
+  # substitutes only on a FALSY value, so the string survived to facts.html and
+  # `.page` was evaluated as a field on a string, stopping the build.
+  contact = '/contact'
+
+  [agent.facts.identity]
+    page = '/'
+    # The same shape one level deeper, on an array-of-tables key.
+    rows = 'not-an-array-of-tables'

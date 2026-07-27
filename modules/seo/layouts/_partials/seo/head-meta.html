@@ -134,15 +134,20 @@
 <meta property="article:author" content="{{ . }}">
     {{- end }}
   {{- end }}
+  {{/* categories and tags go through seo/lib/as-list.html because Hugo front
+       matter accepts the bare scalar form -- `tags: hugo`, `categories: notes`
+       -- and many sites write it. `index` on a string and `range` over one
+       both abort template execution, which would stop the consuming site's
+       build over ordinary content. */}}
   {{- $section := "" -}}
-  {{- with $page.Params.categories -}}
+  {{- with partial "seo/lib/as-list.html" $page.Params.categories -}}
     {{- $section = index . 0 -}}
   {{- end -}}
   {{- if not $section -}}{{- $section = $page.Section -}}{{- end -}}
   {{- with $section }}
 <meta property="article:section" content="{{ . }}">
   {{- end }}
-  {{- range $page.Params.tags }}
+  {{- range partial "seo/lib/as-list.html" $page.Params.tags }}
 <meta property="article:tag" content="{{ . }}">
   {{- end }}
 {{- else if eq $seo.ogType "profile" -}}

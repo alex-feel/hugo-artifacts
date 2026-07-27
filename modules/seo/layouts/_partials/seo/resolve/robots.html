@@ -202,7 +202,10 @@
 {{/* Per-bot map: each bot's directive is the all-bots sources UNIONED with the
      bot's own string, reduced with the identical semantics. */}}
 {{- $bots := dict -}}
+{{/* Guarded on IsMap: seo.robots_bots is documented as a table, and a scalar
+     or list written for it would abort the range and stop the build. */}}
 {{- with $page.Param "seo.robots_bots" -}}
+  {{- if reflect.IsMap . -}}
   {{- range $bot, $botDirective := . -}}
     {{- $botSources := $sources | append $botDirective -}}
     {{- $bHasNoindex := false -}}
@@ -292,6 +295,11 @@
       {{- $bTokens = $bTokens | append (printf "unavailable_after:%s" .) -}}
     {{- end -}}
     {{- $bots = merge $bots (dict $bot (delimit $bTokens ", ")) -}}
+  {{- end -}}
+  {{- else -}}
+    {{- partial "seo/lib/warn.html" (dict
+        "key" "seo:warn:robots-bots-not-a-table"
+        "message" (printf "[seo] Ignoring seo.robots_bots: it expects a table of bot name to directive, but was given %q. Write it as [params.seo.robots_bots] with one key per bot." (printf "%v" .))) -}}
   {{- end -}}
 {{- end -}}
 

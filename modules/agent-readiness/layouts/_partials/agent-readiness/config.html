@@ -246,8 +246,27 @@
   {{- $maps = merge $maps (dict "frontmatter" $fm) -}}
 {{- end -}}
 
+{{/* The same hazard again, one level up from the leaf: a consumer-authored
+     SUB-TABLE written as a scalar. `[params.agent.facts] contact = '/contact'`
+     is the natural mis-write of `[params.agent.facts.contact] page =
+     '/contact'` -- the shape the shipped defaults present -- and `default`
+     substitutes only on a FALSY value, so the string survives to facts.html
+     and `.page` is evaluated as a field on a string, which stops the build.
+     Coercing the whole table to an empty dict degrades to "this block is not
+     configured", which is the correct reading of an unusable value. */}}
 {{- $factsMap := index $maps "facts" -}}
 {{- if reflect.IsMap $factsMap -}}
+  {{- range $t := slice "identity" "contact" -}}
+    {{- $tbl := index $factsMap $t -}}
+    {{- if and (ne $tbl nil) (not (reflect.IsMap $tbl)) -}}
+      {{- partial "agent-readiness/lib/warn.html" (dict
+          "key" (printf "agent-readiness:warn:scalar-for-table:facts.%s" $t)
+          "message" (printf "[agent-readiness] [params.agent.facts] %s expects a table but was given the single value %q; ignoring the whole block. Declare it as [params.agent.facts.%s] with its own keys." $t (printf "%v" $tbl) $t)) -}}
+      {{- $factsMap = merge $factsMap (dict $t dict) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $maps = merge $maps (dict "facts" $factsMap) -}}
+
   {{- $identity := index $factsMap "identity" -}}
   {{- if reflect.IsMap $identity -}}
     {{- $rows := index $identity "rows" -}}
@@ -306,6 +325,15 @@
 {{- range ($llms.sections | default slice) -}}
   {{- if reflect.IsMap . -}}
     {{- $llmsSections = $llmsSections | append (merge . (dict "section" (partial "agent-readiness/lib/section.html" (.section | default "")))) -}}
+  {{- else -}}
+    {{/* A bare string where a table belongs -- `sections = ['blog']` instead
+         of `[[llms.sections]] name = ... section = ...`. It is a real slice, so
+         the scalar coercion above passes it through, and every entry then
+         fails this map test. Dropped silently it would publish a document
+         with an H1 and no sections at all: exit 0, plausible, wrong. */}}
+    {{- partial "agent-readiness/lib/warn.html" (dict
+        "key" (printf "agent-readiness:warn:llms-section-not-a-table:%v" .)
+        "message" (printf "[agent-readiness] Skipping the [[params.agent.llms.sections]] entry %q: an entry must be a table with `name` and `section`, not a bare value. Write it as [[params.agent.llms.sections]] name = '...' section = '...'." (printf "%v" .))) -}}
   {{- end -}}
 {{- end -}}
 {{- $llms = merge $llms (dict "sections" $llmsSections) -}}
@@ -316,6 +344,15 @@
 {{- range ($facts.sections | default slice) -}}
   {{- if reflect.IsMap . -}}
     {{- $factsSections = $factsSections | append (merge . (dict "section" (partial "agent-readiness/lib/section.html" (.section | default "")))) -}}
+  {{- else -}}
+    {{/* A bare string where a table belongs -- `sections = ['blog']` instead
+         of `[[facts.sections]] name = ... section = ...`. It is a real slice, so
+         the scalar coercion above passes it through, and every entry then
+         fails this map test. Dropped silently it would publish a document
+         with an H1 and no sections at all: exit 0, plausible, wrong. */}}
+    {{- partial "agent-readiness/lib/warn.html" (dict
+        "key" (printf "agent-readiness:warn:facts-section-not-a-table:%v" .)
+        "message" (printf "[agent-readiness] Skipping the [[params.agent.facts.sections]] entry %q: an entry must be a table with `name` and `section`, not a bare value. Write it as [[params.agent.facts.sections]] name = '...' section = '...'." (printf "%v" .))) -}}
   {{- end -}}
 {{- end -}}
 {{- $facts = merge $facts (dict "sections" $factsSections) -}}

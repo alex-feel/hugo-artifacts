@@ -1,7 +1,7 @@
 /* global process */
 // Shared helpers for the build-output assertion specs.
 //
-// The runner exports NINE published trees, and every one of them is
+// The runner exports TEN published trees, and every one of them is
 // load-bearing:
 // FIXTURE_PUBLIC (every content-license key unset), FIXTURE_PUBLIC_CONFIGURED
 // (the license table filled and both switches on), FIXTURE_PUBLIC_MINIMAL
@@ -39,6 +39,9 @@ export const multilingualDir = resolve(
 export const llmsoffDir = resolve(process.env.FIXTURE_PUBLIC_LLMSOFF ?? 'fixture/public/llmsoff');
 export const edgeDir = resolve(process.env.FIXTURE_PUBLIC_EDGE ?? 'fixture/public/edge');
 export const offDir = resolve(process.env.FIXTURE_PUBLIC_OFF ?? 'fixture/public/off');
+export const badtablesDir = resolve(
+  process.env.FIXTURE_PUBLIC_BADTABLES ?? 'fixture/public/badtables',
+);
 export const shadowDir = resolve(process.env.FIXTURE_PUBLIC_SHADOW ?? 'fixture-shadow/public');
 
 export function read(rel, dir = publicDir) {
@@ -135,6 +138,7 @@ export function buildLog(which = 'baseline') {
     llmsoff: 'HUGO_BUILD_LOG_LLMSOFF',
     edge: 'HUGO_BUILD_LOG_EDGE',
     off: 'HUGO_BUILD_LOG_OFF',
+    badtables: 'HUGO_BUILD_LOG_BADTABLES',
     shadow: 'HUGO_BUILD_LOG_SHADOW',
   };
   // Throwing rather than returning '' is deliberate. A missing build name

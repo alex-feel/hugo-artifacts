@@ -191,7 +191,7 @@ The full annotated surface:
 | `title_suffix` | string | `""` | Appended to `<title>` only, never to `og:title` or `headline`. The home page never gets the suffix. |
 | `description` | string | `""` | Site-wide fallback description, last link of the description chain. |
 | `content_license` | string | `""` | Absolute URL of the license covering the site's editorial content. When set, emits `"license"` on the `WebPage`, `CollectionPage` and article-class (`Article` / `BlogPosting` / `NewsArticle`) nodes -- the nodes that represent the page's own editorial content. `license` is a schema.org `CreativeWork` property, and other `CreativeWork` subtypes this module emits (`WebSite`, `ProfilePage`, `SoftwareApplication`, `VideoObject`, `ImageObject`) could carry it validly; they deliberately do not, because a site-wide content license describes the page you are reading rather than the site entity or an embedded asset. It is never attached to `Person`, `Organization`, `Offer` or `BreadcrumbList`, where it would not be valid at all. Unset emits nothing. |
-| `default_image` | string | `""` | Site-wide image fallback. Resource path (`assets/` or `static/`) or absolute URL. Applied only when no page-level image resolves. |
+| `default_image` | string | `""` | Site-wide image fallback. Resource path under `assets/`, site-root path for a `static/` file (e.g. `/img/og.png`), or absolute URL. Applied only when no page-level image resolves; a site-root path keeps the `baseURL` path on a subpath deployment. |
 | `image_alt` | string | `""` | Default `og:image:alt` when a page image resolves no alt of its own. |
 | `image_params` | array | `[]` | Names of extra top-level front-matter params (e.g. `["tile_image"]`) whose values (string or list per key) join the page-image candidates -- after `seo.images`/`seo.image`/`meta_image`, before native `images`. |
 | `keywords` | array | `[]` | JSON-LD `keywords` fallback ONLY. No `<meta name="keywords">` is ever emitted. |
@@ -626,6 +626,7 @@ modules/seo/
           types.html                       # Returns {typeSet, ogType} via the dispatch ladder.
           id.html                          # Returns the canonical @id string for a node kind.
         lib/
+          as-list.html                     # Returns a consumer-authored value as something safe to range: nil becomes an empty slice, a scalar becomes a one-item slice, a slice or map passes through. Without it a documented list written as a bare scalar stops the build.
           absolute-url.html                # Returns an absolute URL for a consumer-authored value, normalizing the leading-slash form so absURL keeps the baseURL path; scheme-carrying and protocol-relative values pass through untouched.
           warn.html                        # Emits one deduplicated warnf per (warning-key, page) via a hugo.Store sentinel.
           enum.html                        # Returns the validated enum value or "" for applicationCategory, availability, itemCondition, gender, interaction types, return-policy category.

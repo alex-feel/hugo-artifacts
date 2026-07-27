@@ -71,7 +71,7 @@
   {{/* Additional explicit trails from seo.breadcrumb_trails[]. Each trail is
        a list of {name, url} entries; @id suffix is #breadcrumb-N where N is
        the gapless 2-based index (trail 1 is the derived trail above). */}}
-  {{- with $page.Param "seo.breadcrumb_trails" -}}
+  {{- with partial "seo/lib/as-list.html" ($page.Param "seo.breadcrumb_trails") -}}
     {{- $n := 1 -}}
     {{- range . -}}
       {{- $trail := . -}}
