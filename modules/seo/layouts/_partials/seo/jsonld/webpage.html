@@ -28,7 +28,7 @@
 {{- $kind := $page.Kind -}}
 {{- $isSection := eq $kind "section" -}}
 {{- $isTaxTerm := or (eq $kind "taxonomy") (eq $kind "term") -}}
-{{- $onLists := (partial "seo/lib/as-map.html" (dict "value" (index $page.Site.Params "seo") "key" "params.seo")).webpage_on_lists | default false -}}
+{{- $onLists := (partial "seo/lib/as-map.html" (dict "value" (index $page.Site.Params "seo") "key" "params.seo" "warn_falsy" true)).webpage_on_lists | default false -}}
 
 {{/* Self-gate: taxonomy/term lists only when opted in. */}}
 {{- $emit := true -}}

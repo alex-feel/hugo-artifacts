@@ -13,6 +13,7 @@ import {
   badtablesDir,
   edgeDir,
   minimalDir,
+  nsoffDir,
   publishedTwins,
   llmsoffDir,
   notwinsDir,
@@ -236,6 +237,20 @@ test('a non-map `agent:` front-matter value warns rather than being interpreted'
   // `agent: false` is the documented shorthand; any other scalar is a mistake
   // and is reported instead of guessed at.
   assert.equal(warnCount(/expected a map/), 1);
+});
+
+// ---- The configuration namespace itself ----
+
+test('the whole [params] agent namespace written as a bare value is reported', () => {
+  // `[params] agent = false` is the shorthand a consumer reaches for to switch
+  // the module off. Discarded in silence it does NOTHING: every default stays
+  // in force and the module publishes its full surface -- the exact opposite
+  // of what was asked. The falsy spelling is the likelier one for a kill
+  // switch, so a guard testing truthiness rather than presence misses
+  // precisely the case that matters.
+  assert.equal(warnCount(/Ignoring \[params\] agent/, 'nsoff'), 1);
+  // And the discard is a real discard: the shipped defaults still publish.
+  assert.ok(exists('llms.txt', nsoffDir), 'the module still emits its surfaces');
 });
 
 // ---- The shipped default allow-list ----

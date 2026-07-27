@@ -107,7 +107,7 @@
   {{- if not $keywords -}}
     {{- with partial "seo/lib/as-list.html" ($page.Param "seo.keywords") -}}
       {{- $keywords = delimit . ", " -}}
-    {{- else with partial "seo/lib/as-list.html" site.Params.metadata.keywords -}}
+    {{- else with partial "seo/lib/as-list.html" (partial "seo/lib/as-map.html" (dict "value" (index site.Params "metadata") "key" "params.metadata" "warn_falsy" true)).keywords -}}
       {{- $keywords = delimit . ", " -}}
     {{- end -}}
   {{- end -}}

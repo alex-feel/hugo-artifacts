@@ -39,6 +39,7 @@ export const multilingualDir = resolve(
 export const llmsoffDir = resolve(process.env.FIXTURE_PUBLIC_LLMSOFF ?? 'fixture/public/llmsoff');
 export const edgeDir = resolve(process.env.FIXTURE_PUBLIC_EDGE ?? 'fixture/public/edge');
 export const offDir = resolve(process.env.FIXTURE_PUBLIC_OFF ?? 'fixture/public/off');
+export const nsoffDir = resolve(process.env.FIXTURE_PUBLIC_NSOFF ?? 'fixture/public/nsoff');
 export const badtablesDir = resolve(
   process.env.FIXTURE_PUBLIC_BADTABLES ?? 'fixture/public/badtables',
 );
@@ -139,6 +140,7 @@ export function buildLog(which = 'baseline') {
     edge: 'HUGO_BUILD_LOG_EDGE',
     off: 'HUGO_BUILD_LOG_OFF',
     badtables: 'HUGO_BUILD_LOG_BADTABLES',
+    nsoff: 'HUGO_BUILD_LOG_NSOFF',
     shadow: 'HUGO_BUILD_LOG_SHADOW',
   };
   // Throwing rather than returning '' is deliberate. A missing build name

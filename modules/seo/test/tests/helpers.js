@@ -19,6 +19,10 @@ export const subpathDir = resolve(process.env.FIXTURE_PUBLIC_SUBPATH ?? 'fixture
 export const badtypesDir = resolve(
   process.env.FIXTURE_PUBLIC_BADTYPES ?? 'fixture/public/badtypes',
 );
+// The module switched off the way a consumer actually reaches for it.
+export const offswitchDir = resolve(
+  process.env.FIXTURE_PUBLIC_OFFSWITCH ?? 'fixture/public/offswitch',
+);
 
 export function rawHtml(rel, dir = publicDir) {
   return readFileSync(join(dir, rel), 'utf8');
@@ -72,6 +76,7 @@ export function buildLog(which = 'baseline') {
     configured: 'HUGO_BUILD_LOG_CONFIGURED',
     subpath: 'HUGO_BUILD_LOG_SUBPATH',
     badtypes: 'HUGO_BUILD_LOG_BADTYPES',
+    offswitch: 'HUGO_BUILD_LOG_OFFSWITCH',
   };
   // A key map that throws, rather than a two-state boolean: the boolean form
   // had no path to the third log at all, so a warning assertion against the

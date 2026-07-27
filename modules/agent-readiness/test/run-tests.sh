@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Validates the shipped data files, then builds TEN fixture sites with hugo
+# Validates the shipped data files, then builds ELEVEN fixture sites with hugo
 # (builds, not servers: no port binding, and a finite build exits by itself)
-# and runs the Node build-output assertion suite against all ten.
+# and runs the Node build-output assertion suite against all eleven.
 #
 # The data-file check runs FIRST, before any build. That ordering is the
 # point: a malformed registry otherwise surfaces as an opaque Hugo failure at
 # some unrelated template, and the reader has to work backwards to it.
 #
-# The ten builds:
+# The eleven builds:
 #   baseline   -- every content-license key unset, proving the license
 #                 surfaces are inert until a consumer opts in;
 #   configured -- the license table filled and both switches on;
@@ -31,6 +31,9 @@
 #   badtables  -- the section arrays written as bare strings instead of arrays
 #                 of tables, which TOML cannot express alongside the real
 #                 tables and so needs a build of its own;
+#   nsoff      -- the whole [params] agent namespace written as a bare value,
+#                 the shorthand a consumer reaches for to switch the module
+#                 off;
 #   shadow     -- a fixture shipping its own layouts/robots.txt, proving the
 #                 documented silent-override hazard.
 #
@@ -54,6 +57,7 @@ LOG_FILE_LLMSOFF="$HERE/hugo-build-llmsoff.log"
 LOG_FILE_EDGE="$HERE/hugo-build-edge.log"
 LOG_FILE_OFF="$HERE/hugo-build-off.log"
 LOG_FILE_BADTABLES="$HERE/hugo-build-badtables.log"
+LOG_FILE_NSOFF="$HERE/hugo-build-nsoff.log"
 LOG_FILE_SHADOW="$HERE/hugo-build-shadow.log"
 
 # The logs are retained after a successful run so the documented re-run recipe
@@ -73,7 +77,7 @@ kill_stray_hugo() {
 }
 cleanup_interrupted() {
   kill_stray_hugo
-  rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_NOTWINS"     "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_LLMSOFF" "$LOG_FILE_EDGE" "$LOG_FILE_OFF"     "$LOG_FILE_BADTABLES" "$LOG_FILE_SHADOW"
+  rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_NOTWINS"     "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_LLMSOFF" "$LOG_FILE_EDGE" "$LOG_FILE_OFF"     "$LOG_FILE_BADTABLES" "$LOG_FILE_NSOFF" "$LOG_FILE_SHADOW"
 }
 trap cleanup_interrupted INT TERM
 trap kill_stray_hugo EXIT
@@ -133,6 +137,7 @@ build "$FIXTURE_DIR" llmsoff public/llmsoff "$LOG_FILE_LLMSOFF"
 build "$FIXTURE_DIR" edge public/edge "$LOG_FILE_EDGE"
 build "$FIXTURE_DIR" off public/off "$LOG_FILE_OFF"
 build "$FIXTURE_DIR" badtables public/badtables "$LOG_FILE_BADTABLES"
+build "$FIXTURE_DIR" nsoff public/nsoff "$LOG_FILE_NSOFF"
 build "$SHADOW_DIR" "" public "$LOG_FILE_SHADOW"
 
 export FIXTURE_PUBLIC="$FIXTURE_DIR/public/baseline"
@@ -144,6 +149,7 @@ export FIXTURE_PUBLIC_LLMSOFF="$FIXTURE_DIR/public/llmsoff"
 export FIXTURE_PUBLIC_EDGE="$FIXTURE_DIR/public/edge"
 export FIXTURE_PUBLIC_OFF="$FIXTURE_DIR/public/off"
 export FIXTURE_PUBLIC_BADTABLES="$FIXTURE_DIR/public/badtables"
+export FIXTURE_PUBLIC_NSOFF="$FIXTURE_DIR/public/nsoff"
 export FIXTURE_PUBLIC_SHADOW="$SHADOW_DIR/public"
 export HUGO_BUILD_LOG="$LOG_FILE"
 export HUGO_BUILD_LOG_CONFIGURED="$LOG_FILE_CONFIGURED"
@@ -154,6 +160,7 @@ export HUGO_BUILD_LOG_LLMSOFF="$LOG_FILE_LLMSOFF"
 export HUGO_BUILD_LOG_EDGE="$LOG_FILE_EDGE"
 export HUGO_BUILD_LOG_OFF="$LOG_FILE_OFF"
 export HUGO_BUILD_LOG_BADTABLES="$LOG_FILE_BADTABLES"
+export HUGO_BUILD_LOG_NSOFF="$LOG_FILE_NSOFF"
 export HUGO_BUILD_LOG_SHADOW="$LOG_FILE_SHADOW"
 HUGO_VERSION="$(hugo version | sed -E 's/^hugo v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
 export HUGO_VERSION

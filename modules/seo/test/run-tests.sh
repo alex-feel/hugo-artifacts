@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Builds the fixture site FOUR TIMES with hugo (a BUILD, not a server: no port
+# Builds the fixture site FIVE TIMES with hugo (a BUILD, not a server: no port
 # binding, and a finite build exits by itself) and runs the Node
-# build-output assertion suite against all four trees.
+# build-output assertion suite against all five trees.
 #
 # The three builds are the point of this suite. The default environment omits
 # [seo.alternates], [seo.links] and [seo] content_license entirely, so it
@@ -24,11 +24,12 @@ LOG_FILE="$HERE/hugo-build.log"
 LOG_FILE_CONFIGURED="$HERE/hugo-build-configured.log"
 LOG_FILE_SUBPATH="$HERE/hugo-build-subpath.log"
 LOG_FILE_BADTYPES="$HERE/hugo-build-badtypes.log"
+LOG_FILE_OFFSWITCH="$HERE/hugo-build-offswitch.log"
 
 # The logs are retained after a successful run so the documented re-run recipe
 # can read them; they are gitignored at the repo root. Only an interrupt
 # discards them mid-run.
-trap 'rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_SUBPATH" "$LOG_FILE_BADTYPES"' INT TERM
+trap 'rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_SUBPATH" "$LOG_FILE_BADTYPES" "$LOG_FILE_OFFSWITCH"' INT TERM
 
 if command -v pgrep >/dev/null 2>&1; then
   if pgrep -af hugo >/dev/null 2>&1; then
@@ -69,15 +70,18 @@ build "" public/baseline "$LOG_FILE"
 build configured public/configured "$LOG_FILE_CONFIGURED"
 build subpath public/subpath "$LOG_FILE_SUBPATH"
 build badtypes public/badtypes "$LOG_FILE_BADTYPES"
+build offswitch public/offswitch "$LOG_FILE_OFFSWITCH"
 
 export FIXTURE_PUBLIC="$FIXTURE_DIR/public/baseline"
 export FIXTURE_PUBLIC_CONFIGURED="$FIXTURE_DIR/public/configured"
 export FIXTURE_PUBLIC_SUBPATH="$FIXTURE_DIR/public/subpath"
 export FIXTURE_PUBLIC_BADTYPES="$FIXTURE_DIR/public/badtypes"
+export FIXTURE_PUBLIC_OFFSWITCH="$FIXTURE_DIR/public/offswitch"
 export HUGO_BUILD_LOG="$LOG_FILE"
 export HUGO_BUILD_LOG_CONFIGURED="$LOG_FILE_CONFIGURED"
 export HUGO_BUILD_LOG_SUBPATH="$LOG_FILE_SUBPATH"
 export HUGO_BUILD_LOG_BADTYPES="$LOG_FILE_BADTYPES"
+export HUGO_BUILD_LOG_OFFSWITCH="$LOG_FILE_OFFSWITCH"
 HUGO_VERSION="$(hugo version | sed -E 's/^hugo v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
 export HUGO_VERSION
 

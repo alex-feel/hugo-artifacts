@@ -17,6 +17,7 @@ import {
   configuredDir,
   graph,
   linkRels,
+  offswitchDir,
   rawHtml,
   subpathDir,
   warnCount,
@@ -126,4 +127,22 @@ test('a non-map [seo.links] warns rather than silently dropping every relation',
   for (const gone of ['license', 'author', 'search', 'privacy-policy']) {
     assert.ok(!rels.includes(gone), `${gone} is absent, as the warning says`);
   }
+});
+
+test('the legacy metadata namespace written as a scalar still builds', () => {
+  // Read with a raw parent field access in two builders. `metadata` is far
+  // more generic and collision-prone than `seo` -- a site may already own it
+  // before importing the module.
+  assert.ok(rawHtml(PAGES.page, badtypesDir).includes('<title>'));
+  assert.ok(warnCount(/Ignoring params\.metadata/, 'badtypes') >= 1);
+});
+
+test('the FALSY namespace spelling is reported, not swallowed', () => {
+  // `[params] seo = false` is the shorthand a consumer reaches for to switch
+  // the module off. Hugo's nested .Param returns nil rather than false when an
+  // intermediate segment is a scalar, so the module does not disable itself --
+  // and a guard gated on `with` never fires, because `with` treats false as
+  // absent. The consumer's one line did nothing at all, silently.
+  assert.ok(warnCount(/Ignoring params\.seo/, 'offswitch') >= 1, 'the mistake is named');
+  assert.ok(rawHtml(PAGES.page, offswitchDir).includes('<title>'), 'and the build survives');
 });

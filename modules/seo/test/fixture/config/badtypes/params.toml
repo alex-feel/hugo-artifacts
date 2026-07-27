@@ -13,3 +13,8 @@
 # baseline environment instead, whose specs already assert that no link
 # relation is emitted.
 seo = 'not-a-table'
+
+# The legacy alias namespace, read with a raw parent field access in two
+# builders. `metadata` is a far more generic and collision-prone key than
+# `seo` -- a site may already own it before importing the module.
+metadata = 'not-a-table'

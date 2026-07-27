@@ -25,7 +25,7 @@
 
 {{/* Page-level seo.description, read straight from front matter (not the
      .Param cascade) so it does not absorb the site default prematurely. */}}
-{{- $pageSeo := partial "seo/lib/as-map.html" (dict "value" ($page.Params.seo) "key" "seo") -}}
+{{- $pageSeo := partial "seo/lib/as-map.html" (dict "value" ($page.Params.seo) "key" "seo" "warn_falsy" true) -}}
 
 {{- $description := "" -}}
 {{- with (index $pageSeo "description") -}}
@@ -42,9 +42,9 @@
     {{- end -}}
   {{- end -}}
   {{- if not $description -}}
-    {{- with (partial "seo/lib/as-map.html" (dict "value" (index site.Params "seo") "key" "params.seo")).description -}}
+    {{- with (partial "seo/lib/as-map.html" (dict "value" (index site.Params "seo") "key" "params.seo" "warn_falsy" true)).description -}}
       {{- $description = . -}}
-    {{- else with site.Params.metadata.description -}}
+    {{- else with (partial "seo/lib/as-map.html" (dict "value" (index site.Params "metadata") "key" "params.metadata" "warn_falsy" true)).description -}}
       {{- $description = . -}}
     {{- else with site.Params.description -}}
       {{- $description = . -}}

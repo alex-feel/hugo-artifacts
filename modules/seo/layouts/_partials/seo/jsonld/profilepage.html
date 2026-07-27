@@ -95,7 +95,7 @@
       {{- end -}}
     {{- end -}}
     {{- if $profile.is_site_owner -}}
-      {{- with (partial "seo/lib/as-map.html" (dict "value" (index $page.Site.Params "seo") "key" "params.seo")).social -}}
+      {{- with (partial "seo/lib/as-map.html" (dict "value" (index $page.Site.Params "seo") "key" "params.seo" "warn_falsy" true)).social -}}
         {{- range $k, $v := (cond (reflect.IsMap .) . dict) -}}
           {{- with $v -}}
             {{- $s := string . -}}

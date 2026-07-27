@@ -24,7 +24,7 @@
 {{- $site := . -}}
 {{- $result := dict -}}
 
-{{- $siteSeo := partial "seo/lib/as-map.html" (dict "value" (index $site.Params "seo") "key" "params.seo") -}}
+{{- $siteSeo := partial "seo/lib/as-map.html" (dict "value" (index $site.Params "seo") "key" "params.seo" "warn_falsy" true) -}}
 {{- $org := partial "seo/lib/as-map.html" (dict "value" ($siteSeo.organization) "key" "seo.organization") -}}
 {{- $home := $site.Home.Permalink -}}
 

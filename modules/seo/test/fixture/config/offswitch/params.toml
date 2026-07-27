@@ -1,0 +1,14 @@
+# The `offswitch` environment: the module switched off the way a consumer
+# actually reaches for it.
+#
+# `[params] seo = false` is the natural shorthand for the documented
+# `[params.seo] enable = false` kill switch. Hugo's nested .Param lookup
+# returns nil rather than false when an intermediate segment is a scalar, so
+# the module does NOT disable itself -- and a guard gated on `with` never
+# fires either, because `with` treats false as absent. The consumer's one
+# line did nothing at all, silently, while the LESS likely truthy spelling of
+# the same mistake was the only one that got a diagnostic.
+#
+# It needs its own environment because TOML cannot hold both `seo = false`
+# and the `seo = 'not-a-table'` probe in badtypes.
+seo = false

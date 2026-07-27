@@ -45,7 +45,7 @@
 {{- $sources := slice -}}
 
 {{/* 1. Site baseline. */}}
-{{- with (partial "seo/lib/as-map.html" (dict "value" (index site.Params "seo") "key" "params.seo")).robots -}}
+{{- with (partial "seo/lib/as-map.html" (dict "value" (index site.Params "seo") "key" "params.seo" "warn_falsy" true)).robots -}}
   {{- $sources = $sources | append . -}}
 {{- end -}}
 
@@ -53,7 +53,7 @@
      is absent. Read straight from front matter (not the .Param cascade): the
      site baseline is already source 1, and letting the cascade echo it here
      would both double-add it and short-circuit the legacy alias. */}}
-{{- $pageSeo := partial "seo/lib/as-map.html" (dict "value" ($page.Params.seo) "key" "seo") -}}
+{{- $pageSeo := partial "seo/lib/as-map.html" (dict "value" ($page.Params.seo) "key" "seo" "warn_falsy" true) -}}
 {{- $pageRobots := index $pageSeo "robots" -}}
 {{- if $pageRobots -}}
   {{- $sources = $sources | append $pageRobots -}}

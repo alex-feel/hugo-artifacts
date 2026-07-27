@@ -64,8 +64,24 @@
      shorthand, not a shape error; any other non-map value is ignored here
      and warned about by agent-readiness/page-list.html, which is the one
      place that sees every page. */}}
+{{/* The NAMESPACE itself. `[params] agent = false` is the natural shorthand
+     for the documented `[params.agent] enable = false` master switch, and
+     discarded in silence it does nothing at all: every default stays in
+     force and the module publishes its full surface, which is the exact
+     opposite of what the consumer asked for. Presence is `ne nil`, not
+     truthiness, or the falsy spelling -- the likelier one for a kill switch
+     -- would be the one that goes unreported. */}}
 {{- $sitep := site.Params.agent -}}
-{{- if not (reflect.IsMap $sitep) -}}{{- $sitep = dict -}}{{- end -}}
+{{- if ne $sitep nil -}}
+  {{- if not (reflect.IsMap $sitep) -}}
+    {{- partial "agent-readiness/lib/warn.html" (dict
+        "key" "agent-readiness:warn:non-map-namespace"
+        "message" (printf "[agent-readiness] Ignoring [params] agent: the module's whole configuration namespace expects a table but was given %q, so every key keeps its shipped default and the module still publishes. To switch it off site-wide, set [params.agent] enable = false." (printf "%v" $sitep))) -}}
+    {{- $sitep = dict -}}
+  {{- end -}}
+{{- else -}}
+  {{- $sitep = dict -}}
+{{- end -}}
 {{- $pagep := dict -}}
 {{- if not $siteOnly -}}
   {{- $pagep = $page.Params.agent -}}

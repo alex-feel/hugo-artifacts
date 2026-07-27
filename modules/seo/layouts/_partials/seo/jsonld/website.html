@@ -28,7 +28,7 @@
      'My Site'` -- the same mis-write shape as the organization table two
      lines down -- put a field access on a string and stopped the build on
      every language home page. */}}
-{{- $siteSeo := partial "seo/lib/as-map.html" (dict "value" (index $site.Params "seo") "key" "params.seo") -}}
+{{- $siteSeo := partial "seo/lib/as-map.html" (dict "value" (index $site.Params "seo") "key" "params.seo" "warn_falsy" true) -}}
 {{- $website := partial "seo/lib/as-map.html" (dict "value" ($siteSeo.website) "key" "seo.website") -}}
 {{- $url := $site.Home.Permalink -}}
 {{- $name := "" -}}

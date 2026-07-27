@@ -1,0 +1,13 @@
+# The `nsoff` environment: the module's whole configuration namespace written
+# as a bare value.
+#
+# `[params] agent = false` is the natural shorthand for the documented
+# `[params.agent] enable = false` master switch. Discarded in silence it does
+# NOTHING: every default stays in force and the module publishes its full
+# surface -- the exact opposite of what the consumer asked for. The falsy
+# spelling is the likelier one for a kill switch, so a guard that tests
+# truthiness rather than presence misses precisely the case that matters.
+#
+# It needs its own environment because every other one declares [agent] as a
+# table, which TOML cannot reconcile with a bare value.
+agent = false
