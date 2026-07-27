@@ -1,7 +1,7 @@
-// The OpenSearch description document: Plan A Step 8.3's acceptance, the
+// The OpenSearch description document: the query contract, the
 // escaping contract, the default-off gate, and the one-document-per-site rule.
 //
-// Phase 8 originally shipped with no test of any kind, so nothing in CI ever
+// This document originally shipped with no test of any kind, so nothing in CI
 // rendered this template again after it was written. That is precisely how a
 // document declared isPlainText -- Go's text/template, which escapes NOTHING --
 // came to interpolate the site title raw.
@@ -69,7 +69,7 @@ test('the document is served, is well-formed XML, and declares the OpenSearch na
 test('the advertised template resolves to the real search page with the term pre-filled', async ({
   page,
 }) => {
-  // Plan A Step 8.3's acceptance in full. The value of this document is that
+  // The value of this document is that
   // its query contract cannot drift from the module's own search page, so the
   // advertised URL is followed rather than merely inspected.
   const body = await (await page.request.get('/opensearch.xml')).text();

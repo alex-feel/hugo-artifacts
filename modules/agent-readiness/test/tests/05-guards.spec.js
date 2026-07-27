@@ -1,0 +1,157 @@
+// The configuration guards, and the cross-surface invariant they protect.
+//
+// Every guard here is a handful of template lines whose deletion would change
+// no published byte in a correctly-configured build -- which is exactly how a
+// guard rots. Each one is therefore driven by a deliberately broken entry in
+// the fixture, and asserted on two axes: the warning Hugo actually emitted,
+// and the absence of the wrong output that would otherwise ship.
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  read,
+  exists,
+  notwinsDir,
+  markdownLinks,
+  sectionsWithTopLevelBullets,
+  warnCount,
+} from './helpers.js';
+
+// ---- The invariant: a listed URL always exists ----
+
+test('with twins off site-wide, neither document advertises a twin URL', () => {
+  // The whole reason these five surfaces ship as ONE module. `markdown` stays
+  // in [outputs] page here, so `.OutputFormats.Get "markdown"` still resolves
+  // -- it answers "is the format wired", not "did anything render into it".
+  // A link emitter that trusts it publishes a document in which every page
+  // link 404s, on the exact configuration the module tells consumers to use
+  // to turn twins off.
+  for (const doc of ['llms.txt', 'about.md']) {
+    const links = markdownLinks(read(doc, notwinsDir));
+    assert.ok(links.length > 0, `${doc} must still list its pages`);
+    for (const {url} of links) {
+      assert.ok(!url.endsWith('/index.md'), `${doc} advertises ${url}, but no twin was published`);
+    }
+  }
+});
+
+test('with twins off site-wide, no twin file is published', () => {
+  // The other half of the same invariant: proving the links are right is only
+  // meaningful if the files really are absent.
+  for (const rel of ['index.md', 'blog/post-one/index.md', 'projects/alpha/index.md']) {
+    assert.ok(!exists(rel, notwinsDir), `${rel} must not be published when twins are off`);
+  }
+});
+
+test('with twins off, the pages are still listed by their HTML URLs', () => {
+  // Degrading to no listing at all would be a different bug with the same
+  // green suite.
+  const text = read('llms.txt', notwinsDir);
+  assert.match(text, /^- \[Post One\]\(https:\/\/fixture\.example\/blog\/post-one\/\)/m);
+});
+
+// ---- Section-entry guards ----
+
+test('a section entry with an empty `section` is skipped, with one warning', () => {
+  // An empty section matches EVERY page, because the prefix test degenerates
+  // to "starts with /". Left ungated, one `sections`-for-`section` typo
+  // publishes the whole site under a single heading and looks deliberate.
+  assert.equal(warnCount(/`section` is empty/), 2, 'one for llms, one for facts');
+  for (const doc of ['llms.txt', 'about.md']) {
+    assert.ok(!read(doc).includes('## Empty Section Key'), `${doc} must not carry the entry`);
+  }
+});
+
+test('a section entry with no `name` is skipped, with one warning', () => {
+  // Its bullets would be appended under the PREVIOUS entry's heading, where
+  // a Markdown parser reads them as that section's links. The observable
+  // symptom is a section that silently grows.
+  assert.equal(warnCount(/it has no `name`/), 2, 'one for llms, one for facts');
+
+  // The nameless fixture entry targets /blog, so the failure would show up as
+  // Blog listing more pages than the shared filter admits.
+  const blogBullets = read('llms.txt')
+    .split(/^## /m)
+    .find((s) => s.startsWith('Blog'))
+    .split('\n')
+    .filter((l) => l.startsWith('- '));
+  assert.equal(blogBullets.length, 2, 'Blog lists exactly the two pages the filter admits');
+});
+
+test('a section matching no page is omitted rather than published empty', () => {
+  assert.equal(warnCount(/matches no page/), 2, 'one for llms, one for facts');
+  for (const doc of ['llms.txt', 'about.md']) {
+    assert.ok(
+      !read(doc).includes('## Matches Nothing'),
+      `${doc} must not publish a heading with nothing under it`,
+    );
+  }
+});
+
+// ---- The limit contract ----
+
+test('limit = 0 lists everything and a positive limit truncates', () => {
+  // Both halves in one build: `Blog` and `Recent Blog` target the same
+  // section and differ only in `limit`. Without the second entry the
+  // truncation branch never executes at all, because every other entry in
+  // the fixture pins limit = 0.
+  const sections = sectionsWithTopLevelBullets(read('llms.txt'));
+  assert.equal(sections.get('Blog').length, 2, 'limit = 0 lists every admitted page');
+  assert.equal(sections.get('Recent Blog').length, 1, 'limit = 1 lists exactly one');
+});
+
+// ---- The twin's trailing pointer block ----
+
+test('a twin ends with the pointer section, byte-exactly', () => {
+  // Rewritten to assemble its own terminating newline, because the closing
+  // trim marker of the previous inline form ate it. Nothing asserted the
+  // tail, so the missing newline shipped unnoticed.
+  const tail = '\n\n## Sitemap\n\n- [llms.txt](https://fixture.example/llms.txt)\n';
+  for (const rel of ['index.md', 'blog/post-one/index.md']) {
+    assert.ok(read(rel).endsWith(tail), `${rel} must end with the pointer block and one newline`);
+  }
+});
+
+// ---- Site-scoped keys set at the page tier ----
+
+test('every site-scoped key set in front matter warns exactly once', () => {
+  // The trap is `agent: {enable: false}`: a reader of the key table reaches
+  // for it as a per-page opt-out, it is a map so the non-map guard cannot
+  // catch it, and without this warning it is discarded in total silence while
+  // the page keeps its twin and stays listed. The opt-out that works is
+  // `agent: false`.
+  for (const key of ['enable', 'sections', 'exclude_noindex', 'robots']) {
+    assert.equal(
+      warnCount(new RegExp(`lower-tier|agent key "${key}"|\\[${key}\\] table`)) > 0,
+      true,
+      `a page-tier \`${key}\` must warn`,
+    );
+  }
+  assert.equal(warnCount(/agent key "enable"/), 1, 'exactly once, deduplicated across pages');
+  assert.equal(warnCount(/`markdown.enable`/), 1);
+});
+
+test('the page that set them is unaffected by them', () => {
+  // The keys are discarded, so the page behaves exactly as the site config
+  // says. It sits outside the `sections` allow-list, so it has no twin and
+  // appears in no listing -- and NOT because its own `enable: false` worked.
+  assert.ok(!exists('scoped-keys/index.md'));
+  assert.ok(exists('scoped-keys/index.html'), 'the HTML page is untouched');
+  for (const doc of ['llms.txt', 'about.md']) {
+    assert.ok(!read(doc).includes('scoped-keys'), `${doc} must not list an out-of-scope page`);
+  }
+});
+
+// ---- Skill name uniqueness ----
+
+test('a duplicate skill name is refused, with one warning', () => {
+  // The name is the sole published path segment. Publishing both entries
+  // would serve ONE file while the index advertised two digests for it, so at
+  // least one advertised digest could not match the bytes at its own URL --
+  // which a verifying agent is entitled to read as tampering.
+  assert.equal(warnCount(/second agent skill named/), 1);
+
+  const doc = JSON.parse(read('.well-known/agent-skills/index.json'));
+  const names = doc.skills.map((s) => s.name);
+  assert.equal(new Set(names).size, names.length, 'no name may appear twice in the index');
+  assert.equal(names.filter((n) => n === 'fixture-skill').length, 1);
+});

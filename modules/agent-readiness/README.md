@@ -114,7 +114,20 @@ The opt-out is honored by the shared page filter, so an opted-out page disappear
 
 The module never fails a build over its own configuration. Every misconfiguration degrades to a smaller correct document and emits exactly one deduplicated `WARN` per offending value per build, because a build that stops over a `robots.txt` token typo is worse than a `robots.txt` missing one group.
 
-Warnings are emitted for: a missing `data/agent-readiness/defaults.toml` (the module is not mounted correctly); an unknown `bots` key; a non-map `agent:` front-matter value that is not the documented `false` shorthand; a duplicate permalink across two pages; a per-section front-matter key that collides with a key the twin builder emits itself; and a skill whose remote source could not be fetched or whose fields are invalid.
+Warnings are emitted for:
+
+- a missing `data/agent-readiness/defaults.toml` -- the module is not mounted correctly;
+- an unknown `robots.bots` key, which is skipped rather than emitted as a literal `User-agent` token that matches no crawler;
+- a SITE-SCOPED key set in page front matter or at a call site, where it is discarded -- including `agent: {enable: false}`, which is **not** the per-page opt-out and does nothing (use `agent: false`);
+- a non-map `agent:` front-matter value that is not the documented `false` shorthand;
+- a duplicate permalink across two pages;
+- a per-section front-matter key that collides with a key the twin builder emits itself;
+- an `[[llms.sections]]` or `[[facts.sections]]` entry with an empty `section`, with no `name`, or matching no page -- each is skipped rather than published, because all three otherwise produce a plausible-looking document with the wrong contents;
+- a `markdown.sitemap_section_target` that is not `llms`, `sitemap`, or `none`, and a `sitemap_section_target = 'llms'` whose `llmstxt` format is not wired to the home page;
+- a `[params.agent.license]` with a `url` but no `name`, where the `llms.txt` line would render an empty link label;
+- a skill whose remote source could not be fetched, whose fields are invalid, or whose `name` repeats another entry's.
+
+The one misconfiguration class that is **not** caught this way is a TOML type error -- writing `bots = 'gptbot'` where a list is expected, or `limit = 'ten'` where a number is. Hugo raises a template error on those and the build stops. The failure is loud and names the file, which is why it is left to Hugo rather than absorbed: silently coercing a scalar to a one-element list would hide a real mistake in a config the consumer has to get right anyway.
 
 ## robots.txt
 
@@ -162,6 +175,17 @@ section = ['HTML', 'RSS', 'markdown']
 ```
 
 A site-level `[outputs] <kind>` key **replaces** Hugo's default list for that kind rather than extending it, so `HTML` and `RSS` must be restated to keep every existing feed. The module ships `home.markdown.md` and `section.markdown.md` alongside `page.markdown.md` precisely so a consumer who wires `markdown` into those kinds does not get Hugo's `WARN found no layout file` on every build.
+
+```toml
+[params.agent.markdown]
+enable                = true    # SITE-SCOPED. False emits no twin at all, and both listings fall back to HTML URLs.
+front_matter          = true    # Emit the leading YAML front-matter block.
+canonical             = true    # Emit `canonical:` pointing at the page's HTML URL. Always the last key.
+last_updated          = true    # Emit `last_updated:` when .Lastmod differs from .Date. See the precondition below.
+license               = false   # Emit `license:` -- requires [params.agent.license] url.
+sitemap_section       = true    # Append the trailing pointer section.
+sitemap_section_target = 'llms' # 'llms' | 'sitemap' | 'none'. Case-folded; an unrecognized value warns.
+```
 
 Twins never enter `sitemap.xml`: Hugo's sitemap enumerates pages and emits one `<loc>` per page from `.Permalink`, so no secondary output format can appear in it.
 
@@ -213,6 +237,12 @@ The fix belongs in the CI build command -- fetch the full history before buildin
 ### Per-page opt-out
 
 Use `agent: false`, never `outputs: ['HTML']`. See [Per-page opt-out](#per-page-opt-out) above for why the `outputs` route silently does nothing.
+
+### Twins are withheld per page, which a `rel="alternate"` emitter cannot see
+
+The twin is withheld for a page carrying `agent: false`, for a `robots: noindex` page under the default `exclude_noindex = true`, for the search page, and for any page outside a configured `sections` allow-list. A withheld twin means **no file at all**, not an empty one.
+
+The module's own surfaces all agree about this, because they share one filter. Anything outside the module cannot: Hugo's `.OutputFormats.Get "markdown"` answers "is this format wired for this page kind", which is a fact about your `[outputs]` lists, and there is no template API for "did that format publish bytes". So a generic `<link rel="alternate" type="text/markdown">` emitter -- including the `seo` module's `[seo.alternates]` allow-list -- will advertise a twin on pages that have none. If you run both modules, keep `[seo.alternates] formats` and `[params.agent] sections` describing the same page set, or leave `formats` unset and let `llms.txt` be the discovery surface for twins.
 
 ## llms.txt
 
@@ -337,6 +367,25 @@ Uniqueness is enforced for the same reason the digest is: the name is the sole p
 ### Index length is a curation decision, not a completeness metric
 
 The module accepts any number of entries and imposes no minimum. A consuming site should publish only the skills a fetching agent can **actually use on its own**: a repository holding several `SKILL.md` artifacts may correctly publish exactly one, and an artifact that is a component of a larger environment configuration is meaningless standalone and belongs out of the index. Record the exclusion and its reason in your own documentation, so the gap between the repository's artifact count and the index length reads as a decision rather than a defect.
+
+## Content license
+
+One statement of the license covering the site's editorial content, read by the twins' `license:` front-matter key and by the `llms.txt` license line. It is SITE-SCOPED and **ships inert**: every value is empty, so nothing is emitted until a consumer fills it in, and the two switches that consume it default to `false`.
+
+```toml
+[params.agent.license]
+name = 'CC BY 4.0'                                        # human label
+url  = 'https://creativecommons.org/licenses/by/4.0/'     # absolute deed or legal-code URL
+spdx = 'CC-BY-4.0'                                        # SPDX identifier; reserved for consumers, emitted nowhere today
+
+[params.agent.markdown]
+license = true    # emit `license:` in twin front matter
+
+[params.agent.llms]
+license = true    # emit the license blockquote line in llms.txt
+```
+
+`url` is required by both surfaces: with it empty nothing is emitted at all, whatever the switches say. `name` is required by the `llms.txt` line specifically, which renders as `> Content licensed under [name](url).` -- guarding on the URL alone would publish a Markdown link with an empty label, so a missing `name` warns once and the line is withheld. `spdx` is carried for consumers that want a machine identifier; this module emits it nowhere.
 
 ## i18n
 

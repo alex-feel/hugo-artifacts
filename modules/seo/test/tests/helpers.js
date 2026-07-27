@@ -1,6 +1,6 @@
 /* global process */
 // Shared helpers for the build-output assertion specs. The runner exports
-// FIXTURE_PUBLIC (the baseline build, with the Phase 7 config blocks unset),
+// FIXTURE_PUBLIC (the baseline build, with those config blocks unset),
 // FIXTURE_PUBLIC_CONFIGURED (the build with all three blocks set), the two
 // captured hugo build logs, and HUGO_VERSION.
 import {readFileSync, existsSync} from 'node:fs';

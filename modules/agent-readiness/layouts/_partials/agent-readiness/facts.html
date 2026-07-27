@@ -94,7 +94,7 @@
          shared filter, so this document lists exactly the pages the twins
          emit and llms.txt links. Each entry's `section` value arrived here
          already normalized by config.html. */}}
-  {{- $all := partial "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) -}}
+  {{- $all := partialCached "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) site.Language.Lang -}}
   {{- range $entry := $facts.sections | default slice -}}
     {{- $section := $entry.section | default "" -}}
     {{- $name := $entry.name | default "" -}}
@@ -121,13 +121,27 @@
           {{- $items = $items | append . -}}
         {{- end -}}
       {{- end -}}
+      {{/* A section matching NOTHING is withheld rather than published as a
+           bare heading, for the reason llms.html states at the same point:
+           an empty section reads as a fact about the site rather than as a
+           configuration error. This document is the one-fetch answer to
+           "what have they built", so an empty H2 here answers it wrongly. */}}
+      {{- if not $items -}}
+        {{- partial "agent-readiness/lib/warn.html" (dict
+            "key" (printf "agent-readiness:warn:facts-section-empty-result:%s" $section)
+            "message" (printf "[agent-readiness] The [[params.agent.facts.sections]] entry %q matches no page at %q, so its heading is omitted rather than published empty. Check the section path against your content tree, and check that it is admitted by the top-level `sections` allow-list if you set one." $name $section)) -}}
+      {{- else -}}
       {{- $lines = $lines | append "" | append (printf "## %s" $name) | append "" -}}
       {{- range $item := $items -}}
         {{/* One TOP-LEVEL bullet per page: the count of these is the
              assertion the fixture makes against the filter's page count.
              Absolute, like every other URL this document emits. */}}
         {{- $bullet := printf "- [%s](%s)" $item.Title $item.Permalink -}}
-        {{- if $facts.link_markdown -}}
+        {{/* Gated on markdown.enable as well as link_markdown, for the reason
+             llms.html states at the same point: the output format answers
+             "is it wired", not "was anything rendered into it", and the twin
+             is the module's own to emit or withhold. */}}
+        {{- if and $facts.link_markdown $cfg.markdown.enable -}}
           {{- with $item.OutputFormats.Get "markdown" -}}
             {{- $bullet = printf "%s ([Markdown](%s))" $bullet .Permalink -}}
           {{- end -}}
@@ -164,6 +178,7 @@
           {{- end -}}
         {{- end -}}
       {{- end -}}
+      {{- end -}}
     {{- end -}}
   {{- end -}}
 
@@ -193,7 +208,14 @@
               {{- $url = $url | absURL -}}
             {{- end -}}
             {{- if or $label $value $url -}}
-              {{- $text := $value | default $label -}}
+              {{/* An entry carrying ONLY a url would otherwise render
+                   `- : [](https://...)` -- an empty label, an empty link
+                   text, and a stray colon. That is the same empty-link-text
+                   failure the license line is guarded against in llms.html,
+                   and the module ships no design decision about what such a
+                   link should be called, so the URL speaks for itself in
+                   both slots rather than a fabricated name. */}}
+              {{- $text := $value | default $label | default $url -}}
               {{- $line := "" -}}
               {{- if $url -}}
                 {{- $line = printf "- %s: [%s](%s)" ($label | default $text) $text $url -}}

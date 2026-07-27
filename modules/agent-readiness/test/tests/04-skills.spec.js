@@ -1,4 +1,4 @@
-// Phase 6 -- the Agent Skills discovery index and its digest contract.
+// The Agent Skills discovery index and its digest contract.
 //
 // NETWORK: these specs exercise a real build-time remote fetch, because the
 // digest guarantee cannot be proven without one. A run with no network
@@ -10,6 +10,7 @@ import {
   read,
   exists,
   minimalDir,
+  multilingualDir,
   publicDir,
   publishedPath,
   sha256File,
@@ -20,7 +21,7 @@ const INDEX = '.well-known/agent-skills/index.json';
 const index = () => JSON.parse(read(INDEX));
 
 test('with no skills declared, NO file is emitted at all', () => {
-  // Plan A Step 6.4's acceptance, and the module's own stated reason for the
+  // The module's own stated reason for the
   // gate: an empty JSON shell published at a .well-known path is a claim of a
   // capability that does not exist, which is worse than no file. Zero
   // configured skills is also the DEFAULT state for every consumer who
@@ -107,8 +108,31 @@ test('the index publishes only the skills that survived every gate', () => {
   assert.equal(doc.skills[0].name, 'fixture-skill');
 });
 
-test('the index is emitted once, from the default language', () => {
+test('the index is emitted ONCE across a two-language build, from the default language', () => {
   // The format sets root = true, which pins ONE path for every language, so a
-  // non-default language would overwrite the default language's file.
-  assert.ok(exists(INDEX));
+  // second language rendering its own copy would overwrite the first and the
+  // surviving file would describe the wrong language's site. The gate is a
+  // single conjunct, `site.Language.IsDefault`; in a monolingual build it is
+  // always true, so this assertion runs against the two-language build, where
+  // deleting the conjunct actually changes the published bytes.
+  assert.ok(exists(INDEX, multilingualDir), 'the default language publishes the index');
+
+  // The load-bearing assertion. Because root = true, no language ever writes
+  // to /ru/ -- every language targets this one path -- so an absence check
+  // there would pass with or without the gate. What ungated rendering
+  // actually produces is both languages writing THIS file, last writer
+  // winning. The ru language therefore carries a marker schema value, and
+  // the surviving file must not be wearing it.
+  const doc = JSON.parse(read(INDEX, multilingualDir));
+  assert.equal(
+    doc.$schema,
+    'https://schemas.agentskills.io/discovery/0.2.0/schema.json',
+    'the surviving index was written by the DEFAULT language',
+  );
+  assert.ok(!read(INDEX, multilingualDir).includes('RU-WROTE-THIS'));
+
+  // The ru site really does render this module's other surfaces, so the
+  // absence above is the gate working rather than the language being inert.
+  assert.ok(exists('ru/llms.txt', multilingualDir), 'the ru language is genuinely built');
+  assert.ok(exists('ru/about.md', multilingualDir));
 });

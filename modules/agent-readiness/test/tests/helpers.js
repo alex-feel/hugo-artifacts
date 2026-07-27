@@ -23,6 +23,10 @@ export const configuredDir = resolve(
   process.env.FIXTURE_PUBLIC_CONFIGURED ?? 'fixture/public/configured',
 );
 export const minimalDir = resolve(process.env.FIXTURE_PUBLIC_MINIMAL ?? 'fixture/public/minimal');
+export const notwinsDir = resolve(process.env.FIXTURE_PUBLIC_NOTWINS ?? 'fixture/public/notwins');
+export const multilingualDir = resolve(
+  process.env.FIXTURE_PUBLIC_MULTILINGUAL ?? 'fixture/public/multilingual',
+);
 export const shadowDir = resolve(process.env.FIXTURE_PUBLIC_SHADOW ?? 'fixture-shadow/public');
 
 export function read(rel, dir = publicDir) {
@@ -114,6 +118,7 @@ export function buildLog(which = 'baseline') {
     baseline: 'HUGO_BUILD_LOG',
     configured: 'HUGO_BUILD_LOG_CONFIGURED',
     minimal: 'HUGO_BUILD_LOG_MINIMAL',
+    notwins: 'HUGO_BUILD_LOG_NOTWINS',
     shadow: 'HUGO_BUILD_LOG_SHADOW',
   }[which];
   const p = process.env[key];

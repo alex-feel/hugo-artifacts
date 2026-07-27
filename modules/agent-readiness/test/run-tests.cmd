@@ -1,7 +1,7 @@
 @echo off
-rem Validates the shipped data files, then builds FOUR fixture sites with
+rem Validates the shipped data files, then builds SIX fixture sites with
 rem hugo (builds, not servers: no port binding, and a finite build exits by
-rem itself) and runs the Node build-output assertion suite against all four.
+rem itself) and runs the Node build-output assertion suite against all six.
 rem Windows mirror of run-tests.sh: data check first, pre-launch process
 rem check, then a hard fail on any deprecation, error, or missing-layout line
 rem in any build log.
@@ -28,6 +28,8 @@ if not errorlevel 1 (
 set LOG_FILE=%~dp0hugo-build.log
 set LOG_FILE_CONFIGURED=%~dp0hugo-build-configured.log
 set LOG_FILE_MINIMAL=%~dp0hugo-build-minimal.log
+set LOG_FILE_NOTWINS=%~dp0hugo-build-notwins.log
+set LOG_FILE_MULTILINGUAL=%~dp0hugo-build-multilingual.log
 set LOG_FILE_SHADOW=%~dp0hugo-build-shadow.log
 
 pushd "%~dp0fixture"
@@ -52,6 +54,20 @@ if errorlevel 1 (
   popd
   exit /b 1
 )
+hugo -e notwins --gc --logLevel info --cleanDestinationDir --destination public\notwins > "%LOG_FILE_NOTWINS%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(notwins^):
+  type "%LOG_FILE_NOTWINS%"
+  popd
+  exit /b 1
+)
+hugo -e multilingual --gc --logLevel info --cleanDestinationDir --destination public\multilingual > "%LOG_FILE_MULTILINGUAL%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(multilingual^):
+  type "%LOG_FILE_MULTILINGUAL%"
+  popd
+  exit /b 1
+)
 popd
 
 pushd "%~dp0fixture-shadow"
@@ -64,7 +80,7 @@ if errorlevel 1 (
 )
 popd
 
-for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_MINIMAL%" "%LOG_FILE_SHADOW%") do (
+for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_MINIMAL%" "%LOG_FILE_NOTWINS%" "%LOG_FILE_MULTILINGUAL%" "%LOG_FILE_SHADOW%") do (
   findstr /I "deprecat" %%L >nul 2>&1
   if not errorlevel 1 (
     echo Hugo reported deprecations in %%L:
@@ -88,10 +104,14 @@ for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_MINIMAL%" "%LOG_FILE
 set FIXTURE_PUBLIC=%~dp0fixture\public\baseline
 set FIXTURE_PUBLIC_CONFIGURED=%~dp0fixture\public\configured
 set FIXTURE_PUBLIC_MINIMAL=%~dp0fixture\public\minimal
+set FIXTURE_PUBLIC_NOTWINS=%~dp0fixture\public\notwins
+set FIXTURE_PUBLIC_MULTILINGUAL=%~dp0fixture\public\multilingual
 set FIXTURE_PUBLIC_SHADOW=%~dp0fixture-shadow\public
 set HUGO_BUILD_LOG=%LOG_FILE%
 set HUGO_BUILD_LOG_CONFIGURED=%LOG_FILE_CONFIGURED%
 set HUGO_BUILD_LOG_MINIMAL=%LOG_FILE_MINIMAL%
+set HUGO_BUILD_LOG_NOTWINS=%LOG_FILE_NOTWINS%
+set HUGO_BUILD_LOG_MULTILINGUAL=%LOG_FILE_MULTILINGUAL%
 set HUGO_BUILD_LOG_SHADOW=%LOG_FILE_SHADOW%
 for /f "tokens=2 delims=v " %%v in ('hugo version') do (
   set HUGO_VERSION_RAW=%%v

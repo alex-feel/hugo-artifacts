@@ -6,7 +6,7 @@ rem run-tests.sh: pre-launch process check, then a hard fail on any
 rem deprecation or error output in either build log.
 rem
 rem The default environment omits [seo.alternates], [seo.links] and
-rem [seo] content_license, proving the Phase 7 additions are inert when
+rem [seo] content_license, proving those additions are inert when
 rem unconfigured; the `configured` environment adds exactly those three.
 setlocal
 

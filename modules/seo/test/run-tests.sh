@@ -5,7 +5,7 @@
 #
 # The two builds are the point of this suite. The default environment omits
 # [seo.alternates], [seo.links] and [seo] content_license entirely, so it
-# proves the Phase 7 additions are INERT when unconfigured; the `configured`
+# proves those additions are INERT when unconfigured; the `configured`
 # environment adds exactly those three blocks, so it proves each surface
 # appears when they are set. An assertion that only ever saw one of the two
 # builds could not tell "works" from "always on".

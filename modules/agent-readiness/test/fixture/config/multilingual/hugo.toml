@@ -1,0 +1,37 @@
+# The `multilingual` environment exists for ONE contract: the agent-skills
+# index sets `root = true`, which pins a single published path for every
+# language, so a second language rendering its own copy would overwrite the
+# first and the surviving file would describe the wrong language's site.
+#
+# The gate that prevents it is a single conjunct -- `site.Language.IsDefault`
+# in layouts/home.agentskills.json. In a monolingual fixture that conjunct is
+# always true, so deleting it changes no published byte and no assertion can
+# see it. This environment is the only one where it does anything.
+#
+# It is a separate environment rather than a change to the shared config
+# because adding a language doubles the published tree, which would perturb
+# the page counts, twin sets and warning tallies every other build asserts on.
+[languages]
+
+  [languages.en]
+    locale = 'en-US'
+    weight = 1
+
+  [languages.ru]
+    locale = 'ru-RU'
+    weight = 2
+    title = 'Фикстура agent-readiness'
+
+    # A per-language marker value, and the whole reason this build can detect
+    # anything. `root = true` means NO language ever writes to /ru/ -- every
+    # language targets the same root path -- so asserting the absence of a
+    # /ru/ copy would pass whether the gate exists or not. What actually
+    # happens without the gate is that both languages write the SAME path and
+    # the last writer wins. Only a value that differs per language can reveal
+    # which one survived.
+    [languages.ru.params]
+
+      [languages.ru.params.agent]
+
+        [languages.ru.params.agent.skills_index]
+          schema = 'https://example.invalid/RU-WROTE-THIS'

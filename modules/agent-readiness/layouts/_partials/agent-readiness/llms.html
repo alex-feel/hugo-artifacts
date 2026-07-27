@@ -78,7 +78,7 @@
          normalized by config.html, so a bare name and a slashed form resolve
          identically -- an unnormalized mismatch would render an empty H2
          with no warning, no error and exit 0. */}}
-  {{- $all := partial "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) -}}
+  {{- $all := partialCached "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) site.Language.Lang -}}
   {{- range $entry := $llms.sections | default slice -}}
     {{- $section := $entry.section | default "" -}}
     {{- $name := $entry.name | default "" -}}
@@ -115,18 +115,44 @@
       {{- if and (gt $limit 0) (gt (len $items) $limit) -}}
         {{- $items = first $limit $items -}}
       {{- end -}}
-      {{- $lines = $lines | append "" | append (printf "## %s" $name) | append "" -}}
-      {{/* Absolute URLs: llms.txt is routinely ingested detached from the
-           URL it was fetched from, and a relative path has no origin to
-           resolve against there. */}}
-      {{- range $items -}}
-        {{- $url := .Permalink -}}
-        {{- if $llms.link_markdown -}}
-          {{- with .OutputFormats.Get "markdown" -}}{{- $url = .Permalink -}}{{- end -}}
+
+      {{/* A section that matches NOTHING is the likeliest real instance of
+           the empty-H2 failure the guards above name -- `section = 'blogs'`
+           normalizes cleanly, passes both guards, matches no page, and
+           publishes a heading with no items under it. The heading is
+           withheld and the mismatch named, because an empty section in a
+           link index reads as "this site has no blog posts" rather than as
+           "this configuration is wrong". */}}
+      {{- if not $items -}}
+        {{- partial "agent-readiness/lib/warn.html" (dict
+            "key" (printf "agent-readiness:warn:llms-section-empty-result:%s" $section)
+            "message" (printf "[agent-readiness] The [[params.agent.llms.sections]] entry %q matches no page at %q, so its heading is omitted rather than published empty. Check the section path against your content tree, and check that it is admitted by the top-level `sections` allow-list if you set one." $name $section)) -}}
+      {{- else -}}
+        {{- $lines = $lines | append "" | append (printf "## %s" $name) | append "" -}}
+
+        {{/* Absolute URLs: llms.txt is routinely ingested detached from the
+             URL it was fetched from, and a relative path has no origin to
+             resolve against there.
+
+             The twin URL is substituted only when the twin will actually EXIST.
+             `.OutputFormats.Get "markdown"` answers "is the format wired for
+             this page kind", which is a question about the consumer's
+             [outputs] lists, NOT about whether this module rendered anything
+             into it -- markdown-page.html is the sole producer and it emits
+             nothing when the switch is off, which makes Hugo publish no file.
+             Consulting the format alone would therefore list a URL that 404s
+             for every page on a site that turned the twins off but left
+             `markdown` wired, which is exactly the configuration the module
+             tells consumers to use. */}}
+        {{- range $items -}}
+          {{- $url := .Permalink -}}
+          {{- if and $llms.link_markdown $cfg.markdown.enable -}}
+            {{- with .OutputFormats.Get "markdown" -}}{{- $url = .Permalink -}}{{- end -}}
+          {{- end -}}
+          {{- $item := printf "- [%s](%s)" .Title $url -}}
+          {{- with .Description -}}{{- $item = printf "%s: %s" $item . -}}{{- end -}}
+          {{- $lines = $lines | append $item -}}
         {{- end -}}
-        {{- $item := printf "- [%s](%s)" .Title $url -}}
-        {{- with .Description -}}{{- $item = printf "%s: %s" $item . -}}{{- end -}}
-        {{- $lines = $lines | append $item -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}

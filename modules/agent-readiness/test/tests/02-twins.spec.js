@@ -1,4 +1,4 @@
-// Phase 3 -- the Markdown twins.
+// The Markdown twins.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {parse as parseYaml} from 'yaml';

@@ -1,0 +1,19 @@
+# The `notwins` environment: twins switched OFF site-wide while `markdown`
+# stays wired in [outputs].
+#
+# This is the configuration the module itself prescribes for turning twins off,
+# and it is the only one in which the site-scoped `markdown.enable` switch does
+# anything at all -- a consumer who also unwired [outputs] would not need the
+# switch. It exists to hold one invariant that nothing else can reach: when the
+# twins are off, llms.txt and about.md must fall back to HTML permalinks
+# instead of advertising /index.md URLs for files Hugo never wrote.
+#
+# `.OutputFormats.Get "markdown"` keeps returning the format here, because it
+# answers "is this format wired for this page kind" rather than "did anything
+# get rendered into it". That is exactly why the link emitters have to consult
+# the module's own switch, and exactly why this environment is needed to prove
+# they do.
+[agent]
+
+  [agent.markdown]
+    enable = false

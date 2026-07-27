@@ -1,4 +1,4 @@
-// Step 7.1 -- alternate representations and static link relations.
+// Alternate representations and static link relations.
 //
 // The load-bearing pair of assertions is that the Markdown alternate appears
 // AND the RSS alternate still appears: head-meta.html deliberately narrows

@@ -2,7 +2,7 @@
   "name": "agent-readiness-module-tests",
   "private": true,
   "type": "module",
-  "description": "Build-output assertion suite for the agent-readiness Hugo module, run against the published files that three hugo builds produce: the fixture with every content-license key unset, the same fixture with them set, and a shadowing fixture that ships its own layouts/robots.txt. The module ships zero JavaScript, so there is no browser behavior to test.",
+  "description": "Build-output assertion suite for the agent-readiness Hugo module, run against the published files that five hugo builds produce: the fixture with every content-license key unset, the same fixture with them set, a minimal build configuring almost nothing (the shape a consumer gets on import), a build with the twins switched off site-wide while the markdown format stays wired, and a shadowing fixture that ships its own layouts/robots.txt. The module ships zero JavaScript, so there is no browser behavior to test.",
   "scripts": {
     "test": "node --test \"tests/*.spec.js\"",
     "test:data": "node --test \"tests/00-data.spec.js\""

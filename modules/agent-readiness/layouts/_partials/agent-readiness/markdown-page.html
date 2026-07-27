@@ -54,7 +54,7 @@
        member. */}}
   {{- $included := false -}}
   {{- if eq $page.Kind "page" -}}
-    {{- range partial "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) -}}
+    {{- range partialCached "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) site.Language.Lang -}}
       {{- if eq .Path $page.Path -}}{{- $included = true -}}{{- end -}}
     {{- end -}}
   {{- else -}}

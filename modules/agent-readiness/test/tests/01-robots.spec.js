@@ -1,4 +1,4 @@
-// Phase 2 -- the generated robots.txt, and the shadowing hazard.
+// The generated robots.txt, and the shadowing hazard.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {read, exists, minimalDir, shadowDir, warnCount, moduleRoot} from './helpers.js';
@@ -71,7 +71,7 @@ test('extra lines are emitted verbatim and the sitemap is absolute', () => {
 });
 
 test('the default fixture ships NO layouts/robots.txt', () => {
-  // Step 9.3 invariant 9. If the fixture ever acquires one, every robots
+  // If the fixture ever acquires one, every robots
   // assertion above would pass for the wrong reason -- against the fixture's
   // own file rather than the module's generator.
   assert.ok(

@@ -127,14 +127,36 @@
   {{- $maps = merge $maps (dict "markdown" (dict "enable" (index $mdSite "enable"))) -}}
 {{- end -}}
 
-{{/* A lower tier setting it is a silent no-op otherwise, which is the quiet
-     failure class this module exists to avoid, so say so once. */}}
+{{/* ---- Lower-tier site-scoped keys warn ---- EVERY site-scoped key is
+     silently discarded when set in page front matter or at a call site, and
+     a silent no-op is the quiet failure class this module exists to avoid.
+     The worst of them is `agent: {enable: false}`, which a reader of the key
+     table reaches for as a per-page opt-out: it is a map, so the non-map
+     guard in lib/page-excluded.html cannot catch it either, and the page
+     keeps its twin and stays listed with nothing said. Each offending key
+     warns once per build, naming the working alternative. */}}
 {{- if not $siteOnly -}}
-  {{- range slice $pagep $args -}}
-    {{- with index . "markdown" -}}
+  {{- range $tier := slice $pagep $args -}}
+    {{- range $k := $siteScoped -}}
+      {{- if isset $tier $k -}}
+        {{- partial "agent-readiness/lib/warn.html" (dict
+            "key" (printf "agent-readiness:warn:lower-tier-site-scoped:%s" $k)
+            "message" (printf "[agent-readiness] Ignoring the page-level or call-site agent key %q: it is SITE-SCOPED, because every agent surface must select the same page set no matter which page renders it. Set it under [params.agent] instead. To remove ONE page from every surface at once, use `agent: false` (or `agent: {exclude: true}`) in its front matter -- note that `agent: {enable: false}` is NOT that opt-out and does nothing." $k)) -}}
+      {{- end -}}
+    {{- end -}}
+    {{- range $k := slice "robots" "license" -}}
+      {{- with index $tier $k -}}
+        {{- if reflect.IsMap . -}}
+          {{- partial "agent-readiness/lib/warn.html" (dict
+              "key" (printf "agent-readiness:warn:lower-tier-site-scoped:%s" $k)
+              "message" (printf "[agent-readiness] Ignoring a page-level or call-site [%s] table: it is SITE-SCOPED, because it describes the site rather than one page. Set it under [params.agent.%s] instead." $k $k)) -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+    {{- with index $tier "markdown" -}}
       {{- if and (reflect.IsMap .) (isset . "enable") -}}
         {{- partial "agent-readiness/lib/warn.html" (dict
-            "key" "agent-readiness:warn:page-tier-markdown-enable"
+            "key" "agent-readiness:warn:lower-tier-site-scoped:markdown.enable"
             "message" "[agent-readiness] Ignoring a page-level or call-site `markdown.enable`: the key is SITE-SCOPED, because a page that suppressed only its own twin would still be listed in llms.txt and about.md with a URL that 404s. To exclude one page from every agent surface at once, set `agent: false` in its front matter; to turn the twins off site-wide, set [params.agent.markdown] enable = false.") -}}
       {{- end -}}
     {{- end -}}

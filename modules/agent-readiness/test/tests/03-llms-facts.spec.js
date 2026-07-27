@@ -1,4 +1,4 @@
-// Phases 4 and 5 -- llms.txt and the facts document, plus the cross-surface
+// llms.txt and the facts document, plus the cross-surface
 // invariants that are the entire reason these ship as ONE module.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -43,7 +43,7 @@ test('both authored section shapes produce a non-empty item list', () => {
 });
 
 test('llms.txt items link the Markdown twins by ABSOLUTE URL', () => {
-  // Plan A Step 4.2 specifies `.Permalink`, not `.RelPermalink`, and the
+  // The module contracts `.Permalink`, not `.RelPermalink`, and the
   // reason is the document's whole purpose: llms.txt is ingested by agents
   // that routinely hold it detached from the URL they fetched it from, where
   // a relative path has no origin to resolve against. Asserting only the
@@ -115,7 +115,7 @@ test('about.md exists and carries exactly one H1', () => {
 });
 
 test('each facts section lists EVERY page the shared filter admits', () => {
-  // The numeric equality is the assertion Plan A asks for: a facts document
+  // The numeric equality is the assertion that matters: a facts document
   // that truncates answers the one-fetch question wrongly while appearing to
   // answer it, and facts sections carry no limit key precisely so this can
   // never drift.
@@ -159,7 +159,7 @@ test('a contact href carrying its own scheme is passed through untouched', () =>
 });
 
 test('with facts.sections empty, the document keeps identity and contact and emits no section H2', () => {
-  // Plan A Step 5.3's acceptance verbatim: "With [params.agent.facts]
+  // The documented contract: "With [params.agent.facts]
   // sections = [], the document emits its identity and contact blocks and no
   // section H2, without error." Neither of the other environments can reach
   // that state, because both configure sections.

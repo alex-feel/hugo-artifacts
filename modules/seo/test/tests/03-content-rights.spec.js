@@ -1,4 +1,4 @@
-// Step 7.5 -- the license property on the JSON-LD content nodes.
+// The license property on the JSON-LD content nodes.
 //
 // `license` is a schema.org CreativeWork property. Attaching it to a Person,
 // an Organization, a WebSite or a BreadcrumbList would assert that an entity

@@ -166,9 +166,12 @@ The full annotated surface:
   [params.seo.feed]
     enable            = true               # Emit <link rel="alternate" type="application/rss+xml"> for the page's (or its section's) RSS output, if any. Default: true.
 
+  # --- Content license ---
+  content_license     = ""                 # Absolute URL of the license covering the site's editorial content. Emits "license" on the WebPage, CollectionPage and article-class JSON-LD nodes. Unset emits nothing. Pair it with [params.seo.links] license below to emit the matching <link rel="license">.
+
   # --- Alternate representations (opt-in allow-list) ---
   [params.seo.alternates]
-    formats           = ['markdown']       # Emit <link rel="alternate"> for these output formats when the page carries them. An ALLOW-LIST, never a blanket range: ranging every alternate would advertise /searchindex.json and /manifest.webmanifest as page alternates. Unset emits nothing.
+    formats           = ['markdown']       # Emit <link rel="alternate"> for these output formats when the page carries them. An ALLOW-LIST, never a blanket range: ranging every alternate would advertise /searchindex.json and /manifest.webmanifest as page alternates. Unset emits nothing. See the caveat below: presence is judged from the page's wired output formats, not from whether the format rendered anything.
 
   # --- Static link relations (IANA-registered, fixed sitewide targets) ---
   [params.seo.links]
@@ -178,6 +181,8 @@ The full annotated surface:
     license           = "https://creativecommons.org/licenses/by/4.0/"  # <link rel="license"> (WHATWG HTML). Emitted on every page the module's head runs on, because a content license is constant sitewide.
 ```
 
+**`[seo.alternates]` judges presence, not emptiness.** A format is advertised when the page CARRIES it -- that is, when your `[outputs]` list wires it for that page kind -- not when it demonstrably published bytes. Hugo offers no template API for "will this format write a file", and an output format that renders nothing produces no file at all. So if another module conditionally suppresses a format's body for some pages, those pages still advertise the alternate and the link 404s. The concrete case is the `agent-readiness` module's Markdown twins, which are withheld for pages carrying `agent: false`, for `robots: noindex` pages, for the search page, and for pages outside its configured `sections` allow-list. If you run both modules, keep `[seo.alternates] formats` and `[params.agent] sections` describing the same page set, or leave `formats` unset and let `agent-readiness` own twin discovery through `llms.txt`.
+
 ### Top-level keys (`params.seo.*`)
 
 | Key | Type | Default | Purpose |
@@ -185,7 +190,7 @@ The full annotated surface:
 | `enable` | bool | `true` | Global kill switch. `false` emits nothing anywhere. |
 | `title_suffix` | string | `""` | Appended to `<title>` only, never to `og:title` or `headline`. The home page never gets the suffix. |
 | `description` | string | `""` | Site-wide fallback description, last link of the description chain. |
-| `content_license` | string | `""` | Absolute URL of the license covering the site's editorial content. When set, emits `"license"` on the `WebPage`, `CollectionPage` and article-class (`Article` / `BlogPosting` / `NewsArticle`) nodes. `license` is a schema.org `CreativeWork` property, so it is valid on those and on nothing else the module emits -- it is deliberately NOT attached to `Person`, `Organization`, `WebSite` or `BreadcrumbList`. Unset emits nothing. |
+| `content_license` | string | `""` | Absolute URL of the license covering the site's editorial content. When set, emits `"license"` on the `WebPage`, `CollectionPage` and article-class (`Article` / `BlogPosting` / `NewsArticle`) nodes -- the nodes that represent the page's own editorial content. `license` is a schema.org `CreativeWork` property, and other `CreativeWork` subtypes this module emits (`WebSite`, `ProfilePage`, `SoftwareApplication`, `VideoObject`, `ImageObject`) could carry it validly; they deliberately do not, because a site-wide content license describes the page you are reading rather than the site entity or an embedded asset. It is never attached to `Person`, `Organization`, `Offer` or `BreadcrumbList`, where it would not be valid at all. Unset emits nothing. |
 | `default_image` | string | `""` | Site-wide image fallback. Resource path (`assets/` or `static/`) or absolute URL. Applied only when no page-level image resolves. |
 | `image_alt` | string | `""` | Default `og:image:alt` when a page image resolves no alt of its own. |
 | `image_params` | array | `[]` | Names of extra top-level front-matter params (e.g. `["tile_image"]`) whose values (string or list per key) join the page-image candidates -- after `seo.images`/`seo.image`/`meta_image`, before native `images`. |
@@ -592,7 +597,9 @@ Sites carrying legacy `meta_*`-style front matter (`meta_title`, `meta_descripti
 
 ## Module Structure
 
-The module ships only `layouts/` plus the two identity files and this README; it needs no `assets/`, `static/`, `data/`, `i18n/`, `content/`, or `archetypes/` (SEO metadata is fully derived from consumer front matter and site params). All partials live under `layouts/_partials/seo/` in three override tiers: RENDERERS at the `seo/` root change WHAT is output, RESOLVERS under `seo/resolve/` change HOW a value is chosen, NODE BUILDERS under `seo/jsonld/` change ONE schema type's shape; `seo/lib/` holds internal cross-cutting utilities.
+The module ships `layouts/` plus the two identity files, this README, and a `test/` directory carrying its validation suite; it needs no `assets/`, `static/`, `data/`, `i18n/`, `content/`, or `archetypes/` (SEO metadata is fully derived from consumer front matter and site params).
+
+`test/` holds a Hugo fixture site and Node build-output assertions, run with `bash modules/seo/test/run-tests.sh` (or `run-tests.cmd` on Windows). It builds the fixture twice -- once with `[seo.alternates]`, `[seo.links]` and `content_license` all unset, once with them set -- because a surface that is always on is indistinguishable from one that works unless both are checked. See [`test/README.md`](test/README.md). All partials live under `layouts/_partials/seo/` in three override tiers: RENDERERS at the `seo/` root change WHAT is output, RESOLVERS under `seo/resolve/` change HOW a value is chosen, NODE BUILDERS under `seo/jsonld/` change ONE schema type's shape; `seo/lib/` holds internal cross-cutting utilities.
 
 ```text
 modules/seo/
@@ -637,6 +644,7 @@ modules/seo/
           softwareapplication.html         # Returns the SoftwareApplication node dict (co-typing, enum-validated applicationCategory; self-gates).
           videoobject.html                 # Returns the VideoObject node dict (self-gates to name + thumbnailUrl + uploadDate).
           image-object.html                # Returns an ImageObject dict (or bare URL string) from a normalized image dict; reused by every image-carrying node.
+  test/                                    # Validation suite: a Hugo fixture site built twice (unset and configured) plus Node build-output assertions. See test/README.md.
 ```
 
 Two consumer-authored hook files (`layouts/_partials/seo/head-extra.html` and `layouts/_partials/seo/jsonld-extra.html`) are intentionally NOT shipped; the module calls them only behind `templates.Exists` guards, so both are zero-cost until you opt in.
