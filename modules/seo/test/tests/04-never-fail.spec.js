@@ -12,7 +12,7 @@
 // ordinary content.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {graph, rawHtml, PAGES} from './helpers.js';
+import {graph, rawHtml, warnCount, PAGES} from './helpers.js';
 
 test('a page writing tags and categories as bare scalars builds and emits them', () => {
   // That the suite reaches this assertion at all is half the point: before
@@ -54,4 +54,25 @@ test('no JSON-LD value anywhere is a bare byte code', () => {
       }
     }
   }
+});
+
+test('a scalar written for a page sub-table builds, and degrades to unconfigured', () => {
+  // `seo: {video: 'dQw4w9WgXcQ'}` is the bare-id spelling the module's own
+  // video_id alias encourages. It is TRUTHY, so `| default dict` does not
+  // substitute; resolve/types.html then types the page VideoObject and
+  // head-jsonld.html dispatches to a builder that reads `.thumbnail_url` off
+  // a string. That was a hard build stop -- reaching this assertion at all is
+  // half the proof.
+  const html = rawHtml(PAGES.scalarSubtables);
+  assert.ok(html.length > 0, 'the page built');
+  // The unusable block is treated as unconfigured, so no half-built node ships.
+  const video = graph(PAGES.scalarSubtables).filter((n) => n['@type'] === 'VideoObject');
+  assert.equal(video.length, 0, 'no VideoObject node from an unusable seo.video');
+  assert.ok(warnCount(/Ignoring seo\.video/) >= 1, 'and it says so');
+});
+
+test('a scalar written for a SITE sub-table degrades without taking the build down', () => {
+  // jsonld/organization.html reads `.type` off it on every page, so this one
+  // failed site-wide rather than on one page.
+  assert.ok(warnCount(/Ignoring seo\.organization/, 'subpath') >= 1);
 });

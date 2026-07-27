@@ -40,7 +40,7 @@
 {{- $seo := $ctx.seo -}}
 {{- $result := dict -}}
 
-{{- $video := $page.Param "seo.video" | default dict -}}
+{{- $video := partial "seo/lib/as-map.html" (dict "value" ($page.Param "seo.video") "key" "seo.video") -}}
 
 {{- if eq $page.Kind "page" -}}
   {{- $name := $seo.title -}}

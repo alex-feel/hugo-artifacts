@@ -156,7 +156,7 @@
 <meta property="article:tag" content="{{ . }}">
   {{- end }}
 {{- else if eq $seo.ogType "profile" -}}
-  {{- $profile := $page.Param "seo.profile" | default (dict) -}}
+  {{- $profile := partial "seo/lib/as-map.html" (dict "value" ($page.Param "seo.profile") "key" "seo.profile") -}}
   {{- with (index $profile "given_name") }}
 <meta property="profile:first_name" content="{{ . }}">
   {{- end }}
@@ -170,7 +170,7 @@
 <meta property="profile:gender" content="{{ . }}">
   {{- end }}
 {{- else if eq $seo.ogType "product" -}}
-  {{- $offer := $page.Param "seo.offer" | default (dict) -}}
+  {{- $offer := partial "seo/lib/as-map.html" (dict "value" ($page.Param "seo.offer") "key" "seo.offer") -}}
   {{/* product:price:amount parses through lib/num.html so this meta stays
        consistent with the JSON-LD Offer price: an explicit 0 emits, an
        unparseable value drops the meta (lib/num.html warns once). */}}
@@ -184,7 +184,7 @@
 <meta property="product:price:currency" content="{{ . }}">
   {{- end }}
 {{- else if eq $seo.ogType "video.other" -}}
-  {{- $video := $page.Param "seo.video" | default (dict) -}}
+  {{- $video := partial "seo/lib/as-map.html" (dict "value" ($page.Param "seo.video") "key" "seo.video") -}}
   {{- with (index $video "content_url") }}
 <meta property="og:video:url" content="{{ . }}">
 <meta property="og:video:secure_url" content="{{ . }}">
@@ -232,7 +232,7 @@
 {{/* ---- Site verification ---- Each token emits its provider's verification
      tag. Backward-compatible aliases from params.site_verification.* are read
      only when the seo.verification.* equivalent is absent. */}}
-{{- $ver := $page.Param "seo.verification" | default (dict) -}}
+{{- $ver := partial "seo/lib/as-map.html" (dict "value" ($page.Param "seo.verification") "key" "seo.verification") -}}
 {{- $legacyVer := index (site.Params) "site_verification" | default (dict) -}}
 {{- with (index $ver "google") | default (index $legacyVer "google") }}
 <meta name="google-site-verification" content="{{ . }}">

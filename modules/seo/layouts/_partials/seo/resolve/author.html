@@ -69,7 +69,7 @@
            the author to the profile. */}}
       {{- $descriptor = dict "name" $ap.Title "url" $ap.Permalink "type" "Person" -}}
       {{- $descriptor = merge $descriptor (dict "id" (partial "seo/resolve/id.html" (dict "page" $ap "kind" "person"))) -}}
-      {{- $profile := $ap.Param "seo.profile" | default dict -}}
+      {{- $profile := partial "seo/lib/as-map.html" (dict "value" ($ap.Param "seo.profile") "key" "seo.profile") -}}
       {{- with (index $profile "entity_type") -}}
         {{- $descriptor = merge $descriptor (dict "type" .) -}}
       {{- end -}}

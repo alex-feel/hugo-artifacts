@@ -91,20 +91,35 @@
 {{/* ---- Nested-map cascade ---- robots and license are SITE-SCOPED and stop
      at the site tier no matter how this partial was called; the rest run
      through all four tiers when the caller is not site-scoped. */}}
+{{/* Each tier contributes only if it really is a map. A tier that set the
+     key to something else is REPORTED rather than skipped in silence:
+     `[params.agent] llms = false` is the natural mis-write of
+     `[params.agent.llms] enable = false`, and skipping it silently leaves the
+     shipped `enable = true` in force, so the surface the consumer meant to
+     switch off keeps publishing -- exit 0, no warning, the opposite of what
+     was asked. */}}
 {{- $maps := dict -}}
 {{- range $k := slice "robots" "license" -}}
   {{- $m := dict -}}
   {{- with index $defaults $k -}}{{- if reflect.IsMap . -}}{{- $m = merge $m . -}}{{- end -}}{{- end -}}
-  {{- with index $sitep $k -}}{{- if reflect.IsMap . -}}{{- $m = merge $m . -}}{{- end -}}{{- end -}}
+  {{- with index $sitep $k -}}
+    {{- if reflect.IsMap . -}}{{- $m = merge $m . -}}
+    {{- else -}}{{- partial "agent-readiness/lib/warn.html" (dict
+        "key" (printf "agent-readiness:warn:non-map-table:%s" $k)
+        "message" (printf "[agent-readiness] Ignoring [params.agent] %s: it expects a table but was given %q, so every key inside it keeps its shipped default. Write it as [params.agent.%s]." $k (printf "%v" .) $k)) -}}{{- end -}}
+  {{- end -}}
   {{- $maps = merge $maps (dict $k $m) -}}
 {{- end -}}
 {{- range $k := slice "markdown" "llms" "facts" "skills_index" "frontmatter" -}}
   {{- $m := dict -}}
   {{- with index $defaults $k -}}{{- if reflect.IsMap . -}}{{- $m = merge $m . -}}{{- end -}}{{- end -}}
-  {{- with index $sitep $k -}}{{- if reflect.IsMap . -}}{{- $m = merge $m . -}}{{- end -}}{{- end -}}
-  {{- if not $siteOnly -}}
-    {{- with index $pagep $k -}}{{- if reflect.IsMap . -}}{{- $m = merge $m . -}}{{- end -}}{{- end -}}
-    {{- with index $args $k -}}{{- if reflect.IsMap . -}}{{- $m = merge $m . -}}{{- end -}}{{- end -}}
+  {{- range $tier := (cond $siteOnly (slice $sitep) (slice $sitep $pagep $args)) -}}
+    {{- with index $tier $k -}}
+      {{- if reflect.IsMap . -}}{{- $m = merge $m . -}}
+      {{- else -}}{{- partial "agent-readiness/lib/warn.html" (dict
+          "key" (printf "agent-readiness:warn:non-map-table:%s" $k)
+          "message" (printf "[agent-readiness] Ignoring an agent %s value: it expects a table but was given %q, so every key inside it keeps its shipped default. Write it as [params.agent.%s] (or the matching front-matter map)." $k (printf "%v" .) $k)) -}}{{- end -}}
+    {{- end -}}
   {{- end -}}
   {{- $maps = merge $maps (dict $k $m) -}}
 {{- end -}}
@@ -233,6 +248,14 @@
 {{- $fm := index $maps "frontmatter" -}}
 {{- if reflect.IsMap $fm -}}
   {{- range $section, $sectionMap := $fm -}}
+    {{- if not (reflect.IsMap $sectionMap) -}}
+      {{/* A non-map section drops its ENTIRE vocabulary from every twin and
+           from about.md, with no signal: both readers gate on the same
+           reflect.IsMap and simply skip. */}}
+      {{- partial "agent-readiness/lib/warn.html" (dict
+          "key" (printf "agent-readiness:warn:non-map-table:frontmatter.%s" $section)
+          "message" (printf "[agent-readiness] Ignoring [params.agent.frontmatter] %s: a section vocabulary expects a table carrying `keys`, but was given %q, so that section's front matter is described nowhere. Write it as [params.agent.frontmatter.%s] keys = [...]." $section (printf "%v" $sectionMap) $section)) -}}
+    {{- end -}}
     {{- if reflect.IsMap $sectionMap -}}
       {{- $v := index $sectionMap "keys" -}}
       {{- if and (ne $v nil) (not (reflect.IsSlice $v)) -}}

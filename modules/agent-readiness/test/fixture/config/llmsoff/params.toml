@@ -24,3 +24,6 @@
   # `.rows` was evaluated as a field on a string, and the build stopped.
   [agent.facts]
     identity = '/'
+    # The other half of the same loop. Both sub-tables must be covered, or
+    # dropping one from `range $t := slice "identity" "contact"` ships green.
+    contact = '/contact'

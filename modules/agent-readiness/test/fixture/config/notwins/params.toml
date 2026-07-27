@@ -15,5 +15,30 @@
 # they do.
 [agent]
 
+  # The two SCALAR array-of-tables shapes. They live here because notwins
+  # configures neither key, and because TOML cannot mix a scalar with an
+  # array-of-tables header under one key -- which is why the badtables build
+  # carries the bare-string-ARRAY shapes of the same keys instead. Both
+  # guards protect a hard build stop, so both need a build that enters them.
+  #
+  # Declared BEFORE any sub-table header: a bare key after `[agent.markdown]`
+  # would belong to that table, not to [agent].
+  skills = 'not-an-array-of-tables'
+
+  # Three sub-tables written as non-maps. `[params.agent] robots = '...'` is
+  # the natural mis-write of `[params.agent.robots] enable = ...`, and it is
+  # discarded, so every key inside keeps its shipped default -- the OPPOSITE
+  # of what the consumer asked for, silently. One covers the site-scoped
+  # cascade loop, one the all-tiers loop, one a frontmatter section, whose
+  # whole vocabulary would otherwise vanish from every twin and from about.md.
+  robots = 'not-a-table'
+  skills_index = 'not-a-table'
+
   [agent.markdown]
     enable = false
+
+  [agent.facts.identity]
+    rows = 'not-an-array-of-tables'
+
+  [agent.frontmatter]
+    blog = 'title'

@@ -164,7 +164,7 @@
 
 {{/* shippingDetails / hasMerchantReturnPolicy: reference the Organization
      policy @id when OnlineStore, else inline from seo.offer.*. */}}
-{{- $orgType := $page.Site.Params.seo.organization.type | default "Organization" -}}
+{{- $orgType := (partial "seo/lib/as-map.html" (dict "value" ($page.Site.Params.seo.organization) "key" "seo.organization")).type | default "Organization" -}}
 {{- if eq $orgType "OnlineStore" -}}
   {{- $orgId := $seo.ids.organization -}}
   {{- with $orgId -}}

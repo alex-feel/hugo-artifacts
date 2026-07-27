@@ -26,7 +26,7 @@
 {{- $seo := $ctx.seo -}}
 {{- $result := dict -}}
 
-{{- $profile := $page.Param "seo.profile" | default dict -}}
+{{- $profile := partial "seo/lib/as-map.html" (dict "value" ($page.Param "seo.profile") "key" "seo.profile") -}}
 
 {{- if eq $page.Kind "page" -}}
   {{/* mainEntity.name: given_name + family_name assembled, else the resolved

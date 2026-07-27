@@ -6,6 +6,12 @@
 [seo]
   content_license = 'https://creativecommons.org/licenses/by/4.0/'
 
+  # A site-level sub-table written as a scalar. jsonld/organization.html reads
+  # `.type` off it on EVERY page, so uncoerced this took the whole build down
+  # rather than degrading one node. Carried here rather than in `configured`
+  # because the person-@id specs read that tree and need a real organization.
+  organization = 'Acme'
+
   # A site-root image path -- the form a static/ file must be written as,
   # because static/ is invisible to resources.Get. It feeds og:image,
   # og:image:secure_url, twitter:image and every JSON-LD image node.

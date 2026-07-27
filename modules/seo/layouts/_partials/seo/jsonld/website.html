@@ -30,7 +30,7 @@
   {{- $name = . -}}
 {{- end -}}
 {{- if not $name -}}
-  {{- with $site.Params.seo.organization.name -}}
+  {{- with (partial "seo/lib/as-map.html" (dict "value" ($site.Params.seo.organization) "key" "seo.organization")).name -}}
     {{- $name = . -}}
   {{- end -}}
 {{- end -}}
@@ -63,7 +63,7 @@
        Organization is defined on home and merged by @id; we reference it
        whenever an organization/site name exists (the anchor is shared). */}}
   {{- $orgName := "" -}}
-  {{- with $site.Params.seo.organization.name -}}
+  {{- with (partial "seo/lib/as-map.html" (dict "value" ($site.Params.seo.organization) "key" "seo.organization")).name -}}
     {{- $orgName = . -}}
   {{- end -}}
   {{- if not $orgName -}}

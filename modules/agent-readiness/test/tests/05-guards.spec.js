@@ -358,6 +358,26 @@ test('a non-numeric limit is reported and read as complete', () => {
   assert.equal(bad.length, 3, 'and listed COMPLETE, which is what limit = 0 means');
 });
 
+test('a SCALAR written for an array-of-tables key is refused, not evaluated', () => {
+  // The shape that stops the build outright, as opposed to the bare-string
+  // ARRAY shape below which merely drops entries. Both guards exist; both
+  // need a build that enters them.
+  assert.equal(warnCount(/\[\[params\.agent\.skills\]\] expects an array of tables/, 'notwins'), 1);
+  assert.equal(warnCount(/identity\] rows expects an array of tables/, 'notwins'), 1);
+});
+
+test('a sub-table written as a non-map is reported, not silently discarded', () => {
+  // Discarded silently, every key inside keeps its shipped default -- so
+  // `[params.agent] llms = false`, the natural mis-write of
+  // `[params.agent.llms] enable = false`, leaves llms.txt publishing. That is
+  // the opposite of what the consumer asked for, with no signal at all.
+  assert.equal(warnCount(/agent robots value|\] robots:/, 'notwins'), 1);
+  assert.equal(warnCount(/agent skills_index value/, 'notwins'), 1);
+  // A frontmatter SECTION written as a non-map drops that section's entire
+  // vocabulary from every twin and from about.md.
+  assert.equal(warnCount(/frontmatter\] blog/, 'notwins'), 1);
+});
+
 test('a bare value in ANY array-of-tables key is refused, not dropped', () => {
   // The scalar coercion cannot see these: `skills = ['my-skill']` is a real
   // slice, so it passes IsSlice untouched and every entry then fails the
@@ -395,6 +415,9 @@ test('a scalar written for a consumer sub-table is refused, not evaluated', () =
   // evaluated as a field on a string -- a hard build stop, inside a module
   // the consumer does not own.
   assert.equal(warnCount(/facts\] identity expects a table/, 'llmsoff'), 1);
+  // BOTH halves of the loop: dropping either name from
+  // `range $t := slice "identity" "contact"` must fail.
+  assert.equal(warnCount(/facts\] contact expects a table/, 'llmsoff'), 1);
   const about = read('about.md', llmsoffDir);
   assert.ok(!about.includes('## Identity'), 'the unreadable block is omitted');
   assert.match(about, /^# /m, 'the rest of the document still publishes');

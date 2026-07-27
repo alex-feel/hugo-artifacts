@@ -26,8 +26,8 @@
 {{- $seo := $ctx.seo -}}
 {{- $result := dict -}}
 
-{{- $sw := $page.Param "seo.software" | default dict -}}
-{{- $offerData := $page.Param "seo.offer" | default dict -}}
+{{- $sw := partial "seo/lib/as-map.html" (dict "value" ($page.Param "seo.software") "key" "seo.software") -}}
+{{- $offerData := partial "seo/lib/as-map.html" (dict "value" ($page.Param "seo.offer") "key" "seo.offer") -}}
 
 {{- if eq $page.Kind "page" -}}
   {{- $name := $seo.title -}}
