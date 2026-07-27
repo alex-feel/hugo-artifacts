@@ -99,14 +99,23 @@
      switch off keeps publishing -- exit 0, no warning, the opposite of what
      was asked. */}}
 {{- $maps := dict -}}
+{{/* PRESENCE is tested with `ne nil`, never with `with`. Go's `with` runs its
+     body only for a NON-EMPTY value, so `false`, `0` and `""` are
+     indistinguishable from absent to it -- and `[params.agent] llms = false`,
+     the very mis-write these warnings exist for, is falsy. Gating on `with`
+     would leave the warning unreachable for exactly the case that motivates
+     it. Plan A Step 1.6 states the same rule for the scalar cascade: "Both
+     use `isset`, never truthiness, so an explicit `false` at a higher tier
+     wins." */}}
 {{- range $k := slice "robots" "license" -}}
   {{- $m := dict -}}
   {{- with index $defaults $k -}}{{- if reflect.IsMap . -}}{{- $m = merge $m . -}}{{- end -}}{{- end -}}
-  {{- with index $sitep $k -}}
-    {{- if reflect.IsMap . -}}{{- $m = merge $m . -}}
+  {{- $tv := index $sitep $k -}}
+  {{- if ne $tv nil -}}
+    {{- if reflect.IsMap $tv -}}{{- $m = merge $m $tv -}}
     {{- else -}}{{- partial "agent-readiness/lib/warn.html" (dict
         "key" (printf "agent-readiness:warn:non-map-table:%s" $k)
-        "message" (printf "[agent-readiness] Ignoring [params.agent] %s: it expects a table but was given %q, so every key inside it keeps its shipped default. Write it as [params.agent.%s]." $k (printf "%v" .) $k)) -}}{{- end -}}
+        "message" (printf "[agent-readiness] Ignoring [params.agent] %s: it expects a table but was given %q, so every key inside it keeps its shipped default. Write it as [params.agent.%s]." $k (printf "%v" $tv) $k)) -}}{{- end -}}
   {{- end -}}
   {{- $maps = merge $maps (dict $k $m) -}}
 {{- end -}}
@@ -114,11 +123,12 @@
   {{- $m := dict -}}
   {{- with index $defaults $k -}}{{- if reflect.IsMap . -}}{{- $m = merge $m . -}}{{- end -}}{{- end -}}
   {{- range $tier := (cond $siteOnly (slice $sitep) (slice $sitep $pagep $args)) -}}
-    {{- with index $tier $k -}}
-      {{- if reflect.IsMap . -}}{{- $m = merge $m . -}}
+    {{- $tv := index $tier $k -}}
+    {{- if ne $tv nil -}}
+      {{- if reflect.IsMap $tv -}}{{- $m = merge $m $tv -}}
       {{- else -}}{{- partial "agent-readiness/lib/warn.html" (dict
           "key" (printf "agent-readiness:warn:non-map-table:%s" $k)
-          "message" (printf "[agent-readiness] Ignoring an agent %s value: it expects a table but was given %q, so every key inside it keeps its shipped default. Write it as [params.agent.%s] (or the matching front-matter map)." $k (printf "%v" .) $k)) -}}{{- end -}}
+          "message" (printf "[agent-readiness] Ignoring an agent %s value: it expects a table but was given %q, so every key inside it keeps its shipped default. Write it as [params.agent.%s] (or the matching front-matter map)." $k (printf "%v" $tv) $k)) -}}{{- end -}}
     {{- end -}}
   {{- end -}}
   {{- $maps = merge $maps (dict $k $m) -}}
@@ -143,7 +153,8 @@
 {{- range $k := slice "markdown" "llms" "facts" "skills_index" -}}
   {{- $siteOnlyMap := dict -}}
   {{- with index $defaults $k -}}{{- if reflect.IsMap . -}}{{- $siteOnlyMap = merge $siteOnlyMap . -}}{{- end -}}{{- end -}}
-  {{- with index $sitep $k -}}{{- if reflect.IsMap . -}}{{- $siteOnlyMap = merge $siteOnlyMap . -}}{{- end -}}{{- end -}}
+  {{- $sv := index $sitep $k -}}
+  {{- if and (ne $sv nil) (reflect.IsMap $sv) -}}{{- $siteOnlyMap = merge $siteOnlyMap $sv -}}{{- end -}}
   {{- if ne (index $siteOnlyMap "enable") nil -}}
     {{- $maps = merge $maps (dict $k (dict "enable" (index $siteOnlyMap "enable"))) -}}
   {{- end -}}

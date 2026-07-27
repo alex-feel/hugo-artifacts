@@ -376,6 +376,17 @@ test('a sub-table written as a non-map is reported, not silently discarded', () 
   // A frontmatter SECTION written as a non-map drops that section's entire
   // vocabulary from every twin and from about.md.
   assert.equal(warnCount(/frontmatter\] blog/, 'notwins'), 1);
+
+  // The FALSY half, on BOTH cascade loops. `with` treats false as absent, so
+  // a with-gated guard never sees `[params.agent] llms = false` -- the exact
+  // mis-write these guards exist for. Presence must be tested with `ne nil`,
+  // the rule the scalar cascade already follows and which Plan A Step 1.6
+  // states outright.
+  assert.equal(warnCount(/\[params\.agent\] license:/, 'notwins'), 1, 'site-scoped loop');
+  assert.equal(warnCount(/agent frontmatter value/, 'llmsoff'), 1, 'all-tiers loop');
+  // And the discard really is a discard: shipped defaults survive, so the
+  // surfaces keep publishing rather than silently vanishing.
+  assert.ok(exists('llms.txt', notwinsDir), 'the shipped defaults stand');
 });
 
 test('a bare value in ANY array-of-tables key is refused, not dropped', () => {

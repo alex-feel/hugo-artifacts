@@ -12,7 +12,7 @@
 // ordinary content.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {graph, rawHtml, warnCount, PAGES} from './helpers.js';
+import {configuredDir, graph, rawHtml, warnCount, PAGES} from './helpers.js';
 
 test('a page writing tags and categories as bare scalars builds and emits them', () => {
   // That the suite reaches this assertion at all is half the point: before
@@ -75,4 +75,19 @@ test('a scalar written for a SITE sub-table degrades without taking the build do
   // jsonld/organization.html reads `.type` off it on every page, so this one
   // failed site-wide rather than on one page.
   assert.ok(warnCount(/Ignoring seo\.organization/, 'subpath') >= 1);
+});
+
+test('the whole seo front-matter block written as a scalar still builds', () => {
+  // Read on EVERY page by three resolvers as `| default dict` then `index`.
+  // `index` on a string with a string key errors, so one page written this
+  // way took the whole build down.
+  const html = rawHtml(PAGES.scalarSeoBlock);
+  assert.ok(html.includes('<title>'), 'the page built with its head intact');
+  assert.ok(warnCount(/Ignoring seo:/) >= 1, 'and it says so');
+});
+
+test('a scalar seo.website does not stop the home-page build', () => {
+  // jsonld/website.html reads three keys off it on every language home page.
+  assert.ok(warnCount(/Ignoring seo\.website/, 'configured') >= 1);
+  assert.ok(rawHtml(PAGES.home, configuredDir).includes('<title>'), 'the home page built');
 });

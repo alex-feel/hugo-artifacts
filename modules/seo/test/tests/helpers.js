@@ -89,6 +89,7 @@ export function warnCount(pattern, which = 'baseline') {
 export const PAGES = {
   scalarTaxonomies: 'blog/scalar-taxonomies/index.html',
   scalarSubtables: 'blog/scalar-subtables/index.html',
+  scalarSeoBlock: 'blog/scalar-seo-block/index.html',
   home: 'index.html',
   page: 'page/index.html',
   blogSection: 'blog/index.html',

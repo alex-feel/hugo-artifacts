@@ -13,6 +13,12 @@
 # link on this configuration if they trusted the format alone.
 [agent]
 
+  # The falsy non-map on the ALL-TIERS loop, the counterpart of `license =
+  # false` in notwins. `frontmatter` is chosen because a falsy value replaces
+  # the whole table, and this build asserts nothing about per-section
+  # vocabularies.
+  frontmatter = false
+
   [agent.llms]
     enable = false
 

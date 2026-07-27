@@ -40,7 +40,7 @@
 
 {{- $ctx := . -}}
 {{- $kind := $ctx.kind -}}
-{{- $data := $ctx.data | default dict -}}
+{{- $data := partial "seo/lib/as-map.html" (dict "value" ($ctx.data) "key" "seo.aggregate_rating/review") -}}
 {{- $page := $ctx.page -}}
 {{- $result := dict -}}
 

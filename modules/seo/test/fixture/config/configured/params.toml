@@ -5,6 +5,13 @@
 [seo]
   content_license = 'https://creativecommons.org/licenses/by/4.0/'
 
+  # The sibling table jsonld/website.html reads .name, .alternate_name and
+  # .search_url_template off, on every language home page. The previous sweep
+  # routed `organization` four lines away in that same file and left this one
+  # raw, so uncoerced it stopped the home-page build. It lives here rather
+  # than in `subpath`, which declares a real [seo.website] table.
+  website = 'Acme Docs'
+
   [seo.alternates]
     formats = ['markdown']
 

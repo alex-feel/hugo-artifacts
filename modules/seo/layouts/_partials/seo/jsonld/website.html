@@ -24,9 +24,14 @@
 {{- $site := . -}}
 {{- $result := dict -}}
 
+{{/* Resolved ONCE through as-map.html. Read raw, `[params.seo] website =
+     'My Site'` -- the same mis-write shape as the organization table two
+     lines down -- put a field access on a string and stopped the build on
+     every language home page. */}}
+{{- $website := partial "seo/lib/as-map.html" (dict "value" ($site.Params.seo.website) "key" "seo.website") -}}
 {{- $url := $site.Home.Permalink -}}
 {{- $name := "" -}}
-{{- with $site.Params.seo.website.name -}}
+{{- with $website.name -}}
   {{- $name = . -}}
 {{- end -}}
 {{- if not $name -}}
@@ -50,7 +55,7 @@
     "name" $name
   -}}
 
-  {{- with $site.Params.seo.website.alternate_name -}}
+  {{- with $website.alternate_name -}}
     {{- $node = merge $node (dict "alternateName" .) -}}
   {{- end -}}
 
@@ -79,7 +84,7 @@
        MUST contain the literal {search_term_string}; relative values are
        absolutized through seo/lib/absolute-url.html, which keeps the baseURL
        path. Missing placeholder warns once site-wide. */}}
-  {{- with $site.Params.seo.website.search_url_template -}}
+  {{- with $website.search_url_template -}}
     {{- $tmpl := . -}}
     {{- if in $tmpl "{search_term_string}" -}}
       {{/* seo/lib/absolute-url.html rather than a hand-rolled scheme check

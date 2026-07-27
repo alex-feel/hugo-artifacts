@@ -28,8 +28,8 @@
 {{- $ctx := . -}}
 {{- $page := $ctx.page -}}
 {{- $seo := $ctx.seo -}}
-{{- $offer := $ctx.offer | default dict -}}
-{{- $product := $ctx.product | default dict -}}
+{{- $offer := partial "seo/lib/as-map.html" (dict "value" ($ctx.offer) "key" "seo.offer") -}}
+{{- $product := partial "seo/lib/as-map.html" (dict "value" ($ctx.product) "key" "seo.product") -}}
 {{- $result := dict -}}
 
 {{- $aggregate := $offer.aggregate | default false -}}

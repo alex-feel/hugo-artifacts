@@ -42,7 +42,7 @@
 
 {{/* Read page-level seo.type / meta_type straight from front matter so the
      .Param cascade does not conflate page and site intent. */}}
-{{- $pageSeo := $page.Params.seo | default dict -}}
+{{- $pageSeo := partial "seo/lib/as-map.html" (dict "value" ($page.Params.seo) "key" "seo") -}}
 {{- $explicit := index $pageSeo "type" -}}
 {{- $metaType := $page.Params.meta_type -}}
 {{- $ogOverride := index $pageSeo "og_type" -}}

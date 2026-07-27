@@ -233,7 +233,7 @@
      tag. Backward-compatible aliases from params.site_verification.* are read
      only when the seo.verification.* equivalent is absent. */}}
 {{- $ver := partial "seo/lib/as-map.html" (dict "value" ($page.Param "seo.verification") "key" "seo.verification") -}}
-{{- $legacyVer := index (site.Params) "site_verification" | default (dict) -}}
+{{- $legacyVer := partial "seo/lib/as-map.html" (dict "value" (index (site.Params) "site_verification") "key" "site_verification") -}}
 {{- with (index $ver "google") | default (index $legacyVer "google") }}
 <meta name="google-site-verification" content="{{ . }}">
 {{- end }}

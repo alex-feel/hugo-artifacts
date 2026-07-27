@@ -25,7 +25,7 @@
 
 {{/* Page-level seo.description, read straight from front matter (not the
      .Param cascade) so it does not absorb the site default prematurely. */}}
-{{- $pageSeo := $page.Params.seo | default dict -}}
+{{- $pageSeo := partial "seo/lib/as-map.html" (dict "value" ($page.Params.seo) "key" "seo") -}}
 
 {{- $description := "" -}}
 {{- with (index $pageSeo "description") -}}

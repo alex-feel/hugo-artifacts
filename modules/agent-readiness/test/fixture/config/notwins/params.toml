@@ -34,6 +34,14 @@
   robots = 'not-a-table'
   skills_index = 'not-a-table'
 
+  # The FALSY half of the same mis-write, on the SITE-SCOPED loop. `with`
+  # treats false, 0 and "" as absent, so a with-gated guard is unreachable for
+  # exactly this value -- which is the mis-write the guard exists for. The key
+  # is `license` rather than `llms` because a falsy value REPLACES the whole
+  # table at the Hugo config layer, and this build's other assertions need the
+  # inherited llms configuration intact.
+  license = false
+
   [agent.markdown]
     enable = false
 

@@ -53,7 +53,7 @@
      is absent. Read straight from front matter (not the .Param cascade): the
      site baseline is already source 1, and letting the cascade echo it here
      would both double-add it and short-circuit the legacy alias. */}}
-{{- $pageSeo := $page.Params.seo | default dict -}}
+{{- $pageSeo := partial "seo/lib/as-map.html" (dict "value" ($page.Params.seo) "key" "seo") -}}
 {{- $pageRobots := index $pageSeo "robots" -}}
 {{- if $pageRobots -}}
   {{- $sources = $sources | append $pageRobots -}}
