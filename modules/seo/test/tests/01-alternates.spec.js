@@ -109,6 +109,28 @@ test('a subpath baseURL survives into every emitted href', () => {
   assert.ok(checked > 0, 'the subpath build must emit at least one on-site link');
 });
 
+test('every consumer-authored URL surface keeps the baseURL path', () => {
+  // The link relations were the first call sites normalized; these three were
+  // the ones the first sweep missed, each fed by a documented site-root form.
+  // Asserted on the raw HTML rather than through the link parser, because
+  // they land in meta content, JSON-LD and image tags rather than in <link>.
+  const html = rawHtml(PAGES.page, subpathDir);
+  const bad = [...html.matchAll(/https:\/\/seo-fixture\.example(?!\/docs\/)[^\s"'<]*/g)].map(
+    (m) => m[0],
+  );
+  assert.deepEqual(bad, [], 'no emitted URL may drop the /docs/ path component');
+
+  assert.ok(
+    html.includes('https://seo-fixture.example/docs/img/og-default.png'),
+    'default_image feeds og:image and the JSON-LD image nodes',
+  );
+  const home = rawHtml(PAGES.home, subpathDir);
+  assert.ok(
+    home.includes('https://seo-fixture.example/docs/search/?q={search_term_string}'),
+    'the SearchAction target keeps the path',
+  );
+});
+
 test('a consumer-authored canonical override keeps the baseURL path', () => {
   // rel="canonical" is the one tag whose entire job is to be exactly right;
   // a dropped path prefix declares a canonical URL the site does not serve.

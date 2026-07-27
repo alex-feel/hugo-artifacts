@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
 # Builds the fixture site THREE TIMES with hugo (a BUILD, not a server: no port
 # binding, and a finite build exits by itself) and runs the Node
-# build-output assertion suite against both trees.
+# build-output assertion suite against all three trees.
 #
-# The two builds are the point of this suite. The default environment omits
+# The three builds are the point of this suite. The default environment omits
 # [seo.alternates], [seo.links] and [seo] content_license entirely, so it
 # proves those additions are INERT when unconfigured; the `configured`
 # environment adds exactly those three blocks, so it proves each surface
-# appears when they are set. An assertion that only ever saw one of the two
-# builds could not tell "works" from "always on".
+# appears when they are set. An assertion that only ever saw one of those two
+# builds could not tell "works" from "always on". The `subpath` environment
+# repeats the configured surfaces under a baseURL that carries a PATH, which
+# is the only shape that can tell a correct URL absolutization from a broken
+# one -- at a domain root the two emit identical bytes.
 #
 # Follows the repository's hugo process lifecycle rule with a pre-launch
-# process check, and hard-fails on any deprecation or error output in either
+# process check, and hard-fails on any deprecation or error output in any
 # build log.
 set -euo pipefail
 

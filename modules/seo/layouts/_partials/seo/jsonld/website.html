@@ -77,14 +77,17 @@
 
   {{/* potentialAction SearchAction (Sitelinks Search Box). The template
        MUST contain the literal {search_term_string}; relative values are
-       absolutized via absURL. Missing placeholder warns once site-wide. */}}
+       absolutized through seo/lib/absolute-url.html, which keeps the baseURL
+       path. Missing placeholder warns once site-wide. */}}
   {{- with $site.Params.seo.website.search_url_template -}}
     {{- $tmpl := . -}}
     {{- if in $tmpl "{search_term_string}" -}}
-      {{- $target := $tmpl -}}
-      {{- if not (or (hasPrefix $tmpl "http://") (hasPrefix $tmpl "https://")) -}}
-        {{- $target = absURL $tmpl -}}
-      {{- end -}}
+      {{/* seo/lib/absolute-url.html rather than a hand-rolled scheme check
+           plus absURL: it passes scheme-carrying and protocol-relative values
+           through untouched AND normalizes the leading-slash form, which
+           absURL would otherwise resolve against the protocol and host alone,
+           dropping the baseURL path on a subpath deployment. */}}
+      {{- $target := partial "seo/lib/absolute-url.html" $tmpl -}}
       {{- $node = merge $node (dict "potentialAction" (dict
         "@type" "SearchAction"
         "target" (dict

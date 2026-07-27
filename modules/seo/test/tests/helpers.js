@@ -62,13 +62,25 @@ export function linkRels(rel, dir = publicDir) {
     }));
 }
 
-export function buildLog(configured = false) {
-  const p = configured ? process.env.HUGO_BUILD_LOG_CONFIGURED : process.env.HUGO_BUILD_LOG;
+export function buildLog(which = 'baseline') {
+  const keys = {
+    baseline: 'HUGO_BUILD_LOG',
+    configured: 'HUGO_BUILD_LOG_CONFIGURED',
+    subpath: 'HUGO_BUILD_LOG_SUBPATH',
+  };
+  // A key map that throws, rather than a two-state boolean: the boolean form
+  // had no path to the third log at all, so a warning assertion against the
+  // subpath build would have silently read the baseline one.
+  if (typeof which === 'boolean') which = which ? 'configured' : 'baseline';
+  if (!Object.hasOwn(keys, which)) {
+    throw new Error(`buildLog: unknown build ${JSON.stringify(which)}`);
+  }
+  const p = process.env[keys[which]];
   return p ? readFileSync(resolve(p), 'utf8') : '';
 }
 
-export function warnCount(pattern, configured = false) {
-  return buildLog(configured)
+export function warnCount(pattern, which = 'baseline') {
+  return buildLog(which)
     .split(/\r?\n/)
     .filter((line) => line.startsWith('WARN') && pattern.test(line)).length;
 }

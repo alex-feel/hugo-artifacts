@@ -224,6 +224,42 @@
   {{- $maps = merge $maps (dict $mapName $m) -}}
 {{- end -}}
 
+{{/* The same hazard one level DEEPER, in the two places a list lives inside a
+     consumer-authored sub-table. Both are ranged raw downstream --
+     `frontmatter.<section>.keys` by markdown-front-matter.html and facts.html,
+     `facts.identity.rows` by facts.html -- and `[params.agent.frontmatter.x]
+     keys = 'title'` is at least as likely a typo as the `bots = 'gptbot'`
+     shape above, because a section vocabulary of one field is ordinary. */}}
+{{- $fm := index $maps "frontmatter" -}}
+{{- if reflect.IsMap $fm -}}
+  {{- range $section, $sectionMap := $fm -}}
+    {{- if reflect.IsMap $sectionMap -}}
+      {{- $v := index $sectionMap "keys" -}}
+      {{- if and (ne $v nil) (not (reflect.IsSlice $v)) -}}
+        {{- partial "agent-readiness/lib/warn.html" (dict
+            "key" (printf "agent-readiness:warn:scalar-for-list:frontmatter.%s.keys" $section)
+            "message" (printf "[agent-readiness] The config key frontmatter.%s.keys expects a list but was given the single value %q; reading it as a one-item list. Write it as a TOML array -- keys = [%q]." $section (printf "%v" $v) (printf "%v" $v))) -}}
+        {{- $fm = merge $fm (dict $section (merge $sectionMap (dict "keys" (slice $v)))) -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $maps = merge $maps (dict "frontmatter" $fm) -}}
+{{- end -}}
+
+{{- $factsMap := index $maps "facts" -}}
+{{- if reflect.IsMap $factsMap -}}
+  {{- $identity := index $factsMap "identity" -}}
+  {{- if reflect.IsMap $identity -}}
+    {{- $rows := index $identity "rows" -}}
+    {{- if and (ne $rows nil) (not (reflect.IsSlice $rows)) -}}
+      {{- partial "agent-readiness/lib/warn.html" (dict
+          "key" "agent-readiness:warn:scalar-for-list:facts.identity.rows"
+          "message" "[agent-readiness] [params.agent.facts.identity] rows expects an array of tables but was given a single value; ignoring it. Declare each row as [[params.agent.facts.identity.rows]] with a label and a key.") -}}
+      {{- $maps = merge $maps (dict "facts" (merge $factsMap (dict "identity" (merge $identity (dict "rows" slice))))) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
 {{/* `skills` is the same shape hazard one level up, on a top-level key. */}}
 {{- if and (ne (index $cascade "skills") nil) (not (reflect.IsSlice (index $cascade "skills"))) -}}
   {{- partial "agent-readiness/lib/warn.html" (dict

@@ -6,10 +6,19 @@
 [seo]
   content_license = 'https://creativecommons.org/licenses/by/4.0/'
 
+  # A site-root image path -- the form a static/ file must be written as,
+  # because static/ is invisible to resources.Get. It feeds og:image,
+  # og:image:secure_url, twitter:image and every JSON-LD image node.
+  default_image = '/img/og-default.png'
+
   # A consumer-authored canonical override. rel="canonical" is the one tag
   # whose entire job is to be exactly right, so a dropped path prefix here is
   # the most damaging instance of the whole class.
   canonical = '/canonical-override/'
+
+  # A site-root search template. Feeds the JSON-LD SearchAction target.
+  [seo.website]
+    search_url_template = '/search/?q={search_term_string}'
 
   [seo.alternates]
     formats = ['markdown']

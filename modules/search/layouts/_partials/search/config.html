@@ -297,7 +297,14 @@
     {{- $pageURL = .RelPermalink -}}
     {{- $pageFound = true -}}
   {{- else -}}
-    {{- $pageURL = $pagePath | relLangURL -}}
+    {{/* The leading slash is stripped before relLangURL. Hugo resolves a
+         leading-slash input against the host root, DISCARDING the baseURL's
+         path -- `relLangURL "/search/"` under baseURL https://example.org/docs/
+         yields "/search/", not "/docs/search/" -- so on a subpath deployment
+         every fallback link, and the OpenSearch template built from this
+         value, would point outside the site. The no-leading-slash form keeps
+         the path. `.RelPermalink` above already carries it. */}}
+    {{- $pageURL = strings.TrimPrefix "/" $pagePath | relLangURL -}}
     {{- partial "search/lib/warn.html" (dict
         "key" (printf "search:warn:missing-page:%s" site.Language.Name)
         "message" (printf "[search] No page exists at %q for language %q, so search-page links can land on a 404. Create content%s.md (or that language's equivalent) and place the search shortcode on it, or point params.search.page_path at your search page." $pagePath site.Language.Name $pagePath)) -}}

@@ -125,9 +125,11 @@ Warnings are emitted for:
 - an `[[llms.sections]]` or `[[facts.sections]]` entry with an empty `section`, with no `name`, or matching no page -- each is skipped rather than published, because all three otherwise produce a plausible-looking document with the wrong contents;
 - a `markdown.sitemap_section_target` that is not `llms`, `sitemap`, or `none`, and a `sitemap_section_target = 'llms'` whose `llmstxt` format is not wired to the home page;
 - a `[params.agent.license]` with a `url` but no `name`, where the `llms.txt` line would render an empty link label;
-- a skill whose remote source could not be fetched, whose fields are invalid, or whose `name` repeats another entry's.
+- a skill whose remote source could not be fetched, whose fields are invalid, or whose `name` repeats another entry's;
+- a scalar written where a list belongs (`robots.allow`, `robots.disallow`, `robots.bots`, `robots.bots_allow`, `robots.bots_disallow`, `robots.extra`, `llms.sections`, `llms.optional`, `facts.sections`, `frontmatter.<section>.keys`), which is read as a one-item list; and the two array-of-tables keys `skills` and `facts.identity.rows`, which are ignored;
+- a non-numeric `[[llms.sections]] limit`, which is read as `0` (complete).
 
-The one misconfiguration class that is **not** caught this way is a TOML type error -- writing `bots = 'gptbot'` where a list is expected, or `limit = 'ten'` where a number is. Hugo raises a template error on those and the build stops. The failure is loud and names the file, which is why it is left to Hugo rather than absorbed: silently coercing a scalar to a one-element list would hide a real mistake in a config the consumer has to get right anyway.
+**Type mistakes are absorbed too, not raised.** A scalar written where a list belongs -- `bots = 'gptbot'` instead of `bots = ['gptbot']`, or `keys = 'title'` instead of `keys = ['title']` -- is read as a one-item list, and a non-numeric `limit` is read as `0`, meaning complete. Each emits one deduplicated warning naming the key and the offending value. This is not politeness: Go's `range` accepts no string, so an uncoerced scalar aborts template execution and **stops the consuming site's build** -- which is exactly what the contract above promises never to happen over this module's own configuration. A warning that names the key is strictly more useful than a template error that names a line in someone else's module.
 
 ## robots.txt
 

@@ -308,7 +308,7 @@ test('configured Disallow lines are emitted in their groups', () => {
 test('a scalar written where a list is expected is coerced, with one warning', () => {
   // Go's range accepts no string, so without coercion this alone would stop
   // the build -- against the module's published never-fail-the-build contract.
-  assert.equal(warnCount(/expects a list but was given the single value/, 'edge'), 1);
+  assert.equal(warnCount(/robots\.extra expects a list/, 'edge'), 1);
   assert.ok(read('robots.txt', edgeDir).includes('# a single extra line written as a bare string'));
 });
 
@@ -320,6 +320,37 @@ test('setting one key in a nested map leaves the rest at their shipped values', 
   assert.ok(!/^canonical:/m.test(twin), 'canonical is off, as configured');
   assert.match(twin, /^title:/m, 'front_matter is still on, as shipped');
   assert.match(twin, /^description:/m);
+});
+
+// ---- Type mistakes are absorbed, never raised ----
+
+test('a non-numeric limit is reported and read as complete', () => {
+  // `int` raises a template error on it, which would stop the consuming
+  // site's build over a one-character config typo.
+  assert.equal(warnCount(/non-numeric `limit`/, 'edge'), 1);
+  const bad = sectionsWithTopLevelBullets(read('llms.txt', edgeDir)).get('Bad Limit');
+  assert.ok(bad && bad.length > 0, 'the section is still listed');
+  assert.equal(bad.length, 3, 'and listed COMPLETE, which is what limit = 0 means');
+});
+
+test('a scalar written where a section vocabulary belongs is coerced', () => {
+  // [params.agent.frontmatter.<section>] keys is the one table every consuming
+  // site hand-authors, and a one-field vocabulary is ordinary, so `keys =
+  // 'title'` is a likely typo. It aborted the build until it was coerced.
+  assert.equal(warnCount(/frontmatter\.dupes\.keys expects a list/, 'edge'), 1);
+});
+
+// ---- No Go debug form ever reaches a published document ----
+
+test('map- and list-valued front-matter values are rendered, never stringified', () => {
+  // Go's %v yields `map[k:v]` and `[a b]`. The twin runs the same key through
+  // jsonify and would never produce either, and both surfaces are documented
+  // as describing a page with one vocabulary.
+  const about = read('about.md');
+  assert.match(about, /^- \*\*Credential\*\*: id: ABC-123, issuer: Fixture Authority$/m);
+  assert.match(about, /^- \*\*Focus\*\*: testing, tooling$/m);
+  assert.ok(!/map\[/.test(about), 'no Go map debug form anywhere in the document');
+  assert.ok(!/\[[a-z]+ [a-z]+\]/.test(about), 'no Go slice debug form either');
 });
 
 // ---- Skill name uniqueness ----

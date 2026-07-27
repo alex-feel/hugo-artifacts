@@ -121,9 +121,15 @@
     -}}
   {{- end -}}
 {{- else if $candidate -}}
-  {{/* String branch: bare URL or site-root path, absolutized, no dimensions. */}}
+  {{/* String branch: bare URL or site-root path, absolutized, no dimensions.
+       Absolutized through seo/lib/absolute-url.html rather than by piping
+       into absURL, because a site-root path -- the form this branch exists
+       to accept, and the form a static/ file must be written as -- would
+       otherwise resolve against the protocol and host alone and drop the
+       baseURL path on a subpath deployment. This value feeds og:image,
+       og:image:secure_url, twitter:image and every JSON-LD image node. */}}
   {{- $s := printf "%v" $candidate -}}
-  {{- $url := $s | absURL -}}
+  {{- $url := partial "seo/lib/absolute-url.html" $s -}}
   {{- $type := "" -}}
   {{- $lower := lower $s -}}
   {{- if hasSuffix $lower ".png" -}}

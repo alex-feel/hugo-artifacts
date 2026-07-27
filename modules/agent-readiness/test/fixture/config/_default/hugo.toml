@@ -150,6 +150,17 @@ enableRobotsTXT = true
           label = 'Nonexistent'
           key = 'no_such_key'
 
+        # Map- and list-valued sources, so both non-scalar branches of
+        # lib/flatten-value.html are reached. Without them the map branch is
+        # dead in every build and the slice branch is asserted nowhere.
+        [[params.agent.facts.identity.rows]]
+          label = 'Credential'
+          key = 'credentials'
+
+        [[params.agent.facts.identity.rows]]
+          label = 'Focus'
+          key = 'focus_areas'
+
       [params.agent.facts.contact]
         page = '/contact'
         key = 'channels'

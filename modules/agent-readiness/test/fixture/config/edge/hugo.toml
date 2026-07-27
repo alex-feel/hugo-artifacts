@@ -49,6 +49,14 @@ baseURL = 'https://example.org/docs/'
       # module's published never-fail contract.
       extra = '# a single extra line written as a bare string'
 
+    # A scalar where an array of field names belongs. This is the table every
+    # consuming site hand-authors, and a one-field vocabulary is ordinary, so
+    # `keys = 'title'` is at least as likely as the bots typo above -- and it
+    # aborted the build until it was coerced.
+    [params.agent.frontmatter]
+      [params.agent.frontmatter.dupes]
+        keys = 'title'
+
     [params.agent.markdown]
       sitemap_section_target = 'bogus'
       # Nested-map merge, not replace: setting ONE key here must leave every
@@ -78,6 +86,14 @@ baseURL = 'https://example.org/docs/'
         name = 'Dupes'
         section = '/dupes'
         limit = 0
+
+      # A non-numeric limit. `int` raises a template error on it, which would
+      # stop the build over a one-character config typo, so it is reported and
+      # read as 0 -- complete -- instead.
+      [[params.agent.llms.sections]]
+        name = 'Bad Limit'
+        section = 'blog'
+        limit = 'all'
 
       [[params.agent.llms.optional]]
         name = 'Sitemap'

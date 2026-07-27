@@ -58,7 +58,7 @@ The full annotated surface:
   enable              = true               # Global kill switch. false => the module emits NOTHING anywhere. Default: true.
   title_suffix        = " | Acme Docs"     # Appended to <title> only (never og:title/headline). Default: "". Home page never gets the suffix.
   description         = "Acme builds developer tooling for Hugo sites."  # Site-wide fallback description (last link of the chain).
-  default_image       = "images/og-default.png"  # Global resource path (assets/ or static/) OR absolute URL; site-wide image fallback, applied only when no page-level image resolves.
+  default_image       = "images/og-default.png"  # Global resource path (assets/) OR site-root path for a static/ file (e.g. /img/og.png) OR absolute URL; site-wide image fallback, applied only when no page-level image resolves. Site-root paths keep the baseURL path on a subpath deployment.
   image_alt           = "Acme logo on dark"      # Default og:image:alt when a page image resolves no alt of its own.
   image_params        = ["tile_image"]     # Extra top-level front-matter params whose values (string or list per key) join the page-image candidates.
   keywords            = ["hugo", "seo", "static site"]  # JSON-LD keywords fallback ONLY; NO <meta name=keywords> is ever emitted.
@@ -83,7 +83,7 @@ The full annotated surface:
   [params.seo.website]
     name                = "Acme Documentation"   # WebSite.name override; else params.seo.organization.name; else site.Title.
     alternate_name      = "acme.example"   # WebSite.alternateName (Google suggests the lowercase domain as a backup site name).
-    search_url_template = "https://acme.example/search/?q={search_term_string}"  # Enables SearchAction (Sitelinks Search Box). MUST contain the literal {search_term_string}; relative values are absolutized with absURL.
+    search_url_template = "https://acme.example/search/?q={search_term_string}"  # Enables SearchAction (Sitelinks Search Box). MUST contain the literal {search_term_string}; a site-root or relative value is absolutized against the full baseURL, path included.
 
   # --- Organization / publisher node (home + optional flagged About page) ---
   [params.seo.organization]
@@ -209,7 +209,7 @@ The full annotated surface:
 | --- | --- | --- | --- |
 | `name` | string | `params.seo.organization.name` -> `site.Title` | `WebSite.name` override. |
 | `alternate_name` | string | `""` | `WebSite.alternateName`. Google suggests the lowercase domain as a backup site name. |
-| `search_url_template` | string | `""` | Enables the SearchAction / Sitelinks Search Box. MUST contain the literal `{search_term_string}`; relative values are absolutized with `absURL`. Missing the placeholder emits a site-wide warn and no SearchAction. |
+| `search_url_template` | string | `""` | Enables the SearchAction / Sitelinks Search Box. MUST contain the literal `{search_term_string}`; a site-root or relative value is absolutized against the full `baseURL`, path included. Missing the placeholder emits a site-wide warn and no SearchAction. |
 
 ### Organization (`params.seo.organization.*`, home + optional flagged About page)
 
@@ -599,7 +599,7 @@ Sites carrying legacy `meta_*`-style front matter (`meta_title`, `meta_descripti
 
 The module ships `layouts/` plus the two identity files, this README, and a `test/` directory carrying its validation suite; it needs no `assets/`, `static/`, `data/`, `i18n/`, `content/`, or `archetypes/` (SEO metadata is fully derived from consumer front matter and site params).
 
-`test/` holds a Hugo fixture site and Node build-output assertions, run with `bash modules/seo/test/run-tests.sh` (or `run-tests.cmd` on Windows). It builds the fixture twice -- once with `[seo.alternates]`, `[seo.links]` and `content_license` all unset, once with them set -- because a surface that is always on is indistinguishable from one that works unless both are checked. See [`test/README.md`](test/README.md). All partials live under `layouts/_partials/seo/` in three override tiers: RENDERERS at the `seo/` root change WHAT is output, RESOLVERS under `seo/resolve/` change HOW a value is chosen, NODE BUILDERS under `seo/jsonld/` change ONE schema type's shape; `seo/lib/` holds internal cross-cutting utilities.
+`test/` holds a Hugo fixture site and Node build-output assertions, run with `bash modules/seo/test/run-tests.sh` (or `run-tests.cmd` on Windows). It builds the fixture three times -- once with `[seo.alternates]`, `[seo.links]` and `content_license` all unset, once with them set, and once repeating the configured surfaces under a `baseURL` that carries a path -- because a surface that is always on is indistinguishable from one that works unless both are checked, and a URL that drops the baseURL path is indistinguishable from a correct one at a domain root. See [`test/README.md`](test/README.md). All partials live under `layouts/_partials/seo/` in three override tiers: RENDERERS at the `seo/` root change WHAT is output, RESOLVERS under `seo/resolve/` change HOW a value is chosen, NODE BUILDERS under `seo/jsonld/` change ONE schema type's shape; `seo/lib/` holds internal cross-cutting utilities.
 
 ```text
 modules/seo/
@@ -626,6 +626,7 @@ modules/seo/
           types.html                       # Returns {typeSet, ogType} via the dispatch ladder.
           id.html                          # Returns the canonical @id string for a node kind.
         lib/
+          absolute-url.html                # Returns an absolute URL for a consumer-authored value, normalizing the leading-slash form so absURL keeps the baseURL path; scheme-carrying and protocol-relative values pass through untouched.
           warn.html                        # Emits one deduplicated warnf per (warning-key, page) via a hugo.Store sentinel.
           enum.html                        # Returns the validated enum value or "" for applicationCategory, availability, itemCondition, gender, interaction types, return-policy category.
           time.html                        # Returns an RFC 3339 string for any time.Time value, or "" (with a deduplicated warn) when unparseable, or "" silently when zero; the single date-format authority.
@@ -644,7 +645,7 @@ modules/seo/
           softwareapplication.html         # Returns the SoftwareApplication node dict (co-typing, enum-validated applicationCategory; self-gates).
           videoobject.html                 # Returns the VideoObject node dict (self-gates to name + thumbnailUrl + uploadDate).
           image-object.html                # Returns an ImageObject dict (or bare URL string) from a normalized image dict; reused by every image-carrying node.
-  test/                                    # Validation suite: a Hugo fixture site built twice (unset and configured) plus Node build-output assertions. See test/README.md.
+  test/                                    # Validation suite: a Hugo fixture site built three times (unset, configured, and under a subpath baseURL) plus Node build-output assertions. See test/README.md.
 ```
 
 Two consumer-authored hook files (`layouts/_partials/seo/head-extra.html` and `layouts/_partials/seo/jsonld-extra.html`) are intentionally NOT shipped; the module calls them only behind `templates.Exists` guards, so both are zero-cost until you opt in.
