@@ -274,7 +274,9 @@ note = 'Every published URL.'
 
 The document is: exactly one H1 line, a blockquote summary, an optional blockquote license line, optional prose, one H2 per configured section listing `- [name](url): note` items, and a final `## Optional` heading. `Optional` is a protocol token fixed by the convention and is deliberately not translated.
 
-**Every URL is absolute**, including the ones you write in `[[params.agent.llms.optional]]`: a site-relative value there is resolved against the `baseURL`, while anything carrying a scheme (`https:`, `mailto:`, `tel:`) or a protocol-relative `//` prefix passes through untouched. This file is routinely ingested detached from the URL it was fetched from, where a bare `/sitemap.xml` has no origin to resolve against. `/about.md` follows the same rule.
+**Every URL is absolute**, including the ones you write in `[[params.agent.llms.optional]]`: a site-relative value there is resolved against the full `baseURL` **including its path**, whether or not you write the leading slash, while anything carrying a scheme (`https:`, `mailto:`, `tel:`) or a protocol-relative `//` prefix passes through untouched. This file is routinely ingested detached from the URL it was fetched from, where a bare `/sitemap.xml` has no origin to resolve against. `/about.md` follows the same rule, and so does the `href` on each `[params.agent.facts.contact]` channel.
+
+The "including its path" is load-bearing and is why the module normalizes rather than calling `absURL` directly: Hugo resolves a value that already begins with `/` against the protocol and host **only**, discarding the `baseURL` path. On a site at `https://example.org/docs/`, a naive `absURL "/sitemap.xml"` yields `https://example.org/sitemap.xml` -- a 404 -- while the correct result is `https://example.org/docs/sitemap.xml`.
 
 **A section entry needs both `section` and `name`, and is skipped with a warning without them.** Both omissions fail invisibly otherwise. An empty `section` matches _every_ page, because the prefix test degenerates to "starts with `/`" -- so a single `sections =` for `section =` typo would publish the whole site under one heading and look deliberate. An entry with no `name` has no H2 to open, so its bullets land under the previous entry's heading, where every Markdown parser reads them as that section's links.
 
@@ -436,10 +438,15 @@ modules/agent-readiness/
 │           ├── facts.html
 │           ├── skills.html
 │           └── lib/
+│               ├── absolute-url.html
+│               ├── flatten-value.html
 │               ├── page-excluded.html
 │               ├── section.html
 │               └── warn.html
+├── test/                       # Validation suite: eight Hugo fixture builds plus Node build-output assertions. See test/README.md.
 ├── go.mod
 ├── hugo.toml
 └── README.md
 ```
+
+`test/` ships inside the module, as it does for every other module in this repository. Run it with `bash modules/agent-readiness/test/run-tests.sh` (or `run-tests.cmd` on Windows).

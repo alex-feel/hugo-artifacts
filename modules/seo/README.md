@@ -76,6 +76,9 @@ The full annotated surface:
   twitter_site        = "@acme"            # twitter:site. Leading @ optional; the module normalizes. Legacy alias: params.twitter.
   twitter_creator     = "@acme"            # Default twitter:creator when neither the page nor its first author supplies one.
 
+  # --- Content license ---
+  content_license     = "https://creativecommons.org/licenses/by/4.0/"  # Absolute URL of the license covering the site's editorial content. Emits "license" on the WebPage, CollectionPage and article-class JSON-LD nodes. Unset emits nothing. Pair with [params.seo.links] license below for the matching <link rel="license">.
+
   # --- WebSite node (home page only) ---
   [params.seo.website]
     name                = "Acme Documentation"   # WebSite.name override; else params.seo.organization.name; else site.Title.
@@ -165,9 +168,6 @@ The full annotated surface:
   # --- Feed discovery ---
   [params.seo.feed]
     enable            = true               # Emit <link rel="alternate" type="application/rss+xml"> for the page's (or its section's) RSS output, if any. Default: true.
-
-  # --- Content license ---
-  content_license     = ""                 # Absolute URL of the license covering the site's editorial content. Emits "license" on the WebPage, CollectionPage and article-class JSON-LD nodes. Unset emits nothing. Pair it with [params.seo.links] license below to emit the matching <link rel="license">.
 
   # --- Alternate representations (opt-in allow-list) ---
   [params.seo.alternates]

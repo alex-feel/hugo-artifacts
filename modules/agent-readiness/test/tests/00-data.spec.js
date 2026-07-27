@@ -1,4 +1,4 @@
-// Steps 1.2, 1.3 and 1.10 -- the shipped data files.
+// The shipped data files.
 //
 // The runner executes THIS spec file on its own, BEFORE either fixture is
 // built. That ordering is the point: a malformed data file otherwise surfaces

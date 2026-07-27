@@ -78,7 +78,7 @@
          normalized by config.html, so a bare name and a slashed form resolve
          identically -- an unnormalized mismatch would render an empty H2
          with no warning, no error and exit 0. */}}
-  {{- $all := partialCached "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) site.Language.Lang -}}
+  {{- $all := partialCached "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) site.Language.Name -}}
   {{- range $entry := $llms.sections | default slice -}}
     {{- $section := $entry.section | default "" -}}
     {{- $name := $entry.name | default "" -}}
@@ -164,13 +164,10 @@
   {{- $optional := slice -}}
   {{- range $llms.optional | default slice -}}
     {{- if reflect.IsMap . -}}
-      {{- $u := printf "%v" (.url | default "") -}}
-      {{/* Resolved to absolute like every other URL in this document when it
-           is site-relative; anything carrying a scheme, and any
-           protocol-relative value, is passed through untouched. */}}
-      {{- if and (hasPrefix $u "/") (not (hasPrefix $u "//")) -}}
-        {{- $u = $u | absURL -}}
-      {{- end -}}
+      {{/* Absolutized through the shared routine, which handles the
+           leading-slash form correctly -- passing it to absURL directly
+           would discard the baseURL's path on a subpath deployment. */}}
+      {{- $u := partial "agent-readiness/lib/absolute-url.html" (.url | default "") -}}
       {{- if $u -}}
         {{- $item := printf "- [%s](%s)" (.name | default $u) $u -}}
         {{- with .note -}}{{- $item = printf "%s: %s" $item . -}}{{- end -}}

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Validates the shipped data files, then builds SIX fixture sites with hugo
+# Validates the shipped data files, then builds EIGHT fixture sites with hugo
 # (builds, not servers: no port binding, and a finite build exits by itself)
-# and runs the Node build-output assertion suite against all six.
+# and runs the Node build-output assertion suite against all eight.
 #
 # The data-file check runs FIRST, before any build. That ordering is the
 # point: a malformed registry otherwise surfaces as an opaque Hugo failure at
 # some unrelated template, and the reader has to work backwards to it.
 #
-# The six builds:
+# The eight builds:
 #   baseline   -- every content-license key unset, proving the license
 #                 surfaces are inert until a consumer opts in;
 #   configured -- the license table filled and both switches on;
@@ -20,6 +20,11 @@
 #                 be caught advertising twin URLs for files that do not exist;
 #   multilingual -- a two-language build, the only shape in which the
 #                 agent-skills index's default-language gate does anything;
+#   llmsoff    -- llms.txt off while `llmstxt` stays wired, the counterpart of
+#                 notwins for the other pointed-at document;
+#   edge       -- a subpath baseURL plus the misconfigurations no other build
+#                 reaches (license url without name, an unrecognized
+#                 sitemap_section_target, colliding permalinks);
 #   shadow     -- a fixture shipping its own layouts/robots.txt, proving the
 #                 documented silent-override hazard.
 #
@@ -39,12 +44,14 @@ LOG_FILE_CONFIGURED="$HERE/hugo-build-configured.log"
 LOG_FILE_MINIMAL="$HERE/hugo-build-minimal.log"
 LOG_FILE_NOTWINS="$HERE/hugo-build-notwins.log"
 LOG_FILE_MULTILINGUAL="$HERE/hugo-build-multilingual.log"
+LOG_FILE_LLMSOFF="$HERE/hugo-build-llmsoff.log"
+LOG_FILE_EDGE="$HERE/hugo-build-edge.log"
 LOG_FILE_SHADOW="$HERE/hugo-build-shadow.log"
 
 # The logs are retained after a successful run so the documented re-run recipe
 # can read them; they are gitignored at the repo root. Only an interrupt
 # discards them mid-run.
-trap 'rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_NOTWINS" "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_SHADOW"' INT TERM
+trap 'rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_NOTWINS" "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_LLMSOFF" "$LOG_FILE_EDGE" "$LOG_FILE_SHADOW"' INT TERM
 
 cd "$HERE"
 
@@ -97,6 +104,8 @@ build "$FIXTURE_DIR" configured public/configured "$LOG_FILE_CONFIGURED"
 build "$FIXTURE_DIR" minimal public/minimal "$LOG_FILE_MINIMAL"
 build "$FIXTURE_DIR" notwins public/notwins "$LOG_FILE_NOTWINS"
 build "$FIXTURE_DIR" multilingual public/multilingual "$LOG_FILE_MULTILINGUAL"
+build "$FIXTURE_DIR" llmsoff public/llmsoff "$LOG_FILE_LLMSOFF"
+build "$FIXTURE_DIR" edge public/edge "$LOG_FILE_EDGE"
 build "$SHADOW_DIR" "" public "$LOG_FILE_SHADOW"
 
 export FIXTURE_PUBLIC="$FIXTURE_DIR/public/baseline"
@@ -104,12 +113,16 @@ export FIXTURE_PUBLIC_CONFIGURED="$FIXTURE_DIR/public/configured"
 export FIXTURE_PUBLIC_MINIMAL="$FIXTURE_DIR/public/minimal"
 export FIXTURE_PUBLIC_NOTWINS="$FIXTURE_DIR/public/notwins"
 export FIXTURE_PUBLIC_MULTILINGUAL="$FIXTURE_DIR/public/multilingual"
+export FIXTURE_PUBLIC_LLMSOFF="$FIXTURE_DIR/public/llmsoff"
+export FIXTURE_PUBLIC_EDGE="$FIXTURE_DIR/public/edge"
 export FIXTURE_PUBLIC_SHADOW="$SHADOW_DIR/public"
 export HUGO_BUILD_LOG="$LOG_FILE"
 export HUGO_BUILD_LOG_CONFIGURED="$LOG_FILE_CONFIGURED"
 export HUGO_BUILD_LOG_MINIMAL="$LOG_FILE_MINIMAL"
 export HUGO_BUILD_LOG_NOTWINS="$LOG_FILE_NOTWINS"
 export HUGO_BUILD_LOG_MULTILINGUAL="$LOG_FILE_MULTILINGUAL"
+export HUGO_BUILD_LOG_LLMSOFF="$LOG_FILE_LLMSOFF"
+export HUGO_BUILD_LOG_EDGE="$LOG_FILE_EDGE"
 export HUGO_BUILD_LOG_SHADOW="$LOG_FILE_SHADOW"
 HUGO_VERSION="$(hugo version | sed -E 's/^hugo v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
 export HUGO_VERSION

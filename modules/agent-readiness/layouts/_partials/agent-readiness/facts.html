@@ -74,11 +74,12 @@
                value block would silently render the key instead. */}}
           {{- $label := printf "%v" (.label | default $k) -}}
           {{- if $k -}}
-            {{- $v := index $idPage.Params $k -}}
-            {{- if ne $v nil -}}
-              {{- with printf "%v" $v -}}
-                {{- $rendered = $rendered | append (printf "- **%s**: %s" $label .) -}}
-              {{- end -}}
+            {{/* Flattened through the shared routine, so an identity row
+                 naming a list-valued key reads "a, b" rather than Go's
+                 debug form "[a b]" -- and reads identically to the same key
+                 rendered as a section bullet below. */}}
+            {{- with partial "agent-readiness/lib/flatten-value.html" (index $idPage.Params $k) -}}
+              {{- $rendered = $rendered | append (printf "- **%s**: %s" $label .) -}}
             {{- end -}}
           {{- end -}}
         {{- end -}}
@@ -94,7 +95,7 @@
          shared filter, so this document lists exactly the pages the twins
          emit and llms.txt links. Each entry's `section` value arrived here
          already normalized by config.html. */}}
-  {{- $all := partialCached "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) site.Language.Lang -}}
+  {{- $all := partialCached "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) site.Language.Name -}}
   {{- range $entry := $facts.sections | default slice -}}
     {{- $section := $entry.section | default "" -}}
     {{- $name := $entry.name | default "" -}}
@@ -160,19 +161,8 @@
           {{- range $key := ($map.keys | default slice) -}}
             {{- $k := lower (trim (printf "%v" $key) " \t\n\r") -}}
             {{- if $k -}}
-              {{- $v := index $item.Params $k -}}
-              {{- if ne $v nil -}}
-                {{- $s := "" -}}
-                {{- if reflect.IsSlice $v -}}
-                  {{- $parts := slice -}}
-                  {{- range $v -}}{{- $parts = $parts | append (printf "%v" .) -}}{{- end -}}
-                  {{- $s = delimit $parts ", " -}}
-                {{- else -}}
-                  {{- $s = printf "%v" $v -}}
-                {{- end -}}
-                {{- with $s -}}
-                  {{- $lines = $lines | append (printf "  - %s: %s" $k .) -}}
-                {{- end -}}
+              {{- with partial "agent-readiness/lib/flatten-value.html" (index $item.Params $k) -}}
+                {{- $lines = $lines | append (printf "  - %s: %s" $k .) -}}
               {{- end -}}
             {{- end -}}
           {{- end -}}
@@ -198,15 +188,12 @@
             {{- $value := printf "%v" (index . (lower ($contact.value_field | default "value")) | default "") -}}
             {{- $url := printf "%v" (index . (lower ($contact.url_field | default "href")) | default "") -}}
             {{/* A site-relative href authored on the contact page is
-                 resolved to absolute; anything carrying a scheme
-                 (https:, mailto:, tel:) and any protocol-relative value is
-                 passed through untouched. about.md is read detached from the
-                 site far more often than it is read on it, and a bare
-                 /contact/ resolves against whatever origin the reader
-                 happens to be on. */}}
-            {{- if and (hasPrefix $url "/") (not (hasPrefix $url "//")) -}}
-              {{- $url = $url | absURL -}}
-            {{- end -}}
+                 resolved through the shared routine; anything carrying a
+                 scheme (https:, mailto:, tel:) is passed through untouched.
+                 about.md is read detached from the site far more often than
+                 it is read on it, and a bare /contact/ resolves against
+                 whatever origin the reader happens to be on. */}}
+            {{- $url = partial "agent-readiness/lib/absolute-url.html" $url -}}
             {{- if or $label $value $url -}}
               {{/* An entry carrying ONLY a url would otherwise render
                    `- : [](https://...)` -- an empty label, an empty link
@@ -241,8 +228,14 @@
          relative would put two URL forms in one list of two items. */}}
   {{- if $facts.sitemap_section -}}
     {{- $pointers := slice -}}
-    {{- with site.Home.OutputFormats.Get "llmstxt" -}}
-      {{- $pointers = $pointers | append (printf "- [llms.txt](%s)" .Permalink) -}}
+    {{/* llms.enable is consulted as well as the format being wired: the
+         output format answers "is it wired", not "did llms.html render
+         anything into it". With the switch off the document is never
+         published, so this pointer would be a dead link. */}}
+    {{- if $cfg.llms.enable -}}
+      {{- with site.Home.OutputFormats.Get "llmstxt" -}}
+        {{- $pointers = $pointers | append (printf "- [llms.txt](%s)" .Permalink) -}}
+      {{- end -}}
     {{- end -}}
     {{- $sitemapURL := "sitemap.xml" | absURL -}}
     {{- with site.Home.OutputFormats.Get "sitemap" -}}

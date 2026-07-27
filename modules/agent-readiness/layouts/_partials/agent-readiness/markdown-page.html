@@ -54,7 +54,7 @@
        member. */}}
   {{- $included := false -}}
   {{- if eq $page.Kind "page" -}}
-    {{- range partialCached "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) site.Language.Lang -}}
+    {{- range partialCached "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) site.Language.Name -}}
       {{- if eq .Path $page.Path -}}{{- $included = true -}}{{- end -}}
     {{- end -}}
   {{- else -}}
@@ -101,13 +101,25 @@
       {{- $target := "" -}}
       {{- $label := "" -}}
       {{- if eq $wanted "llms" -}}
-        {{- with site.Home.OutputFormats.Get "llmstxt" -}}
-          {{- $target = .Permalink -}}
-          {{- $label = "llms.txt" -}}
-        {{- else -}}
-          {{- partial "agent-readiness/lib/warn.html" (dict
-              "key" "agent-readiness:warn:sitemap-section-no-llmstxt"
-              "message" "[agent-readiness] The Markdown twins are configured with sitemap_section_target = \"llms\", but the llmstxt output format is not wired to the home page, so the trailing pointer section is omitted. Add 'llmstxt' to your existing [outputs] home list -- the config list replaces the ENTIRE default home list, so keep every format you already wire there -- or set sitemap_section_target to \"sitemap\" or \"none\".") -}}
+        {{/* Gated on llms.enable as well as on the format being wired, for
+             the same reason the twin links are gated on markdown.enable: the
+             output format answers "is it wired", not "did llms.html render
+             anything into it". With the switch off, llms.html emits zero
+             bytes and Hugo publishes no /llms.txt, so pointing at it would
+             put a dead link in the tail of every twin.
+
+             Switched off deliberately, so no warning -- unlike the wired
+             case below, where the consumer asked for the pointer and the
+             format is missing, which they cannot see without being told. */}}
+        {{- if $cfg.llms.enable -}}
+          {{- with site.Home.OutputFormats.Get "llmstxt" -}}
+            {{- $target = .Permalink -}}
+            {{- $label = "llms.txt" -}}
+          {{- else -}}
+            {{- partial "agent-readiness/lib/warn.html" (dict
+                "key" "agent-readiness:warn:sitemap-section-no-llmstxt"
+                "message" "[agent-readiness] The Markdown twins are configured with sitemap_section_target = \"llms\", but the llmstxt output format is not wired to the home page, so the trailing pointer section is omitted. Add 'llmstxt' to your existing [outputs] home list -- the config list replaces the ENTIRE default home list, so keep every format you already wire there -- or set sitemap_section_target to \"sitemap\" or \"none\".") -}}
+          {{- end -}}
         {{- end -}}
       {{- else if eq $wanted "sitemap" -}}
         {{- with site.Home.OutputFormats.Get "sitemap" -}}

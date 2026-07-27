@@ -68,7 +68,7 @@
   {{- with $cfg.id }} id="{{ . }}"{{ end }}
   data-search-surface="inline"
   data-search-index-url="{{ $cfg.index_url }}"
-  data-search-lang="{{ site.Language.Lang }}"
+  data-search-lang="{{ site.Language.Name }}"
   data-search-page-url="{{ $cfg.page_url }}"
   {{- with $cfg.worker_url }} data-search-worker-url="{{ . }}"{{ end }}
   data-search-min-length="{{ $cfg.min_query_length }}"

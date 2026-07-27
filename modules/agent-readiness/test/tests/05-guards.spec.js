@@ -10,6 +10,8 @@ import assert from 'node:assert/strict';
 import {
   read,
   exists,
+  edgeDir,
+  llmsoffDir,
   notwinsDir,
   markdownLinks,
   sectionsWithTopLevelBullets,
@@ -139,6 +141,83 @@ test('the page that set them is unaffected by them', () => {
   for (const doc of ['llms.txt', 'about.md']) {
     assert.ok(!read(doc).includes('scoped-keys'), `${doc} must not list an out-of-scope page`);
   }
+});
+
+// ---- The other pointed-at document: llms.txt switched off ----
+
+test('with llms.txt off, nothing points at it', () => {
+  // The counterpart of the twins case above, and the same distinction:
+  // `site.Home.OutputFormats.Get "llmstxt"` still resolves with the switch
+  // off, because it answers "is the format wired", not "did llms.html render
+  // anything into it". Two surfaces point at llms.txt, and both would publish
+  // a dead link if they trusted the format alone.
+  assert.ok(!exists('llms.txt', llmsoffDir), 'the document itself is not published');
+
+  for (const rel of ['index.md', 'blog/post-one/index.md']) {
+    assert.ok(!read(rel, llmsoffDir).includes('llms.txt'), `${rel} must not point at it`);
+  }
+  assert.ok(!read('about.md', llmsoffDir).includes('llms.txt'));
+
+  // The Sitemap block itself survives -- only the dead pointer is dropped.
+  assert.match(read('about.md', llmsoffDir), /^## Sitemap$/m);
+  assert.match(read('about.md', llmsoffDir), /- \[sitemap\.xml\]\(/);
+});
+
+// ---- Subpath baseURL ----
+
+test('a subpath baseURL is preserved in every consumer-authored URL', () => {
+  // absURL does NOT prepend the whole baseURL to a value that already starts
+  // with "/" -- Hugo resolves that form against the protocol and host only,
+  // DISCARDING the baseURL's path. A leading slash is exactly what a consumer
+  // writes, and exactly the input that breaks, so the module normalizes before
+  // absolutizing. Every other fixture sits at a domain root, where a broken
+  // implementation is indistinguishable from a correct one.
+  const llms = read('llms.txt', edgeDir);
+  assert.match(llms, /- \[Sitemap\]\(https:\/\/example\.org\/docs\/sitemap\.xml\)/);
+  assert.ok(
+    !/\]\(https:\/\/example\.org\/(?!docs\/)/.test(llms),
+    'no URL may drop the baseURL path component',
+  );
+
+  const about = read('about.md', edgeDir);
+  assert.match(about, /\[Contact form\]\(https:\/\/example\.org\/docs\/contact\/\)/);
+  assert.ok(!/\]\(https:\/\/example\.org\/(?!docs\/)/.test(about));
+
+  // A value carrying its own scheme is still passed through untouched.
+  assert.match(about, /\(mailto:hello@fixture\.example\)/);
+});
+
+// ---- The remaining refusals ----
+
+test('a license with a url but no name is refused, with one warning', () => {
+  // Composed as [name](url), so emitting it with an empty name would publish
+  // a Markdown link with an empty label -- the failure this guard exists for.
+  assert.equal(warnCount(/license line/, 'edge'), 1);
+  assert.ok(!read('llms.txt', edgeDir).includes('Content licensed under'));
+  assert.ok(!read('llms.txt', edgeDir).includes(']()'));
+});
+
+test('an unrecognized sitemap_section_target warns and drops the pointer block', () => {
+  assert.equal(warnCount(/unrecognized markdown.sitemap_section_target/, 'edge'), 1);
+  for (const rel of ['index.md', 'blog/post-one/index.md']) {
+    assert.ok(!read(rel, edgeDir).includes('## Sitemap'), `${rel} must carry no pointer block`);
+  }
+});
+
+test('two pages publishing one URL are listed once, with one warning', () => {
+  // Only one twin can exist at a colliding URL, so listing both would
+  // advertise a URL whose twin belongs to the other page.
+  assert.equal(warnCount(/duplicate agent-surface entry/, 'edge'), 1);
+  const collisions = markdownLinks(read('llms.txt', edgeDir)).filter((l) =>
+    l.url.includes('/dupes/collide/'),
+  );
+  assert.equal(collisions.length, 1, 'the colliding URL is listed exactly once');
+});
+
+test('a non-map `agent:` front-matter value warns rather than being interpreted', () => {
+  // `agent: false` is the documented shorthand; any other scalar is a mistake
+  // and is reported instead of guessed at.
+  assert.equal(warnCount(/expected a map/), 1);
 });
 
 // ---- Skill name uniqueness ----

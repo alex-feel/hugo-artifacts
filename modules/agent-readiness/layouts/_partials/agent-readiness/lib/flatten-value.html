@@ -1,0 +1,35 @@
+{{/*
+  agent-readiness/lib/flatten-value.html -- utility (LIB tier).
+
+  Purpose: render one front-matter value as the prose string the facts
+  document publishes.
+
+  A slice is joined with ", " rather than stringified, because Go's %v on a
+  slice yields "[a b]" -- square brackets and space separation, which is a
+  Go debug representation and not something a reader or an agent should meet
+  in a published document. Everything else goes through %v unchanged.
+
+  This exists as a shared routine because the facts document has TWO places
+  that render a front-matter value -- the identity rows and the per-section
+  nested bullets -- and only one of them flattened slices, so an identity row
+  naming a list-valued key published "[a b]" while a section bullet naming
+  the same key published "a, b".
+
+  Expected context: the value (the dot, not a dict). Any type.
+
+  Return value: the rendered string, "" for nil. ONE terminal return.
+*/}}
+
+{{- $out := "" -}}
+
+{{- if ne . nil -}}
+  {{- if reflect.IsSlice . -}}
+    {{- $parts := slice -}}
+    {{- range . -}}{{- $parts = $parts | append (printf "%v" .) -}}{{- end -}}
+    {{- $out = delimit $parts ", " -}}
+  {{- else -}}
+    {{- $out = printf "%v" . -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $out -}}

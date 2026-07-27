@@ -299,8 +299,8 @@
   {{- else -}}
     {{- $pageURL = $pagePath | relLangURL -}}
     {{- partial "search/lib/warn.html" (dict
-        "key" (printf "search:warn:missing-page:%s" site.Language.Lang)
-        "message" (printf "[search] No page exists at %q for language %q, so search-page links can land on a 404. Create content%s.md (or that language's equivalent) and place the search shortcode on it, or point params.search.page_path at your search page." $pagePath site.Language.Lang $pagePath)) -}}
+        "key" (printf "search:warn:missing-page:%s" site.Language.Name)
+        "message" (printf "[search] No page exists at %q for language %q, so search-page links can land on a 404. Create content%s.md (or that language's equivalent) and place the search shortcode on it, or point params.search.page_path at your search page." $pagePath site.Language.Name $pagePath)) -}}
   {{- end -}}
 
   {{/* Built page and worker scripts. fingerprint runs LAST so the hash

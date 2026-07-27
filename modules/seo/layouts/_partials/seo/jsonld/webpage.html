@@ -98,10 +98,14 @@
   {{- end -}}
 
 
-  {{/* license -- a schema.org CreativeWork property, so it is valid on this
-       node and on nothing else this module emits. Deliberately NOT attached
-       to Person, Organization, WebSite or BreadcrumbList: a license
-       describes a creative work, not an entity or a navigational aid.
+  {{/* license -- a schema.org CreativeWork property. Emitted here because
+       this node represents the page's own editorial content, which is what
+       a site-wide content license covers. Other CreativeWork subtypes this
+       module emits (WebSite, ProfilePage, SoftwareApplication, VideoObject,
+       ImageObject) COULD carry it validly and deliberately do not: the
+       restriction is a SCOPE decision, not a validity one. Person,
+       Organization, Offer and BreadcrumbList are not CreativeWorks at all,
+       so they could never carry it.
        Inert until [seo] content_license is set. */}}
   {{- with $page.Param "seo.content_license" -}}
     {{- $node = merge $node (dict "license" .) -}}

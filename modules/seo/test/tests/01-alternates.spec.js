@@ -110,6 +110,7 @@ test('the unset build emits nothing at all at the alternates call site', () => {
   // whitespace -- so the head stays byte-identical to a build from before the
   // partial existed. It is called immediately after feed discovery, so the
   // bytes following the feed link are the exact witness.
+  let checked = 0;
   for (const [name, rel] of Object.entries(PAGES)) {
     const head = /<head>([\s\S]*?)<\/head>/.exec(rawHtml(rel))?.[1] ?? '';
     const feed = head.indexOf('rss&#43;xml');
@@ -120,5 +121,12 @@ test('the unset build emits nothing at all at the alternates call site', () => {
       /^\n\n\S/,
       `${name}: exactly one blank line must follow the feed link, as it did before the partial existed`,
     );
+    checked += 1;
   }
+  // Without this the whole test degrades to zero assertions the day the feed
+  // anchor changes shape -- every iteration would take the `continue` above
+  // and the test would pass having proven nothing. This is the only standing
+  // guard for a byte-identity result that was measured once by hand against a
+  // pre-change worktree and cannot be re-measured in CI.
+  assert.equal(checked, Object.keys(PAGES).length, 'every page shape must carry the feed anchor');
 });

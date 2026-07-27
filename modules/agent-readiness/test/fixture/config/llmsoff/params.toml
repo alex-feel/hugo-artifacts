@@ -1,0 +1,17 @@
+# The `llmsoff` environment: llms.txt switched off while `llmstxt` stays wired
+# in [outputs] home.
+#
+# It is the llms.txt counterpart of `notwins`, and it exists for the same
+# reason: an output format being WIRED is not the same as this module having
+# rendered anything into it. With the switch off, llms.html emits zero bytes
+# and Hugo publishes no /llms.txt at all -- yet `site.Home.OutputFormats.Get
+# "llmstxt"` still resolves, because that method answers a question about the
+# consumer's [outputs] lists.
+#
+# Two surfaces point at llms.txt: the trailing pointer block appended to every
+# Markdown twin, and the Sitemap block in about.md. Both would publish a dead
+# link on this configuration if they trusted the format alone.
+[agent]
+
+  [agent.llms]
+    enable = false

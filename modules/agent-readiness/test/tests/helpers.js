@@ -1,13 +1,18 @@
 /* global process */
 // Shared helpers for the build-output assertion specs.
 //
-// The runner exports four published trees, and all four are load-bearing:
+// The runner exports six published trees, and every one of them is
+// load-bearing:
 // FIXTURE_PUBLIC (every content-license key unset), FIXTURE_PUBLIC_CONFIGURED
 // (the license table filled and both switches on), FIXTURE_PUBLIC_MINIMAL
 // (almost nothing configured -- the shape a consumer gets on import, and the
 // only one that reaches the unconfigured robots.txt, the zero-skills gate and
-// the sectionless facts document), and FIXTURE_PUBLIC_SHADOW (a fixture that
-// ships its own layouts/robots.txt). It also exports the captured build logs,
+// the sectionless facts document), FIXTURE_PUBLIC_NOTWINS (twins off site-wide
+// while the markdown format stays wired, the only shape in which a link
+// emitter can be caught advertising a file that was never written),
+// FIXTURE_PUBLIC_MULTILINGUAL (two languages, the only shape in which the
+// agent-skills default-language gate does anything), and FIXTURE_PUBLIC_SHADOW
+// (a fixture that ships its own layouts/robots.txt). It also exports the captured build logs,
 // so warning-count assertions read what Hugo actually said rather than
 // re-deriving it.
 import {readFileSync, existsSync, readdirSync, statSync} from 'node:fs';
@@ -27,6 +32,8 @@ export const notwinsDir = resolve(process.env.FIXTURE_PUBLIC_NOTWINS ?? 'fixture
 export const multilingualDir = resolve(
   process.env.FIXTURE_PUBLIC_MULTILINGUAL ?? 'fixture/public/multilingual',
 );
+export const llmsoffDir = resolve(process.env.FIXTURE_PUBLIC_LLMSOFF ?? 'fixture/public/llmsoff');
+export const edgeDir = resolve(process.env.FIXTURE_PUBLIC_EDGE ?? 'fixture/public/edge');
 export const shadowDir = resolve(process.env.FIXTURE_PUBLIC_SHADOW ?? 'fixture-shadow/public');
 
 export function read(rel, dir = publicDir) {
@@ -114,14 +121,24 @@ export function sectionsWithTopLevelBullets(text) {
 }
 
 export function buildLog(which = 'baseline') {
-  const key = {
+  const keys = {
     baseline: 'HUGO_BUILD_LOG',
     configured: 'HUGO_BUILD_LOG_CONFIGURED',
     minimal: 'HUGO_BUILD_LOG_MINIMAL',
     notwins: 'HUGO_BUILD_LOG_NOTWINS',
+    multilingual: 'HUGO_BUILD_LOG_MULTILINGUAL',
+    llmsoff: 'HUGO_BUILD_LOG_LLMSOFF',
+    edge: 'HUGO_BUILD_LOG_EDGE',
     shadow: 'HUGO_BUILD_LOG_SHADOW',
-  }[which];
-  const p = process.env[key];
+  };
+  // Throwing rather than returning '' is deliberate. A missing build name
+  // used to resolve process.env[undefined] to undefined and yield an empty
+  // log, so every warnCount against it returned 0 and any assertion built on
+  // it passed while proving nothing.
+  if (!Object.hasOwn(keys, which)) {
+    throw new Error(`buildLog: unknown build ${JSON.stringify(which)}`);
+  }
+  const p = process.env[keys[which]];
   return p ? readFileSync(resolve(p), 'utf8') : '';
 }
 

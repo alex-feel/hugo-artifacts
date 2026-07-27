@@ -1,0 +1,44 @@
+{{/*
+  agent-readiness/lib/absolute-url.html -- utility (LIB tier).
+
+  Purpose: turn a consumer-authored URL into an absolute one, for the
+  machine-read documents this module publishes. llms.txt and about.md are
+  routinely ingested detached from the URL they were fetched from, where a
+  bare /path has no origin to resolve against.
+
+  THE TRAP THIS EXISTS TO AVOID: `absURL` does NOT prepend the whole baseURL
+  to a value that already starts with "/". Hugo documents that form as
+  relative to the protocol and host only, DISCARDING the baseURL's path. So
+  with baseURL = "https://example.org/docs/", `absURL "/sitemap.xml"` yields
+  "https://example.org/sitemap.xml" -- a 404 on every subpath deployment --
+  while `absURL "sitemap.xml"` correctly yields
+  "https://example.org/docs/sitemap.xml". A leading slash is exactly what a
+  consumer naturally writes, and it is exactly the input that breaks, which
+  is why this normalizes rather than passing the value straight through.
+
+  Values carrying their own scheme (https:, mailto:, tel:) and
+  protocol-relative values (//host/path) are returned untouched: absolutizing
+  them would corrupt them.
+
+  Expected context: the URL, as a string (the dot, not a dict).
+
+  Return value: the absolute URL, or "" for an empty input. ONE terminal
+  return.
+*/}}
+
+{{- $u := trim (printf "%v" .) " \t\n\r" -}}
+{{- $out := "" -}}
+
+{{- with $u -}}
+  {{- if or (hasPrefix . "//") (findRE `^[a-zA-Z][a-zA-Z0-9+.\-]*:` .) -}}
+    {{/* Already carries a scheme, or is protocol-relative. */}}
+    {{- $out = . -}}
+  {{- else -}}
+    {{/* Site-relative, with or without the leading slash. Both forms are
+         reduced to the no-leading-slash form FIRST, so absURL keeps the
+         baseURL's path component. */}}
+    {{- $out = strings.TrimPrefix "/" . | absURL -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $out -}}
