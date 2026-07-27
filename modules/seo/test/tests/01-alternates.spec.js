@@ -8,7 +8,7 @@
 // always on is indistinguishable from one that works unless both are checked.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {configuredDir, linkRels, rawHtml, warnCount, PAGES} from './helpers.js';
+import {configuredDir, linkRels, rawHtml, subpathDir, warnCount, PAGES} from './helpers.js';
 
 const markdownAlternates = (rel, dir) =>
   linkRels(rel, dir).filter((l) => l.rel === 'alternate' && l.type === 'text/markdown');
@@ -85,6 +85,36 @@ test('configured: registered relations carry their required attributes', () => {
 
   const privacy = rels.find((l) => l.rel === 'privacy-policy');
   assert.match(privacy.href, /^https:\/\//, 'a site-relative value must be resolved to absolute');
+});
+
+test('a subpath baseURL survives into every emitted href', () => {
+  // Hugo's absURL resolves a value that already begins with "/" against the
+  // protocol and host ONLY, discarding the baseURL path -- and the leading
+  // slash is the form this module documents for all four [seo.links] keys and
+  // for the canonical override. At a domain root, which every other build
+  // uses, a broken implementation is byte-identical to a correct one, so this
+  // is the only place the difference exists.
+  const under = (rel) => linkRels(rel, subpathDir);
+  let checked = 0;
+  for (const [name, rel] of Object.entries(PAGES)) {
+    for (const l of under(rel)) {
+      if (!l.href?.startsWith('https://seo-fixture.example')) continue;
+      assert.ok(
+        l.href.startsWith('https://seo-fixture.example/docs/'),
+        `${name}: rel="${l.rel}" href ${l.href} dropped the baseURL path`,
+      );
+      checked += 1;
+    }
+  }
+  assert.ok(checked > 0, 'the subpath build must emit at least one on-site link');
+});
+
+test('a consumer-authored canonical override keeps the baseURL path', () => {
+  // rel="canonical" is the one tag whose entire job is to be exactly right;
+  // a dropped path prefix declares a canonical URL the site does not serve.
+  const canonical = linkRels(PAGES.page, subpathDir).find((l) => l.rel === 'canonical');
+  assert.ok(canonical, 'a canonical link must be emitted');
+  assert.equal(canonical.href, 'https://seo-fixture.example/docs/canonical-override/');
 });
 
 test('an unregistered [seo.links] key warns exactly once and emits no tag', () => {

@@ -1,6 +1,6 @@
 # agent-readiness module test suite
 
-Node build-output assertions for `modules/agent-readiness`, run against the files that eight Hugo builds publish. The module ships zero JavaScript, so there is no browser behavior to test and the suite carries no Playwright dependency.
+Node build-output assertions for `modules/agent-readiness`, run against the files that nine Hugo builds publish. The module ships zero JavaScript, so there is no browser behavior to test and the suite carries no Playwright dependency.
 
 ## Running
 
@@ -14,7 +14,7 @@ or, on Windows:
 modules\agent-readiness\test\run-tests.cmd
 ```
 
-Both runners validate the shipped data files, perform the repository's pre-launch Hugo process check, build all eight fixtures, fail hard on any `deprecat`, `ERROR`, or `found no layout file` line in any build log, and then run the assertions.
+Both runners validate the shipped data files, perform the repository's pre-launch Hugo process check, build all nine fixtures, fail hard on any `deprecat`, `ERROR`, or `found no layout file` line in any build log, and then run the assertions.
 
 > **These specs need network access.** The Agent Skills specs exercise a real build-time `resources.GetRemote`, because the digest guarantee -- that the advertised hash matches the bytes actually served -- cannot be proven without one. On a run with no network, the module correctly omits every skill and emits no index file at all, and the first skills spec reports that as the cause rather than as a mysterious missing file.
 
@@ -22,7 +22,7 @@ Both runners validate the shipped data files, perform the repository's pre-launc
 
 `tests/00-data.spec.js` runs on its own, **before either fixture is built**. A malformed `data/agent-readiness/*.toml` otherwise surfaces as an opaque Hugo build failure at some unrelated template, leaving the reader to work backwards to the registry. Run first, it is reported as itself.
 
-## Eight builds
+## Nine builds
 
 | Build | Fixture | Environment | What it proves |
 | --- | --- | --- | --- |
@@ -33,6 +33,7 @@ Both runners validate the shipped data files, perform the repository's pre-launc
 | multilingual | `fixture/` | `multilingual` | Two languages, the only shape in which the agent-skills index's `site.Language.IsDefault` gate does anything at all. |
 | llmsoff | `fixture/` | `llmsoff` | `llms.txt` switched off while `llmstxt` stays wired. The counterpart of `notwins` for the other document the twins and `about.md` point at. |
 | edge | `fixture/` | `edge` | A **subpath** `baseURL`, plus the misconfigurations no other build reaches: a license `url` with no `name`, an unrecognized `sitemap_section_target`, and two pages publishing to one URL. |
+| off | `fixture/` | `off` | The master switch and every surface switch false, with all four formats still wired. The only shape that exercises the `enable` conjunct in any renderer. |
 | shadow | `fixture-shadow/` | default | The fixture ships its own `layouts/robots.txt`, proving the documented silent-override hazard. |
 
 **Why so many.** Each extra environment exists because a real contract is unreachable without it, and the pattern behind all of them is the same: a fixture that configures everything cannot test what happens when something is not configured. The `robots.txt` defect fixed in `d0bdfe7` lived in exactly the default shape and the whole suite stayed green through it. `notwins`, `multilingual` and `edge` each isolate gates whose deletion changes no byte in any other build; each was verified by deleting the gate and watching the suite go red. The `edge` build's subpath `baseURL` is the clearest case: every other fixture sits at a domain root, where Hugo's `absURL` treats a leading-slash input identically to a correct implementation, so a URL bug that 404s on every subpath deployment is invisible.
@@ -51,7 +52,9 @@ It deliberately configures things that must fail gracefully:
 - a page carrying `agent: false`, a page carrying `robots: noindex`, and a search page, proving all three vanish from every surface together;
 - an identity row whose key **is absent** from the page it reads, proving a missing optional fact is omitted silently rather than fabricated;
 - a project carrying `period_to: 'present'`, proving the sentinel is **omitted** from twin front matter (it is not a date) while rendering **as prose** in the facts document (where it is true and useful);
-- four `[[params.agent.skills]]` entries covering every outcome: one that fetches and publishes, one whose source 404s (which `resources.GetRemote` reports as an absent resource rather than a failure), and one whose name breaks the field rules.
+- four `[[params.agent.skills]]` entries covering every outcome: one that fetches and publishes, one whose source 404s (which `resources.GetRemote` reports as an absent resource rather than a failure), one whose name breaks the field rules, and one that repeats an earlier entry's name;
+- a page using the map opt-out `agent: {exclude: true}` and a noindexed page using the `agent: {exclude: false}` override, so both documented forms are exercised rather than only the bare shorthand;
+- surface `enable` keys set on the HOME page, where a page tier would do real damage, proving all of them are discarded with a warning.
 
 **The default fixture ships no `layouts/robots.txt`, and a spec asserts that it does not.** If it ever acquired one, every robots assertion would pass for the wrong reason -- against the fixture's own file rather than against the module's generator.
 
@@ -73,13 +76,13 @@ FIXTURE_PUBLIC=fixture/public/baseline \
 FIXTURE_PUBLIC_CONFIGURED=fixture/public/configured \
 FIXTURE_PUBLIC_MINIMAL=fixture/public/minimal \
 FIXTURE_PUBLIC_NOTWINS=fixture/public/notwins \
-FIXTURE_PUBLIC_MULTILINGUAL=fixture/public/multilingual FIXTURE_PUBLIC_LLMSOFF=fixture/public/llmsoff FIXTURE_PUBLIC_EDGE=fixture/public/edge \
+FIXTURE_PUBLIC_MULTILINGUAL=fixture/public/multilingual FIXTURE_PUBLIC_LLMSOFF=fixture/public/llmsoff FIXTURE_PUBLIC_EDGE=fixture/public/edge FIXTURE_PUBLIC_OFF=fixture/public/off \
 FIXTURE_PUBLIC_SHADOW=fixture-shadow/public \
 HUGO_BUILD_LOG=hugo-build.log \
 HUGO_BUILD_LOG_CONFIGURED=hugo-build-configured.log \
 HUGO_BUILD_LOG_MINIMAL=hugo-build-minimal.log \
 HUGO_BUILD_LOG_NOTWINS=hugo-build-notwins.log \
-HUGO_BUILD_LOG_MULTILINGUAL=hugo-build-multilingual.log HUGO_BUILD_LOG_LLMSOFF=hugo-build-llmsoff.log HUGO_BUILD_LOG_EDGE=hugo-build-edge.log \
+HUGO_BUILD_LOG_MULTILINGUAL=hugo-build-multilingual.log HUGO_BUILD_LOG_LLMSOFF=hugo-build-llmsoff.log HUGO_BUILD_LOG_EDGE=hugo-build-edge.log HUGO_BUILD_LOG_OFF=hugo-build-off.log \
 HUGO_BUILD_LOG_SHADOW=hugo-build-shadow.log \
 npm test
 ```

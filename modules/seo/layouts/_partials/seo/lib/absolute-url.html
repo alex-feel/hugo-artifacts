@@ -1,0 +1,41 @@
+{{/*
+  seo/lib/absolute-url.html -- internal utility.
+
+  Purpose: turn a consumer-authored URL into an absolute one for emission
+  into <head>.
+
+  THE TRAP THIS EXISTS TO AVOID: `absURL` does NOT prepend the whole baseURL
+  to a value that already starts with "/". Hugo documents that form as
+  relative to the protocol and host only, DISCARDING the baseURL's path. So
+  with baseURL = "https://example.org/docs/", `absURL "/privacy-policy/"`
+  yields "https://example.org/privacy-policy/" -- outside the site, a 404 in
+  the head of every page -- while `absURL "privacy-policy/"` correctly yields
+  "https://example.org/docs/privacy-policy/".
+
+  The leading-slash form is the form this module's own README and docstrings
+  document, so it is the form most consumers write, and it is exactly the one
+  that breaks. Normalizing here rather than at each call site keeps every
+  emitted href honest on subpath deployments.
+
+  Values carrying their own scheme (https:, mailto:, tel:) and
+  protocol-relative values (//host/path) are returned untouched: absolutizing
+  them would corrupt them.
+
+  Expected context: the URL, as a string (the dot, not a dict).
+
+  Return value: the absolute URL, or "" for an empty input. ONE terminal
+  return.
+*/}}
+
+{{- $u := trim (printf "%v" .) " \t\n\r" -}}
+{{- $out := "" -}}
+
+{{- with $u -}}
+  {{- if or (hasPrefix . "//") (findRE `^[a-zA-Z][a-zA-Z0-9+.\-]*:` .) -}}
+    {{- $out = . -}}
+  {{- else -}}
+    {{- $out = strings.TrimPrefix "/" . | absURL -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $out -}}

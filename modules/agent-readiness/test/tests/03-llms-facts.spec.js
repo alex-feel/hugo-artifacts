@@ -128,7 +128,11 @@ test('each facts section lists EVERY page the shared filter admits', () => {
       `about.md and llms.txt must list the same number of ${name} pages`,
     );
   }
-  assert.equal(facts.get('Blog').length, 2, 'excluded and noindexed pages are filtered out');
+  assert.equal(
+    facts.get('Blog').length,
+    3,
+    'the two ordinary posts plus the noindexed page that explicitly opts back in; the bare-shorthand and map-form opt-outs are filtered out',
+  );
   assert.equal(facts.get('Projects').length, 2);
 });
 

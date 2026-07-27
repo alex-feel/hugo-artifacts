@@ -111,7 +111,19 @@
           {{- $items = $items | append . -}}
         {{- end -}}
       {{- end -}}
-      {{- $limit := int ($entry.limit | default 0) -}}
+      {{/* `int` raises a template error on a non-numeric value, which would
+           stop the build over a config typo -- against the contract that this
+           module never does that. A non-numeric limit is reported and read as
+           0, which means "complete". */}}
+      {{- $rawLimit := printf "%v" ($entry.limit | default 0) -}}
+      {{- $limit := 0 -}}
+      {{- if findRE `^[0-9]+$` $rawLimit -}}
+        {{- $limit = int $rawLimit -}}
+      {{- else -}}
+        {{- partial "agent-readiness/lib/warn.html" (dict
+            "key" (printf "agent-readiness:warn:llms-bad-limit:%s" $rawLimit)
+            "message" (printf "[agent-readiness] The [[params.agent.llms.sections]] entry %q has a non-numeric `limit` (%q); listing the section complete. Use a non-negative whole number, where 0 means complete." $name $rawLimit)) -}}
+      {{- end -}}
       {{- if and (gt $limit 0) (gt (len $items) $limit) -}}
         {{- $items = first $limit $items -}}
       {{- end -}}

@@ -157,10 +157,10 @@ enableRobotsTXT = true
         value_field = 'value'
         url_field = 'href'
 
-    # Three entries covering all three outcomes: one that fetches and
-    # publishes, one whose source 404s (GetRemote returns nil rather than an
-    # error, so the nil branch is what warns and omits), and one whose name
-    # violates the field rules.
+    # Four entries covering every outcome: one that fetches and publishes,
+    # one whose source 404s (GetRemote returns nil rather than an error, so
+    # the nil branch is what warns and omits), one whose name violates the
+    # field rules, and one that repeats an earlier name.
     [[params.agent.skills]]
       name = 'fixture-skill'
       description = 'A fixture skill used to prove the fetch, republish and digest chain end to end.'

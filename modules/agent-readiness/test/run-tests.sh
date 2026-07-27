@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Validates the shipped data files, then builds EIGHT fixture sites with hugo
+# Validates the shipped data files, then builds NINE fixture sites with hugo
 # (builds, not servers: no port binding, and a finite build exits by itself)
-# and runs the Node build-output assertion suite against all eight.
+# and runs the Node build-output assertion suite against all nine.
 #
 # The data-file check runs FIRST, before any build. That ordering is the
 # point: a malformed registry otherwise surfaces as an opaque Hugo failure at
 # some unrelated template, and the reader has to work backwards to it.
 #
-# The eight builds:
+# The nine builds:
 #   baseline   -- every content-license key unset, proving the license
 #                 surfaces are inert until a consumer opts in;
 #   configured -- the license table filled and both switches on;
@@ -25,6 +25,9 @@
 #   edge       -- a subpath baseURL plus the misconfigurations no other build
 #                 reaches (license url without name, an unrecognized
 #                 sitemap_section_target, colliding permalinks);
+#   off        -- the master switch and every surface switch false while all
+#                 four formats stay wired, the only shape that exercises the
+#                 `enable` conjunct in any renderer;
 #   shadow     -- a fixture shipping its own layouts/robots.txt, proving the
 #                 documented silent-override hazard.
 #
@@ -46,12 +49,13 @@ LOG_FILE_NOTWINS="$HERE/hugo-build-notwins.log"
 LOG_FILE_MULTILINGUAL="$HERE/hugo-build-multilingual.log"
 LOG_FILE_LLMSOFF="$HERE/hugo-build-llmsoff.log"
 LOG_FILE_EDGE="$HERE/hugo-build-edge.log"
+LOG_FILE_OFF="$HERE/hugo-build-off.log"
 LOG_FILE_SHADOW="$HERE/hugo-build-shadow.log"
 
 # The logs are retained after a successful run so the documented re-run recipe
 # can read them; they are gitignored at the repo root. Only an interrupt
 # discards them mid-run.
-trap 'rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_NOTWINS" "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_LLMSOFF" "$LOG_FILE_EDGE" "$LOG_FILE_SHADOW"' INT TERM
+trap 'rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_NOTWINS" "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_LLMSOFF" "$LOG_FILE_EDGE" "$LOG_FILE_OFF" "$LOG_FILE_SHADOW"' INT TERM
 
 cd "$HERE"
 
@@ -106,6 +110,7 @@ build "$FIXTURE_DIR" notwins public/notwins "$LOG_FILE_NOTWINS"
 build "$FIXTURE_DIR" multilingual public/multilingual "$LOG_FILE_MULTILINGUAL"
 build "$FIXTURE_DIR" llmsoff public/llmsoff "$LOG_FILE_LLMSOFF"
 build "$FIXTURE_DIR" edge public/edge "$LOG_FILE_EDGE"
+build "$FIXTURE_DIR" off public/off "$LOG_FILE_OFF"
 build "$SHADOW_DIR" "" public "$LOG_FILE_SHADOW"
 
 export FIXTURE_PUBLIC="$FIXTURE_DIR/public/baseline"
@@ -115,6 +120,7 @@ export FIXTURE_PUBLIC_NOTWINS="$FIXTURE_DIR/public/notwins"
 export FIXTURE_PUBLIC_MULTILINGUAL="$FIXTURE_DIR/public/multilingual"
 export FIXTURE_PUBLIC_LLMSOFF="$FIXTURE_DIR/public/llmsoff"
 export FIXTURE_PUBLIC_EDGE="$FIXTURE_DIR/public/edge"
+export FIXTURE_PUBLIC_OFF="$FIXTURE_DIR/public/off"
 export FIXTURE_PUBLIC_SHADOW="$SHADOW_DIR/public"
 export HUGO_BUILD_LOG="$LOG_FILE"
 export HUGO_BUILD_LOG_CONFIGURED="$LOG_FILE_CONFIGURED"
@@ -123,6 +129,7 @@ export HUGO_BUILD_LOG_NOTWINS="$LOG_FILE_NOTWINS"
 export HUGO_BUILD_LOG_MULTILINGUAL="$LOG_FILE_MULTILINGUAL"
 export HUGO_BUILD_LOG_LLMSOFF="$LOG_FILE_LLMSOFF"
 export HUGO_BUILD_LOG_EDGE="$LOG_FILE_EDGE"
+export HUGO_BUILD_LOG_OFF="$LOG_FILE_OFF"
 export HUGO_BUILD_LOG_SHADOW="$LOG_FILE_SHADOW"
 HUGO_VERSION="$(hugo version | sed -E 's/^hugo v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
 export HUGO_VERSION

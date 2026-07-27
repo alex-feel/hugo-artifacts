@@ -1,7 +1,7 @@
 /* global process */
 // Shared helpers for the build-output assertion specs.
 //
-// The runner exports six published trees, and every one of them is
+// The runner exports NINE published trees, and every one of them is
 // load-bearing:
 // FIXTURE_PUBLIC (every content-license key unset), FIXTURE_PUBLIC_CONFIGURED
 // (the license table filled and both switches on), FIXTURE_PUBLIC_MINIMAL
@@ -11,8 +11,12 @@
 // while the markdown format stays wired, the only shape in which a link
 // emitter can be caught advertising a file that was never written),
 // FIXTURE_PUBLIC_MULTILINGUAL (two languages, the only shape in which the
-// agent-skills default-language gate does anything), and FIXTURE_PUBLIC_SHADOW
-// (a fixture that ships its own layouts/robots.txt). It also exports the captured build logs,
+// agent-skills default-language gate does anything), FIXTURE_PUBLIC_LLMSOFF
+// (llms.txt off while its format stays wired), FIXTURE_PUBLIC_EDGE (a subpath
+// baseURL plus the misconfigurations no other build reaches),
+// FIXTURE_PUBLIC_OFF (the master switch and every surface switch false, the
+// only shape that exercises the `enable` conjunct in any renderer), and
+// FIXTURE_PUBLIC_SHADOW (a fixture that ships its own layouts/robots.txt). It also exports the captured build logs,
 // so warning-count assertions read what Hugo actually said rather than
 // re-deriving it.
 import {readFileSync, existsSync, readdirSync, statSync} from 'node:fs';
@@ -34,6 +38,7 @@ export const multilingualDir = resolve(
 );
 export const llmsoffDir = resolve(process.env.FIXTURE_PUBLIC_LLMSOFF ?? 'fixture/public/llmsoff');
 export const edgeDir = resolve(process.env.FIXTURE_PUBLIC_EDGE ?? 'fixture/public/edge');
+export const offDir = resolve(process.env.FIXTURE_PUBLIC_OFF ?? 'fixture/public/off');
 export const shadowDir = resolve(process.env.FIXTURE_PUBLIC_SHADOW ?? 'fixture-shadow/public');
 
 export function read(rel, dir = publicDir) {
@@ -129,6 +134,7 @@ export function buildLog(which = 'baseline') {
     multilingual: 'HUGO_BUILD_LOG_MULTILINGUAL',
     llmsoff: 'HUGO_BUILD_LOG_LLMSOFF',
     edge: 'HUGO_BUILD_LOG_EDGE',
+    off: 'HUGO_BUILD_LOG_OFF',
     shadow: 'HUGO_BUILD_LOG_SHADOW',
   };
   // Throwing rather than returning '' is deliberate. A missing build name

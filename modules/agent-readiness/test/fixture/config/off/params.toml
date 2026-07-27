@@ -1,0 +1,25 @@
+# The `off` environment: the master switch and every surface switch set false,
+# with all four output formats still wired in [outputs].
+#
+# It exists because `enable` was, until this build, reachable by nothing. The
+# switch gates all six renderers -- page-list.html, robots.html,
+# markdown-page.html, llms.html, facts.html and home.agentskills.json -- and
+# every one of those conjuncts was unconditionally true in every build, so
+# deleting `$cfg.enable` from any of them changed no published byte and left
+# the suite green. It is the first key in defaults.toml, the first row of the
+# README key table, and the key most exposed to a future cascade refactor.
+#
+# The page-tier `agent: {enable: false}` in content/scoped-keys.md cannot
+# stand in for this: that key is SITE-SCOPED, so it is discarded with a
+# warning, which is exactly what its own spec asserts.
+[agent]
+  enable = false
+
+  [agent.robots]
+    enable = false
+
+  [agent.facts]
+    enable = false
+
+  [agent.skills_index]
+    enable = false

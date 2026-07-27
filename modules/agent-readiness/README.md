@@ -62,7 +62,7 @@ Values resolve through a four-tier cascade, highest precedence first:
 
 Presence wins at every tier, so an explicit `false` or empty value overrides the tier below it. Nested maps (`robots`, `markdown`, `llms`, `facts`, `skills_index`, `frontmatter`, `license`) merge tier by tier rather than replacing, so overriding one key inside `[params.agent.markdown]` keeps the shipped values for the rest. Slice-valued keys are replaced, never combined.
 
-**SITE-SCOPED keys are honored at the defaults and `[params.agent]` tiers only**, because they shape site-wide artifacts that must select the same page set no matter which page renders them: `enable`, `sections`, `exclude_noindex`, `exclude_search_page`, `search_page_path`, `skills`, `markdown.enable`, and the whole `robots` and `license` tables. Setting one of them lower down is a no-op and warns once; `markdown.enable` is site-scoped for the same reason as the master switch, since `llms.txt` and `about.md` link a twin's URL without re-deriving that switch per page, so a page able to suppress only its own twin would still be listed with a URL that 404s. To remove a single page from every agent surface at once, use `agent: false` in its front matter.
+**SITE-SCOPED keys are honored at the defaults and `[params.agent]` tiers only**, because they shape site-wide artifacts that must select the same page set no matter which page renders them: `enable`, `sections`, `exclude_noindex`, `exclude_search_page`, `search_page_path`, `skills`, every surface's own `enable` (`markdown.enable`, `llms.enable`, `facts.enable`, `skills_index.enable`), and the whole `robots` and `license` tables. Setting one of them lower down is a no-op and warns once; each surface's `enable` is site-scoped for the same reason as the master switch: these keys govern whether an artifact EXISTS, and a lower tier that switched one document off would leave every other surface still linking it with a URL that 404s. To remove a single page from every agent surface at once, use `agent: false` in its front matter.
 
 ### Top-level keys
 
@@ -443,7 +443,7 @@ modules/agent-readiness/
 │               ├── page-excluded.html
 │               ├── section.html
 │               └── warn.html
-├── test/                       # Validation suite: eight Hugo fixture builds plus Node build-output assertions. See test/README.md.
+├── test/                       # Validation suite: nine Hugo fixture builds plus Node build-output assertions. See test/README.md.
 ├── go.mod
 ├── hugo.toml
 └── README.md

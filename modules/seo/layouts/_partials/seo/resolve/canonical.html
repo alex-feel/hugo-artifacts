@@ -19,11 +19,16 @@
 
 {{- $page := . -}}
 
+{{/* Both consumer-authored overrides go through seo/lib/absolute-url.html
+     rather than straight into absURL: a value beginning with "/" resolves
+     against the protocol and host ONLY, discarding the baseURL's path, so on
+     a subpath deployment `canonical: '/about/'` would declare a canonical URL
+     outside the site -- the one tag whose whole job is to be exactly right. */}}
 {{- $canonical := "" -}}
 {{- with $page.Param "seo.canonical" -}}
-  {{- $canonical = . | absURL -}}
+  {{- $canonical = partial "seo/lib/absolute-url.html" . -}}
 {{- else with $page.Params.canonical -}}
-  {{- $canonical = . | absURL -}}
+  {{- $canonical = partial "seo/lib/absolute-url.html" . -}}
 {{- else -}}
   {{- $canonical = $page.Permalink -}}
 {{- end -}}

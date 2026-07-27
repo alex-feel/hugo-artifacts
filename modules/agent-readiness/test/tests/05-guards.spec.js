@@ -13,6 +13,7 @@ import {
   edgeDir,
   llmsoffDir,
   notwinsDir,
+  offDir,
   markdownLinks,
   sectionsWithTopLevelBullets,
   warnCount,
@@ -76,7 +77,7 @@ test('a section entry with no `name` is skipped, with one warning', () => {
     .find((s) => s.startsWith('Blog'))
     .split('\n')
     .filter((l) => l.startsWith('- '));
-  assert.equal(blogBullets.length, 2, 'Blog lists exactly the two pages the filter admits');
+  assert.equal(blogBullets.length, 3, 'Blog lists exactly the pages the filter admits');
 });
 
 test('a section matching no page is omitted rather than published empty', () => {
@@ -97,7 +98,7 @@ test('limit = 0 lists everything and a positive limit truncates', () => {
   // truncation branch never executes at all, because every other entry in
   // the fixture pins limit = 0.
   const sections = sectionsWithTopLevelBullets(read('llms.txt'));
-  assert.equal(sections.get('Blog').length, 2, 'limit = 0 lists every admitted page');
+  assert.equal(sections.get('Blog').length, 3, 'limit = 0 lists every admitted page');
   assert.equal(sections.get('Recent Blog').length, 1, 'limit = 1 lists exactly one');
 });
 
@@ -130,6 +131,20 @@ test('every site-scoped key set in front matter warns exactly once', () => {
   }
   assert.equal(warnCount(/agent key "enable"/), 1, 'exactly once, deduplicated across pages');
   assert.equal(warnCount(/`markdown.enable`/), 1);
+});
+
+test('a surface `enable` set on the HOME page is discarded, with one warning each', () => {
+  // The home page is the only place a page-tier surface switch could do real
+  // damage: llms.txt, about.md and the skills index all render from it, so a
+  // page tier that reached them would switch a document off while every twin
+  // kept pointing at it -- exactly the disagreement the site-scoping exists to
+  // prevent. All three keys are set there and all three must be ignored.
+  for (const key of ['llms.enable', 'facts.enable', 'skills_index.enable']) {
+    assert.equal(warnCount(new RegExp(`\`${key.replace('.', '\\.')}\``)), 1, `${key} must warn`);
+  }
+  assert.ok(exists('llms.txt'), 'llms.txt is still published');
+  assert.ok(exists('about.md'), 'about.md is still published');
+  assert.ok(exists('.well-known/agent-skills/index.json'), 'the skills index is still published');
 });
 
 test('the page that set them is unaffected by them', () => {
@@ -218,6 +233,93 @@ test('a non-map `agent:` front-matter value warns rather than being interpreted'
   // `agent: false` is the documented shorthand; any other scalar is a mistake
   // and is reported instead of guessed at.
   assert.equal(warnCount(/expected a map/), 1);
+});
+
+// ---- The master switch ----
+
+test('enable = false emits no agent surface at all', () => {
+  // The switch gates all six renderers, and until this build every one of
+  // those conjuncts was unconditionally true: deleting `$cfg.enable` from any
+  // renderer changed no published byte and left the suite green. All four
+  // formats stay wired in [outputs] here, so the absence is the switch
+  // working rather than the format being unwired.
+  for (const rel of [
+    'llms.txt',
+    'about.md',
+    'index.md',
+    'blog/post-one/index.md',
+    '.well-known/agent-skills/index.json',
+    // Even the built-in robots format publishes nothing: a template that
+    // renders zero bytes makes Hugo write no file, whoever owns the format.
+    'robots.txt',
+  ]) {
+    assert.ok(!exists(rel, offDir), `${rel} must not be published with enable = false`);
+  }
+  // The site itself is untouched -- the switch suppresses the agent surfaces,
+  // not the site that carries them.
+  assert.ok(exists('blog/post-one/index.html', offDir), 'the HTML site still builds');
+  assert.ok(exists('index.html', offDir));
+});
+
+// ---- The documented map opt-out, and its explicit-include override ----
+
+test('agent: {exclude: true} is equivalent to the bare shorthand', () => {
+  // The README publishes both forms as equivalent, but only the shorthand had
+  // a fixture page, so the `isset` branch implementing the map form survived
+  // deletion with the suite green.
+  assert.ok(!exists('blog/opt-out-map/index.md'), 'no twin');
+  for (const doc of ['llms.txt', 'about.md']) {
+    assert.ok(!read(doc).includes('opt-out-map'), `${doc} must not list it`);
+  }
+  assert.ok(exists('blog/opt-out-map/index.html'), 'the HTML page is untouched');
+});
+
+test('agent: {exclude: false} overrides the noindex rule', () => {
+  // The documented escape hatch for a page that is noindex but should still
+  // appear on the agent surfaces. Both `if not $explicitlyIncluded` wrappers
+  // were dead code before this page existed.
+  assert.ok(exists('blog/noindex-but-included/index.md'), 'the twin IS emitted');
+  assert.ok(read('llms.txt').includes('noindex-but-included'), 'and it IS listed');
+});
+
+// ---- Configured Disallow, and nested-map merge ----
+
+test('configured Disallow lines are emitted in their groups', () => {
+  // The module ships both lists empty, correctly -- a Disallow shipped as a
+  // default would deindex a site on the build after import -- so no build had
+  // ever exercised the emission path or its line placement.
+  const robots = read('robots.txt', edgeDir).split('\n');
+  const star = robots.indexOf('User-agent: *');
+  const group = robots.slice(star + 1, robots.indexOf('', star + 1));
+  assert.ok(group.includes('Disallow: /private/'), 'inside the catch-all group');
+  assert.ok(group.includes('Disallow: /tmp/'));
+  assert.ok(group.includes('Allow: /'), 'Allow survives alongside');
+
+  const gptbot = robots.indexOf('User-agent: GPTBot');
+  assert.ok(gptbot > star, 'the bot group follows the catch-all group');
+  const botGroup = robots.slice(gptbot + 1, robots.indexOf('', gptbot + 1));
+  assert.deepEqual(
+    botGroup,
+    ['Allow: /', 'Disallow: /'],
+    'the bot group carries bots_allow then bots_disallow, and nothing else',
+  );
+});
+
+test('a scalar written where a list is expected is coerced, with one warning', () => {
+  // Go's range accepts no string, so without coercion this alone would stop
+  // the build -- against the module's published never-fail-the-build contract.
+  assert.equal(warnCount(/expects a list but was given the single value/, 'edge'), 1);
+  assert.ok(read('robots.txt', edgeDir).includes('# a single extra line written as a bare string'));
+});
+
+test('setting one key in a nested map leaves the rest at their shipped values', () => {
+  // The named acceptance criterion for map-merge-not-replace. The edge build
+  // sets markdown.canonical = false and nothing else in that table, so every
+  // other markdown key must still be at its default.
+  const twin = read('blog/post-one/index.md', edgeDir);
+  assert.ok(!/^canonical:/m.test(twin), 'canonical is off, as configured');
+  assert.match(twin, /^title:/m, 'front_matter is still on, as shipped');
+  assert.match(twin, /^description:/m);
 });
 
 // ---- Skill name uniqueness ----

@@ -109,22 +109,29 @@
   {{- $maps = merge $maps (dict $k $m) -}}
 {{- end -}}
 
-{{/* ---- markdown.enable is SITE-SCOPED ---- It is the one key inside an
-     all-tiers map that governs whether an ARTIFACT EXISTS rather than what
-     that artifact contains, and existence is exactly what the surfaces have
-     to agree about. llms.txt and about.md resolve a twin's URL from the
-     page's own output formats, so a page tier able to suppress its own twin
-     would leave that page listed with a URL that 404s -- the same
-     disagreement that made the master switch site-scoped. Nothing is lost,
-     because the per-page opt-out that KEEPS every surface in agreement
-     already exists: `agent: false` in front matter drops the page from
-     page-list.html and from the twin together. Every other markdown key
-     governs twin CONTENT and stays settable at all four tiers. */}}
-{{- $mdSite := dict -}}
-{{- with index $defaults "markdown" -}}{{- if reflect.IsMap . -}}{{- $mdSite = merge $mdSite . -}}{{- end -}}{{- end -}}
-{{- with index $sitep "markdown" -}}{{- if reflect.IsMap . -}}{{- $mdSite = merge $mdSite . -}}{{- end -}}{{- end -}}
-{{- if ne (index $mdSite "enable") nil -}}
-  {{- $maps = merge $maps (dict "markdown" (dict "enable" (index $mdSite "enable"))) -}}
+{{/* ---- Every surface's `enable` is SITE-SCOPED ---- These four keys sit
+     inside all-tiers maps but govern whether an ARTIFACT EXISTS rather than
+     what that artifact contains, and existence is exactly what the surfaces
+     have to agree about. Each one has the same failure shape: a lower tier
+     switches a document off, Hugo publishes no file because the template
+     renders zero bytes, and every OTHER surface -- which resolved its own
+     config from its own tiers, and which asks the output format whether the
+     format is WIRED rather than whether anything was rendered -- keeps
+     linking it. A page-tier `llms.enable = false` on the home page is the
+     sharpest case: /llms.txt vanishes while the tail of every twin still
+     points at it.
+
+     Nothing is lost. The per-page opt-out that KEEPS every surface in
+     agreement already exists: `agent: false` in front matter drops the page
+     from page-list.html and from its twin together. Every remaining key in
+     these maps governs CONTENT and stays settable at all four tiers. */}}
+{{- range $k := slice "markdown" "llms" "facts" "skills_index" -}}
+  {{- $siteOnlyMap := dict -}}
+  {{- with index $defaults $k -}}{{- if reflect.IsMap . -}}{{- $siteOnlyMap = merge $siteOnlyMap . -}}{{- end -}}{{- end -}}
+  {{- with index $sitep $k -}}{{- if reflect.IsMap . -}}{{- $siteOnlyMap = merge $siteOnlyMap . -}}{{- end -}}{{- end -}}
+  {{- if ne (index $siteOnlyMap "enable") nil -}}
+    {{- $maps = merge $maps (dict $k (dict "enable" (index $siteOnlyMap "enable"))) -}}
+  {{- end -}}
 {{- end -}}
 
 {{/* ---- Lower-tier site-scoped keys warn ---- EVERY site-scoped key is
@@ -153,11 +160,13 @@
         {{- end -}}
       {{- end -}}
     {{- end -}}
-    {{- with index $tier "markdown" -}}
-      {{- if and (reflect.IsMap .) (isset . "enable") -}}
-        {{- partial "agent-readiness/lib/warn.html" (dict
-            "key" "agent-readiness:warn:lower-tier-site-scoped:markdown.enable"
-            "message" "[agent-readiness] Ignoring a page-level or call-site `markdown.enable`: the key is SITE-SCOPED, because a page that suppressed only its own twin would still be listed in llms.txt and about.md with a URL that 404s. To exclude one page from every agent surface at once, set `agent: false` in its front matter; to turn the twins off site-wide, set [params.agent.markdown] enable = false.") -}}
+    {{- range $k := slice "markdown" "llms" "facts" "skills_index" -}}
+      {{- with index $tier $k -}}
+        {{- if and (reflect.IsMap .) (isset . "enable") -}}
+          {{- partial "agent-readiness/lib/warn.html" (dict
+              "key" (printf "agent-readiness:warn:lower-tier-site-scoped:%s.enable" $k)
+              "message" (printf "[agent-readiness] Ignoring a page-level or call-site `%s.enable`: every surface's `enable` is SITE-SCOPED, because a lower tier that switched one document off would leave every OTHER surface still linking it, with a URL that 404s. To exclude one page from every agent surface at once, set `agent: false` in its front matter; to turn this surface off site-wide, set [params.agent.%s] enable = false." $k $k)) -}}
+        {{- end -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}
@@ -184,6 +193,43 @@
     {{- $m = merge $m (dict $k (in (slice "true" "1" "yes" "on") (lower (printf "%v" (index $m $k | default false))))) -}}
   {{- end -}}
   {{- $maps = merge $maps (dict $mapName $m) -}}
+{{- end -}}
+
+{{/* ---- Slice-shape normalization ---- Every slice-typed key is coerced to a
+     real slice before any renderer ranges over it, because Go's `range`
+     accepts only an array, slice, map, chan or int: a consumer who writes
+     `bots = 'gptbot'` instead of `bots = ['gptbot']` would otherwise abort
+     template execution and STOP THE BUILD, against this module's published
+     contract that it never fails a build over its own configuration
+     (lib/warn.html and the README both state it). A bare scalar becomes a
+     one-element slice and a comma-separated string is split, matching how
+     `sections` has always been handled; each coercion warns once, because a
+     silently-accepted wrong shape is the quiet failure this module avoids. */}}
+{{- $sliceKeys := dict
+  "robots" (slice "allow" "disallow" "bots" "bots_allow" "bots_disallow" "extra")
+  "llms" (slice "sections" "optional")
+  "facts" (slice "sections")
+-}}
+{{- range $mapName, $keys := $sliceKeys -}}
+  {{- $m := index $maps $mapName -}}
+  {{- range $k := $keys -}}
+    {{- $v := index $m $k -}}
+    {{- if and (ne $v nil) (not (reflect.IsSlice $v)) -}}
+      {{- partial "agent-readiness/lib/warn.html" (dict
+          "key" (printf "agent-readiness:warn:scalar-for-list:%s.%s" $mapName $k)
+          "message" (printf "[agent-readiness] The config key %s.%s expects a list but was given the single value %q; reading it as a one-item list. Write it as a TOML array -- %s = [%q] -- so the intent is explicit." $mapName $k (printf "%v" $v) $k (printf "%v" $v))) -}}
+      {{- $m = merge $m (dict $k (slice $v)) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $maps = merge $maps (dict $mapName $m) -}}
+{{- end -}}
+
+{{/* `skills` is the same shape hazard one level up, on a top-level key. */}}
+{{- if and (ne (index $cascade "skills") nil) (not (reflect.IsSlice (index $cascade "skills"))) -}}
+  {{- partial "agent-readiness/lib/warn.html" (dict
+      "key" "agent-readiness:warn:scalar-for-list:skills"
+      "message" "[agent-readiness] [[params.agent.skills]] expects an array of tables but was given a single value; ignoring it. Declare each skill as [[params.agent.skills]] with name, description and source.") -}}
+  {{- $cascade = merge $cascade (dict "skills" slice) -}}
 {{- end -}}
 
 {{/* ---- Section allow-list ---- Slice or comma-separated string; each entry

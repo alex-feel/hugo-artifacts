@@ -36,8 +36,26 @@ baseURL = 'https://example.org/docs/'
       # so emitting it would publish a link with an empty label.
       url = 'https://creativecommons.org/licenses/by/4.0/'
 
+    [params.agent.robots]
+      # The Disallow emission paths execute in no other build: the module
+      # ships both lists empty (correctly -- a Disallow shipped as a default
+      # would deindex a site on the build after import), and no other
+      # environment sets them. What no build proved until now is the line
+      # PLACEMENT when a consumer does configure them.
+      disallow = ['/private/', '/tmp/']
+      bots_disallow = ['/']
+      # A scalar where a list is expected. Go's range accepts no string, so
+      # without coercion this alone would stop the build -- against the
+      # module's published never-fail contract.
+      extra = '# a single extra line written as a bare string'
+
     [params.agent.markdown]
       sitemap_section_target = 'bogus'
+      # Nested-map merge, not replace: setting ONE key here must leave every
+      # other markdown key at its shipped value. That is a named acceptance
+      # criterion no build could reach, because no fixture had ever set a
+      # markdown content key at all.
+      canonical = false
 
     # Restated in full, not extended: a higher-priority config REPLACES a
     # slice rather than merging into it. Without a section entry that admits

@@ -11,6 +11,10 @@ export const publicDir = resolve(process.env.FIXTURE_PUBLIC ?? 'fixture/public/b
 export const configuredDir = resolve(
   process.env.FIXTURE_PUBLIC_CONFIGURED ?? 'fixture/public/configured',
 );
+// The same configured surfaces under a baseURL that carries a PATH. At a
+// domain root a correct URL absolutization and a broken one emit identical
+// bytes, so this tree is the only place the difference is visible.
+export const subpathDir = resolve(process.env.FIXTURE_PUBLIC_SUBPATH ?? 'fixture/public/subpath');
 
 export function rawHtml(rel, dir = publicDir) {
   return readFileSync(join(dir, rel), 'utf8');

@@ -80,16 +80,22 @@
   {{- $ogSiteName := $page.Param "seo.organization.name" | default ($page.Param "seo.website.name") | default site.Title -}}
   {{- range $key, $value := $links -}}
     {{- $k := lower (trim (printf "%v" $key) " \t\n\r") -}}
-    {{- $v := trim (printf "%v" $value) " \t\n\r" -}}
+    {{/* Absolutized through the shared routine rather than by piping into
+         absURL directly: a value that already starts with "/" -- which is
+         the form this module documents for all four keys -- resolves against
+         the protocol and host only, discarding the baseURL path, so the
+         direct form emits a 404 in the head of every page on a subpath
+         deployment. */}}
+    {{- $v := partial "seo/lib/absolute-url.html" $value -}}
     {{- if $v -}}
       {{- if eq $k "privacy_policy" }}
-<link rel="privacy-policy" href="{{ $v | absURL }}">
+<link rel="privacy-policy" href="{{ $v }}">
       {{- else if eq $k "author" }}
-<link rel="author" href="{{ $v | absURL }}">
+<link rel="author" href="{{ $v }}">
       {{- else if eq $k "license" }}
-<link rel="license" href="{{ $v | absURL }}">
+<link rel="license" href="{{ $v }}">
       {{- else if eq $k "search" }}
-<link rel="search" type="application/opensearchdescription+xml" title="{{ $ogSiteName }}" href="{{ $v | absURL }}">
+<link rel="search" type="application/opensearchdescription+xml" title="{{ $ogSiteName }}" href="{{ $v }}">
       {{- else -}}
         {{- partial "seo/lib/warn.html" (dict
             "key" (printf "seo:warn:unknown-link-rel:%s" $k)

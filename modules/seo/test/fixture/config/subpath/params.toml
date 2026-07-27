@@ -1,0 +1,22 @@
+# The same surfaces the `configured` environment sets, so the subpath build
+# differs from it in exactly one respect: the baseURL carries a path. Every
+# value below is authored in the SITE-RELATIVE, leading-slash form the module
+# documents, which is precisely the form Hugo's absURL resolves against the
+# protocol and host alone.
+[seo]
+  content_license = 'https://creativecommons.org/licenses/by/4.0/'
+
+  # A consumer-authored canonical override. rel="canonical" is the one tag
+  # whose entire job is to be exactly right, so a dropped path prefix here is
+  # the most damaging instance of the whole class.
+  canonical = '/canonical-override/'
+
+  [seo.alternates]
+    formats = ['markdown']
+
+  [seo.links]
+    privacy_policy = '/privacy-policy/'
+    author = '/authors/jane-doe/'
+    search = '/opensearch.xml'
+    license = 'https://creativecommons.org/licenses/by/4.0/'
+    not_a_real_relation = '/nowhere/'
