@@ -12,7 +12,16 @@
 // ordinary content.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {configuredDir, graph, rawHtml, warnCount, PAGES} from './helpers.js';
+import {
+  badtypesDir,
+  configuredDir,
+  graph,
+  linkRels,
+  rawHtml,
+  subpathDir,
+  warnCount,
+  PAGES,
+} from './helpers.js';
 
 test('a page writing tags and categories as bare scalars builds and emits them', () => {
   // That the suite reaches this assertion at all is half the point: before
@@ -90,4 +99,31 @@ test('a scalar seo.website does not stop the home-page build', () => {
   // jsonld/website.html reads three keys off it on every language home page.
   assert.ok(warnCount(/Ignoring seo\.website/, 'configured') >= 1);
   assert.ok(rawHtml(PAGES.home, configuredDir).includes('<title>'), 'the home page built');
+});
+
+test('the whole seo NAMESPACE written as a scalar still builds', () => {
+  // Ten builders read site.Params.seo.<child>, and that field access lands on
+  // the PARENT before any guard is entered -- so one line of site config
+  // stopped the build on the first page rendered. `seo = false` is equally
+  // fatal and is the natural shorthand for the documented kill switch.
+  const html = rawHtml(PAGES.page, badtypesDir);
+  assert.ok(html.includes('<title>'), 'the page built with its head intact');
+  assert.ok(warnCount(/Ignoring params\.seo/, 'badtypes') >= 1, 'and it says so');
+});
+
+test('a scalar alternates.formats still emits the alternate', () => {
+  // Gating on IsSlice made this behave exactly like unset: the twins were
+  // published and never linked, silently disabling the surface.
+  const md = linkRels(PAGES.page, subpathDir).filter(
+    (l) => l.rel === 'alternate' && l.type === 'text/markdown',
+  );
+  assert.equal(md.length, 1, 'the scalar form is read as a one-item list');
+});
+
+test('a non-map [seo.links] warns rather than silently dropping every relation', () => {
+  assert.equal(warnCount(/Ignoring \[seo\.links\]/), 1);
+  const rels = linkRels(PAGES.page).map((l) => l.rel);
+  for (const gone of ['license', 'author', 'search', 'privacy-policy']) {
+    assert.ok(!rels.includes(gone), `${gone} is absent, as the warning says`);
+  }
 });

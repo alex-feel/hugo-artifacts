@@ -42,7 +42,7 @@
     {{- end -}}
   {{- end -}}
   {{- if not $description -}}
-    {{- with site.Params.seo.description -}}
+    {{- with (partial "seo/lib/as-map.html" (dict "value" (index site.Params "seo") "key" "params.seo")).description -}}
       {{- $description = . -}}
     {{- else with site.Params.metadata.description -}}
       {{- $description = . -}}

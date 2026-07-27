@@ -380,8 +380,7 @@ test('a sub-table written as a non-map is reported, not silently discarded', () 
   // The FALSY half, on BOTH cascade loops. `with` treats false as absent, so
   // a with-gated guard never sees `[params.agent] llms = false` -- the exact
   // mis-write these guards exist for. Presence must be tested with `ne nil`,
-  // the rule the scalar cascade already follows and which Plan A Step 1.6
-  // states outright.
+  // the rule the scalar cascade already follows.
   assert.equal(warnCount(/\[params\.agent\] license:/, 'notwins'), 1, 'site-scoped loop');
   assert.equal(warnCount(/agent frontmatter value/, 'llmsoff'), 1, 'all-tiers loop');
   // And the discard really is a discard: shipped defaults survive, so the

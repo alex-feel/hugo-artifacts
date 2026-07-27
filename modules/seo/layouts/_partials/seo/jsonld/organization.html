@@ -24,7 +24,8 @@
 {{- $site := . -}}
 {{- $result := dict -}}
 
-{{- $org := partial "seo/lib/as-map.html" (dict "value" ($site.Params.seo.organization) "key" "seo.organization") -}}
+{{- $siteSeo := partial "seo/lib/as-map.html" (dict "value" (index $site.Params "seo") "key" "params.seo") -}}
+{{- $org := partial "seo/lib/as-map.html" (dict "value" ($siteSeo.organization) "key" "seo.organization") -}}
 {{- $home := $site.Home.Permalink -}}
 
 {{- $type := $org.type | default "Organization" -}}
@@ -105,7 +106,7 @@
       {{- $sameAs = $sameAs | append . -}}
     {{- end -}}
   {{- end -}}
-  {{- with $site.Params.seo.social -}}
+  {{- with $siteSeo.social -}}
     {{- range $k, $v := (cond (reflect.IsMap .) . dict) -}}
       {{- with $v -}}
         {{- $s := string . -}}

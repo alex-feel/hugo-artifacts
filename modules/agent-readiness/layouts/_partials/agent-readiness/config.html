@@ -104,9 +104,8 @@
      indistinguishable from absent to it -- and `[params.agent] llms = false`,
      the very mis-write these warnings exist for, is falsy. Gating on `with`
      would leave the warning unreachable for exactly the case that motivates
-     it. Plan A Step 1.6 states the same rule for the scalar cascade: "Both
-     use `isset`, never truthiness, so an explicit `false` at a higher tier
-     wins." */}}
+     it. The scalar cascade above follows the same rule with `isset`, and for
+     the same reason: an explicit `false` at a higher tier must win. */}}
 {{- range $k := slice "robots" "license" -}}
   {{- $m := dict -}}
   {{- with index $defaults $k -}}{{- if reflect.IsMap . -}}{{- $m = merge $m . -}}{{- end -}}{{- end -}}

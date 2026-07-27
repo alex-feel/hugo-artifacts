@@ -1,0 +1,15 @@
+# The `badtypes` environment: the config shapes that used to stop the build or
+# silently disable a surface, none of which any other environment can carry.
+#
+# `seo` written as a bare scalar is the whole NAMESPACE, not one table inside
+# it. Ten builders read `site.Params.seo.<child>`, and that field access lands
+# on the parent BEFORE any guard is entered, so one line of site config stopped
+# the consuming site's build on its first page. `seo = false` is equally fatal
+# and is the natural shorthand for the documented `[params.seo] enable = false`
+# kill switch, so the mis-write is a likely one rather than a contrived one.
+#
+# The non-map `[seo.links]` shape CANNOT live here: TOML rejects a file that
+# writes `seo` as a value and then opens `[seo]` as a table. It lives in the
+# baseline environment instead, whose specs already assert that no link
+# relation is emitted.
+seo = 'not-a-table'

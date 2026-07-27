@@ -45,7 +45,7 @@
 {{- $sources := slice -}}
 
 {{/* 1. Site baseline. */}}
-{{- with site.Params.seo.robots -}}
+{{- with (partial "seo/lib/as-map.html" (dict "value" (index site.Params "seo") "key" "params.seo")).robots -}}
   {{- $sources = $sources | append . -}}
 {{- end -}}
 

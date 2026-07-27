@@ -26,6 +26,13 @@ locale = 'en-us'
 
   [params.seo]
     description = 'A fixture site for the seo module.'
+    # A non-map [seo.links]. Gated silently it loses rel="license",
+    # rel="author", rel="search" and rel="privacy-policy" from every page with
+    # no signal -- the same behaves-exactly-like-unset failure the scalar
+    # `formats` form causes. The BASELINE environment holds it because these
+    # specs already assert that no link relation is emitted here, so the
+    # degraded output is what they expect either way; only the warning is new.
+    links = 'not-a-table'
 
     [params.seo.organization]
       name = 'Jane Doe'

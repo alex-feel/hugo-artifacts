@@ -28,14 +28,15 @@
      'My Site'` -- the same mis-write shape as the organization table two
      lines down -- put a field access on a string and stopped the build on
      every language home page. */}}
-{{- $website := partial "seo/lib/as-map.html" (dict "value" ($site.Params.seo.website) "key" "seo.website") -}}
+{{- $siteSeo := partial "seo/lib/as-map.html" (dict "value" (index $site.Params "seo") "key" "params.seo") -}}
+{{- $website := partial "seo/lib/as-map.html" (dict "value" ($siteSeo.website) "key" "seo.website") -}}
 {{- $url := $site.Home.Permalink -}}
 {{- $name := "" -}}
 {{- with $website.name -}}
   {{- $name = . -}}
 {{- end -}}
 {{- if not $name -}}
-  {{- with (partial "seo/lib/as-map.html" (dict "value" ($site.Params.seo.organization) "key" "seo.organization")).name -}}
+  {{- with (partial "seo/lib/as-map.html" (dict "value" ($siteSeo.organization) "key" "seo.organization")).name -}}
     {{- $name = . -}}
   {{- end -}}
 {{- end -}}
@@ -68,7 +69,7 @@
        Organization is defined on home and merged by @id; we reference it
        whenever an organization/site name exists (the anchor is shared). */}}
   {{- $orgName := "" -}}
-  {{- with (partial "seo/lib/as-map.html" (dict "value" ($site.Params.seo.organization) "key" "seo.organization")).name -}}
+  {{- with (partial "seo/lib/as-map.html" (dict "value" ($siteSeo.organization) "key" "seo.organization")).name -}}
     {{- $orgName = . -}}
   {{- end -}}
   {{- if not $orgName -}}

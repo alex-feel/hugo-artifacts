@@ -15,6 +15,10 @@ export const configuredDir = resolve(
 // domain root a correct URL absolutization and a broken one emit identical
 // bytes, so this tree is the only place the difference is visible.
 export const subpathDir = resolve(process.env.FIXTURE_PUBLIC_SUBPATH ?? 'fixture/public/subpath');
+// The config shapes that used to stop the build or silently disable a surface.
+export const badtypesDir = resolve(
+  process.env.FIXTURE_PUBLIC_BADTYPES ?? 'fixture/public/badtypes',
+);
 
 export function rawHtml(rel, dir = publicDir) {
   return readFileSync(join(dir, rel), 'utf8');
@@ -67,6 +71,7 @@ export function buildLog(which = 'baseline') {
     baseline: 'HUGO_BUILD_LOG',
     configured: 'HUGO_BUILD_LOG_CONFIGURED',
     subpath: 'HUGO_BUILD_LOG_SUBPATH',
+    badtypes: 'HUGO_BUILD_LOG_BADTYPES',
   };
   // A key map that throws, rather than a two-state boolean: the boolean form
   // had no path to the third log at all, so a warning assertion against the

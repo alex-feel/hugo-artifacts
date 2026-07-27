@@ -28,7 +28,10 @@
     search_url_template = '/search/?q={search_term_string}'
 
   [seo.alternates]
-    formats = ['markdown']
+    # The SCALAR form. Gating on IsSlice made this behave exactly like unset,
+    # so the twins were published and never linked -- silently disabling the
+    # one surface alternates.html exists to provide.
+    formats = 'markdown'
 
   [seo.links]
     privacy_policy = '/privacy-policy/'
