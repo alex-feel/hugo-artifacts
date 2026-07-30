@@ -21,13 +21,35 @@
   protocol-relative values (//host/path) are returned untouched: absolutizing
   them would corrupt them.
 
-  Expected context: the URL, as a string (the dot, not a dict).
+  A non-scalar value (a table, a list, or a boolean) yields "" and warns
+  once: stringifying one would publish Go's debug form (map[...]) as a URL,
+  and dropping it in silence would leave a consumer staring at a missing tag
+  with nothing to explain it, so it degrades through the same warn-and-skip
+  idiom every other shape mistake in this module uses. Note that `with`
+  treats a non-empty table as PRESENT, so a key written as a table really
+  does arrive here rather than being skipped upstream.
 
-  Return value: the absolute URL, or "" for an empty input. ONE terminal
-  return.
+  Expected context (dict):
+  - .value (any)    - the consumer-authored URL.
+  - .key   (string) - the config key, named in the warning.
+  - .scope (string) - optional. Appended to the dedup key so a page-authored
+                      value warns once per page; omit for site-level config,
+                      which warns once per build.
+
+  Return value: the absolute URL, or "" for an empty or non-scalar input. ONE
+  terminal return.
 */}}
 
-{{- $u := trim (printf "%v" .) " \t\n\r" -}}
+{{- $v := .value -}}
+{{- $key := .key -}}
+{{- $u := "" -}}
+{{- if and (ne $v nil) (not (reflect.IsMap $v)) (not (reflect.IsSlice $v)) (ne (printf "%T" $v) "bool") -}}
+  {{- $u = trim (printf "%v" $v) " \t\n\r" -}}
+{{- else if ne $v nil -}}
+  {{- partial "seo/lib/warn.html" (dict
+      "key" (printf "seo:warn:non-scalar-url:%s:%s" $key (.scope | default ""))
+      "message" (printf "[seo] Ignoring %s: it expects a URL written as a single value, but a table, list, or boolean arrived, so no URL is emitted for it." $key)) -}}
+{{- end -}}
 {{- $out := "" -}}
 
 {{- with $u -}}

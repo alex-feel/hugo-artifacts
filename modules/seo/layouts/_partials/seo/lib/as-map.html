@@ -70,8 +70,12 @@
   {{- if reflect.IsMap $v -}}
     {{- $out = $v -}}
   {{- else -}}
+    {{/* The dedup key carries the VALUE, not just the config key: a scalar on
+         one page and false on another are two different mistakes under the
+         same key, and keyed by name alone they race for one warning slot in
+         page-render order, so which one surfaces is nondeterministic. */}}
     {{- partial "seo/lib/warn.html" (dict
-        "key" (printf "seo:warn:not-a-table:%s" .key)
+        "key" (printf "seo:warn:not-a-table:%s:%v" .key $v)
         "message" (printf "[seo] Ignoring %s: it expects a table but was given %q, so that block is treated as unconfigured. Write it as a table with its own keys (or the matching front-matter map)." .key (printf "%v" $v))) -}}
   {{- end -}}
 {{- end -}}

@@ -91,7 +91,7 @@
          the protocol and host only, discarding the baseURL path, so the
          direct form emits a 404 in the head of every page on a subpath
          deployment. */}}
-    {{- $v := partial "seo/lib/absolute-url.html" $value -}}
+    {{- $v := partial "seo/lib/absolute-url.html" (dict "value" $value "key" (printf "[seo.links] %s" $k)) -}}
     {{- if $v -}}
       {{- if eq $k "privacy_policy" }}
 <link rel="privacy-policy" href="{{ $v }}">

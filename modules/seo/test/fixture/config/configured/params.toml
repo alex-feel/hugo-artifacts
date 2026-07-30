@@ -12,6 +12,13 @@
   # than in `subpath`, which declares a real [seo.website] table.
   website = 'Acme Docs'
 
+  # The site-level JSON-LD keywords fallback, in its LIST spelling. It fills
+  # the BlogPosting keywords for article pages that carry neither keywords nor
+  # tags front matter; this module never emits <meta name=keywords>. The
+  # `subpath` environment writes the same value as one SCALAR, and the two
+  # trees must publish the identical comma-joined string.
+  keywords = ['alpha', 'beta']
+
   [seo.alternates]
     formats = ['markdown']
 

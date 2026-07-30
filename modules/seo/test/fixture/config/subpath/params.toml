@@ -23,6 +23,12 @@
   # the most damaging instance of the whole class.
   canonical = '/canonical-override/'
 
+  # The SCALAR spelling of the site-level keywords the `configured`
+  # environment writes as a list. Only this form can tell the one-item-list
+  # coercion from a raw `delimit`, which accepts a bare string and iterates it
+  # BYTE-WISE; both trees must publish the identical comma-joined string.
+  keywords = 'alpha, beta'
+
   # A site-root search template. Feeds the JSON-LD SearchAction target.
   [seo.website]
     search_url_template = '/search/?q={search_term_string}'

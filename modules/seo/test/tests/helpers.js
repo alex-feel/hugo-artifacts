@@ -1,8 +1,9 @@
 /* global process */
 // Shared helpers for the build-output assertion specs. The runner exports
 // FIXTURE_PUBLIC (the baseline build, with those config blocks unset),
-// FIXTURE_PUBLIC_CONFIGURED (the build with all three blocks set), the two
-// captured hugo build logs, and HUGO_VERSION.
+// FIXTURE_PUBLIC_CONFIGURED (the build with all three blocks set), one
+// FIXTURE_PUBLIC_* variable per remaining environment, the captured hugo
+// build logs, and HUGO_VERSION.
 import {readFileSync, existsSync} from 'node:fs';
 import {resolve, join} from 'node:path';
 import {parse} from 'node-html-parser';
@@ -22,6 +23,12 @@ export const badtypesDir = resolve(
 // The module switched off the way a consumer actually reaches for it.
 export const offswitchDir = resolve(
   process.env.FIXTURE_PUBLIC_OFFSWITCH ?? 'fixture/public/offswitch',
+);
+// A second language whose params set a noindex robots baseline: the only
+// build in which a per-language params read and a rendering-language one
+// produce different bytes.
+export const multilingualDir = resolve(
+  process.env.FIXTURE_PUBLIC_MULTILINGUAL ?? 'fixture/public/multilingual',
 );
 
 export function rawHtml(rel, dir = publicDir) {
@@ -77,6 +84,7 @@ export function buildLog(which = 'baseline') {
     subpath: 'HUGO_BUILD_LOG_SUBPATH',
     badtypes: 'HUGO_BUILD_LOG_BADTYPES',
     offswitch: 'HUGO_BUILD_LOG_OFFSWITCH',
+    multilingual: 'HUGO_BUILD_LOG_MULTILINGUAL',
   };
   // A key map that throws, rather than a two-state boolean: the boolean form
   // had no path to the third log at all, so a warning assertion against the
@@ -100,10 +108,18 @@ export const PAGES = {
   scalarTaxonomies: 'blog/scalar-taxonomies/index.html',
   scalarSubtables: 'blog/scalar-subtables/index.html',
   scalarSeoBlock: 'blog/scalar-seo-block/index.html',
+  falsySeoBlock: 'blog/falsy-seo-block/index.html',
+  keywordsFallback: 'blog/keywords-fallback/index.html',
   home: 'index.html',
   page: 'page/index.html',
   blogSection: 'blog/index.html',
   blogPost: 'blog/post/index.html',
   author: 'authors/jane-doe/index.html',
   promo: 'promo/thing/index.html',
+  undecodableRaster: 'undecodable-raster/index.html',
+  avifCover: 'avif-cover/index.html',
+  decodableRaster: 'decodable-raster/index.html',
+  mapImages: 'map-images/index.html',
+  mapTaxonomies: 'blog/map-taxonomies/index.html',
+  tableCanonical: 'blog/table-canonical/index.html',
 };

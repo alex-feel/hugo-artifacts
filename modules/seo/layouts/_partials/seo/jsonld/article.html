@@ -94,20 +94,24 @@
 
   {{/* keywords: .Keywords -> .Params.tags -> site seo.keywords (alias
        params.metadata.keywords), comma-joined string. The site keys are a
-       JSON-LD-only fallback; this module never emits <meta name=keywords>. */}}
+       JSON-LD-only fallback; this module never emits <meta name=keywords>.
+       Each list passes through seo/lib/as-scalar-list.html: `delimit` would
+       join a nested table as Go's debug form (map[...]), and an unusable
+       list must empty out so the chain falls through to its next source.
+       (.Keywords needs no filter: Hugo types it as a string slice.) */}}
   {{- $keywords := "" -}}
   {{- with $page.Keywords -}}
     {{- $keywords = delimit . ", " -}}
   {{- end -}}
   {{- if not $keywords -}}
-    {{- with partial "seo/lib/as-list.html" $page.Params.tags -}}
+    {{- with partial "seo/lib/as-scalar-list.html" (dict "value" $page.Params.tags "key" "tags") -}}
       {{- $keywords = delimit . ", " -}}
     {{- end -}}
   {{- end -}}
   {{- if not $keywords -}}
-    {{- with partial "seo/lib/as-list.html" ($page.Param "seo.keywords") -}}
+    {{- with partial "seo/lib/as-scalar-list.html" (dict "value" ($page.Param "seo.keywords") "key" "seo.keywords") -}}
       {{- $keywords = delimit . ", " -}}
-    {{- else with partial "seo/lib/as-list.html" (partial "seo/lib/as-map.html" (dict "value" (index site.Params "metadata") "key" "params.metadata" "warn_falsy" true)).keywords -}}
+    {{- else with partial "seo/lib/as-scalar-list.html" (dict "value" (partial "seo/lib/as-map.html" (dict "value" (index $page.Site.Params "metadata") "key" "params.metadata" "warn_falsy" true)).keywords "key" "params.metadata.keywords") -}}
       {{- $keywords = delimit . ", " -}}
     {{- end -}}
   {{- end -}}
@@ -117,11 +121,13 @@
 
   {{/* articleSection: first category -> .Section. */}}
   {{- $section := "" -}}
-  {{/* Coerced like the OG surface in head-meta.html: `delimit` and `index`
-       do NOT reject a string, they iterate it BYTE-WISE, so `tags: hugo`
-       published articleSection as an integer and keywords as a list of byte
-       codes -- silently, to Google and to every AI crawler. */}}
-  {{- with partial "seo/lib/as-list.html" $page.Params.categories -}}
+  {{/* Coerced and scalar-filtered like the OG surface in head-meta.html:
+       `delimit` and `index` do NOT reject a string, they iterate it
+       BYTE-WISE, so `tags: hugo` published articleSection as an integer and
+       keywords as a list of byte codes -- and a table nested in the list
+       stringifies as Go's debug form (map[...]) -- silently, to Google and
+       to every AI crawler. */}}
+  {{- with partial "seo/lib/as-scalar-list.html" (dict "value" $page.Params.categories "key" "categories") -}}
     {{- if gt (len .) 0 -}}
       {{- $section = index . 0 -}}
     {{- end -}}

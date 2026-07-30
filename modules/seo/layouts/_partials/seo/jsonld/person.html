@@ -52,7 +52,7 @@
        which an inline [[seo.authors]] descriptor is free to use -- keeps the
        baseURL path instead of resolving against the protocol and host alone. */}}
   {{- with $d.image -}}
-    {{- $node = merge $node (dict "image" (partial "seo/lib/absolute-url.html" .)) -}}
+    {{- $node = merge $node (dict "image" (partial "seo/lib/absolute-url.html" (dict "value" . "key" "an author descriptor image"))) -}}
   {{- end -}}
   {{- with $d.same_as -}}
     {{- $node = merge $node (dict "sameAs" .) -}}

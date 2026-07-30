@@ -1,0 +1,35 @@
+# The `multilingual` environment: a second language whose LANGUAGE params set
+# a noindex robots baseline. head-meta.html resolves every entry of
+# .AllTranslations through seo/resolve/robots.html, so this build is the only
+# one that can tell a per-language baseline read ($page.Site.Params) from a
+# rendering-language one (the global `site`): with the global read, the
+# English page cannot see the Russian baseline and emits an hreflang alternate
+# pointing at a noindexed URL -- the exact thing the hreflang block promises
+# never happens. The Russian language reads its content from `content-ru/`,
+# which no other environment mounts, so the translation exists only here.
+defaultContentLanguage = 'en'
+
+[languages]
+
+  [languages.en]
+    locale = 'en-US'
+    weight = 1
+
+  [languages.ru]
+    locale = 'ru-RU'
+    weight = 2
+    contentDir = 'content-ru'
+
+    [languages.ru.params]
+      [languages.ru.params.seo]
+        robots = 'noindex'
+
+[params]
+
+  [params.seo]
+    # Environment builds other than the default are not production, and the
+    # non-production override would force noindex onto EVERY page, suppressing
+    # the hreflang block whose skip behavior this environment exists to prove.
+    # The escape hatch keeps the English pages indexable; the Russian language
+    # baseline above still forces noindex through the site-baseline source.
+    allow_index_nonprod = true

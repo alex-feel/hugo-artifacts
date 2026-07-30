@@ -42,11 +42,14 @@
     {{- end -}}
   {{- end -}}
   {{- if not $description -}}
-    {{- with (partial "seo/lib/as-map.html" (dict "value" (index site.Params "seo") "key" "params.seo" "warn_falsy" true)).description -}}
+    {{/* Site-level fallbacks read the page's OWN language site, not the
+         global `site` (the rendering language), so a translated page falls
+         back to its own language's defaults. */}}
+    {{- with (partial "seo/lib/as-map.html" (dict "value" (index $page.Site.Params "seo") "key" "params.seo" "warn_falsy" true)).description -}}
       {{- $description = . -}}
-    {{- else with (partial "seo/lib/as-map.html" (dict "value" (index site.Params "metadata") "key" "params.metadata" "warn_falsy" true)).description -}}
+    {{- else with (partial "seo/lib/as-map.html" (dict "value" (index $page.Site.Params "metadata") "key" "params.metadata" "warn_falsy" true)).description -}}
       {{- $description = . -}}
-    {{- else with site.Params.description -}}
+    {{- else with $page.Site.Params.description -}}
       {{- $description = . -}}
     {{- end -}}
   {{- end -}}

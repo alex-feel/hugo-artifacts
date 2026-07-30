@@ -93,7 +93,7 @@
            through untouched AND normalizes the leading-slash form, which
            absURL would otherwise resolve against the protocol and host alone,
            dropping the baseURL path on a subpath deployment. */}}
-      {{- $target := partial "seo/lib/absolute-url.html" $tmpl -}}
+      {{- $target := partial "seo/lib/absolute-url.html" (dict "value" $tmpl "key" "seo.website.search_url_template") -}}
       {{- $node = merge $node (dict "potentialAction" (dict
         "@type" "SearchAction"
         "target" (dict

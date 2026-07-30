@@ -26,10 +26,19 @@
      outside the site -- the one tag whose whole job is to be exactly right. */}}
 {{- $canonical := "" -}}
 {{- with $page.Param "seo.canonical" -}}
-  {{- $canonical = partial "seo/lib/absolute-url.html" . -}}
+  {{- $canonical = partial "seo/lib/absolute-url.html" (dict "value" . "key" "seo.canonical" "scope" $page.RelPermalink) -}}
 {{- else with $page.Params.canonical -}}
-  {{- $canonical = partial "seo/lib/absolute-url.html" . -}}
-{{- else -}}
+  {{- $canonical = partial "seo/lib/absolute-url.html" (dict "value" . "key" "canonical" "scope" $page.RelPermalink) -}}
+{{- end -}}
+
+{{/* The .Permalink fallback is applied AFTER the override chain rather than
+     as its else branch, so it also catches an override that was PRESENT but
+     unusable -- a key written as a table, which `with` treats as present and
+     the absolutizer resolves to "". Emitting no canonical at all is the worst
+     of the three outcomes: the self-referencing permalink is always a correct
+     answer, so a malformed override degrades to it instead of removing the
+     tag the page would otherwise have had. */}}
+{{- if not $canonical -}}
   {{- $canonical = $page.Permalink -}}
 {{- end -}}
 

@@ -2,7 +2,7 @@
   "name": "seo-module-tests",
   "private": true,
   "type": "module",
-  "description": "Build-output assertion suite for the seo Hugo module, run against the static HTML that three hugo builds of ./fixture produce -- one with the alternates, link-relation and content-license config blocks unset, one with them set, and one repeating the configured surfaces under a baseURL that carries a path. The module ships zero JavaScript, so there is no browser behavior to test.",
+  "description": "Build-output assertion suite for the seo Hugo module, run against the static HTML that six hugo builds of ./fixture produce -- the baseline, configured, subpath, badtypes, offswitch and multilingual environments. The module ships zero JavaScript, so there is no browser behavior to test.",
   "scripts": {
     "test": "node --test \"tests/*.spec.js\""
   },

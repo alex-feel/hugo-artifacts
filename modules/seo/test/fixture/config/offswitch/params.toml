@@ -12,3 +12,9 @@
 # It needs its own environment because TOML cannot hold both `seo = false`
 # and the `seo = 'not-a-table'` probe in badtypes.
 seo = false
+
+# The legacy alias namespace written the same falsy way. Two builders read it
+# (resolve/description.html and jsonld/article.html), so swallowing the value
+# loses the diagnostic on both. It lives here for the same TOML reason as
+# `seo`: badtypes already writes `metadata = 'not-a-table'`.
+metadata = false

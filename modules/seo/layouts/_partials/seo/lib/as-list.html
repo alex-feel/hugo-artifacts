@@ -22,6 +22,13 @@
   ONE-ITEM slice, which is the reading a consumer writing a bare scalar
   intended.
 
+  Items are NOT shape-checked here: the structure-list callers (breadcrumb
+  trails, video clips) filter each item downstream to the shape they need. A
+  caller whose items land in published text verbatim uses
+  seo/lib/as-scalar-list.html instead, which keeps only scalar items --
+  passed through here, a map item would stringify into published output as
+  Go's debug form (`map[...]`).
+
   Expected context: the value (the dot, not a dict). Any type.
 
   Return value: a rangeable value. ONE terminal return.

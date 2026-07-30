@@ -134,25 +134,28 @@
 <meta property="article:author" content="{{ . }}">
     {{- end }}
   {{- end }}
-  {{/* categories and tags go through seo/lib/as-list.html because Hugo front
-       matter accepts the bare scalar form -- `tags: hugo`, `categories: notes`
-       -- and many sites write it.
+  {{/* categories and tags go through seo/lib/as-scalar-list.html because
+       Hugo front matter accepts the bare scalar form -- `tags: hugo`,
+       `categories: notes` -- and many sites write it, and because either
+       list can carry non-scalar entries.
 
-       Two different failures, one cause: `range` REJECTS a string and stops
-       the build, while `index` and `delimit` ACCEPT it and iterate it
-       byte-wise, publishing integers. The second is worse because it is
-       silent -- it shipped `"keywords": "104, 117, 103, 111"` to Google from
-       the JSON-LD builder while this surface was already correct. Coerce
+       Three different failures, one cause: `range` REJECTS a string and
+       stops the build; `index` and `delimit` ACCEPT it and iterate it
+       byte-wise, publishing integers; and a table nested in the list
+       stringifies as Go's debug form (map[...]) straight into the content
+       attribute. The silent pair is worse -- the byte-wise form shipped
+       `"keywords": "104, 117, 103, 111"` to Google from the JSON-LD builder
+       while this surface was already correct. Coerce and scalar-filter
        before all three. */}}
   {{- $section := "" -}}
-  {{- with partial "seo/lib/as-list.html" $page.Params.categories -}}
+  {{- with partial "seo/lib/as-scalar-list.html" (dict "value" $page.Params.categories "key" "categories") -}}
     {{- $section = index . 0 -}}
   {{- end -}}
   {{- if not $section -}}{{- $section = $page.Section -}}{{- end -}}
   {{- with $section }}
 <meta property="article:section" content="{{ . }}">
   {{- end }}
-  {{- range partial "seo/lib/as-list.html" $page.Params.tags }}
+  {{- range partial "seo/lib/as-scalar-list.html" (dict "value" $page.Params.tags "key" "tags") }}
 <meta property="article:tag" content="{{ . }}">
   {{- end }}
 {{- else if eq $seo.ogType "profile" -}}
@@ -201,7 +204,7 @@
      is. twitter:creator = first author's twitter -> twitter_creator ->
      twitter_site. */}}
 {{- $primaryImage := index $seo.images 0 -}}
-{{- $twSite := $page.Param "seo.twitter_site" | default (index (site.Params) "twitter") -}}
+{{- $twSite := $page.Param "seo.twitter_site" | default (index $page.Site.Params "twitter") -}}
 {{- $twCreator := "" -}}
 {{- with (index $seo.authors 0) -}}
   {{- with .twitter -}}{{- $twCreator = . -}}{{- end -}}
@@ -233,7 +236,7 @@
      tag. Backward-compatible aliases from params.site_verification.* are read
      only when the seo.verification.* equivalent is absent. */}}
 {{- $ver := partial "seo/lib/as-map.html" (dict "value" ($page.Param "seo.verification") "key" "seo.verification") -}}
-{{- $legacyVer := partial "seo/lib/as-map.html" (dict "value" (index (site.Params) "site_verification") "key" "site_verification") -}}
+{{- $legacyVer := partial "seo/lib/as-map.html" (dict "value" (index $page.Site.Params "site_verification") "key" "site_verification") -}}
 {{- with (index $ver "google") | default (index $legacyVer "google") }}
 <meta name="google-site-verification" content="{{ . }}">
 {{- end }}
