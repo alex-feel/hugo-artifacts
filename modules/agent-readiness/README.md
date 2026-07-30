@@ -133,6 +133,8 @@ Warnings are emitted for:
 
 **Type mistakes are absorbed too, not raised.** A scalar written where a list belongs -- `bots = 'gptbot'` instead of `bots = ['gptbot']`, or `keys = 'title'` instead of `keys = ['title']` -- is read as a one-item list, and a non-numeric `limit` is read as `0`, meaning complete. Each emits one deduplicated warning naming the key and the offending value. This is not politeness: Go's `range` accepts no string, so an uncoerced scalar aborts template execution and **stops the consuming site's build** -- which is exactly what the contract above promises never to happen over this module's own configuration. A warning that names the key is strictly more useful than a template error that names a line in someone else's module.
 
+**Values cannot restructure the line-oriented documents.** `robots.txt`, `llms.txt`, `about.md` and the twins' pointer section carry their meaning in how the text divides into lines, so every interpolated value has any embedded line break collapsed to a space before it joins its line -- a description authored as a multi-line YAML block scalar stays text of its own entry instead of becoming list entries or headings of the generated document, and a robots path value cannot inject a directive line. Inside a Markdown link, the text additionally gets its backslashes and brackets backslash-escaped and the destination gets its spaces and parentheses percent-encoded, so a title containing `]` or a URL containing `(...)` cannot end the link's own syntax early. Neither treatment changes a byte of a value that carries none of those characters. Two slots are deliberately verbatim, embedded line breaks included: `llms.notes`, the document's free-prose block, and `robots.extra`, the escape hatch for whole `robots.txt` lines.
+
 ## robots.txt
 
 > **A site-level `layouts/robots.txt` overrides the module's with no warning and no build error.** Hugo's ordinary template lookup order puts the site's own file first, nothing reports the shadowing, and `--printPathWarnings` does not surface it either. A consuming site must delete its own `layouts/robots.txt` in the same change that imports this module, or the generator below is silently disabled forever while every other surface keeps working.
@@ -144,17 +146,17 @@ The generated file carries, in order: a catch-all `User-agent: *` group with the
 ```toml
 [params.agent.robots]
 enable = true
-allow = ['/']
+allow = []
 disallow = []
 content_signal = 'search=yes, ai-train=yes, ai-input=yes'
 bots = ['gptbot', 'oai_searchbot', 'claudebot', 'google_extended', 'ccbot']
-bots_allow = ['/']
+bots_allow = []
 bots_disallow = []
 extra = []
 sitemap = true
 ```
 
-Defaults are permissive by construction: with no configuration at all the output is `User-agent: *`, `Allow: /`, and the sitemap line. Every restriction is opt-in, because a `Disallow` shipped as a module default would deindex a consumer's site on the build after they imported the module.
+Defaults are permissive by construction: with no configuration at all the output is a directive-free `User-agent: *` group and the sitemap line, which RFC 9309 reads as fully permissive. No `Allow: /` ships either: an `Allow` and a `Disallow` of equal path length tie, and RFC 9309 (section 2.2.2) resolves the tie in favor of `Allow` -- Google's parser does the same -- so a shipped `Allow: /` would sit in every group and silently neutralize exactly the `bots_disallow = ['/']` a consumer writes to block a crawler. Every restriction is opt-in, because a `Disallow` shipped as a module default would deindex a consumer's site on the build after they imported the module.
 
 ### The crawler registry
 
@@ -205,7 +207,7 @@ Relative links inside the body need no rewriting: `index.md` sits in the same pu
 
 ### Front matter
 
-Every value is emitted through `jsonify`. JSON is a strict subset of YAML 1.2, so this produces a valid mapping entry for every possible value -- a title containing a colon, a description containing a `#`, a list of tags -- with no quoting logic and no escaping hazard. Consumers should expect quoted scalars, including dates: `period_from: "2025-02-01"`.
+Every value is emitted through `jsonify`. JSON is a strict subset of YAML 1.2, so this produces a valid mapping entry for every possible value -- a title containing a colon, a description containing a `#`, a list of tags -- with no quoting logic and no escaping hazard. Consumers should expect quoted scalars, including dates: `period_from: "2025-02-01"`. A per-section key that is not a plain token of lowercase alphanumerics, `_` and `-` is emitted through the same `jsonify`, so a key carrying a line break or a colon becomes a double-quoted YAML key on one mapping line instead of restructuring the block.
 
 Fields are emitted in a fixed order:
 
@@ -444,10 +446,13 @@ modules/agent-readiness/
 │           └── lib/
 │               ├── absolute-url.html
 │               ├── flatten-value.html
+│               ├── inline.html
+│               ├── map-list.html
+│               ├── markdown-link.html
 │               ├── page-excluded.html
 │               ├── section.html
 │               └── warn.html
-├── test/                       # Validation suite: ten Hugo fixture builds plus Node build-output assertions. See test/README.md.
+├── test/                       # Validation suite: eleven Hugo fixture builds plus Node build-output assertions. See test/README.md.
 ├── go.mod
 ├── hugo.toml
 └── README.md

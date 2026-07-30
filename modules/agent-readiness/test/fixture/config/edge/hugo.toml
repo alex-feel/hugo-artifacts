@@ -37,12 +37,20 @@ baseURL = 'https://example.org/docs/'
       url = 'https://creativecommons.org/licenses/by/4.0/'
 
     [params.agent.robots]
-      # The Disallow emission paths execute in no other build: the module
-      # ships both lists empty (correctly -- a Disallow shipped as a default
-      # would deindex a site on the build after import), and no other
-      # environment sets them. What no build proved until now is the line
-      # PLACEMENT when a consumer does configure them.
-      disallow = ['/private/', '/tmp/']
+      # The directive emission paths execute in no other build: the module
+      # ships all four lists empty (correctly -- a Disallow shipped as a
+      # default would deindex a site on the build after import, and a
+      # shipped Allow would tie against a configured Disallow of equal path
+      # length, a tie RFC 9309 resolves in favor of Allow). The catch-all
+      # pair proves Allow and Disallow placement inside one group.
+      # bots_disallow is set WITHOUT bots_allow on purpose: this is the
+      # blocking shape the empty bots_allow default exists to keep working,
+      # so the bot groups here must carry no Allow line at all.
+      allow = ['/']
+      # The last entry carries an embedded line break (a TOML basic string
+      # with \n): the emitter must collapse it to one Disallow line rather
+      # than let a path value inject a directive line of its own.
+      disallow = ['/private/', '/tmp/', "/drafts/\n/old-drafts/"]
       bots_disallow = ['/']
       # A scalar where a list is expected. Go's range accepts no string, so
       # without coercion this alone would stop the build -- against the

@@ -12,6 +12,13 @@
   no escaping hazard. Hand-quoting is where hand-rolled front-matter emitters
   break.
 
+  The KEY side of a per-section entry is consumer-authored too, and it sits
+  on the same mapping line, where jsonify does not already stand guard. A
+  plain token (lowercase alphanumerics, `_`, `-`) is emitted as itself;
+  anything else -- a key carrying a line break, a colon, a leading marker --
+  is emitted through the same jsonify, whose double-quoted form YAML reads
+  as the identical key while keeping the mapping entry on one line.
+
   Field order, fixed:
     1. title                        (always)
     2. description                  (when non-empty)
@@ -106,7 +113,16 @@
                  omit it rather than writing the literal string into a
                  machine surface. */}}
             {{- if ne (lower (trim (printf "%v" $v) " \t\n\r")) "present" -}}
-              {{- $lines = $lines | append (printf "%s: %s" $k ($v | jsonify (dict "noHTMLEscape" true))) -}}
+              {{/* The key sits on the same mapping line as the value, so a
+                   key that is not a plain token -- one carrying a line
+                   break, a colon, a leading marker -- goes through the same
+                   jsonify as every value: its double-quoted form is the
+                   identical key to YAML, kept on one line. */}}
+              {{- $keyOut := $k -}}
+              {{- if not (findRE `^[a-z0-9_-]+$` $k) -}}
+                {{- $keyOut = $k | jsonify (dict "noHTMLEscape" true) -}}
+              {{- end -}}
+              {{- $lines = $lines | append (printf "%s: %s" $keyOut ($v | jsonify (dict "noHTMLEscape" true))) -}}
               {{- $emitted = $emitted | append $k -}}
             {{- end -}}
           {{- end -}}

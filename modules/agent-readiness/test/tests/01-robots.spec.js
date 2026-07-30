@@ -1,7 +1,15 @@
 // The generated robots.txt, and the shadowing hazard.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {read, exists, minimalDir, shadowDir, warnCount, moduleRoot} from './helpers.js';
+import {
+  read,
+  exists,
+  configuredDir,
+  minimalDir,
+  shadowDir,
+  warnCount,
+  moduleRoot,
+} from './helpers.js';
 import {existsSync} from 'node:fs';
 import {join} from 'node:path';
 
@@ -19,9 +27,15 @@ test('the DEFAULT robots.txt is byte-exact', () => {
   // identically with one blank line, two blank lines, or none, and with or
   // without a terminating newline -- it cannot see this class of defect at
   // all. Only byte equality can.
+  //
+  // The catch-all group is deliberately DIRECTIVE-FREE: an empty group is
+  // already fully permissive under RFC 9309, and a shipped Allow: / would
+  // tie against any consumer-configured Disallow: / at equal path length --
+  // a tie the RFC resolves in favor of Allow, silently unblocking exactly
+  // the crawler the consumer configured to block.
   assert.equal(
     read('robots.txt', minimalDir),
-    'User-agent: *\nAllow: /\n\nSitemap: https://fixture.example/sitemap.xml\n',
+    'User-agent: *\n\nSitemap: https://fixture.example/sitemap.xml\n',
   );
 });
 
@@ -40,7 +54,24 @@ test('the catch-all group carries the Content-Signal line inside it', () => {
     group.some((l) => l === 'Content-Signal: search=yes, ai-train=yes, ai-input=yes'),
     'Content-Signal belongs INSIDE the catch-all group, per the contentsignals.org convention',
   );
-  assert.ok(group.includes('Allow: /'));
+  assert.ok(
+    !group.some((l) => l.startsWith('Allow:')),
+    'the shipped defaults put no Allow line in the group',
+  );
+});
+
+test('bot-group Allow lines precede Disallow lines when both are configured', () => {
+  // The block-everything-except shape: bots_allow = ['/public/'] with
+  // bots_disallow = ['/']. The longer Allow wins for /public/ paths under
+  // RFC 9309's longest-match rule and the Disallow covers the rest, so the
+  // pair means what the consumer wrote only if both lines land inside the
+  // group, Allow first. This is the sole build that configures bots_allow,
+  // because the module ships it empty.
+  const lines = read('robots.txt', configuredDir).split('\n');
+  const start = lines.indexOf('User-agent: GPTBot');
+  assert.ok(start > -1, 'a GPTBot group must exist');
+  const group = lines.slice(start + 1, lines.indexOf('', start + 1));
+  assert.deepEqual(group, ['Allow: /public/', 'Disallow: /']);
 });
 
 test('one group per configured token, resolved through the registry', () => {

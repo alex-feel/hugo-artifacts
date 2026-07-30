@@ -10,7 +10,9 @@
 # The eleven builds:
 #   baseline   -- every content-license key unset, proving the license
 #                 surfaces are inert until a consumer opts in;
-#   configured -- the license table filled and both switches on;
+#   configured -- the license table filled and both switches on, plus
+#                 bots_allow configured together with bots_disallow, the only
+#                 build in which the bot-group Allow emission path executes;
 #   minimal    -- almost nothing configured, which is the shape a consumer
 #                 gets on import and the only one that can reach the
 #                 unconfigured robots.txt, the zero-skills gate and the

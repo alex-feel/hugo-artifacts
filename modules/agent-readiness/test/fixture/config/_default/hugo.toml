@@ -1,7 +1,7 @@
 # Baseline configuration: every [params.agent.license] key is ABSENT here and
 # both license switches are off, so a default build proves the license
 # surfaces are inert until a consumer opts in. The `configured` environment
-# adds exactly those keys.
+# adds those keys, plus the bot-group directive pair its own header explains.
 baseURL = 'https://fixture.example/'
 title = 'Agent Readiness Fixture'
 locale = 'en-us'
@@ -51,7 +51,7 @@ enableRobotsTXT = true
     # strict YAML loader with duplicate-key detection enabled.
     [params.agent.frontmatter]
       [params.agent.frontmatter.blog]
-        keys = ['title', 'categories', 'tags', 'keywords']
+        keys = ['title', 'categories', 'tags', 'keywords', "probe\nkey"]
       [params.agent.frontmatter.projects]
         keys = ['project_name', 'status', 'period_from', 'period_to', 'repository']
 

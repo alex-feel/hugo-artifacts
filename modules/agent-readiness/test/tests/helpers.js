@@ -1,23 +1,27 @@
 /* global process */
 // Shared helpers for the build-output assertion specs.
 //
-// The runner exports TEN published trees, and every one of them is
+// The runner exports ELEVEN published trees, and every one of them is
 // load-bearing:
 // FIXTURE_PUBLIC (every content-license key unset), FIXTURE_PUBLIC_CONFIGURED
-// (the license table filled and both switches on), FIXTURE_PUBLIC_MINIMAL
-// (almost nothing configured -- the shape a consumer gets on import, and the
-// only one that reaches the unconfigured robots.txt, the zero-skills gate and
-// the sectionless facts document), FIXTURE_PUBLIC_NOTWINS (twins off site-wide
-// while the markdown format stays wired, the only shape in which a link
-// emitter can be caught advertising a file that was never written),
-// FIXTURE_PUBLIC_MULTILINGUAL (two languages, the only shape in which the
-// agent-skills default-language gate does anything), FIXTURE_PUBLIC_LLMSOFF
-// (llms.txt off while its format stays wired), FIXTURE_PUBLIC_EDGE (a subpath
-// baseURL plus the misconfigurations no other build reaches),
-// FIXTURE_PUBLIC_OFF (the master switch and every surface switch false, the
-// only shape that exercises the `enable` conjunct in any renderer), and
-// FIXTURE_PUBLIC_SHADOW (a fixture that ships its own layouts/robots.txt). It also exports the captured build logs,
-// so warning-count assertions read what Hugo actually said rather than
+// (the license table filled and both switches on, plus the bots_allow with
+// bots_disallow pair), FIXTURE_PUBLIC_MINIMAL (almost nothing configured --
+// the shape a consumer gets on import, and the only one that reaches the
+// unconfigured robots.txt, the zero-skills gate and the sectionless facts
+// document), FIXTURE_PUBLIC_NOTWINS (twins off site-wide while the markdown
+// format stays wired, the only shape in which a link emitter can be caught
+// advertising a file that was never written), FIXTURE_PUBLIC_MULTILINGUAL
+// (two languages, the only shape in which the agent-skills default-language
+// gate does anything), FIXTURE_PUBLIC_LLMSOFF (llms.txt off while its format
+// stays wired, plus the scalar-for-a-sub-table shapes), FIXTURE_PUBLIC_EDGE
+// (a subpath baseURL plus the misconfigurations no other build reaches),
+// FIXTURE_PUBLIC_OFF (the master switch ALONE, false, with all four formats
+// still wired -- the only shape that exercises the `enable` conjunct in any
+// renderer), FIXTURE_PUBLIC_BADTABLES (the section arrays written as bare
+// strings), FIXTURE_PUBLIC_NSOFF (the whole [params] agent namespace written
+// as a bare value), and FIXTURE_PUBLIC_SHADOW (a fixture that ships its own
+// layouts/robots.txt). It also exports the captured build logs, so
+// warning-count assertions read what Hugo actually said rather than
 // re-deriving it.
 import {readFileSync, existsSync, readdirSync, statSync} from 'node:fs';
 import {createHash} from 'node:crypto';

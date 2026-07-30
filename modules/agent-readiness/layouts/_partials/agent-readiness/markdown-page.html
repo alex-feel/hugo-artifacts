@@ -139,12 +139,13 @@
       {{/* Assembled with an explicit terminating newline rather than written
            inline: the closing trim marker of an inline block eats the final
            newline, and a text document ends with one -- the same standard
-           robots.txt, llms.txt and about.md are held to. safeHTML because
-           this partial is in the .html namespace while the twin is plain
-           text, so an ampersand in the URL would otherwise become an
-           entity. */}}
+           robots.txt, llms.txt and about.md are held to. The heading and the
+           link go through the same line-safety routines as every other
+           value in the line-oriented documents. safeHTML because this
+           partial is in the .html namespace while the twin is plain text,
+           so an ampersand in the URL would otherwise become an entity. */}}
       {{- with $target -}}
-        {{- printf "\n\n## %s\n\n- [%s](%s)\n" $cfg.i18n.sitemap_heading $label . | safeHTML -}}
+        {{- printf "\n\n## %s\n\n- %s\n" (partial "agent-readiness/lib/inline.html" $cfg.i18n.sitemap_heading) (partial "agent-readiness/lib/markdown-link.html" (dict "name" $label "url" .)) | safeHTML -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}

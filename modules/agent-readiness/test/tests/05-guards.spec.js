@@ -5,7 +5,7 @@
 // guard rots. Each one is therefore driven by a deliberately broken entry in
 // the fixture, and asserted on two axes: the warning Hugo actually emitted,
 // and the absence of the wrong output that would otherwise ship.
-import {test} from 'node:test';
+import {test as nodeTest} from 'node:test';
 import assert from 'node:assert/strict';
 import {
   read,
@@ -22,6 +22,16 @@ import {
   sectionsWithTopLevelBullets,
   warnCount,
 } from './helpers.js';
+
+// Mutation-to-test attribution rests entirely on test titles: a red result
+// must trace to exactly one test, so a reused title makes it untraceable.
+// Every registration in this file goes through this wrapper, and the final
+// test asserts that no title was registered twice.
+const registeredTitles = [];
+function test(title, fn) {
+  registeredTitles.push(title);
+  return nodeTest(title, fn);
+}
 
 // ---- The invariant: a listed URL always exists ----
 
@@ -128,7 +138,7 @@ test('every site-scoped key set in front matter warns exactly once', () => {
   // `agent: false`.
   for (const key of ['enable', 'sections', 'exclude_noindex', 'robots']) {
     assert.equal(
-      warnCount(new RegExp(`lower-tier|agent key "${key}"|\\[${key}\\] table`)) > 0,
+      warnCount(new RegExp(`agent key "${key}"|\\[${key}\\] table`)) > 0,
       true,
       `a page-tier \`${key}\` must warn`,
     );
@@ -325,23 +335,60 @@ test('agent: {exclude: false} overrides the noindex rule', () => {
 // ---- Configured Disallow, and nested-map merge ----
 
 test('configured Disallow lines are emitted in their groups', () => {
-  // The module ships both lists empty, correctly -- a Disallow shipped as a
-  // default would deindex a site on the build after import -- so no build had
-  // ever exercised the emission path or its line placement.
+  // The module ships all four directive lists empty, correctly -- a Disallow
+  // shipped as a default would deindex a site on the build after import, and
+  // a shipped Allow would tie a configured Disallow away -- so no other build
+  // exercises these emission paths or their line placement.
   const robots = read('robots.txt', edgeDir).split('\n');
   const star = robots.indexOf('User-agent: *');
   const group = robots.slice(star + 1, robots.indexOf('', star + 1));
   assert.ok(group.includes('Disallow: /private/'), 'inside the catch-all group');
   assert.ok(group.includes('Disallow: /tmp/'));
-  assert.ok(group.includes('Allow: /'), 'Allow survives alongside');
+  assert.ok(group.includes('Allow: /'), 'the consumer-authored Allow survives alongside');
 
   const gptbot = robots.indexOf('User-agent: GPTBot');
   assert.ok(gptbot > star, 'the bot group follows the catch-all group');
   const botGroup = robots.slice(gptbot + 1, robots.indexOf('', gptbot + 1));
   assert.deepEqual(
     botGroup,
-    ['Allow: /', 'Disallow: /'],
-    'the bot group carries bots_allow then bots_disallow, and nothing else',
+    ['Disallow: /'],
+    'the bot group carries the configured bots_disallow, and nothing else',
+  );
+});
+
+test('a bots_disallow configured alone blocks, with no Allow line to tie against it', () => {
+  // RFC 9309 section 2.2.2 resolves an Allow and a Disallow of equal path
+  // length in favor of Allow, and Google's parser does the same. Shipped as
+  // a default, bots_allow = ['/'] would therefore sit in every bot group as
+  // Allow: /, tie the consumer's Disallow: / at length one, and keep the
+  // crawler fully allowed -- the one directive the consumer wrote to block
+  // it would silently never take effect. The module ships bots_allow empty
+  // so the configured block is the whole group.
+  const robots = read('robots.txt', edgeDir).split('\n');
+  for (const token of ['GPTBot', 'ClaudeBot', 'CCBot']) {
+    const start = robots.indexOf(`User-agent: ${token}`);
+    assert.ok(start > -1, `a group for ${token} must exist`);
+    const group = robots.slice(start + 1, robots.indexOf('', start + 1));
+    assert.ok(group.includes('Disallow: /'), `${token} carries the configured Disallow: /`);
+    assert.ok(
+      !group.some((l) => l.startsWith('Allow:')),
+      `${token} must carry no Allow line for the Disallow to tie against`,
+    );
+  }
+});
+
+test('a robots path value carrying a line break cannot add a directive line', () => {
+  // The edge build writes one Disallow entry as a TOML basic string with an
+  // embedded \n. robots.txt is line-oriented in exactly the way llms.txt and
+  // about.md are: uncollapsed, the value's second half would publish as a
+  // directive line of its own rather than as part of the configured path.
+  const robots = read('robots.txt', edgeDir).split('\n');
+  const star = robots.indexOf('User-agent: *');
+  const group = robots.slice(star + 1, robots.indexOf('', star + 1));
+  assert.ok(group.includes('Disallow: /drafts/ /old-drafts/'), 'one line, collapsed');
+  assert.ok(
+    !robots.includes('/old-drafts/'),
+    'no fragment of the value may become a line of its own',
   );
 });
 
@@ -416,16 +463,12 @@ test('a bare value in ANY array-of-tables key is refused, not dropped', () => {
   assert.equal(warnCount(/contact channel/, 'badtables'), 2);
 });
 
-test('a scalar written for a consumer sub-table is refused, not evaluated', () => {
-  // `[params.agent.facts] contact = '/contact'` is the natural mis-write of
-  // `[params.agent.facts.contact] page = '/contact'`. Hugo's `default`
-  // substitutes only on a FALSY value, so the string reached facts.html and
-  // `.page` was evaluated as a field on a string -- a hard build stop, in a
-  // module the consumer does not own.
-  // The scalar sub-table shape lives in `edge`; `badtables` now carries the
-  // bare-string-array shapes instead, so this asserts the degraded OUTPUT
-  // both produce: a document that still publishes, minus the block that
-  // could not be read.
+test('refused bare-string entries leave a degraded document that still publishes', () => {
+  // The bare-string-array shapes of the contact channels, the identity rows
+  // and the skills all land in `badtables` (the scalar sub-table shape lives
+  // in `llmsoff`), and each refused entry must cost exactly its own block: a
+  // document that still publishes, minus the block that could not be read,
+  // is what separates degradation from failure.
   const about = read('about.md', badtablesDir);
   assert.ok(!about.includes('## Contact'), 'no channel survived, so no block');
   assert.ok(!about.includes('## Identity'), 'no row survived, so no block');
@@ -500,4 +543,14 @@ test('a duplicate skill name is refused, with one warning', () => {
   const names = doc.skills.map((s) => s.name);
   assert.equal(new Set(names).size, names.length, 'no name may appear twice in the index');
   assert.equal(names.filter((n) => n === 'fixture-skill').length, 1);
+});
+
+// ---- The suite's own attribution invariant ----
+
+nodeTest('every test title in this file is unique', () => {
+  // Registered last, after every wrapped registration above has recorded its
+  // title, and registered through nodeTest directly so it cannot count
+  // itself.
+  const dupes = registeredTitles.filter((t, i) => registeredTitles.indexOf(t) !== i);
+  assert.deepEqual(dupes, [], 'a reused title makes a red result untraceable');
 });

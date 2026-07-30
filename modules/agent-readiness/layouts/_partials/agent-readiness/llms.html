@@ -32,6 +32,14 @@
   whitespace-significant plain text, and line assembly is the only way to
   keep blank-line placement exact and reviewable.
 
+  Because the document is line-oriented, every interpolated value goes
+  through lib/inline.html -- or lib/markdown-link.html when it lands inside
+  a link -- before it joins its line: a value-borne line break is a
+  structure change here, not text, and an unescaped bracket in a link text
+  or parenthesis in a destination ends the link's own syntax early. The one
+  exception is the free-prose `notes` slot, which is block content by
+  design.
+
   Expected context (dict):
   - .page (Page) - The home page.
   - .cfg  (dict) - The resolved config from agent-readiness/config.html.
@@ -47,11 +55,11 @@
   {{- $lines := slice -}}
 
   {{/* 1. Exactly one H1. */}}
-  {{- $lines = $lines | append (printf "# %s" ($llms.title | default site.Title)) -}}
+  {{- $lines = $lines | append (printf "# %s" (partial "agent-readiness/lib/inline.html" ($llms.title | default site.Title))) -}}
 
   {{/* 2. The one-line summary. */}}
   {{- with $llms.summary -}}
-    {{- $lines = $lines | append "" | append (printf "> %s" .) -}}
+    {{- $lines = $lines | append "" | append (printf "> %s" (partial "agent-readiness/lib/inline.html" .)) -}}
   {{- end -}}
 
   {{/* 3. The license line. Composed as [name](url) and guarded on BOTH
@@ -59,7 +67,7 @@
          empty label the moment a consumer set url without name. */}}
   {{- if and $llms.license $cfg.license.url -}}
     {{- if $cfg.license.name -}}
-      {{- $lines = $lines | append "" | append (printf "> Content licensed under [%s](%s)." $cfg.license.name $cfg.license.url) -}}
+      {{- $lines = $lines | append "" | append (printf "> Content licensed under %s." (partial "agent-readiness/lib/markdown-link.html" (dict "name" $cfg.license.name "url" $cfg.license.url))) -}}
     {{- else -}}
       {{- partial "agent-readiness/lib/warn.html" (dict
           "key" "agent-readiness:warn:license-name-missing"
@@ -67,7 +75,10 @@
     {{- end -}}
   {{- end -}}
 
-  {{/* 4. Optional free prose. */}}
+  {{/* 4. Optional free prose. Appended verbatim, embedded line breaks
+         included: this is the document's one block-content slot, so a
+         multi-line value here is the consumer writing prose paragraphs,
+         not a field value leaking structure. */}}
   {{- with $llms.notes -}}
     {{- $lines = $lines | append "" | append . -}}
   {{- end -}}
@@ -140,7 +151,7 @@
             "key" (printf "agent-readiness:warn:llms-section-empty-result:%s" $section)
             "message" (printf "[agent-readiness] The [[params.agent.llms.sections]] entry %q matches no page at %q, so its heading is omitted rather than published empty. Check the section path against your content tree, and check that it is admitted by the top-level `sections` allow-list if you set one." $name $section)) -}}
       {{- else -}}
-        {{- $lines = $lines | append "" | append (printf "## %s" $name) | append "" -}}
+        {{- $lines = $lines | append "" | append (printf "## %s" (partial "agent-readiness/lib/inline.html" $name)) | append "" -}}
 
         {{/* Absolute URLs: llms.txt is routinely ingested detached from the
              URL it was fetched from, and a relative path has no origin to
@@ -161,8 +172,8 @@
           {{- if and $llms.link_markdown $cfg.markdown.enable -}}
             {{- with .OutputFormats.Get "markdown" -}}{{- $url = .Permalink -}}{{- end -}}
           {{- end -}}
-          {{- $item := printf "- [%s](%s)" .Title $url -}}
-          {{- with .Description -}}{{- $item = printf "%s: %s" $item . -}}{{- end -}}
+          {{- $item := printf "- %s" (partial "agent-readiness/lib/markdown-link.html" (dict "name" .Title "url" $url)) -}}
+          {{- with .Description -}}{{- $item = printf "%s: %s" $item (partial "agent-readiness/lib/inline.html" .) -}}{{- end -}}
           {{- $lines = $lines | append $item -}}
         {{- end -}}
       {{- end -}}
@@ -181,8 +192,8 @@
            would discard the baseURL's path on a subpath deployment. */}}
       {{- $u := partial "agent-readiness/lib/absolute-url.html" (.url | default "") -}}
       {{- if $u -}}
-        {{- $item := printf "- [%s](%s)" (.name | default $u) $u -}}
-        {{- with .note -}}{{- $item = printf "%s: %s" $item . -}}{{- end -}}
+        {{- $item := printf "- %s" (partial "agent-readiness/lib/markdown-link.html" (dict "name" (.name | default $u) "url" $u)) -}}
+        {{- with .note -}}{{- $item = printf "%s: %s" $item (partial "agent-readiness/lib/inline.html" .) -}}{{- end -}}
         {{- $optional = $optional | append $item -}}
       {{- end -}}
     {{- else -}}

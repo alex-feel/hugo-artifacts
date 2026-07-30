@@ -39,11 +39,17 @@ test('defaults.toml declares every table the cascade merges', () => {
 });
 
 test('defaults.toml ships a permissive robots policy', () => {
-  // A Disallow shipped as a module default would deindex a consumer's site on
-  // the build after they imported the module.
+  // A Disallow shipped as a module default would deindex a consumer's site
+  // on the build after they imported the module -- and a shipped Allow would
+  // tie against a consumer-configured Disallow of equal path length, a tie
+  // RFC 9309 resolves in favor of Allow, silently unblocking the crawler the
+  // consumer blocked. Permissive therefore means EMPTY on all four directive
+  // lists: a directive-free group is already fully permissive.
   const {robots} = loadToml('defaults.toml');
-  assert.deepEqual(robots.allow, ['/']);
+  assert.deepEqual(robots.allow, []);
   assert.deepEqual(robots.disallow, []);
+  assert.deepEqual(robots.bots_allow, []);
+  assert.deepEqual(robots.bots_disallow, []);
   assert.deepEqual(robots.bots, []);
   assert.equal(robots.content_signal, '');
 });

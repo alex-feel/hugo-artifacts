@@ -162,6 +162,75 @@ test('a contact href carrying its own scheme is passed through untouched', () =>
   assert.match(text, /^- Email: \[hello@fixture\.example\]\(mailto:hello@fixture\.example\)$/m);
 });
 
+// ---- Line-oriented structural integrity ----
+//
+// Both documents carry their meaning in how the text divides into lines, so
+// a value-borne line break is a structure change rather than text, and an
+// unescaped bracket or parenthesis inside a link is the link's own syntax.
+// The fixture authors post-two hostile on purpose: a title with an unbalanced
+// closing bracket and a description written as a YAML block scalar whose
+// continuation line begins with a list marker.
+
+test('a multi-line description cannot add lines to llms.txt', () => {
+  // Uncollapsed, the description's continuation line would publish as a list
+  // entry of THIS document -- indistinguishable from a page bullet to every
+  // consumer -- and a continuation starting with a heading marker would
+  // publish as a heading.
+  const text = read('llms.txt');
+  assert.match(
+    text,
+    /^- \[Post Two\\\] With A Stray Bracket\]\(https:\/\/fixture\.example\/blog\/post-two\/index\.md\): A second post so section listings have more than one item\. - a continuation line that begins with a list marker$/m,
+    'the whole entry, description included, is one line',
+  );
+  assert.ok(
+    !/^- a continuation line/m.test(text),
+    'no description fragment may surface as a document line of its own',
+  );
+});
+
+test('a bracket in a page title cannot break the listing link text', () => {
+  // CommonMark reads an unescaped "]" as the end of the link text, so the
+  // raw title would end the link early and spill the rest of the line as
+  // literal text in both listing documents. In a plain value position -- the
+  // nested front-matter bullet -- the same bracket is ordinary text and must
+  // survive unescaped.
+  const about = read('about.md');
+  assert.match(
+    about,
+    /^- \[Post Two\\\] With A Stray Bracket\]\(https:\/\/fixture\.example\/blog\/post-two\/\) \(\[Markdown\]\(https:\/\/fixture\.example\/blog\/post-two\/index\.md\)\)$/m,
+  );
+  assert.match(about, /^ {2}- title: Post Two\] With A Stray Bracket$/m);
+});
+
+test('parentheses in a link destination are percent-encoded', () => {
+  // CommonMark ends an unwrapped link destination at the first unbalanced
+  // closing parenthesis, so a raw "(reference)" URL would truncate the link
+  // and leave a stray ")" as literal text. Percent-encoding is transparent
+  // to the destination and changes no byte of a URL carrying no parentheses.
+  assert.match(
+    read('about.md'),
+    /^- Reference: \[Fixture reference\]\(https:\/\/wiki\.example\/Fixture_%28reference%29\)$/m,
+  );
+});
+
+test('a line break in a URL-only contact channel cannot add lines to about.md', () => {
+  // When a channel carries only an href, the URL stands in for the label and
+  // the link text as well as the destination, so it reaches the one plain
+  // value position in the contact line. Uncollapsed, the value's second half
+  // would surface as a document line of its own; collapsed, the space it
+  // gains is percent-encoded where the URL is a destination.
+  const text = read('about.md');
+  assert.match(
+    text,
+    /^- https:\/\/probe\.example\/x y: \[https:\/\/probe\.example\/x y\]\(https:\/\/probe\.example\/x%20y\)$/m,
+    'the whole channel, URL included, is one line',
+  );
+  assert.ok(
+    !/^- https:\/\/probe\.example\/x$/m.test(text),
+    'no fragment of the value may become a line of its own',
+  );
+});
+
 test('with facts.sections empty, the document keeps identity and contact and emits no section H2', () => {
   // The documented contract: "With [params.agent.facts]
   // sections = [], the document emits its identity and contact blocks and no

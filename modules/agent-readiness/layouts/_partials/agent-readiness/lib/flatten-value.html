@@ -45,6 +45,11 @@
   {{- else -}}
     {{- $out = printf "%v" . -}}
   {{- end -}}
+  {{/* One line always: the prose string this returns lands inside a single
+       line of a line-oriented document, so an embedded line break in the
+       source value would change the document's structure, not the value's
+       text. */}}
+  {{- $out = partial "agent-readiness/lib/inline.html" $out -}}
 {{- end -}}
 
 {{- return $out -}}

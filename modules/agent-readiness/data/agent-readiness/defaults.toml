@@ -36,8 +36,12 @@ search_page_path = "/search"
 # --- robots.txt (SITE-SCOPED) ---
 [robots]
 enable = true
-# Directives for the catch-all User-agent: * group.
-allow = ["/"]
+# Directives for the catch-all User-agent: * group. Both ship EMPTY: a group
+# with no directives is already fully permissive under RFC 9309, and a shipped
+# `Allow: /` would tie against a consumer-configured `Disallow: /` at equal
+# path length -- a tie RFC 9309 section 2.2.2 resolves in favor of Allow, so
+# the configured block would silently never happen.
+allow = []
 disallow = []
 # Content Signals declaration placed inside the User-agent: * group.
 # Empty emits no line. Grammar: "search=yes, ai-train=yes, ai-input=yes".
@@ -45,8 +49,10 @@ disallow = []
 content_signal = ""
 # Named tokens from data/agent-readiness/bots.toml, each emitted as its own group.
 bots = []
-# Directives applied to every group named in `bots`.
-bots_allow = ["/"]
+# Directives applied to every group named in `bots`. Empty for the same
+# reason as `allow` above: a shipped `Allow: /` would neutralize exactly the
+# `bots_disallow = ["/"]` these groups exist to carry.
+bots_allow = []
 bots_disallow = []
 # Verbatim lines appended after the last group, before Sitemap.
 extra = []

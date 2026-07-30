@@ -7,9 +7,14 @@
   Sitemap directive.
 
   Defaults are permissive BY CONSTRUCTION: with no configuration at all the
-  output is `User-agent: *` / `Allow: /` / `Sitemap: …`. Every restriction is
-  opt-in, because a Disallow shipped as a module default would deindex a
-  consumer's site on the build after they imported the module.
+  output is a directive-free `User-agent: *` group and the Sitemap line,
+  which RFC 9309 reads as fully permissive. No `Allow: /` ships either: an
+  Allow and a Disallow of equal path length tie, RFC 9309 section 2.2.2
+  resolves the tie in favor of Allow, so a shipped `Allow: /` would sit in
+  every group and silently neutralize the `Disallow: /` a consumer
+  configures to block a crawler. Every restriction is opt-in, because a
+  Disallow shipped as a module default would deindex a consumer's site on
+  the build after they imported the module.
 
   The document is assembled as a slice of lines and emitted once, rather than
   written inline with whitespace-trimming markers. robots.txt is a
@@ -18,6 +23,13 @@
   every combination of configured and unconfigured keys -- the inline form
   emitted a doubled blank line in the commonest case of all, a site with no
   bot groups and no extra lines.
+
+  Because the format is line-oriented, every consumer-authored value is
+  collapsed to one line through lib/inline.html before it joins its
+  directive: a path value carrying an embedded line break would otherwise
+  inject a directive line of its own. The `extra` lines are the deliberate
+  exception -- that key exists to carry verbatim robots.txt lines, so its
+  entries pass through untouched, embedded line breaks included.
 
   Expected context (dict):
   - .page (Page) - The home page (robots.txt renders from it).
@@ -39,13 +51,13 @@
        contentsignals.org convention. */}}
   {{- $lines = $lines | append "User-agent: *" -}}
   {{- with $robots.content_signal -}}
-    {{- $lines = $lines | append (printf "Content-Signal: %s" .) -}}
+    {{- $lines = $lines | append (printf "Content-Signal: %s" (partial "agent-readiness/lib/inline.html" .)) -}}
   {{- end -}}
   {{- range $robots.allow | default slice -}}
-    {{- $lines = $lines | append (printf "Allow: %s" .) -}}
+    {{- $lines = $lines | append (printf "Allow: %s" (partial "agent-readiness/lib/inline.html" .)) -}}
   {{- end -}}
   {{- range $robots.disallow | default slice -}}
-    {{- $lines = $lines | append (printf "Disallow: %s" .) -}}
+    {{- $lines = $lines | append (printf "Disallow: %s" (partial "agent-readiness/lib/inline.html" .)) -}}
   {{- end -}}
 
   {{/* One group per configured token, each separated by exactly one blank
@@ -57,14 +69,14 @@
     {{- $k := lower (trim (printf "%v" $key) " \t\n\r") -}}
     {{- $entry := index $registry $k -}}
     {{- $token := "" -}}
-    {{- if reflect.IsMap $entry -}}{{- $token = printf "%v" ($entry.token | default "") -}}{{- end -}}
+    {{- if reflect.IsMap $entry -}}{{- $token = partial "agent-readiness/lib/inline.html" ($entry.token | default "") -}}{{- end -}}
     {{- if $token -}}
       {{- $lines = $lines | append "" | append (printf "User-agent: %s" $token) -}}
       {{- range $robots.bots_allow | default slice -}}
-        {{- $lines = $lines | append (printf "Allow: %s" .) -}}
+        {{- $lines = $lines | append (printf "Allow: %s" (partial "agent-readiness/lib/inline.html" .)) -}}
       {{- end -}}
       {{- range $robots.bots_disallow | default slice -}}
-        {{- $lines = $lines | append (printf "Disallow: %s" .) -}}
+        {{- $lines = $lines | append (printf "Disallow: %s" (partial "agent-readiness/lib/inline.html" .)) -}}
       {{- end -}}
     {{- else -}}
       {{- partial "agent-readiness/lib/warn.html" (dict
