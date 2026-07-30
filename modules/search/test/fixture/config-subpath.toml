@@ -15,6 +15,11 @@
 #
 # Together they make the fallback emit a link that must still live under
 # /docs/. The module warns about the missing page, which is expected here.
+#
+# The base fixture's opensearch opt-in and [outputs] home wiring merge into
+# this build unchanged, so the OpenSearch document -- the module's one
+# absolute-URL surface -- is also emitted here, at the only baseURL where a
+# broken absolute-URL derivation is visible.
 baseURL = 'https://example.org/docs/'
 
 [params]

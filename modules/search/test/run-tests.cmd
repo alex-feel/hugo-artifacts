@@ -1,12 +1,15 @@
 @echo off
 rem Serves the fixture site with hugo and runs the Playwright suite against
-rem it. Windows mirror of run-tests.sh: pre-launch process check, two static
-rem overlay builds, deprecation gate on the server log, and forced hugo
-rem cleanup afterward.
+rem it. Windows mirror of run-tests.sh: pre-launch process check, four static
+rem overlay builds (each logged to <dir>.log), deprecation gate on the server
+rem log, and forced hugo cleanup afterward.
 rem
-rem The static builds reach the two OpenSearch states the single served
-rem fixture cannot be in at once: a hostile site title, which proves the
-rem document escapes what it interpolates, and the default-off gate.
+rem The static builds reach states the single served fixture cannot be in at
+rem once: a hostile site title, which proves the OpenSearch document escapes
+rem what it interpolates; the default-off gate; a subpath baseURL, the only
+rem place a discarded baseURL path is visible; and scalar values written for
+rem the table-valued config keys, whose warnings the suite counts from the
+rem captured build log.
 setlocal enabledelayedexpansion
 if "%PORT%"=="" set PORT=1515
 
@@ -19,27 +22,47 @@ if not errorlevel 1 (
 set OPENSEARCH_HOSTILE_DIR=%~dp0.opensearch-hostile
 set OPENSEARCH_OFF_DIR=%~dp0.opensearch-off
 set SUBPATH_DIR=%~dp0.subpath
+set SCALAR_TABLES_DIR=%~dp0.scalar-tables
 
 pushd "%~dp0fixture"
-hugo --config hugo.toml,config-opensearch-hostile.toml --quiet --cleanDestinationDir --destination "%OPENSEARCH_HOSTILE_DIR%"
+hugo --config hugo.toml,config-opensearch-hostile.toml --cleanDestinationDir --destination "%OPENSEARCH_HOSTILE_DIR%" > "%OPENSEARCH_HOSTILE_DIR%.log" 2>&1
 if errorlevel 1 (
   echo Static overlay build failed ^(hostile title^).
+  type "%OPENSEARCH_HOSTILE_DIR%.log"
   popd
   exit /b 1
 )
-hugo --config hugo.toml,config-opensearch-off.toml --quiet --cleanDestinationDir --destination "%OPENSEARCH_OFF_DIR%"
+hugo --config hugo.toml,config-opensearch-off.toml --cleanDestinationDir --destination "%OPENSEARCH_OFF_DIR%" > "%OPENSEARCH_OFF_DIR%.log" 2>&1
 if errorlevel 1 (
   echo Static overlay build failed ^(opensearch off^).
+  type "%OPENSEARCH_OFF_DIR%.log"
   popd
   exit /b 1
 )
-hugo --config hugo.toml,config-subpath.toml --quiet --cleanDestinationDir --destination "%SUBPATH_DIR%"
+hugo --config hugo.toml,config-subpath.toml --cleanDestinationDir --destination "%SUBPATH_DIR%" > "%SUBPATH_DIR%.log" 2>&1
 if errorlevel 1 (
   echo Static overlay build failed ^(subpath^).
+  type "%SUBPATH_DIR%.log"
+  popd
+  exit /b 1
+)
+hugo --config hugo.toml,config-scalar-tables.toml --cleanDestinationDir --destination "%SCALAR_TABLES_DIR%" > "%SCALAR_TABLES_DIR%.log" 2>&1
+if errorlevel 1 (
+  echo Static overlay build failed ^(scalar tables^).
+  type "%SCALAR_TABLES_DIR%.log"
   popd
   exit /b 1
 )
 popd
+
+for %%d in ("%OPENSEARCH_HOSTILE_DIR%" "%OPENSEARCH_OFF_DIR%" "%SUBPATH_DIR%" "%SCALAR_TABLES_DIR%") do (
+  findstr /I "deprecat" "%%~d.log" >nul 2>&1
+  if not errorlevel 1 (
+    echo Hugo reported deprecations in the overlay build logged at %%~d.log:
+    findstr /I "deprecat" "%%~d.log"
+    exit /b 1
+  )
+)
 
 pushd "%~dp0fixture"
 start "search-fixture" /b hugo server --port %PORT% --bind 127.0.0.1 --logLevel info > "%~dp0.hugo-server.log" 2>&1
@@ -74,7 +97,8 @@ popd
 
 taskkill /F /IM hugo.exe >nul 2>&1
 del "%~dp0.hugo-server.log" >nul 2>&1
-rd /s /q "%OPENSEARCH_HOSTILE_DIR%" >nul 2>&1
-rd /s /q "%OPENSEARCH_OFF_DIR%" >nul 2>&1
-rd /s /q "%SUBPATH_DIR%" >nul 2>&1
+for %%d in ("%OPENSEARCH_HOSTILE_DIR%" "%OPENSEARCH_OFF_DIR%" "%SUBPATH_DIR%" "%SCALAR_TABLES_DIR%") do (
+  rd /s /q "%%~d" >nul 2>&1
+  del "%%~d.log" >nul 2>&1
+)
 exit /b %EXITCODE%

@@ -4,12 +4,15 @@
 # check, a deprecation gate on the server log, and belt-and-suspenders
 # cleanup (the trap kills the tracked pid AND pkills stray hugo children).
 #
-# Two STATIC builds run first, before the server starts. They exist because
-# the OpenSearch document has states the single served fixture cannot be in at
-# once -- a hostile site title, which proves the document escapes what it
-# interpolates, and the default-off gate, which is what every consumer gets
-# until they opt in. Both are plain builds, so they cost a second and bind no
-# port.
+# Four STATIC builds run first, before the server starts. They exist because
+# the module has states the single served fixture cannot be in at once -- a
+# hostile site title, which proves the OpenSearch document escapes what it
+# interpolates; the default-off gate, which is what every consumer gets until
+# they opt in; a subpath baseURL, the only place a discarded baseURL path is
+# visible; and scalar values written for the table-valued config keys, whose
+# warnings the suite counts from the captured build log. All are plain
+# builds, so they cost a few seconds and bind no port; each one's output is
+# captured next to its destination directory as <dir>.log.
 set -euo pipefail
 
 PORT="${PORT:-1515}"
@@ -19,6 +22,7 @@ LOG_FILE="$HERE/.hugo-server.log"
 OPENSEARCH_HOSTILE_DIR="$HERE/.opensearch-hostile"
 OPENSEARCH_OFF_DIR="$HERE/.opensearch-off"
 SUBPATH_DIR="$HERE/.subpath"
+SCALAR_TABLES_DIR="$HERE/.scalar-tables"
 
 # Git Bash on Windows ships neither pgrep nor pkill, so both lifecycle steps
 # fall back to the Windows-native tasklist/taskkill equivalents there;
@@ -46,7 +50,10 @@ cleanup() {
   fi
   kill_stray_hugo
   rm -f "$LOG_FILE"
-  rm -rf "$OPENSEARCH_HOSTILE_DIR" "$OPENSEARCH_OFF_DIR" "$SUBPATH_DIR"
+  for dir in "$OPENSEARCH_HOSTILE_DIR" "$OPENSEARCH_OFF_DIR" "$SUBPATH_DIR" "$SCALAR_TABLES_DIR"; do
+    rm -rf "$dir"
+    rm -f "$dir.log"
+  done
 }
 trap cleanup EXIT INT TERM
 
@@ -56,18 +63,28 @@ if hugo_running; then
 fi
 
 # ---- Static overlay builds, before the server binds anything ----
+# Each build's output lands in <dest>.log (not --quiet: the scalar-tables
+# spec counts the config-shape warnings), gated on the same deprecation
+# check the served fixture gets.
 static_build() {
   local overlay="$1" dest="$2"
-  (cd "$FIXTURE_DIR" && hugo --config "hugo.toml,$overlay" --quiet --cleanDestinationDir \
-    --destination "$dest") || {
+  (cd "$FIXTURE_DIR" && hugo --config "hugo.toml,$overlay" --cleanDestinationDir \
+    --destination "$dest" >"$dest.log" 2>&1) || {
     echo "Static overlay build failed ($overlay)." >&2
+    cat "$dest.log" >&2
     exit 1
   }
+  if grep -qi "deprecat" "$dest.log"; then
+    echo "Hugo reported deprecations ($overlay):" >&2
+    grep -i "deprecat" "$dest.log" >&2
+    exit 1
+  fi
 }
 static_build config-opensearch-hostile.toml "$OPENSEARCH_HOSTILE_DIR"
 static_build config-opensearch-off.toml "$OPENSEARCH_OFF_DIR"
 static_build config-subpath.toml "$SUBPATH_DIR"
-export OPENSEARCH_HOSTILE_DIR OPENSEARCH_OFF_DIR SUBPATH_DIR
+static_build config-scalar-tables.toml "$SCALAR_TABLES_DIR"
+export OPENSEARCH_HOSTILE_DIR OPENSEARCH_OFF_DIR SUBPATH_DIR SCALAR_TABLES_DIR
 
 (cd "$FIXTURE_DIR" && hugo server --port "$PORT" --bind 127.0.0.1 --logLevel info >"$LOG_FILE" 2>&1) &
 HUGO_PID=$!

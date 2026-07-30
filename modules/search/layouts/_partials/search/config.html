@@ -211,22 +211,43 @@
 {{- end -}}
 
 {{/* Per-field boosts: maps merge across tiers, so a tier overriding one
-     field keeps the shipped weights for the rest. */}}
+     field keeps the shipped weights for the rest. Consumer-tier PRESENCE is
+     tested with `ne nil`, never with `with`: Go's `with` runs its body only
+     for a non-empty value, so `false`, `0` and `""` are indistinguishable
+     from absent to it -- `boost = false` would be dropped in silence -- and
+     a truthy scalar would fall through the map check with no diagnostic
+     either. A scalar written where the table belongs is reported once and
+     ignored, so the shipped weights stay in force. */}}
 {{- $boost := dict -}}
 {{- with $defaults.boost -}}{{- if reflect.IsMap . -}}{{- $boost = merge $boost . -}}{{- end -}}{{- end -}}
-{{- with $sitep.boost -}}{{- if reflect.IsMap . -}}{{- $boost = merge $boost . -}}{{- end -}}{{- end -}}
-{{- if not $siteOnly -}}
-  {{- with $pagep.boost -}}{{- if reflect.IsMap . -}}{{- $boost = merge $boost . -}}{{- end -}}{{- end -}}
-  {{- with $args.boost -}}{{- if reflect.IsMap . -}}{{- $boost = merge $boost . -}}{{- end -}}{{- end -}}
+{{- $boostTiers := slice $sitep -}}
+{{- if not $siteOnly -}}{{- $boostTiers = slice $sitep $pagep $args -}}{{- end -}}
+{{- range $tier := $boostTiers -}}
+  {{- $tv := index $tier "boost" -}}
+  {{- if ne $tv nil -}}
+    {{- if reflect.IsMap $tv -}}{{- $boost = merge $boost $tv -}}
+    {{- else -}}{{- partial "search/lib/warn.html" (dict
+        "key" "search:warn:non-map-table:boost"
+        "message" (printf "[search] Ignoring a search boost value: it expects a table of per-field weights but was given %q, so every field keeps its shipped weight. Write it as [params.search.boost] (or the matching front-matter map)." (printf "%v" $tv))) -}}{{- end -}}
+  {{- end -}}
 {{- end -}}
 
 {{/* OpenSearch: a nested map merged tier by tier like boost, so a consumer
      overriding one key keeps the shipped values for the rest. SITE-SCOPED --
      the document is one published file per site, not a per-page surface --
-     so only the defaults and site tiers are read. */}}
+     so only the defaults and site tiers are read. Presence is `ne nil` for
+     the same reason as boost: `opensearch = true` is the natural shorthand
+     mis-write of `opensearch.enable = true`, and skipped in silence it
+     would leave the document unpublished with nothing said. */}}
 {{- $opensearch := dict -}}
 {{- with $defaults.opensearch -}}{{- if reflect.IsMap . -}}{{- $opensearch = merge $opensearch . -}}{{- end -}}{{- end -}}
-{{- with $sitep.opensearch -}}{{- if reflect.IsMap . -}}{{- $opensearch = merge $opensearch . -}}{{- end -}}{{- end -}}
+{{- $osv := index $sitep "opensearch" -}}
+{{- if ne $osv nil -}}
+  {{- if reflect.IsMap $osv -}}{{- $opensearch = merge $opensearch $osv -}}
+  {{- else -}}{{- partial "search/lib/warn.html" (dict
+      "key" "search:warn:non-map-table:opensearch"
+      "message" (printf "[search] Ignoring [params.search] opensearch: it expects a table but was given %q, so the document keeps its shipped default and stays unpublished. To publish it, write [params.search] opensearch.enable = true." (printf "%v" $osv))) -}}{{- end -}}
+{{- end -}}
 {{- $opensearch = merge $opensearch (dict "enable" (in (slice "true" "1" "yes" "on") (lower (printf "%v" ($opensearch.enable | default false))))) -}}
 
 {{/* Hotkey grammar (case-insensitive): zero or more modifiers from mod,

@@ -1,0 +1,14 @@
+# Overlay for a STATIC build (hugo --config hugo.toml,config-scalar-tables.toml).
+#
+# The module's two table-valued keys written as scalars -- the natural
+# mis-writes of [params.search.boost] weights and opensearch.enable = true.
+# Go's `with` treats false, 0 and "" as absent, and a truthy scalar falls
+# through a map check with no diagnostic, so the resolver must test presence
+# with `ne nil`, warn ONCE per key, and keep the shipped defaults: boost
+# keeps every shipped weight, and opensearch keeps its default-off gate, so
+# no document is published even though the scalar spells "true". The runner
+# captures this build's log so the suite can count the warnings.
+[params]
+  [params.search]
+    boost = 2
+    opensearch = true
