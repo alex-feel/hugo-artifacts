@@ -3,9 +3,11 @@
   alt, natural}. Pure value chooser: no HTML, no side effects.
 
   Context (dict):
-  - .candidate (any)  Either a Hugo resource (page-bundle or global) OR a
+  - .candidate (any)  Either a Hugo resource (page-bundle or global), a
                       string (bundle-relative path, site-root path, or
-                      absolute/remote URL).
+                      absolute/remote URL), or a map carrying such a string
+                      under src, url, or image -- the front-matter shape
+                      images: [{src: "/img/cover.jpg"}] many themes use.
   - .page (page)      The current page, for the alt fallback chain and for
                       resolving a string candidate as a bundle or global
                       resource.
@@ -53,20 +55,49 @@
 {{- $result := dict -}}
 {{- $res := "" -}}
 
+{{/* Reduce a non-resource candidate to a usable scalar string BEFORE any
+     stringification. printf "%v" on a map renders Go's debug form
+     (map[src:/img/cover.jpg]), which would be absolutized and published into
+     og:image and every JSON-LD image node as a URL that can never resolve --
+     so a map-shaped candidate is read through its src, url, or image key
+     instead. A candidate (or extracted value) that is a boolean, a slice, or
+     a map carrying none of those keys holds no path at all: it warns once
+     per page and is skipped rather than published. */}}
+{{- $str := "" -}}
+{{- if not (reflect.IsResource $candidate) -}}
+  {{- if reflect.IsMap $candidate -}}
+    {{- range slice "src" "url" "image" -}}
+      {{- if eq $str "" -}}
+        {{- $v := index $candidate . -}}
+        {{- if and (ne $v nil) (not (reflect.IsMap $v)) (not (reflect.IsSlice $v)) (ne (printf "%T" $v) "bool") -}}
+          {{- $str = trim (printf "%v" $v) " \t\n\r" -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- else if and (ne $candidate nil) (not (reflect.IsSlice $candidate)) (ne (printf "%T" $candidate) "bool") -}}
+    {{- $str = trim (printf "%v" $candidate) " \t\n\r" -}}
+  {{- end -}}
+  {{- if and (eq $str "") (or (reflect.IsMap $candidate) (reflect.IsSlice $candidate) (eq (printf "%T" $candidate) "bool")) -}}
+    {{- partial "seo/lib/warn.html" (dict
+      "key" (printf "seo:warn:unusable-image-candidate:%s" $page.RelPermalink)
+      "message" (printf "[seo] Page %q lists an image candidate with no usable value; a map-shaped entry is read through its src, url, or image key, and a boolean or nested list holds no path. That candidate is skipped." $page.RelPermalink)
+    ) -}}
+  {{- end -}}
+{{- end -}}
+
 {{/* Resolve the candidate to a resource when possible. */}}
 {{- if reflect.IsResource $candidate -}}
   {{- $res = $candidate -}}
-{{- else if $candidate -}}
+{{- else if $str -}}
   {{/* String candidate: a bundle-relative path resolves as a page resource
        (the more specific scope wins), a project path as a global resource;
        otherwise it is treated as a bare URL/path below. */}}
-  {{- $s := printf "%v" $candidate -}}
-  {{- if not (or (hasPrefix $s "http://") (hasPrefix $s "https://") (hasPrefix $s "//")) -}}
-    {{- with $page.Resources.GetMatch $s -}}
+  {{- if not (or (hasPrefix $str "http://") (hasPrefix $str "https://") (hasPrefix $str "//")) -}}
+    {{- with $page.Resources.GetMatch $str -}}
       {{- $res = . -}}
     {{- end -}}
     {{- if not $res -}}
-      {{- with resources.Get $s -}}
+      {{- with resources.Get $str -}}
         {{- $res = . -}}
       {{- end -}}
     {{- end -}}
@@ -83,6 +114,34 @@
   {{/* Resource branch: distinguish raster from SVG by sub-type. */}}
   {{- $isImage := eq $res.ResourceType "image" -}}
   {{- $isSVG := and $isImage (eq $res.MediaType.SubType "svg") -}}
+
+  {{/* A resource can be media-typed as an image and still carry no image Hugo
+       can decode: a format Hugo has no decoder for (avif, heic), a file whose
+       bytes are not the image its extension claims (a version-control pointer
+       checked out in place of the binary), or a truncated upload. Reading
+       .Width or calling .Fill DECODES, so on any of those it errors -- and an
+       error here would abort the WHOLE consumer build from a page that
+       configured nothing, because images.html auto-picks bundle resources by
+       name. The sub-type list is the fast path for formats known to have no
+       decoder; the probe covers everything else, since only a decode attempt
+       can tell a sound file from a broken one. Either way an undecodable
+       image degrades to the same url-only rendering an SVG gets. */}}
+  {{- $decodable := false -}}
+  {{- if and $isImage (not $isSVG) -}}
+    {{- if in (slice "jpeg" "png" "gif" "tiff" "bmp" "webp") $res.MediaType.SubType -}}
+      {{/* A width of zero counts as undecodable: .Width answers from a header
+           parse and returns zero rather than erroring when the bytes are not
+           the image the extension claims, so the error alone is not enough. */}}
+      {{- $probe := try $res.Width -}}
+      {{- $decodable = and (not $probe.Err) (gt (int ($probe.Value | default 0)) 0) -}}
+    {{- end -}}
+    {{- if not $decodable -}}
+      {{- partial "seo/lib/warn.html" (dict
+        "key" (printf "seo:warn:undecodable-image:%s" $res.RelPermalink)
+        "message" (printf "[seo] Cannot decode image %q (%s); publishing its URL without dimensions or cropping. Re-export it in a format Hugo can process (jpeg, png, gif, tiff, bmp, webp), or check that the file is complete." $res.RelPermalink $res.MediaType.Type)
+      ) -}}
+    {{- end -}}
+  {{- end -}}
   {{- if not $alt -}}
     {{- with $res.Params.alt -}}
       {{- $alt = . -}}
@@ -94,14 +153,26 @@
       {{- end -}}
     {{- end -}}
   {{- end -}}
-  {{- if and $isImage (not $isSVG) -}}
+  {{- if $decodable -}}
     {{/* Local raster: real dimensions. The og variant adds the content-aware
-         1.91:1 crop; the natural variant keeps the source as-is. */}}
+         1.91:1 crop; the natural variant keeps the source as-is. The crop is
+         attempted through try for the same reason the probe above exists:
+         decoding succeeded, but a resize can still fail on a malformed image,
+         and a failed crop degrades to the source's own dimensions rather than
+         taking the build down. */}}
     {{- $natural := dict "url" $res.Permalink "width" $res.Width "height" $res.Height -}}
     {{- $chosen := $natural -}}
     {{- if eq $variant "og" -}}
-      {{- $filled := $res.Fill "1200x630 Smart" -}}
-      {{- $chosen = dict "url" $filled.Permalink "width" $filled.Width "height" $filled.Height -}}
+      {{- $fill := try ($res.Fill "1200x630 Smart") -}}
+      {{- with $fill.Err -}}
+        {{- partial "seo/lib/warn.html" (dict
+          "key" (printf "seo:warn:uncroppable-image:%s" $res.RelPermalink)
+          "message" (printf "[seo] Cannot crop image %q to the 1.91:1 ratio og:image expects; publishing it uncropped at its own dimensions." $res.RelPermalink)
+        ) -}}
+      {{- else -}}
+        {{- $filled := $fill.Value -}}
+        {{- $chosen = dict "url" $filled.Permalink "width" $filled.Width "height" $filled.Height -}}
+      {{- end -}}
     {{- end -}}
     {{- $result = dict
       "url" $chosen.url
@@ -112,7 +183,8 @@
       "natural" $natural
     -}}
   {{- else -}}
-    {{/* SVG (or a non-raster resource): url + type only, no dimensions. */}}
+    {{/* SVG, an undecodable raster, or another non-raster resource: url +
+         type only, no dimensions. */}}
     {{- $result = dict
       "url" $res.Permalink
       "type" $res.MediaType.Type
@@ -120,12 +192,17 @@
       "natural" (dict "url" $res.Permalink)
     -}}
   {{- end -}}
-{{- else if $candidate -}}
-  {{/* String branch: bare URL or site-root path, absolutized, no dimensions. */}}
-  {{- $s := printf "%v" $candidate -}}
-  {{- $url := $s | absURL -}}
+{{- else if $str -}}
+  {{/* String branch: bare URL or site-root path, absolutized, no dimensions.
+       Absolutized through seo/lib/absolute-url.html rather than by piping
+       into absURL, because a site-root path -- the form this branch exists
+       to accept, and the form a static/ file must be written as -- would
+       otherwise resolve against the protocol and host alone and drop the
+       baseURL path on a subpath deployment. This value feeds og:image,
+       og:image:secure_url, twitter:image and every JSON-LD image node. */}}
+  {{- $url := partial "seo/lib/absolute-url.html" (dict "value" $str "key" "seo.image") -}}
   {{- $type := "" -}}
-  {{- $lower := lower $s -}}
+  {{- $lower := lower $str -}}
   {{- if hasSuffix $lower ".png" -}}
     {{- $type = "image/png" -}}
   {{- else if or (hasSuffix $lower ".jpg") (hasSuffix $lower ".jpeg") -}}

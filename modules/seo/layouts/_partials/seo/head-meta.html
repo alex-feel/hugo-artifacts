@@ -55,13 +55,24 @@
      an hreflang pointing at a noindexed URL. x-default targets the
      DEFAULT-language variant selected via .Language.IsDefault (never
      self-pointing); when no default-language translation exists it is omitted,
-     never fabricated. */}}
+     never fabricated.
+
+     On a pager beyond the first, every href carries the pager suffix
+     ("page/2/") resolved upstream, because .Permalink is pinned to the first
+     pager on all of them: without it the cluster served at /posts/page/2/
+     names /posts/ and /de/posts/, so the document that served it is absent
+     from its own cluster and no translated pager is ever declared. The suffix
+     is the one Hugo appended for THIS document, applied to each translation's
+     own permalink, so a per-language URL prefix and a baseURL path are both
+     carried along. A translation that publishes fewer pagers than the current
+     language has no pager of that number; the module states the correspondence
+     it can see and leaves the section shapes to the site. */}}
 {{- $currentNoindex := in (lower $seo.robots) "noindex" -}}
 {{- if and (not $is404) (not $currentNoindex) (hugo.IsMultilingual) -}}
   {{- range $page.AllTranslations -}}
     {{- $tRobots := (partial "seo/resolve/robots.html" .).robots -}}
     {{- if not (in (lower $tRobots) "noindex") }}
-<link rel="alternate" hreflang="{{ .Language.Locale }}" href="{{ .Permalink }}">
+<link rel="alternate" hreflang="{{ .Language.Locale }}" href="{{ printf "%s%s" .Permalink $seo.pagerSuffix }}">
     {{- end -}}
   {{- end -}}
   {{- $default := "" -}}
@@ -71,7 +82,7 @@
     {{- end -}}
   {{- end -}}
   {{- with $default }}
-<link rel="alternate" hreflang="x-default" href="{{ .Permalink }}">
+<link rel="alternate" hreflang="x-default" href="{{ printf "%s%s" .Permalink $seo.pagerSuffix }}">
   {{- end -}}
 {{- end }}
 
@@ -134,19 +145,32 @@
 <meta property="article:author" content="{{ . }}">
     {{- end }}
   {{- end }}
+  {{/* categories and tags go through seo/lib/as-scalar-list.html because
+       Hugo front matter accepts the bare scalar form -- `tags: hugo`,
+       `categories: notes` -- and many sites write it, and because either
+       list can carry non-scalar entries.
+
+       Three different failures, one cause: `range` REJECTS a string and
+       stops the build; `index` and `delimit` ACCEPT it and iterate it
+       byte-wise, publishing integers; and a table nested in the list
+       stringifies as Go's debug form (map[...]) straight into the content
+       attribute. The silent pair is worse -- the byte-wise form shipped
+       `"keywords": "104, 117, 103, 111"` to Google from the JSON-LD builder
+       while this surface was already correct. Coerce and scalar-filter
+       before all three. */}}
   {{- $section := "" -}}
-  {{- with $page.Params.categories -}}
+  {{- with partial "seo/lib/as-scalar-list.html" (dict "value" $page.Params.categories "key" "categories") -}}
     {{- $section = index . 0 -}}
   {{- end -}}
   {{- if not $section -}}{{- $section = $page.Section -}}{{- end -}}
   {{- with $section }}
 <meta property="article:section" content="{{ . }}">
   {{- end }}
-  {{- range $page.Params.tags }}
+  {{- range partial "seo/lib/as-scalar-list.html" (dict "value" $page.Params.tags "key" "tags") }}
 <meta property="article:tag" content="{{ . }}">
   {{- end }}
 {{- else if eq $seo.ogType "profile" -}}
-  {{- $profile := $page.Param "seo.profile" | default (dict) -}}
+  {{- $profile := partial "seo/lib/as-map.html" (dict "value" ($page.Param "seo.profile") "key" "seo.profile") -}}
   {{- with (index $profile "given_name") }}
 <meta property="profile:first_name" content="{{ . }}">
   {{- end }}
@@ -160,7 +184,7 @@
 <meta property="profile:gender" content="{{ . }}">
   {{- end }}
 {{- else if eq $seo.ogType "product" -}}
-  {{- $offer := $page.Param "seo.offer" | default (dict) -}}
+  {{- $offer := partial "seo/lib/as-map.html" (dict "value" ($page.Param "seo.offer") "key" "seo.offer") -}}
   {{/* product:price:amount parses through lib/num.html so this meta stays
        consistent with the JSON-LD Offer price: an explicit 0 emits, an
        unparseable value drops the meta (lib/num.html warns once). */}}
@@ -174,7 +198,7 @@
 <meta property="product:price:currency" content="{{ . }}">
   {{- end }}
 {{- else if eq $seo.ogType "video.other" -}}
-  {{- $video := $page.Param "seo.video" | default (dict) -}}
+  {{- $video := partial "seo/lib/as-map.html" (dict "value" ($page.Param "seo.video") "key" "seo.video") -}}
   {{- with (index $video "content_url") }}
 <meta property="og:video:url" content="{{ . }}">
 <meta property="og:video:secure_url" content="{{ . }}">
@@ -191,7 +215,7 @@
      is. twitter:creator = first author's twitter -> twitter_creator ->
      twitter_site. */}}
 {{- $primaryImage := index $seo.images 0 -}}
-{{- $twSite := $page.Param "seo.twitter_site" | default (index (site.Params) "twitter") -}}
+{{- $twSite := $page.Param "seo.twitter_site" | default (index $page.Site.Params "twitter") -}}
 {{- $twCreator := "" -}}
 {{- with (index $seo.authors 0) -}}
   {{- with .twitter -}}{{- $twCreator = . -}}{{- end -}}
@@ -222,8 +246,8 @@
 {{/* ---- Site verification ---- Each token emits its provider's verification
      tag. Backward-compatible aliases from params.site_verification.* are read
      only when the seo.verification.* equivalent is absent. */}}
-{{- $ver := $page.Param "seo.verification" | default (dict) -}}
-{{- $legacyVer := index (site.Params) "site_verification" | default (dict) -}}
+{{- $ver := partial "seo/lib/as-map.html" (dict "value" ($page.Param "seo.verification") "key" "seo.verification") -}}
+{{- $legacyVer := partial "seo/lib/as-map.html" (dict "value" (index $page.Site.Params "site_verification") "key" "site_verification") -}}
 {{- with (index $ver "google") | default (index $legacyVer "google") }}
 <meta name="google-site-verification" content="{{ . }}">
 {{- end }}

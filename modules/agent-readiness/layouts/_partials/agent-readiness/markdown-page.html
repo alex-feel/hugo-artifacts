@@ -6,20 +6,21 @@
 
   MEMBERSHIP: the twin emits NOTHING AT ALL for a page the shared filter
   excludes, so the twin surface can never disagree with robots.txt, llms.txt
-  and about.md about which pages of the site exist. Hugo still creates the
-  file (the output format is wired per page kind), but it is empty, which is
-  the honest representation of a page that opted out.
+  and about.md about which pages of the site exist. A template that renders
+  no bytes makes Hugo publish no file for that format, so an excluded page
+  ends up with no index.md beside its index.html rather than an empty one --
+  which is what 02-twins.spec.js asserts.
 
   BODY SOURCE: .RenderShortcodes, which is the only one of Hugo's four
   content accessors that yields a document that is simultaneously valid
   Markdown prose and complete. .RawContent leaves every shortcode call as the
   literal, unexpanded call text; .Content renders the surrounding Markdown to
   HTML too, producing an HTML document with a .md extension; .Plain strips
-  every tag
-  and destroys headings, lists, links and code fences. There is no
-
-  HTML-to-Markdown template function in Hugo, so this is not merely the best
-  of four -- it is the only correct one.
+  every tag and destroys headings, lists, links and code fences.
+  Reconstructing Markdown from .Content is possible -- transform.HTMLToMarkdown
+  exists as of v0.151.0 -- but it is still experimental and would put the twin
+  through a lossy Markdown-to-HTML-to-Markdown round trip, so the accessor
+  that never leaves Markdown wins on both counts.
 
   The documented consequence: a twin of a shortcode-heavy page contains raw
   HTML blocks inline. That is valid CommonMark, and for a page whose entire
@@ -53,7 +54,7 @@
        member. */}}
   {{- $included := false -}}
   {{- if eq $page.Kind "page" -}}
-    {{- range partial "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) -}}
+    {{- range partialCached "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) site.Language.Name -}}
       {{- if eq .Path $page.Path -}}{{- $included = true -}}{{- end -}}
     {{- end -}}
   {{- else -}}
@@ -83,34 +84,68 @@
     {{- partial "agent-readiness/markdown-front-matter.html" (dict "page" $page "cfg" $cfg) | safeHTML -}}
     {{- $page.RenderShortcodes -}}
 
-    {{/* Trailing pointer section. The target is resolved through the home
-         page's output formats rather than a hardcoded path, so a subpath
-         baseURL or a language prefix is honored. */}}
-    {{- if and $md.sitemap_section (ne $md.sitemap_section_target "none") -}}
+    {{/* Trailing pointer section, emitted as an ABSOLUTE URL because a twin
+         is routinely read detached from the site it came from, where a
+         relative path has no base to resolve against.
+
+         llms.txt IS a home output format and resolves through it. `sitemap`
+         is NOT -- it is a page KIND -- so that lookup never matches and the
+         absURL fallback always wins.
+
+         The configured target is case-folded and trimmed before it is
+         matched. Every other enumerated value in this module is normalized
+         the same way, and here an unnormalized miss is invisible: "LLMS"
+         would match no branch, leave the target empty and emit nothing at
+         all, with no warning and exit 0. An unrecognized value now says so
+         once rather than silently dropping the section. */}}
+    {{- $wanted := lower (trim (printf "%v" ($md.sitemap_section_target | default "llms")) " \t\n\r") -}}
+    {{- if and $md.sitemap_section (ne $wanted "none") -}}
       {{- $target := "" -}}
       {{- $label := "" -}}
-      {{- if eq $md.sitemap_section_target "llms" -}}
-        {{- with site.Home.OutputFormats.Get "llmstxt" -}}
-          {{- $target = .RelPermalink -}}
-          {{- $label = "llms.txt" -}}
-        {{- else -}}
-          {{- partial "agent-readiness/lib/warn.html" (dict
-              "key" "agent-readiness:warn:sitemap-section-no-llmstxt"
-              "message" "[agent-readiness] The Markdown twins are configured with sitemap_section_target = \"llms\", but the llmstxt output format is not wired to the home page, so the trailing pointer section is omitted. Add 'llmstxt' to your existing [outputs] home list -- the config list replaces the ENTIRE default home list, so keep every format you already wire there -- or set sitemap_section_target to \"sitemap\" or \"none\".") -}}
+      {{- if eq $wanted "llms" -}}
+        {{/* Gated on llms.enable as well as on the format being wired, for
+             the same reason the twin links are gated on markdown.enable: the
+             output format answers "is it wired", not "did llms.html render
+             anything into it". With the switch off, llms.html emits zero
+             bytes and Hugo publishes no /llms.txt, so pointing at it would
+             put a dead link in the tail of every twin.
+
+             Switched off deliberately, so no warning -- unlike the wired
+             case below, where the consumer asked for the pointer and the
+             format is missing, which they cannot see without being told. */}}
+        {{- if $cfg.llms.enable -}}
+          {{- with site.Home.OutputFormats.Get "llmstxt" -}}
+            {{- $target = .Permalink -}}
+            {{- $label = "llms.txt" -}}
+          {{- else -}}
+            {{- partial "agent-readiness/lib/warn.html" (dict
+                "key" "agent-readiness:warn:sitemap-section-no-llmstxt"
+                "message" "[agent-readiness] The Markdown twins are configured with sitemap_section_target = \"llms\", but the llmstxt output format is not wired to the home page, so the trailing pointer section is omitted. Add 'llmstxt' to your existing [outputs] home list -- the config list replaces the ENTIRE default home list, so keep every format you already wire there -- or set sitemap_section_target to \"sitemap\" or \"none\".") -}}
+          {{- end -}}
         {{- end -}}
-      {{- else if eq $md.sitemap_section_target "sitemap" -}}
+      {{- else if eq $wanted "sitemap" -}}
         {{- with site.Home.OutputFormats.Get "sitemap" -}}
-          {{- $target = .RelPermalink -}}
+          {{- $target = .Permalink -}}
         {{- else -}}
           {{- $target = "sitemap.xml" | absURL -}}
         {{- end -}}
         {{- $label = "sitemap.xml" -}}
+      {{- else -}}
+        {{- partial "agent-readiness/lib/warn.html" (dict
+            "key" (printf "agent-readiness:warn:unknown-sitemap-target:%s" $wanted)
+            "message" (printf "[agent-readiness] Ignoring the unrecognized markdown.sitemap_section_target %q and omitting the twins' trailing pointer section. Use \"llms\", \"sitemap\", or \"none\"." $wanted)) -}}
       {{- end -}}
-      {{- with $target }}
 
-## {{ $cfg.i18n.sitemap_heading }}
-
-- [{{ $label }}]({{ . }})
+      {{/* Assembled with an explicit terminating newline rather than written
+           inline: the closing trim marker of an inline block eats the final
+           newline, and a text document ends with one -- the same standard
+           robots.txt, llms.txt and about.md are held to. The heading and the
+           link go through the same line-safety routines as every other
+           value in the line-oriented documents. safeHTML because this
+           partial is in the .html namespace while the twin is plain text,
+           so an ampersand in the URL would otherwise become an entity. */}}
+      {{- with $target -}}
+        {{- printf "\n\n## %s\n\n- %s\n" (partial "agent-readiness/lib/inline.html" $cfg.i18n.sitemap_heading) (partial "agent-readiness/lib/markdown-link.html" (dict "name" $label "url" .)) | safeHTML -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}

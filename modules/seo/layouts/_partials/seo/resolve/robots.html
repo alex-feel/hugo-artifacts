@@ -44,8 +44,12 @@
 {{/* Collect the raw directive source strings for the ALL-BOTS set, in order. */}}
 {{- $sources := slice -}}
 
-{{/* 1. Site baseline. */}}
-{{- with site.Params.seo.robots -}}
+{{/* 1. Site baseline, read from the PAGE'S OWN language site. head-meta.html
+     resolves every entry of .AllTranslations through this partial, and the
+     global `site` is the rendering language, so it would hide a translation's
+     own language baseline -- emitting an hreflang alternate that points at a
+     URL the baseline noindexes. */}}
+{{- with (partial "seo/lib/as-map.html" (dict "value" (index $page.Site.Params "seo") "key" "params.seo" "warn_falsy" true)).robots -}}
   {{- $sources = $sources | append . -}}
 {{- end -}}
 
@@ -53,7 +57,7 @@
      is absent. Read straight from front matter (not the .Param cascade): the
      site baseline is already source 1, and letting the cascade echo it here
      would both double-add it and short-circuit the legacy alias. */}}
-{{- $pageSeo := $page.Params.seo | default dict -}}
+{{- $pageSeo := partial "seo/lib/as-map.html" (dict "value" ($page.Params.seo) "key" "seo" "warn_falsy" true) -}}
 {{- $pageRobots := index $pageSeo "robots" -}}
 {{- if $pageRobots -}}
   {{- $sources = $sources | append $pageRobots -}}
@@ -202,7 +206,10 @@
 {{/* Per-bot map: each bot's directive is the all-bots sources UNIONED with the
      bot's own string, reduced with the identical semantics. */}}
 {{- $bots := dict -}}
+{{/* Guarded on IsMap: seo.robots_bots is documented as a table, and a scalar
+     or list written for it would abort the range and stop the build. */}}
 {{- with $page.Param "seo.robots_bots" -}}
+  {{- if reflect.IsMap . -}}
   {{- range $bot, $botDirective := . -}}
     {{- $botSources := $sources | append $botDirective -}}
     {{- $bHasNoindex := false -}}
@@ -292,6 +299,11 @@
       {{- $bTokens = $bTokens | append (printf "unavailable_after:%s" .) -}}
     {{- end -}}
     {{- $bots = merge $bots (dict $bot (delimit $bTokens ", ")) -}}
+  {{- end -}}
+  {{- else -}}
+    {{- partial "seo/lib/warn.html" (dict
+        "key" "seo:warn:robots-bots-not-a-table"
+        "message" (printf "[seo] Ignoring seo.robots_bots: it expects a table of bot name to directive, but was given %q. Write it as [params.seo.robots_bots] with one key per bot." (printf "%v" .))) -}}
   {{- end -}}
 {{- end -}}
 

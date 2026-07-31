@@ -21,6 +21,21 @@ hugo mod get github.com/alex-feel/hugo-artifacts/modules/seo
 
 Confirm resolution with `hugo mod graph`. For local development against a checkout of this repo, use a `hugo.work` workspace or a `[module.replacements]` block per the repo convention.
 
+### Combining this module with other modules that wire output formats
+
+This module defines no output format of its own, but it READS your `[outputs]` lists: `[seo.alternates]` advertises a format when the page CARRIES it, which is a fact about those lists. Your site configuration holds exactly ONE `[outputs]` table, and its lists are the union of every module's needs. A second `[outputs]` table in the same file fails the configuration load outright (`unmarshal failed: toml: table outputs already exists`); pasting one module README's `[outputs]` block over another's leaves a single table that loads cleanly, exits 0, warns about nothing -- and silently stops publishing every document the replaced list asked for, taking the alternates this module advertises with it. So do not copy any module's block wholesale into a site that already has one: MERGE the names into the list already there.
+
+A site importing this module together with [`agent-readiness`](../agent-readiness/README.md) and [`search`](../search/README.md) wires all of them at once:
+
+```toml
+[outputs]
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'agentfacts', 'agentskills', 'searchindex', 'opensearch']
+  section = ['html', 'rss', 'markdown']
+  page = ['html', 'markdown']
+```
+
+Only `[outputs]` needs this care: `[outputFormats]` and `[mediaTypes]` DO merge additively from module configuration, which is why the format names above are usable although the site defines none of them. The combination is covered by the cross-module suite in [`modules/test-composition/`](../test-composition/README.md).
+
 **Important -- template lookup precedence:** every partial the module ships is overridable by same-name placement. If your site has a file at `layouts/_partials/seo/<file>.html`, Hugo uses your local copy instead of the module's. This is the primary extension mechanism (see [Extension Hooks](#extension-hooks)); it also means a stray local `seo/` partial silently shadows the module, so delete any leftover copies you do not intend to override.
 
 ## Requirements
@@ -58,7 +73,7 @@ The full annotated surface:
   enable              = true               # Global kill switch. false => the module emits NOTHING anywhere. Default: true.
   title_suffix        = " | Acme Docs"     # Appended to <title> only (never og:title/headline). Default: "". Home page never gets the suffix.
   description         = "Acme builds developer tooling for Hugo sites."  # Site-wide fallback description (last link of the chain).
-  default_image       = "images/og-default.png"  # Global resource path (assets/ or static/) OR absolute URL; site-wide image fallback, applied only when no page-level image resolves.
+  default_image       = "images/og-default.png"  # Global resource path (assets/) OR site-root path for a static/ file (e.g. /img/og.png) OR absolute URL; site-wide image fallback, applied only when no page-level image resolves. Site-root paths keep the baseURL path on a subpath deployment.
   image_alt           = "Acme logo on dark"      # Default og:image:alt when a page image resolves no alt of its own.
   image_params        = ["tile_image"]     # Extra top-level front-matter params whose values (string or list per key) join the page-image candidates.
   keywords            = ["hugo", "seo", "static site"]  # JSON-LD keywords fallback ONLY; NO <meta name=keywords> is ever emitted.
@@ -76,11 +91,14 @@ The full annotated surface:
   twitter_site        = "@acme"            # twitter:site. Leading @ optional; the module normalizes. Legacy alias: params.twitter.
   twitter_creator     = "@acme"            # Default twitter:creator when neither the page nor its first author supplies one.
 
+  # --- Content license ---
+  content_license     = "https://creativecommons.org/licenses/by/4.0/"  # Absolute URL of the license covering the site's editorial content. Emits "license" on the WebPage, CollectionPage and article-class JSON-LD nodes. Unset emits nothing. Pair with [params.seo.links] license below for the matching <link rel="license">.
+
   # --- WebSite node (home page only) ---
   [params.seo.website]
     name                = "Acme Documentation"   # WebSite.name override; else params.seo.organization.name; else site.Title.
     alternate_name      = "acme.example"   # WebSite.alternateName (Google suggests the lowercase domain as a backup site name).
-    search_url_template = "https://acme.example/search/?q={search_term_string}"  # Enables SearchAction (Sitelinks Search Box). MUST contain the literal {search_term_string}; relative values are absolutized with absURL.
+    search_url_template = "https://acme.example/search/?q={search_term_string}"  # Enables SearchAction (Sitelinks Search Box). MUST contain the literal {search_term_string}; a site-root or relative value is absolutized against the full baseURL, path included.
 
   # --- Organization / publisher node (home + optional flagged About page) ---
   [params.seo.organization]
@@ -168,7 +186,7 @@ The full annotated surface:
 
   # --- Alternate representations (opt-in allow-list) ---
   [params.seo.alternates]
-    formats           = ['markdown']       # Emit <link rel="alternate"> for these output formats when the page carries them. An ALLOW-LIST, never a blanket range: ranging every alternate would advertise /searchindex.json and /manifest.webmanifest as page alternates. Unset emits nothing.
+    formats           = ['markdown']       # Emit <link rel="alternate"> for these output formats when the page carries them. An ALLOW-LIST, never a blanket range: ranging every alternate would advertise /searchindex.json and /manifest.webmanifest as page alternates. Unset emits nothing. See the caveat below: presence is judged from the page's wired output formats, not from whether the format rendered anything.
 
   # --- Static link relations (IANA-registered, fixed sitewide targets) ---
   [params.seo.links]
@@ -178,6 +196,8 @@ The full annotated surface:
     license           = "https://creativecommons.org/licenses/by/4.0/"  # <link rel="license"> (WHATWG HTML). Emitted on every page the module's head runs on, because a content license is constant sitewide.
 ```
 
+**`[seo.alternates]` judges presence, not emptiness.** A format is advertised when the page CARRIES it -- that is, when your `[outputs]` list wires it for that page kind -- not when it demonstrably published bytes. Hugo offers no template API for "will this format write a file", and an output format that renders nothing produces no file at all. So if another module conditionally suppresses a format's body for some pages, those pages still advertise the alternate and the link 404s. The concrete case is the `agent-readiness` module's Markdown twins, which are withheld for pages carrying `agent: false`, for `robots: noindex` pages, for the search page, and for pages outside its configured `sections` allow-list. If you run both modules, keep `[seo.alternates] formats` and `[params.agent] sections` describing the same page set, or leave `formats` unset and let `agent-readiness` own twin discovery through `llms.txt`.
+
 ### Top-level keys (`params.seo.*`)
 
 | Key | Type | Default | Purpose |
@@ -185,8 +205,8 @@ The full annotated surface:
 | `enable` | bool | `true` | Global kill switch. `false` emits nothing anywhere. |
 | `title_suffix` | string | `""` | Appended to `<title>` only, never to `og:title` or `headline`. The home page never gets the suffix. |
 | `description` | string | `""` | Site-wide fallback description, last link of the description chain. |
-| `content_license` | string | `""` | Absolute URL of the license covering the site's editorial content. When set, emits `"license"` on the `WebPage`, `CollectionPage` and article-class (`Article` / `BlogPosting` / `NewsArticle`) nodes. `license` is a schema.org `CreativeWork` property, so it is valid on those and on nothing else the module emits -- it is deliberately NOT attached to `Person`, `Organization`, `WebSite` or `BreadcrumbList`. Unset emits nothing. |
-| `default_image` | string | `""` | Site-wide image fallback. Resource path (`assets/` or `static/`) or absolute URL. Applied only when no page-level image resolves. |
+| `content_license` | string | `""` | Absolute URL of the license covering the site's editorial content. When set, emits `"license"` on the `WebPage`, `CollectionPage` and article-class (`Article` / `BlogPosting` / `NewsArticle`) nodes -- the nodes that represent the page's own editorial content. `license` is a schema.org `CreativeWork` property, and other `CreativeWork` subtypes this module emits (`WebSite`, `ProfilePage`, `SoftwareApplication`, `VideoObject`, `ImageObject`) could carry it validly; they deliberately do not, because a site-wide content license describes the page you are reading rather than the site entity or an embedded asset. It is never attached to `Person`, `Organization`, `Offer` or `BreadcrumbList`, where it would not be valid at all. Unset emits nothing. |
+| `default_image` | string | `""` | Site-wide image fallback. Resource path under `assets/`, site-root path for a `static/` file (e.g. `/img/og.png`), or absolute URL. Applied only when no page-level image resolves; a site-root path keeps the `baseURL` path on a subpath deployment. |
 | `image_alt` | string | `""` | Default `og:image:alt` when a page image resolves no alt of its own. |
 | `image_params` | array | `[]` | Names of extra top-level front-matter params (e.g. `["tile_image"]`) whose values (string or list per key) join the page-image candidates -- after `seo.images`/`seo.image`/`meta_image`, before native `images`. |
 | `keywords` | array | `[]` | JSON-LD `keywords` fallback ONLY. No `<meta name="keywords">` is ever emitted. |
@@ -204,7 +224,7 @@ The full annotated surface:
 | --- | --- | --- | --- |
 | `name` | string | `params.seo.organization.name` -> `site.Title` | `WebSite.name` override. |
 | `alternate_name` | string | `""` | `WebSite.alternateName`. Google suggests the lowercase domain as a backup site name. |
-| `search_url_template` | string | `""` | Enables the SearchAction / Sitelinks Search Box. MUST contain the literal `{search_term_string}`; relative values are absolutized with `absURL`. Missing the placeholder emits a site-wide warn and no SearchAction. |
+| `search_url_template` | string | `""` | Enables the SearchAction / Sitelinks Search Box. MUST contain the literal `{search_term_string}`; a site-root or relative value is absolutized against the full `baseURL`, path included. Missing the placeholder emits a site-wide warn and no SearchAction. |
 
 ### Organization (`params.seo.organization.*`, home + optional flagged About page)
 
@@ -525,10 +545,21 @@ Merge semantics: on the index axis any `noindex` wins, on the follow axis any `n
 
 All multilingual output is gated on `hugo.IsMultilingual`. On a monolingual site NO hreflang and NO `og:locale:alternate` are emitted (Google discourages self-only hreflang); `og:locale` alone emits.
 
-- **hreflang + x-default:** `head-meta.html` iterates `.AllTranslations` (which includes the current page, so one range yields the full symmetric set) and emits `<link rel="alternate" hreflang="{{ .Language.Locale }}" href="{{ .Permalink }}">` per translation -- absolute URLs, hreflang from `.Language.Locale` (RFC 5646 language-TERRITORY, e.g. `en-US`, `de-DE`). A translation whose resolved robots directive contains `noindex` is skipped, so Google never sees an hreflang pointing at a noindexed URL; when the current page itself is noindex, the whole hreflang block is suppressed. x-default targets the DEFAULT-LANGUAGE variant, selected by `.Language.IsDefault` (ordering-independent); when no default-language translation of the page exists, x-default is omitted -- never fabricated, never self-pointed.
+- **hreflang + x-default:** `head-meta.html` iterates `.AllTranslations` (which includes the current page, so one range yields the full symmetric set) and emits `<link rel="alternate" hreflang="{{ .Language.Locale }}" href="{{ .Permalink }}{{ pager suffix }}">` per translation -- absolute URLs, hreflang from `.Language.Locale` (RFC 5646 language-TERRITORY, e.g. `en-US`, `de-DE`). A translation whose resolved robots directive contains `noindex` is skipped, so Google never sees an hreflang pointing at a noindexed URL; when the current page itself is noindex, the whole hreflang block is suppressed. x-default targets the DEFAULT-LANGUAGE variant, selected by `.Language.IsDefault` (ordering-independent); when no default-language translation of the page exists, x-default is omitted -- never fabricated, never self-pointed.
 - **og:locale / og:locale:alternate:** `og:locale` is `.Language.Locale` underscore-normalized (`en_US`). `og:locale:alternate` is emitted per other translation, only under `hugo.IsMultilingual`.
 - **`locale` recommendation:** when a language's `locale` is unconfigured, `.Language.Locale` falls back to `.Language.Name` (e.g. `en`) -- valid but region-less. Set `locale` per language (`[languages.en] locale = "en-US"`, `[languages.de] locale = "de-DE"`) for the full `ll_TT` `og:locale` and hreflang form. (`locale` replaced the `languageCode` key, which Hugo deprecated in v0.158.0.)
+- **Pagers:** on a pager beyond the first, every href carries the pager suffix (`page/2/`) that Hugo appended for the current document, applied to each translation's own permalink, so the cluster served at `/posts/page/2/` names `/posts/page/2/` and `/de/posts/page/2/` rather than the two first-pager URLs. See [Pagination](#pagination).
 - **Per-language params:** because `[params.seo]` can be declared per language and everything reads through the `.Param` cascade, the Organization name, description, default image, title suffix, twitter handle, and verification codes can all differ per language. The WebSite/Organization `@id`s derive from the per-language `site.Home.Permalink`, so each language site has its own entity -- correct, since names and descriptions legitimately differ per language.
+
+## Pagination
+
+Hugo renders one list `Page` object once per pager, and `.Permalink` stays pinned to the FIRST pager on every one of them. Left at that, the document published at `/posts/page/2/` would declare `/posts/` as its canonical URL, its `og:url`, its JSON-LD `@id`s and its `WebPage` `url`, and would be missing from its own hreflang cluster -- two published documents claiming one identity. The module resolves the URL that actually served the document (`resolve/pager.html`) and derives every self-referencing URL from it: `rel="canonical"` and `og:url` name the pager URL; the `WebPage`/`CollectionPage` `@id` and `url`, the `BreadcrumbList` `@id` and the final crumb are anchored on it; and each hreflang alternate names the corresponding pager of its language. The first pager is unchanged -- its URL is the page permalink. `rel="next"` / `rel="prev"` are never emitted (Google dropped support), which is precisely why the self-referencing pager URL matters.
+
+An explicit `seo.canonical` (or the legacy `canonical` alias) still wins on every pager: an override is a statement about the page, and the module never overrules it.
+
+The module never INITIALIZES pagination. Hugo builds a paginator once per page output and the first invocation wins, so a head partial that reached for `.Paginator` would build it with the site defaults and hand that cached paginator back to a list template that asked for its own collection and its own pager size -- republishing the section with the wrong entries and the wrong number of pagers. The paginator is therefore read only on a render where the list template must already have built it, and a list template keeps full control of what it paginates.
+
+One limit worth naming: the pager suffix is applied to every translation, so when a translated section publishes FEWER pagers than the current language, its alternate names a pager that language does not publish. The module states the correspondence it can see; keeping paginated sections the same shape across languages is the site's job.
 
 ## Extension Hooks
 
@@ -592,7 +623,9 @@ Sites carrying legacy `meta_*`-style front matter (`meta_title`, `meta_descripti
 
 ## Module Structure
 
-The module ships only `layouts/` plus the two identity files and this README; it needs no `assets/`, `static/`, `data/`, `i18n/`, `content/`, or `archetypes/` (SEO metadata is fully derived from consumer front matter and site params). All partials live under `layouts/_partials/seo/` in three override tiers: RENDERERS at the `seo/` root change WHAT is output, RESOLVERS under `seo/resolve/` change HOW a value is chosen, NODE BUILDERS under `seo/jsonld/` change ONE schema type's shape; `seo/lib/` holds internal cross-cutting utilities.
+The module ships `layouts/` plus the two identity files, this README, and a `test/` directory carrying its validation suite; it needs no `assets/`, `static/`, `data/`, `i18n/`, `content/`, or `archetypes/` (SEO metadata is fully derived from consumer front matter and site params).
+
+`test/` holds a Hugo fixture site and Node build-output assertions, run with `bash modules/seo/test/run-tests.sh` (or `run-tests.cmd` on Windows). It builds the fixture eight times -- with `[seo.alternates]`, `[seo.links]` and `content_license` unset and then set, under a `baseURL` that carries a path, with those namespaces written as bare scalars, with the kill switch off, with a second language whose params set a noindex baseline, with a two-language paginated section, and with `jsonld_container` switched to `"graph"` -- because a surface that is always on is indistinguishable from one that works unless both are checked, a URL that drops the baseURL path is indistinguishable from a correct one at a domain root, a URL pinned to the first pager is indistinguishable from a correct one until a document is served from a pager, and the `@graph` serialization site is reached by no other build. See [`test/README.md`](test/README.md). All partials live under `layouts/_partials/seo/` in three override tiers: RENDERERS at the `seo/` root change WHAT is output, RESOLVERS under `seo/resolve/` change HOW a value is chosen, NODE BUILDERS under `seo/jsonld/` change ONE schema type's shape; `seo/lib/` holds internal cross-cutting utilities.
 
 ```text
 modules/seo/
@@ -618,7 +651,10 @@ modules/seo/
           robots.html                      # Returns {robots, bots} -- the merged robots directive string and the per-bot map.
           types.html                       # Returns {typeSet, ogType} via the dispatch ladder.
           id.html                          # Returns the canonical @id string for a node kind.
+          pager.html                       # Returns {number, suffix, url} for the current document: the pager URL that served it, the suffix that pager adds, and its 1-based number. Reads the paginator only on a render where the list template has already built one.
         lib/
+          as-list.html                     # Returns a consumer-authored value as something safe to range: nil becomes an empty slice, a scalar becomes a one-item slice, a slice or map passes through. Without it a documented list written as a bare scalar stops the build.
+          absolute-url.html                # Returns an absolute URL for a consumer-authored value, normalizing the leading-slash form so absURL keeps the baseURL path; scheme-carrying and protocol-relative values pass through untouched.
           warn.html                        # Emits one deduplicated warnf per (warning-key, page) via a hugo.Store sentinel.
           enum.html                        # Returns the validated enum value or "" for applicationCategory, availability, itemCondition, gender, interaction types, return-policy category.
           time.html                        # Returns an RFC 3339 string for any time.Time value, or "" (with a deduplicated warn) when unparseable, or "" silently when zero; the single date-format authority.
@@ -637,6 +673,7 @@ modules/seo/
           softwareapplication.html         # Returns the SoftwareApplication node dict (co-typing, enum-validated applicationCategory; self-gates).
           videoobject.html                 # Returns the VideoObject node dict (self-gates to name + thumbnailUrl + uploadDate).
           image-object.html                # Returns an ImageObject dict (or bare URL string) from a normalized image dict; reused by every image-carrying node.
+  test/                                    # Validation suite: a Hugo fixture site built three times (unset, configured, and under a subpath baseURL) plus Node build-output assertions. See test/README.md.
 ```
 
 Two consumer-authored hook files (`layouts/_partials/seo/head-extra.html` and `layouts/_partials/seo/jsonld-extra.html`) are intentionally NOT shipped; the module calls them only behind `templates.Exists` guards, so both are zero-cost until you opt in.

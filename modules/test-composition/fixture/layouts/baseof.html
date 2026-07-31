@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="{{ site.Language.Locale }}">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {{/* The seo module's whole surface is head markup, so it composes only
+         if this call still renders alongside the other two modules. */}}
+    {{ partial "seo/head.html" . }}
+  </head>
+  <body>
+    <header>{{ partial "search/modal.html" . }}</header>
+    <main>{{ block "main" . }}{{ end }}</main>
+  </body>
+</html>

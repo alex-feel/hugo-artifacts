@@ -64,8 +64,24 @@
      shorthand, not a shape error; any other non-map value is ignored here
      and warned about by agent-readiness/page-list.html, which is the one
      place that sees every page. */}}
+{{/* The NAMESPACE itself. `[params] agent = false` is the natural shorthand
+     for the documented `[params.agent] enable = false` master switch, and
+     discarded in silence it does nothing at all: every default stays in
+     force and the module publishes its full surface, which is the exact
+     opposite of what the consumer asked for. Presence is `ne nil`, not
+     truthiness, or the falsy spelling -- the likelier one for a kill switch
+     -- would be the one that goes unreported. */}}
 {{- $sitep := site.Params.agent -}}
-{{- if not (reflect.IsMap $sitep) -}}{{- $sitep = dict -}}{{- end -}}
+{{- if ne $sitep nil -}}
+  {{- if not (reflect.IsMap $sitep) -}}
+    {{- partial "agent-readiness/lib/warn.html" (dict
+        "key" "agent-readiness:warn:non-map-namespace"
+        "message" (printf "[agent-readiness] Ignoring [params] agent: the module's whole configuration namespace expects a table but was given %q, so every key keeps its shipped default and the module still publishes. To switch it off site-wide, set [params.agent] enable = false." (printf "%v" $sitep))) -}}
+    {{- $sitep = dict -}}
+  {{- end -}}
+{{- else -}}
+  {{- $sitep = dict -}}
+{{- end -}}
 {{- $pagep := dict -}}
 {{- if not $siteOnly -}}
   {{- $pagep = $page.Params.agent -}}
@@ -91,22 +107,110 @@
 {{/* ---- Nested-map cascade ---- robots and license are SITE-SCOPED and stop
      at the site tier no matter how this partial was called; the rest run
      through all four tiers when the caller is not site-scoped. */}}
+{{/* Each tier contributes only if it really is a map. A tier that set the
+     key to something else is REPORTED rather than skipped in silence:
+     `[params.agent] llms = false` is the natural mis-write of
+     `[params.agent.llms] enable = false`, and skipping it silently leaves the
+     shipped `enable = true` in force, so the surface the consumer meant to
+     switch off keeps publishing -- exit 0, no warning, the opposite of what
+     was asked. */}}
 {{- $maps := dict -}}
+{{/* PRESENCE is tested with `ne nil`, never with `with`. Go's `with` runs its
+     body only for a NON-EMPTY value, so `false`, `0` and `""` are
+     indistinguishable from absent to it -- and `[params.agent] llms = false`,
+     the very mis-write these warnings exist for, is falsy. Gating on `with`
+     would leave the warning unreachable for exactly the case that motivates
+     it. The scalar cascade above follows the same rule with `isset`, and for
+     the same reason: an explicit `false` at a higher tier must win. */}}
 {{- range $k := slice "robots" "license" -}}
   {{- $m := dict -}}
   {{- with index $defaults $k -}}{{- if reflect.IsMap . -}}{{- $m = merge $m . -}}{{- end -}}{{- end -}}
-  {{- with index $sitep $k -}}{{- if reflect.IsMap . -}}{{- $m = merge $m . -}}{{- end -}}{{- end -}}
+  {{- $tv := index $sitep $k -}}
+  {{- if ne $tv nil -}}
+    {{- if reflect.IsMap $tv -}}{{- $m = merge $m $tv -}}
+    {{- else -}}{{- partial "agent-readiness/lib/warn.html" (dict
+        "key" (printf "agent-readiness:warn:non-map-table:%s" $k)
+        "message" (printf "[agent-readiness] Ignoring [params.agent] %s: it expects a table but was given %q, so every key inside it keeps its shipped default. Write it as [params.agent.%s]." $k (printf "%v" $tv) $k)) -}}{{- end -}}
+  {{- end -}}
   {{- $maps = merge $maps (dict $k $m) -}}
 {{- end -}}
 {{- range $k := slice "markdown" "llms" "facts" "skills_index" "frontmatter" -}}
   {{- $m := dict -}}
   {{- with index $defaults $k -}}{{- if reflect.IsMap . -}}{{- $m = merge $m . -}}{{- end -}}{{- end -}}
-  {{- with index $sitep $k -}}{{- if reflect.IsMap . -}}{{- $m = merge $m . -}}{{- end -}}{{- end -}}
-  {{- if not $siteOnly -}}
-    {{- with index $pagep $k -}}{{- if reflect.IsMap . -}}{{- $m = merge $m . -}}{{- end -}}{{- end -}}
-    {{- with index $args $k -}}{{- if reflect.IsMap . -}}{{- $m = merge $m . -}}{{- end -}}{{- end -}}
+  {{- range $tier := (cond $siteOnly (slice $sitep) (slice $sitep $pagep $args)) -}}
+    {{- $tv := index $tier $k -}}
+    {{- if ne $tv nil -}}
+      {{- if reflect.IsMap $tv -}}{{- $m = merge $m $tv -}}
+      {{- else -}}{{- partial "agent-readiness/lib/warn.html" (dict
+          "key" (printf "agent-readiness:warn:non-map-table:%s" $k)
+          "message" (printf "[agent-readiness] Ignoring an agent %s value: it expects a table but was given %q, so every key inside it keeps its shipped default. Write it as [params.agent.%s] (or the matching front-matter map)." $k (printf "%v" $tv) $k)) -}}{{- end -}}
+    {{- end -}}
   {{- end -}}
   {{- $maps = merge $maps (dict $k $m) -}}
+{{- end -}}
+
+{{/* ---- Every surface's `enable` is SITE-SCOPED ---- These four keys sit
+     inside all-tiers maps but govern whether an ARTIFACT EXISTS rather than
+     what that artifact contains, and existence is exactly what the surfaces
+     have to agree about. Each one has the same failure shape: a lower tier
+     switches a document off, Hugo publishes no file because the template
+     renders zero bytes, and every OTHER surface -- which resolved its own
+     config from its own tiers, and which asks the output format whether the
+     format is WIRED rather than whether anything was rendered -- keeps
+     linking it. A page-tier `llms.enable = false` on the home page is the
+     sharpest case: /llms.txt vanishes while the tail of every twin still
+     points at it.
+
+     Nothing is lost. The per-page opt-out that KEEPS every surface in
+     agreement already exists: `agent: false` in front matter drops the page
+     from page-list.html and from its twin together. Every remaining key in
+     these maps governs CONTENT and stays settable at all four tiers. */}}
+{{- range $k := slice "markdown" "llms" "facts" "skills_index" -}}
+  {{- $siteOnlyMap := dict -}}
+  {{- with index $defaults $k -}}{{- if reflect.IsMap . -}}{{- $siteOnlyMap = merge $siteOnlyMap . -}}{{- end -}}{{- end -}}
+  {{- $sv := index $sitep $k -}}
+  {{- if and (ne $sv nil) (reflect.IsMap $sv) -}}{{- $siteOnlyMap = merge $siteOnlyMap $sv -}}{{- end -}}
+  {{- if ne (index $siteOnlyMap "enable") nil -}}
+    {{- $maps = merge $maps (dict $k (dict "enable" (index $siteOnlyMap "enable"))) -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---- Lower-tier site-scoped keys warn ---- EVERY site-scoped key is
+     silently discarded when set in page front matter or at a call site, and
+     a silent no-op is the quiet failure class this module exists to avoid.
+     The worst of them is `agent: {enable: false}`, which a reader of the key
+     table reaches for as a per-page opt-out: it is a map, so the non-map
+     guard in lib/page-excluded.html cannot catch it either, and the page
+     keeps its twin and stays listed with nothing said. Each offending key
+     warns once per build, naming the working alternative. */}}
+{{- if not $siteOnly -}}
+  {{- range $tier := slice $pagep $args -}}
+    {{- range $k := $siteScoped -}}
+      {{- if isset $tier $k -}}
+        {{- partial "agent-readiness/lib/warn.html" (dict
+            "key" (printf "agent-readiness:warn:lower-tier-site-scoped:%s" $k)
+            "message" (printf "[agent-readiness] Ignoring the page-level or call-site agent key %q: it is SITE-SCOPED, because every agent surface must select the same page set no matter which page renders it. Set it under [params.agent] instead. To remove ONE page from every surface at once, use `agent: false` (or `agent: {exclude: true}`) in its front matter -- note that `agent: {enable: false}` is NOT that opt-out and does nothing." $k)) -}}
+      {{- end -}}
+    {{- end -}}
+    {{- range $k := slice "robots" "license" -}}
+      {{- with index $tier $k -}}
+        {{- if reflect.IsMap . -}}
+          {{- partial "agent-readiness/lib/warn.html" (dict
+              "key" (printf "agent-readiness:warn:lower-tier-site-scoped:%s" $k)
+              "message" (printf "[agent-readiness] Ignoring a page-level or call-site [%s] table: it is SITE-SCOPED, because it describes the site rather than one page. Set it under [params.agent.%s] instead." $k $k)) -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+    {{- range $k := slice "markdown" "llms" "facts" "skills_index" -}}
+      {{- with index $tier $k -}}
+        {{- if and (reflect.IsMap .) (isset . "enable") -}}
+          {{- partial "agent-readiness/lib/warn.html" (dict
+              "key" (printf "agent-readiness:warn:lower-tier-site-scoped:%s.enable" $k)
+              "message" (printf "[agent-readiness] Ignoring a page-level or call-site `%s.enable`: every surface's `enable` is SITE-SCOPED, because a lower tier that switched one document off would leave every OTHER surface still linking it, with a URL that 404s. To exclude one page from every agent surface at once, set `agent: false` in its front matter; to turn this surface off site-wide, set [params.agent.%s] enable = false." $k $k)) -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
 {{- end -}}
 
 {{/* ---- Boolean normalization ---- Any tier may deliver a real bool, a
@@ -130,6 +234,106 @@
     {{- $m = merge $m (dict $k (in (slice "true" "1" "yes" "on") (lower (printf "%v" (index $m $k | default false))))) -}}
   {{- end -}}
   {{- $maps = merge $maps (dict $mapName $m) -}}
+{{- end -}}
+
+{{/* ---- Slice-shape normalization ---- Every slice-typed key is coerced to a
+     real slice before any renderer ranges over it, because Go's `range`
+     accepts only an array, slice, map, chan or int: a consumer who writes
+     `bots = 'gptbot'` instead of `bots = ['gptbot']` would otherwise abort
+     template execution and STOP THE BUILD, against this module's published
+     contract that it never fails a build over its own configuration
+     (lib/warn.html and the README both state it). A bare scalar becomes a
+     one-element slice and a comma-separated string is split, matching how
+     `sections` has always been handled; each coercion warns once, because a
+     silently-accepted wrong shape is the quiet failure this module avoids. */}}
+{{- $sliceKeys := dict
+  "robots" (slice "allow" "disallow" "bots" "bots_allow" "bots_disallow" "extra")
+  "llms" (slice "sections" "optional")
+  "facts" (slice "sections")
+-}}
+{{- range $mapName, $keys := $sliceKeys -}}
+  {{- $m := index $maps $mapName -}}
+  {{- range $k := $keys -}}
+    {{- $v := index $m $k -}}
+    {{- if and (ne $v nil) (not (reflect.IsSlice $v)) -}}
+      {{- partial "agent-readiness/lib/warn.html" (dict
+          "key" (printf "agent-readiness:warn:scalar-for-list:%s.%s" $mapName $k)
+          "message" (printf "[agent-readiness] The config key %s.%s expects a list but was given the single value %q; reading it as a one-item list. Write it as a TOML array -- %s = [%q] -- so the intent is explicit." $mapName $k (printf "%v" $v) $k (printf "%v" $v))) -}}
+      {{- $m = merge $m (dict $k (slice $v)) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $maps = merge $maps (dict $mapName $m) -}}
+{{- end -}}
+
+{{/* The same hazard one level DEEPER, in the two places a list lives inside a
+     consumer-authored sub-table. Both are ranged raw downstream --
+     `frontmatter.<section>.keys` by markdown-front-matter.html and facts.html,
+     `facts.identity.rows` by facts.html -- and `[params.agent.frontmatter.x]
+     keys = 'title'` is at least as likely a typo as the `bots = 'gptbot'`
+     shape above, because a section vocabulary of one field is ordinary. */}}
+{{- $fm := index $maps "frontmatter" -}}
+{{- if reflect.IsMap $fm -}}
+  {{- range $section, $sectionMap := $fm -}}
+    {{- if not (reflect.IsMap $sectionMap) -}}
+      {{/* A non-map section drops its ENTIRE vocabulary from every twin and
+           from about.md, with no signal: both readers gate on the same
+           reflect.IsMap and simply skip. */}}
+      {{- partial "agent-readiness/lib/warn.html" (dict
+          "key" (printf "agent-readiness:warn:non-map-table:frontmatter.%s" $section)
+          "message" (printf "[agent-readiness] Ignoring [params.agent.frontmatter] %s: a section vocabulary expects a table carrying `keys`, but was given %q, so that section's front matter is described nowhere. Write it as [params.agent.frontmatter.%s] keys = [...]." $section (printf "%v" $sectionMap) $section)) -}}
+    {{- end -}}
+    {{- if reflect.IsMap $sectionMap -}}
+      {{- $v := index $sectionMap "keys" -}}
+      {{- if and (ne $v nil) (not (reflect.IsSlice $v)) -}}
+        {{- partial "agent-readiness/lib/warn.html" (dict
+            "key" (printf "agent-readiness:warn:scalar-for-list:frontmatter.%s.keys" $section)
+            "message" (printf "[agent-readiness] The config key frontmatter.%s.keys expects a list but was given the single value %q; reading it as a one-item list. Write it as a TOML array -- keys = [%q]." $section (printf "%v" $v) (printf "%v" $v))) -}}
+        {{- $fm = merge $fm (dict $section (merge $sectionMap (dict "keys" (slice $v)))) -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $maps = merge $maps (dict "frontmatter" $fm) -}}
+{{- end -}}
+
+{{/* The same hazard again, one level up from the leaf: a consumer-authored
+     SUB-TABLE written as a scalar. `[params.agent.facts] contact = '/contact'`
+     is the natural mis-write of `[params.agent.facts.contact] page =
+     '/contact'` -- the shape the shipped defaults present -- and `default`
+     substitutes only on a FALSY value, so the string survives to facts.html
+     and `.page` is evaluated as a field on a string, which stops the build.
+     Coercing the whole table to an empty dict degrades to "this block is not
+     configured", which is the correct reading of an unusable value. */}}
+{{- $factsMap := index $maps "facts" -}}
+{{- if reflect.IsMap $factsMap -}}
+  {{- range $t := slice "identity" "contact" -}}
+    {{- $tbl := index $factsMap $t -}}
+    {{- if and (ne $tbl nil) (not (reflect.IsMap $tbl)) -}}
+      {{- partial "agent-readiness/lib/warn.html" (dict
+          "key" (printf "agent-readiness:warn:scalar-for-table:facts.%s" $t)
+          "message" (printf "[agent-readiness] [params.agent.facts] %s expects a table but was given the single value %q; ignoring the whole block. Declare it as [params.agent.facts.%s] with its own keys." $t (printf "%v" $tbl) $t)) -}}
+      {{- $factsMap = merge $factsMap (dict $t dict) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $maps = merge $maps (dict "facts" $factsMap) -}}
+
+  {{- $identity := index $factsMap "identity" -}}
+  {{- if reflect.IsMap $identity -}}
+    {{- $rows := index $identity "rows" -}}
+    {{- if and (ne $rows nil) (not (reflect.IsSlice $rows)) -}}
+      {{- partial "agent-readiness/lib/warn.html" (dict
+          "key" "agent-readiness:warn:scalar-for-list:facts.identity.rows"
+          "message" "[agent-readiness] [params.agent.facts.identity] rows expects an array of tables but was given a single value; ignoring it. Declare each row as [[params.agent.facts.identity.rows]] with a label and a key.") -}}
+      {{- $maps = merge $maps (dict "facts" (merge $factsMap (dict "identity" (merge $identity (dict "rows" slice))))) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* `skills` is the same shape hazard one level up, on a top-level key. */}}
+{{- if and (ne (index $cascade "skills") nil) (not (reflect.IsSlice (index $cascade "skills"))) -}}
+  {{- partial "agent-readiness/lib/warn.html" (dict
+      "key" "agent-readiness:warn:scalar-for-list:skills"
+      "message" "[agent-readiness] [[params.agent.skills]] expects an array of tables but was given a single value; ignoring it. Declare each skill as [[params.agent.skills]] with name, description and source.") -}}
+  {{- $cascade = merge $cascade (dict "skills" slice) -}}
 {{- end -}}
 
 {{/* ---- Section allow-list ---- Slice or comma-separated string; each entry
@@ -170,6 +374,15 @@
 {{- range ($llms.sections | default slice) -}}
   {{- if reflect.IsMap . -}}
     {{- $llmsSections = $llmsSections | append (merge . (dict "section" (partial "agent-readiness/lib/section.html" (.section | default "")))) -}}
+  {{- else -}}
+    {{/* A bare string where a table belongs -- `sections = ['blog']` instead
+         of `[[llms.sections]] name = ... section = ...`. It is a real slice, so
+         the scalar coercion above passes it through, and every entry then
+         fails this map test. Dropped silently it would publish a document
+         with an H1 and no sections at all: exit 0, plausible, wrong. */}}
+    {{- partial "agent-readiness/lib/warn.html" (dict
+        "key" (printf "agent-readiness:warn:llms-section-not-a-table:%v" .)
+        "message" (printf "[agent-readiness] Skipping the [[params.agent.llms.sections]] entry %q: an entry must be a table with `name` and `section`, not a bare value. Write it as [[params.agent.llms.sections]] name = '...' section = '...'." (printf "%v" .))) -}}
   {{- end -}}
 {{- end -}}
 {{- $llms = merge $llms (dict "sections" $llmsSections) -}}
@@ -180,6 +393,15 @@
 {{- range ($facts.sections | default slice) -}}
   {{- if reflect.IsMap . -}}
     {{- $factsSections = $factsSections | append (merge . (dict "section" (partial "agent-readiness/lib/section.html" (.section | default "")))) -}}
+  {{- else -}}
+    {{/* A bare string where a table belongs -- `sections = ['blog']` instead
+         of `[[facts.sections]] name = ... section = ...`. It is a real slice, so
+         the scalar coercion above passes it through, and every entry then
+         fails this map test. Dropped silently it would publish a document
+         with an H1 and no sections at all: exit 0, plausible, wrong. */}}
+    {{- partial "agent-readiness/lib/warn.html" (dict
+        "key" (printf "agent-readiness:warn:facts-section-not-a-table:%v" .)
+        "message" (printf "[agent-readiness] Skipping the [[params.agent.facts.sections]] entry %q: an entry must be a table with `name` and `section`, not a bare value. Write it as [[params.agent.facts.sections]] name = '...' section = '...'." (printf "%v" .))) -}}
   {{- end -}}
 {{- end -}}
 {{- $facts = merge $facts (dict "sections" $factsSections) -}}

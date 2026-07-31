@@ -26,8 +26,8 @@
 {{- $seo := $ctx.seo -}}
 {{- $result := dict -}}
 
-{{- $sw := $page.Param "seo.software" | default dict -}}
-{{- $offerData := $page.Param "seo.offer" | default dict -}}
+{{- $sw := partial "seo/lib/as-map.html" (dict "value" ($page.Param "seo.software") "key" "seo.software") -}}
+{{- $offerData := partial "seo/lib/as-map.html" (dict "value" ($page.Param "seo.offer") "key" "seo.offer") -}}
 
 {{- if eq $page.Kind "page" -}}
   {{- $name := $seo.title -}}
@@ -219,7 +219,7 @@
     {{- with $seo.description -}}
       {{- $node = merge $node (dict "description" .) -}}
     {{- end -}}
-    {{- $node = merge $node (dict "url" $page.Permalink) -}}
+    {{- $node = merge $node (dict "url" $seo.pageUrl) -}}
     {{/* sameAs[] from seo.same_as, with the bare top-level same_as key as its
          deprecated alias (consulted only when seo.same_as is unset). */}}
     {{- $sameAs := $page.Param "seo.same_as" -}}

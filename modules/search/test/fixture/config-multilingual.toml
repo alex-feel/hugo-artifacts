@@ -1,0 +1,13 @@
+# Overlay for a STATIC build (hugo --config hugo.toml,config-multilingual.toml).
+#
+# A per-language override of two site-scoped keys. The index is emitted once
+# per language, so a language block that narrows the section allow-list and
+# the result limit must reach the ru index and the ru surfaces alone, and
+# the en build must be untouched by it. The served fixture cannot carry this
+# override: its ru assertions run against the inherited configuration.
+[languages]
+  [languages.ru]
+    [languages.ru.params]
+      [languages.ru.params.search]
+        sections = "blog"
+        results_limit = 3

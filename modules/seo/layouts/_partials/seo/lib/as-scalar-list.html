@@ -1,0 +1,65 @@
+{{/*
+  seo/lib/as-scalar-list.html -- internal utility.
+
+  Purpose: return a consumer-authored value as a slice of SCALAR STRINGS,
+  safe both to `range` and to publish item-by-item.
+
+  WHY IT IS SEPARATE FROM as-list.html: as-list.html hands back something
+  safe to `range` and deliberately passes structure through, because its
+  structure-list callers (breadcrumb trails, video clips) filter each item
+  downstream to the shape they need. The keys handled HERE -- `tags`,
+  `categories`, `seo.keywords` and its legacy alias -- are lists of strings
+  whose items land in published text verbatim: `delimit` joins them into the
+  JSON-LD keywords string, and the article:tag / article:section metas print
+  them into content attributes. A table, list or boolean nested in such a
+  list aborts nothing; it stringifies as Go's debug form (`map[...]` and
+  friends) and ships -- silently, exit 0. Filtering to scalars closes that
+  surface for every caller at once.
+
+  Behavior: nil becomes an empty slice; a usable scalar becomes a one-item
+  slice of its string form; a slice keeps its usable scalar items as strings
+  and drops map, slice, boolean and null entries; a bare map or boolean is
+  dropped whole. Any drop warns ONCE per config key through
+  seo/lib/warn.html -- the warn-and-skip idiom every shape mistake in this
+  module degrades through. An emptied-out list lets a caller's `with` chain
+  fall through to its next source, exactly as an unset key does.
+
+  Expected context (dict):
+  - .value (any)    - the consumer-authored value.
+  - .key   (string) - the config key, named in the warning.
+
+  Return value: a slice whose every element is a string. ONE terminal return.
+*/}}
+
+{{- $out := slice -}}
+{{- $dropped := false -}}
+{{- $v := .value -}}
+{{- $key := .key -}}
+
+{{- if ne $v nil -}}
+  {{- if reflect.IsSlice $v -}}
+    {{- range $v -}}
+      {{- if or (eq . nil) (reflect.IsMap .) (reflect.IsSlice .) (eq (printf "%T" .) "bool") -}}
+        {{- $dropped = true -}}
+      {{- else -}}
+        {{- with printf "%v" . -}}
+          {{- $out = $out | append . -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- else if or (reflect.IsMap $v) (eq (printf "%T" $v) "bool") -}}
+    {{- $dropped = true -}}
+  {{- else -}}
+    {{- with printf "%v" $v -}}
+      {{- $out = slice . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if $dropped -}}
+  {{- partial "seo/lib/warn.html" (dict
+      "key" (printf "seo:warn:non-scalar-list:%s" $key)
+      "message" (printf "[seo] Ignoring one or more entries under %s: it expects a list of scalar values (or one bare scalar), but a table, list, boolean, or null arrived; each unusable entry is skipped and the usable ones are kept." $key)) -}}
+{{- end -}}
+
+{{- return $out -}}

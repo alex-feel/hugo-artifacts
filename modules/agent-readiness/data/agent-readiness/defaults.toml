@@ -9,6 +9,12 @@
 # the tier below it. Keys marked SITE-SCOPED shape site-wide artifacts
 # (robots.txt, llms.txt, about.md, the skills index) and are honored at
 # tiers 1 and 2 only.
+#
+# EVERY surface's own `enable` is SITE-SCOPED -- markdown, llms, facts and
+# skills_index alike -- because those keys govern whether an ARTIFACT EXISTS
+# rather than what it contains, and a lower tier that switched one document
+# off would leave every other surface still linking it with a URL that 404s.
+# The per-page opt-out that keeps all of them in agreement is `agent: false`.
 
 # --- Master switch (SITE-SCOPED) ---
 # Site-scoped deliberately: every surface must select the same page set, and
@@ -30,8 +36,12 @@ search_page_path = "/search"
 # --- robots.txt (SITE-SCOPED) ---
 [robots]
 enable = true
-# Directives for the catch-all User-agent: * group.
-allow = ["/"]
+# Directives for the catch-all User-agent: * group. Both ship EMPTY: a group
+# with no directives is already fully permissive under RFC 9309, and a shipped
+# `Allow: /` would tie against a consumer-configured `Disallow: /` at equal
+# path length -- a tie RFC 9309 section 2.2.2 resolves in favor of Allow, so
+# the configured block would silently never happen.
+allow = []
 disallow = []
 # Content Signals declaration placed inside the User-agent: * group.
 # Empty emits no line. Grammar: "search=yes, ai-train=yes, ai-input=yes".
@@ -39,14 +49,19 @@ disallow = []
 content_signal = ""
 # Named tokens from data/agent-readiness/bots.toml, each emitted as its own group.
 bots = []
-# Directives applied to every group named in `bots`.
-bots_allow = ["/"]
+# Directives applied to every group named in `bots`. Empty for the same
+# reason as `allow` above: a shipped `Allow: /` would neutralize exactly the
+# `bots_disallow = ["/"]` these groups exist to carry.
+bots_allow = []
 bots_disallow = []
 # Verbatim lines appended after the last group, before Sitemap.
 extra = []
 sitemap = true
 
 # --- Markdown twins ---
+# Every key here is settable at all four tiers EXCEPT `enable`, which is
+# SITE-SCOPED like every other surface switch (see the header note). The
+# remaining keys govern twin CONTENT and are page-settable.
 [markdown]
 enable = true
 # Emit the leading YAML front-matter block.
@@ -71,7 +86,7 @@ sitemap_section_target = "llms"   # "llms" | "sitemap" | "none"
 
 # --- llms.txt ---
 [llms]
-enable = true
+enable = true   # SITE-SCOPED (see the header note on surface switches)
 title = ""     # falls back to site.Title
 summary = ""   # the required one-line blockquote
 notes = ""     # optional free prose after the blockquote
@@ -88,7 +103,7 @@ optional = []
 
 # --- /about.md (aggregated facts document) ---
 [facts]
-enable = true
+enable = true   # SITE-SCOPED (see the header note on surface switches)
 title = ""     # falls back to the agent_facts_title i18n string, then site.Title
 summary = ""   # optional one-line blockquote under the H1
 # Link each entry's Markdown twin alongside its HTML URL.
@@ -116,7 +131,7 @@ sitemap_section = true
 
 # --- /.well-known/agent-skills/ ---
 [skills_index]
-enable = true
+enable = true   # SITE-SCOPED (see the header note on surface switches)
 schema = "https://schemas.agentskills.io/discovery/0.2.0/schema.json"
 # Consumer-declared array of tables; empty emits NO file at all. Shape:
 #   [[params.agent.skills]] name = "…" description = "…" source = "<pinned raw URL>"

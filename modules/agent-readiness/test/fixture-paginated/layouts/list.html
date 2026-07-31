@@ -1,0 +1,11 @@
+{{ define "main" }}
+  <h1>{{ .Title }}</h1>
+  {{ .Content }}
+  {{/* The list ranges the PAGER rather than .Pages, which is what makes Hugo
+       publish /posts/page/2/ and /posts/page/3/ at all. */}}
+  {{ $paginator := .Paginate .Pages }}
+  <ul>
+    {{ range $paginator.Pages }}<li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>{{ end }}
+  </ul>
+  <p class="pager-identity">pager={{ $paginator.PageNumber }} url={{ $paginator.URL }} self={{ .RelPermalink }}</p>
+{{ end }}

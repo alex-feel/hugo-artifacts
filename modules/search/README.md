@@ -44,6 +44,21 @@ For local development against a checkout of this repository, use a `hugo.work` w
 
 Troubleshooting: if surfaces warn that the index is not wired even though you completed Step 3, check the import for `ignoreConfig = true` -- it suppresses the module's whole `hugo.toml`, including the output-format definition and the vendor mount. Diagnose with `hugo config | grep -i searchindex`. If the index file is missing with no warning, check `disableKinds` for `home` (the index is a home-page output) and inspect template resolution with `hugo build --logLevel debug`.
 
+### Combining this module with other modules that wire output formats
+
+Path A above edits a table you may already own: your site configuration holds exactly ONE `[outputs]` table, and its lists are the union of every module's needs. A second `[outputs]` table in the same file fails the configuration load outright (`unmarshal failed: toml: table outputs already exists`); pasting one module README's `[outputs]` block over another's leaves a single table that loads cleanly, exits 0, warns about nothing -- and silently stops publishing every document the replaced list asked for, this module's search corpus included. So do not copy the block above into a site that already has one: MERGE `searchindex` into the list already there.
+
+A site importing this module together with [`agent-readiness`](../agent-readiness/README.md) wires all of them at once:
+
+```toml
+[outputs]
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'agentfacts', 'agentskills', 'searchindex', 'opensearch']
+  section = ['html', 'rss', 'markdown']
+  page = ['html', 'markdown']
+```
+
+Only `[outputs]` needs this care. `[outputFormats]` and `[mediaTypes]` DO merge additively from module configuration, which is why `searchindex`, `opensearch`, `llmstxt`, `agentfacts` and `agentskills` are usable by name in the list above although the site defines none of them. Naming `opensearch` there is harmless while `params.search.opensearch.enable` is unset: the format stays wired and publishes nothing. The [`seo`](../seo/README.md) module defines no output format of its own, but it READS this list: `[seo.alternates] formats` advertises exactly the formats your `[outputs]` lists wire for that page kind. The combination is covered by the cross-module suite in [`modules/test-composition/`](../test-composition/README.md).
+
 ### Content Security Policy
 
 Under a granular CSP the module needs exactly this directive set: `script-src 'self'` (covers the fingerprinted module script AND the dynamic `import()` fallback), `worker-src 'self'` (browsers resolve workers through the `worker-src` -> `child-src` -> `script-src` fallback chain), `connect-src 'self'` (the index `fetch` -- a site whose `connect-src` is an explicit API-endpoint allow-list otherwise gets a permanently erroring search), and `img-src 'self'` plus any external thumbnail origins when `show_image` is on. The module defaults require NO `'unsafe-inline'` for scripts and NO `blob:`; only the consumer-side `blob:` worker wrapper described under Performance additionally needs `worker-src blob:`. A `style-src`/`style-src-attr` policy without `'unsafe-inline'` blocks the dual-hidden controls' inline `display:none` with console violations while the `hidden` attribute still applies -- functionally harmless, and exactly why the dual mechanism exists.
@@ -98,6 +113,8 @@ The index template emits one envelope per language (`/searchindex.json`, `/ru/se
 
 Each record carries: `href` (the page's relative permalink; also the engine's document id), `title`, `section` and `sectionTitle` (grouping key and label), `date` (`YYYY-MM-DD`, omitted when the page has none), `description`, `summary` (truncated to `summary_max_length`), `keywords` (extra matching terms: front matter `search.keywords` when present, else the standard `keywords` front matter), one array per configured taxonomy (`tags`, `categories` by default), `content` (indexed body text, truncated to `content_max_length`; never stored client-side), `image` (only when `show_image` is enabled at the defaults or site tier), and `headings` (sub-records with `id`/`level`/`title`, only when `headings = true`).
 
+Authored strings reach the index exactly as written: `title`, `description` and `keywords` come straight from the front matter, so angle brackets, ampersands, quotation marks, backslashes, embedded newlines and non-ASCII all survive, and a title such as `Using <div> elements` is indexed under that spelling. Entity spellings are decoded in every text field the module composes -- the authored ones (`title`, `sectionTitle`, `description`, `keywords`) and the rendered ones (`summary`, `content`, the heading titles) alike -- so a title written `R&amp;D` is indexed as `R&D` and a result label reads as the page reads. The taxonomy arrays are the exception: they carry Hugo's own term titles verbatim, and Hugo title-cases a title it derives from the term name. The fields sourced from RENDERED markup -- `summary` and `content` -- are additionally stripped of tags, because there they are markup rather than text.
+
 Inclusion rules, in order: the index ranges over regular pages only (sections, taxonomy pages, and the home page are structurally absent, and drafts, future, and expired pages never reach normal builds); the `sections` allow-list filters case-insensitively at path-segment boundaries (`docs` never matches `docs-internal`, and `docs/guides` never matches `docs/guides-old`); front matter `search: false` or `search.exclude: true` removes a page; the dedicated search page itself (resolved from `page_path`) is dropped so its own UI text never surfaces as a result; and a page whose front matter `robots` contains `noindex` is dropped too -- a page hidden from crawlers should not surface in site search. The last two rules are overridable per page by explicitly setting `search.exclude: false`. A structural alternative: front matter `build.list: never` (or `local`) removes a page from ALL site collections including this index. Records also dedupe by permalink: `href` is the engine's document id and duplicate ids would break client-side search, so when two pages resolve to the same permalink (colliding `url` front matter) the first record wins and the collision warns once per build.
 
 Warnings worth knowing: `hugo server -D` indexes drafts locally; `disableKinds = ['home']` silently kills the home-wired index; taxonomy, term, and section pages are deliberately not indexed.
@@ -120,6 +137,8 @@ The URL template is derived from the same `page_path` value every other surface 
 
 The document is emitted once, from the default language: its output format sets `root = true`, which pins one published path, and a per-language document would overwrite it with the last writer winning.
 
+Every value the document interpolates -- the site title in `ShortName` and `Description`, and both `Url` templates -- is escaped with `transform.XMLEscape`. The output format sets `isPlainText = true`, which selects Go's `text/template` so the HTML escaper cannot mangle the markup, and `text/template` escapes nothing at all; a site titled `R&D Notes` would otherwise publish a bare ampersand as an undefined entity reference and no conformant XML parser would accept the document. The 16- and 1024-character caps are applied **before** escaping, so they count real characters and can never bisect an entity.
+
 **Audience note, stated plainly.** Browser-toolbar search autodiscovery is largely dead in modern Chrome and Firefox UI, so the realistic consumers are agents and crawlers that still honor `rel="search"`. This is a low-value, low-cost addition; it should not gate anything. Pair it with the `seo` module's `[seo.links] search` key to emit the matching `<link rel="search">`.
 
 ## Language handling
@@ -140,7 +159,7 @@ Serialized-index caching (`cache = "auto"`) persists the BUILT index in Cache St
 
 ## Configuration
 
-Four tiers, lowest to highest precedence: the shipped `data/search/defaults.toml`, site `[params.search]`, page front matter `search:` (a map), and call-site arguments on the partial or shortcode. PRESENCE wins at every tier, so an explicit `false` or empty value overrides the tier below it. Values are shape-tolerant: list keys accept a slice or a comma-separated string, booleans accept `true`/`1`/`yes`/`on` and their negatives, and `boost` maps merge across tiers so overriding one field keeps the shipped weights for the rest.
+Four tiers, lowest to highest precedence: the shipped `data/search/defaults.toml`, site `[params.search]`, page front matter `search:` (a map), and call-site arguments on the partial or shortcode. PRESENCE wins at every tier, so an explicit `false` or empty value overrides the tier below it. Values are shape-tolerant: list keys accept a slice or a comma-separated string, booleans accept `true`/`1`/`yes`/`on` and their negatives, and `boost` maps merge across tiers so overriding one field keeps the shipped weights for the rest. A value written in a shape the key has no reading for -- a table or a boolean where a list belongs, a scalar where the `boost` or `opensearch` table belongs -- is reported once per key in the build log and falls back to the shipped default, so a mis-shaped value degrades visibly instead of silently emptying the index.
 
 Scope notes: the emitted index is site-wide, so INDEX-TIME keys are resolved from the defaults and site tiers only; all surfaces on a page share ONE client-side backend and one built index, so the BACKEND-SCOPED keys (`stemming`, `stopwords`, `stopwords_extra`, `worker`, `cache`) are likewise site-tier-only. Everything a surface may legitimately vary -- the per-query engine options (`fuzzy`, `prefix`, `boost`), the limits and input behavior, and the display toggles -- remains overridable at the page and call-site tiers.
 
@@ -150,8 +169,8 @@ Kill switches: site `params.search.enable = false` disables every surface AND em
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `sections` | list or CSV | `[]` | Sections to index: top-level names or nested path prefixes like `docs/guides`; `docs`, `/docs`, and `docs/` all work, and matching is case-insensitive (entries are lowercased to match Hugo's lowercase page paths). Empty indexes ALL regular pages. The sentinel `["mainSections"]` scopes to `site.MainSections`. INDEX-TIME. |
-| `taxonomies` | list or CSV | `["tags", "categories"]` | Taxonomies serialized into records and matched during search; every listed taxonomy becomes a search field and accepts a `boost.<name>` key. Only `tags` and `categories` have display slots; other listed taxonomies match but are not displayed. A taxonomy named like a reserved record field (`href`, `title`, `section`, `sectionTitle`, `date`, `description`, `summary`, `keywords`, `content`, `image`, `headings` -- matched case-insensitively) is skipped with a warning, because serializing it would clobber that field. INDEX-TIME. |
+| `sections` | list or CSV | `[]` | Sections to index: top-level names or nested path prefixes like `docs/guides`; `docs`, `/docs`, and `docs/` all work, and matching is case-insensitive (entries are lowercased to match Hugo's lowercase page paths). Empty indexes ALL regular pages. The sentinel `["mainSections"]` scopes to `site.MainSections`. A table or boolean written here warns once and falls back to the default, because a stringified table would allow-list an entry no page matches and empty the whole index. INDEX-TIME. |
+| `taxonomies` | list or CSV | `["tags", "categories"]` | Taxonomies serialized into records and matched during search; every listed taxonomy becomes a search field and accepts a `boost.<name>` key. Only `tags` and `categories` have display slots; other listed taxonomies match but are not displayed. A table or boolean written here warns once and falls back to the default. A taxonomy named like a reserved record field (`href`, `title`, `section`, `sectionTitle`, `date`, `description`, `summary`, `keywords`, `content`, `image`, `headings` -- matched case-insensitively) is skipped with a warning, because serializing it would clobber that field. INDEX-TIME. |
 | `content` | string | `"full"` | Body strategy: `full` (plain text, truncated), `summary`, or `none`. INDEX-TIME. |
 | `content_max_length` | int | `8000` | Character bound for indexed body text; `0` = unlimited. INDEX-TIME. |
 | `summary_max_length` | int | `240` | Character bound for the stored result summary. INDEX-TIME. |
@@ -164,7 +183,7 @@ Kill switches: site `params.search.enable = false` disables every surface AND em
 | `prefix` | bool | `true` | Prefix-match the final query term. |
 | `stemming` | bool | `true` | Language-aware stemming (en Porter2 + ru Snowball), symmetric. BACKEND-SCOPED. |
 | `stopwords` | bool | `true` | Apply the built-in per-language stopword lists. BACKEND-SCOPED. |
-| `stopwords_extra` | list or CSV | `[]` | Extra stopwords, added to the built-ins. BACKEND-SCOPED. |
+| `stopwords_extra` | list or CSV | `[]` | Extra stopwords, added to the built-ins. A table or boolean written here warns once and falls back to the default. BACKEND-SCOPED. |
 | `boost.*` | floats | title 5, headings 3, description 2, keywords 2, tags 1.5, content 1 | Per-field BM25 relevance weights; dotted keys, merged across tiers. |
 | `show_description` | bool | `true` | Show each result's description/summary line. |
 | `show_image` | bool | `false` | Show result thumbnails; also INDEX-TIME (the image field is emitted only when enabled at the defaults or site tier). |
@@ -188,7 +207,7 @@ Call-site-only keys on the partials and the shortcode: `class` (appended to the 
 
 ### Validation
 
-Every misconfiguration warns once per build (deduplicated; under Hugo's parallel page rendering, a warning that embeds per-caller context can rarely surface more than once) or degrades: a non-map `params.search` or `search:` front matter value is ignored with a warning (except the bare `search: false` opt-out shorthand), malformed numbers fall back to the shipped defaults, an unknown shortcode surface renders the page surface, an unparseable hotkey disables the hotkey, a taxonomy named like a reserved record field is skipped, an unwired output format renders the page surface's form but no modal, no inline surface, and no scripts, and a missing search page warns per language while every link falls back to the configured path. The single build-failing error is calling an entry partial with something other than a Page -- a wiring mistake, not a content problem.
+Every misconfiguration warns once per build (deduplicated; under Hugo's parallel page rendering, a warning that embeds per-caller context can rarely surface more than once) or degrades: a non-map `params.search` or `search:` front matter value is ignored with a warning (except the bare `search: false` opt-out shorthand), a scalar written where one of the table-valued keys belongs (`boost`, `opensearch` -- including the natural `opensearch = true` shorthand mis-write of `opensearch.enable = true`) is ignored with a warning while the shipped table stays in force, a map-shaped `images` front matter entry contributes the first usable scalar among its `src`, `url`, and `image` keys (a boolean or otherwise falsy key value has no path spelling and counts as absent) and warns when it carries none while the page-bundle image fallback still applies, a first `images` entry that is itself a list or boolean likewise warns and leaves the thumbnail to that fallback, a map- or boolean-shaped `search.keywords` value is ignored with a warning while the standard `keywords` fallback still applies, a map, nested list or boolean entry inside a keywords list is skipped with a warning while the scalar entries beside it still index, malformed numbers fall back to the shipped defaults, an unknown shortcode surface renders the page surface, an unparseable hotkey disables the hotkey, a taxonomy named like a reserved record field is skipped, an unwired output format renders the page surface's form but no modal, no inline surface, and no scripts, and a missing search page warns per language while every link falls back to the configured path. The single build-failing error is calling an entry partial with something other than a Page -- a wiring mistake, not a content problem.
 
 ## CustomEvents reference
 
@@ -253,7 +272,7 @@ Shipped glyphs: `search` and `close` -- inline SVGs using `stroke="currentColor"
 
 ## Validation
 
-The Playwright suite under [`test/`](test/) validates the module against the multilingual fixture site in `test/fixture` (index shape and filters, the no-JavaScript baseline, enhancement and lazy loading, English and Russian recall, the modal and inline keyboard models, live regions, XSS robustness, caching, and the event contract); see [`test/README.md`](test/README.md) for how to run it. Repository CI verifies `go.mod` parsing, the standalone `hugo mod graph`, and the lint suite; the Playwright suite runs locally.
+The Playwright suite under [`test/`](test/) validates the module against the multilingual fixture site in `test/fixture` (index shape and filters, index serialization of the authored front matter characters, the configuration-shape matrix, pagination, per-language configuration, the no-JavaScript baseline, enhancement and lazy loading, English and Russian recall, the modal and inline keyboard models, live regions, robustness against hostile payloads, caching, and the event contract); see [`test/README.md`](test/README.md) for how to run it. Repository CI verifies `go.mod` parsing, the standalone `hugo mod graph`, and the lint suite; the Playwright suite runs locally.
 
 ## Module Structure
 
@@ -304,6 +323,7 @@ modules/search/
 │           └── lib/
 │               ├── warn.html           # deduplicated warning funnel
 │               ├── guard.html          # config-shape guard
+│               ├── listparam.html      # list-valued config key normalizer
 │               ├── record.html         # per-page index record builder
 │               └── headings.html       # heading-tree walker
 └── test/                               # Playwright suite + fixture (see test/README.md)

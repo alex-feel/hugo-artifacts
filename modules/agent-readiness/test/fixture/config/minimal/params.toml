@@ -1,0 +1,40 @@
+# The `minimal` environment strips the fixture back to the shape a consumer
+# gets when they import the module and configure almost nothing. That shape is
+# both the commonest real deployment and, until this environment existed, the
+# only one no build covered: `_default` deliberately configures every surface,
+# so three acceptance criteria that are ABOUT the unconfigured case had no
+# build to be asserted against.
+#
+# It reaches exactly three states the other environments cannot:
+#
+#   1. robots.txt with no Content-Signal, no bot groups and no extra lines --
+#      the default shape, whose exact blank-line separation and trailing
+#      newline were broken once already and fixed with no test to lock them.
+#   2. Zero declared skills, where the index must not be published AT ALL. An
+#      empty JSON shell at a .well-known path is a claim of a capability that
+#      does not exist, and the gate that prevents it is a single template
+#      construct whose removal no other build would notice.
+#   3. A facts document with no sections, which must still emit its identity
+#      and contact blocks and no section H2.
+#
+# Everything else is inherited from config/_default, so the content, the module
+# import and the outputs wiring stay in one place.
+[agent]
+  # The SHIPPED DEFAULT allow-list, which no build reached: _default sets two
+  # sections and every other environment inherits them, so `{{- if
+  # $cfg.sections -}}` in page-list.html was always true and a regression
+  # making the empty list admit nothing would ship with the suite green.
+  # Empty must admit EVERY regular page.
+  sections = []
+
+  # Emptied, not removed: an environment overlay merges over the default, so an
+  # absent key would inherit the three skills _default declares.
+  skills = []
+
+  [agent.robots]
+    content_signal = ''
+    bots = []
+    extra = []
+
+  [agent.facts]
+    sections = []

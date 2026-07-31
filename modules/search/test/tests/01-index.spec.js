@@ -72,6 +72,89 @@ test.describe('search index envelope', () => {
     expect(lighthouse.keywords).toEqual(['pharos']);
   });
 
+  test('map-shaped images entries contribute a path, never a stringified map', async ({
+    request,
+  }) => {
+    const res = await request.get('/searchindex.json');
+    expect(res.ok()).toBeTruthy();
+    const env = await res.json();
+
+    // images: [{src: ...}] contributes its src value, exactly as a plain
+    // string entry would.
+    const atlas = env.docs.find((d) => d.href === '/map-image/');
+    expect(atlas).toBeTruthy();
+    expect(atlas.image).toBe('/img/cover.png');
+
+    // A map entry with no usable src/url/image key stays EMPTY, so the
+    // page-bundle resource fallback still finds the bundle cover; a
+    // stringified map would be truthy and suppress it.
+    const harbor = env.docs.find((d) => d.href === '/bundle-image/');
+    expect(harbor).toBeTruthy();
+    expect(harbor.image).toBe('/bundle-image/cover.png');
+
+    // And no record anywhere carries Go's stringified-map spelling.
+    const raw = await res.text();
+    expect(raw).not.toContain('map[');
+  });
+
+  test('present-but-unusable scalar image keys count as absent, so the bundle fallback runs', async ({
+    request,
+  }) => {
+    const res = await request.get('/searchindex.json');
+    expect(res.ok()).toBeTruthy();
+    const env = await res.json();
+
+    // images: [{src: false, url: 0, image: true}]: none of these scalars is
+    // a path, so the walk must skip all three and let the page-bundle cover
+    // land, instead of publishing "false" as the thumbnail path -- which
+    // would also suppress that fallback.
+    const meridian = env.docs.find((d) => d.href === '/falsy-image/');
+    expect(meridian).toBeTruthy();
+    expect(meridian.image).toBe('/falsy-image/cover.png');
+  });
+
+  test('a list-shaped first images entry contributes no thumbnail, so the bundle fallback runs', async ({
+    request,
+  }) => {
+    const res = await request.get('/searchindex.json');
+    expect(res.ok()).toBeTruthy();
+    const env = await res.json();
+
+    // images: [['/img/cover.png']]: the first entry is itself a list, which
+    // has no path spelling, so the walk must leave the field empty and let
+    // the page-bundle cover land instead of publishing a stringified list
+    // -- a shape the universal map[ scan cannot catch.
+    const quadrant = env.docs.find((d) => d.href === '/list-image/');
+    expect(quadrant).toBeTruthy();
+    expect(quadrant.image).toBe('/list-image/cover.png');
+
+    // And no record anywhere opens its image with Go's stringified-slice
+    // bracket spelling.
+    const raw = await res.text();
+    expect(raw).not.toContain('"image":"[');
+  });
+
+  test('unusable keywords shapes degrade to the fallback, never a stringified map', async ({
+    request,
+  }) => {
+    const res = await request.get('/searchindex.json');
+    expect(res.ok()).toBeTruthy();
+    const env = await res.json();
+
+    // search.keywords written as a MAP has no term spelling: the record
+    // builder must ignore it and fall back to the standard keywords front
+    // matter, exactly as if search.keywords were absent.
+    const sextant = env.docs.find((d) => d.href === '/map-keywords/');
+    expect(sextant).toBeTruthy();
+    expect(sextant.keywords).toEqual(['fallback-kw']);
+
+    // A map entry INSIDE a keywords list is skipped while the scalar entry
+    // beside it still indexes.
+    const astrolabe = env.docs.find((d) => d.href === '/mixed-keywords/');
+    expect(astrolabe).toBeTruthy();
+    expect(astrolabe.keywords).toEqual(['listed-kw']);
+  });
+
   test('ru index: envelope and morphology corpus', async ({request}) => {
     const res = await request.get('/ru/searchindex.json');
     expect(res.ok()).toBeTruthy();

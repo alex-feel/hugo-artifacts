@@ -1,0 +1,64 @@
+# The PAGINATED fixture. Its whole purpose is to pin what the enumerating
+# surfaces publish for a section that Hugo splits across pagers.
+#
+# It needs a fixture of its own rather than another environment of the default
+# one: pagination is driven by a `list.html` that calls `.Paginate` and by a
+# content tree large enough to spill past `pagerSize`, and layouts and content
+# are per-fixture rather than per-environment. It also has to leave the
+# section allow-list UNSET, so every regular page is enumerated -- the default
+# fixture pins `sections` to blog and projects, which would drop the paginated
+# section from every surface and make the assertions pass for the wrong
+# reason.
+#
+# Five posts at pagerSize 2 publish /posts/, /posts/page/2/ and /posts/page/3/.
+# A pager is a VIEW of one section, not a page of the site: it carries no
+# content of its own, its identity resolves back to /posts/, and Hugo renders
+# no Markdown twin for it. The surfaces must therefore enumerate the five
+# regular pages and no pager URL.
+baseURL = 'https://paginated.example/'
+title = 'Agent Readiness Paginated Fixture'
+locale = 'en-us'
+
+[pagination]
+  pagerSize = 2
+
+[outputs]
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'agentfacts', 'agentskills']
+  section = ['html', 'rss', 'markdown']
+  page = ['html', 'markdown']
+
+[module]
+
+  [module.hugoVersion]
+    min = "0.160.0"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/agent-readiness"
+
+[params]
+
+  [params.agent]
+
+    [params.agent.llms]
+      title = 'Agent Readiness Paginated Fixture'
+      summary = 'A fixture whose single section is split across three pagers.'
+
+      [[params.agent.llms.sections]]
+        name = 'Posts'
+        section = 'posts'
+        limit = 0
+
+    [params.agent.facts]
+      title = 'About This Paginated Fixture'
+      summary = 'Everything the paginated fixture knows, in one fetch.'
+
+      [[params.agent.facts.sections]]
+        name = 'Posts'
+        section = 'posts'
+
+    # One valid, fetchable skill, so the skills index is actually emitted and
+    # the assertion that it names no pager URL reads a real document.
+    [[params.agent.skills]]
+      name = 'paginated-fixture-skill'
+      description = 'A fixture skill, present so the paginated build emits a real Agent Skills index to assert against.'
+      source = 'https://raw.githubusercontent.com/gohugoio/hugo/v0.160.1/SECURITY.md'

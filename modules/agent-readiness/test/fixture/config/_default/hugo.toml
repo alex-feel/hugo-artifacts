@@ -1,7 +1,7 @@
 # Baseline configuration: every [params.agent.license] key is ABSENT here and
 # both license switches are off, so a default build proves the license
 # surfaces are inert until a consumer opts in. The `configured` environment
-# adds exactly those keys.
+# adds those keys, plus the bot-group directive pair its own header explains.
 baseURL = 'https://fixture.example/'
 title = 'Agent Readiness Fixture'
 locale = 'en-us'
@@ -51,7 +51,7 @@ enableRobotsTXT = true
     # strict YAML loader with duplicate-key detection enabled.
     [params.agent.frontmatter]
       [params.agent.frontmatter.blog]
-        keys = ['title', 'categories', 'tags', 'keywords']
+        keys = ['title', 'categories', 'tags', 'keywords', "probe\nkey"]
       [params.agent.frontmatter.projects]
         keys = ['project_name', 'status', 'period_from', 'period_to', 'repository']
 
@@ -73,6 +73,35 @@ enableRobotsTXT = true
         section = '/projects/'
         limit = 0
 
+      # Three deliberately broken entries. Each one fails INVISIBLY without
+      # its guard -- an empty `section` matches every page, a nameless entry's
+      # bullets are read as belonging to the section above it, and a section
+      # matching nothing publishes a heading that reads as a fact about the
+      # site. All three must be skipped with a warning and contribute no line
+      # to the document.
+      [[params.agent.llms.sections]]
+        name = 'Empty Section Key'
+        section = ''
+        limit = 0
+
+      [[params.agent.llms.sections]]
+        section = '/blog'
+        limit = 0
+
+      [[params.agent.llms.sections]]
+        name = 'Matches Nothing'
+        section = 'no-such-section'
+        limit = 0
+
+      # A truncating entry over the same section as `Blog` above, so one
+      # build proves both halves of the limit contract: 0 lists everything,
+      # a positive value lists exactly that many. Without it the truncation
+      # branch never executes, because every other entry pins limit = 0.
+      [[params.agent.llms.sections]]
+        name = 'Recent Blog'
+        section = 'blog'
+        limit = 1
+
       [[params.agent.llms.optional]]
         name = 'Sitemap'
         url = '/sitemap.xml'
@@ -89,6 +118,19 @@ enableRobotsTXT = true
       [[params.agent.facts.sections]]
         name = 'Projects'
         section = '/projects/'
+
+      # The same three broken shapes as the llms sections above: both surfaces
+      # share the machinery, so both share the guards, and both are proven.
+      [[params.agent.facts.sections]]
+        name = 'Empty Section Key'
+        section = ''
+
+      [[params.agent.facts.sections]]
+        section = '/blog'
+
+      [[params.agent.facts.sections]]
+        name = 'Matches Nothing'
+        section = 'no-such-section'
 
       [params.agent.facts.identity]
         page = '/'
@@ -108,6 +150,17 @@ enableRobotsTXT = true
           label = 'Nonexistent'
           key = 'no_such_key'
 
+        # Map- and list-valued sources, so both non-scalar branches of
+        # lib/flatten-value.html are reached. Without them the map branch is
+        # dead in every build and the slice branch is asserted nowhere.
+        [[params.agent.facts.identity.rows]]
+          label = 'Credential'
+          key = 'credentials'
+
+        [[params.agent.facts.identity.rows]]
+          label = 'Focus'
+          key = 'focus_areas'
+
       [params.agent.facts.contact]
         page = '/contact'
         key = 'channels'
@@ -115,10 +168,10 @@ enableRobotsTXT = true
         value_field = 'value'
         url_field = 'href'
 
-    # Three entries covering all three outcomes: one that fetches and
-    # publishes, one whose source 404s (GetRemote returns nil rather than an
-    # error, so the nil branch is what warns and omits), and one whose name
-    # violates the field rules.
+    # Four entries covering every outcome: one that fetches and publishes,
+    # one whose source 404s (GetRemote returns nil rather than an error, so
+    # the nil branch is what warns and omits), one whose name violates the
+    # field rules, and one that repeats an earlier name.
     [[params.agent.skills]]
       name = 'fixture-skill'
       description = 'A fixture skill used to prove the fetch, republish and digest chain end to end.'
@@ -133,3 +186,12 @@ enableRobotsTXT = true
       name = 'Invalid--Name'
       description = 'Its name breaks the field rules, so the module warns once and skips it.'
       source = 'https://raw.githubusercontent.com/gohugoio/hugo/v0.160.1/SECURITY.md'
+
+    # A fourth: a valid, fetchable entry that repeats the first entry's name.
+    # The name is the sole published path segment, so publishing both would
+    # serve one file while advertising two digests for it -- at least one of
+    # which could not match the bytes at its own URL.
+    [[params.agent.skills]]
+      name = 'fixture-skill'
+      description = 'A duplicate name, which must be refused so the digest contract cannot be broken.'
+      source = 'https://raw.githubusercontent.com/gohugoio/hugo/v0.160.1/README.md'

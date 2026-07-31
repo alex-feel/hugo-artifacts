@@ -25,6 +25,16 @@
   Description at 1024; both are truncated here rather than emitted
   over-length, because an over-length value makes the whole document invalid
   to a strict consumer.
+
+  Every interpolated value is escaped with transform.XMLEscape. This document
+  is declared isPlainText, which selects text/template and therefore performs
+  NO escaping of its own -- that is deliberate, so Go's HTML escaper cannot
+  mangle the markup, but it makes escaping this template's own job. A site
+  simply titled "R&D Notes" would otherwise publish a bare ampersand as an
+  undefined entity reference, and no conformant XML parser accepts that --
+  which is to say it would break for exactly the strict machine consumers
+  this document exists to serve. Truncation runs BEFORE escaping so the
+  character caps count real characters rather than entity text.
 */ -}}
 {{- $cfg := partial "search/config.html" (dict "page" . "args" dict) -}}
 {{- if and $cfg.enable $cfg.opensearch.enable site.Language.IsDefault -}}
@@ -35,12 +45,12 @@
   {{- with .OutputFormats.Get "opensearch" -}}{{- $self = .Permalink -}}{{- end -}}
   {{- printf "%s\n" `<?xml version="1.0" encoding="UTF-8"?>` | safeHTML -}}
 <OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
-  <ShortName>{{ substr $shortName 0 16 }}</ShortName>
-  <Description>{{ substr $description 0 1024 }}</Description>
+  <ShortName>{{ substr $shortName 0 16 | transform.XMLEscape }}</ShortName>
+  <Description>{{ substr $description 0 1024 | transform.XMLEscape }}</Description>
   <InputEncoding>UTF-8</InputEncoding>
-  <Url type="text/html" method="get" template="{{ $template }}" />
+  <Url type="text/html" method="get" template="{{ $template | transform.XMLEscape }}" />
   {{- with $self }}
-  <Url type="application/opensearchdescription+xml" rel="self" template="{{ . }}" />
+  <Url type="application/opensearchdescription+xml" rel="self" template="{{ . | transform.XMLEscape }}" />
   {{- end }}
 </OpenSearchDescription>
-{{- end -}}
+{{ end -}}

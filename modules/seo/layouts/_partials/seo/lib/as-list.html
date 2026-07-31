@@ -1,0 +1,49 @@
+{{/*
+  seo/lib/as-list.html -- internal utility.
+
+  Purpose: return a consumer-authored value as something safe to `range`.
+
+  WHY IT EXISTS: Go's `range` accepts only an array, slice, map, chan or int,
+  so a key documented as a list but written as a bare scalar -- `tags: hugo`
+  instead of `tags: [hugo]`, `image_params = "tile_image"` instead of
+  `image_params = ["tile_image"]` -- aborts template execution and STOPS THE
+  CONSUMING SITE'S BUILD. This module's README opens by promising the
+  opposite: "The module never breaks a build over SEO data: every
+  misconfiguration degrades to a deduplicated warnf and a safe fallback, so a
+  broken schema declaration costs you one rich result, never the site."
+
+  The scalar form is not exotic. Hugo front matter accepts `tags: hugo` and
+  `categories: notes` and many sites write them that way, so the failure lands
+  on ordinary content rather than on an unusual configuration.
+
+  Behavior: nil and empty become an empty slice (range does nothing); a slice
+  passes through untouched; a map passes through untouched, because `range`
+  handles it and some callers want the key-value form; anything else becomes a
+  ONE-ITEM slice, which is the reading a consumer writing a bare scalar
+  intended.
+
+  Items are NOT shape-checked here: the structure-list callers (breadcrumb
+  trails, video clips) filter each item downstream to the shape they need. A
+  caller whose items land in published text verbatim uses
+  seo/lib/as-scalar-list.html instead, which keeps only scalar items --
+  passed through here, a map item would stringify into published output as
+  Go's debug form (`map[...]`).
+
+  Expected context: the value (the dot, not a dict). Any type.
+
+  Return value: a rangeable value. ONE terminal return.
+*/}}
+
+{{- $out := slice -}}
+
+{{- if ne . nil -}}
+  {{- if or (reflect.IsSlice .) (reflect.IsMap .) -}}
+    {{- $out = . -}}
+  {{- else -}}
+    {{- with printf "%v" . -}}
+      {{- $out = slice . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $out -}}

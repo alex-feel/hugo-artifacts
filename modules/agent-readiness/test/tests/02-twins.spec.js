@@ -1,4 +1,4 @@
-// Phase 3 -- the Markdown twins.
+// The Markdown twins.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {parse as parseYaml} from 'yaml';
@@ -76,6 +76,18 @@ test('values are emitted through jsonify, so scalars are quoted and safe', () =>
   // the mapping entry ambiguous or invalid.
   assert.match(raw, /^title: "Project Beta: a title, with punctuation"$/m);
   assert.match(raw, /^period_from: "2024-03-01"$/m, 'dates are quoted strings');
+});
+
+test('a front-matter key carrying a line break cannot split the twin mapping line', () => {
+  // The per-section keys are the one consumer-authored string on the KEY
+  // side of the twin's YAML mapping, where jsonify does not already stand
+  // guard: emitted raw, an embedded line break splits the mapping entry
+  // across two lines and strict parsers reject the whole block. A key that
+  // is not a plain token is emitted as its JSON-quoted form, which YAML
+  // reads as the identical key on one line.
+  const raw = splitFrontMatter(read('blog/post-two/index.md')).frontMatter;
+  assert.match(raw, /^"probe\\nkey": "probe value"$/m, 'the hostile key is quoted onto one line');
+  assert.equal(parseStrict(raw)['probe\nkey'], 'probe value', 'the parsed key survives byte-exact');
 });
 
 test('the present sentinel is OMITTED from the twin front matter', () => {

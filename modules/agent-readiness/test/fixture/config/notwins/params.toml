@@ -1,0 +1,52 @@
+# The `notwins` environment: twins switched OFF site-wide while `markdown`
+# stays wired in [outputs].
+#
+# This is the configuration the module itself prescribes for turning twins off,
+# and it is the only one in which the site-scoped `markdown.enable` switch does
+# anything at all -- a consumer who also unwired [outputs] would not need the
+# switch. It exists to hold one invariant that nothing else can reach: when the
+# twins are off, llms.txt and about.md must fall back to HTML permalinks
+# instead of advertising /index.md URLs for files Hugo never wrote.
+#
+# `.OutputFormats.Get "markdown"` keeps returning the format here, because it
+# answers "is this format wired for this page kind" rather than "did anything
+# get rendered into it". That is exactly why the link emitters have to consult
+# the module's own switch, and exactly why this environment is needed to prove
+# they do.
+[agent]
+
+  # The two SCALAR array-of-tables shapes. They live here because notwins
+  # configures neither key, and because TOML cannot mix a scalar with an
+  # array-of-tables header under one key -- which is why the badtables build
+  # carries the bare-string-ARRAY shapes of the same keys instead. Both
+  # guards protect a hard build stop, so both need a build that enters them.
+  #
+  # Declared BEFORE any sub-table header: a bare key after `[agent.markdown]`
+  # would belong to that table, not to [agent].
+  skills = 'not-an-array-of-tables'
+
+  # Three sub-tables written as non-maps. `[params.agent] robots = '...'` is
+  # the natural mis-write of `[params.agent.robots] enable = ...`, and it is
+  # discarded, so every key inside keeps its shipped default -- the OPPOSITE
+  # of what the consumer asked for, silently. One covers the site-scoped
+  # cascade loop, one the all-tiers loop, one a frontmatter section, whose
+  # whole vocabulary would otherwise vanish from every twin and from about.md.
+  robots = 'not-a-table'
+  skills_index = 'not-a-table'
+
+  # The FALSY half of the same mis-write, on the SITE-SCOPED loop. `with`
+  # treats false, 0 and "" as absent, so a with-gated guard is unreachable for
+  # exactly this value -- which is the mis-write the guard exists for. The key
+  # is `license` rather than `llms` because a falsy value REPLACES the whole
+  # table at the Hugo config layer, and this build's other assertions need the
+  # inherited llms configuration intact.
+  license = false
+
+  [agent.markdown]
+    enable = false
+
+  [agent.facts.identity]
+    rows = 'not-an-array-of-tables'
+
+  [agent.frontmatter]
+    blog = 'title'

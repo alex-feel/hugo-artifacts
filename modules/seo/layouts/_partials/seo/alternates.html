@@ -59,15 +59,19 @@
 {{- $page := .page -}}
 {{- $seo := .seo -}}
 
-{{/* ---- Alternate representations ---- */}}
-{{- $formats := $page.Param "seo.alternates.formats" -}}
-{{- if reflect.IsSlice $formats -}}
-  {{- range $formats -}}
-    {{- $name := trim (printf "%v" .) " \t\n\r" -}}
-    {{- with $name -}}
-      {{- with $page.OutputFormats.Get . }}
+{{/* ---- Alternate representations ---- Coerced through as-list.html rather
+     than gated on IsSlice: gating made `formats = 'markdown'` behave exactly
+     like unset, so the twins were published and never linked -- silently
+     disabling the one surface this partial exists to provide.
+
+     Both comment markers are trimmed. An untrimmed comment preserves the
+     newline before it, which is precisely the stray blank line the
+     regression lock in 01-alternates.spec.js was written to catch. */ -}}
+{{- range partial "seo/lib/as-list.html" ($page.Param "seo.alternates.formats") -}}
+  {{- $name := trim (printf "%v" .) " \t\n\r" -}}
+  {{- with $name -}}
+    {{- with $page.OutputFormats.Get . }}
 <link rel="alternate" type="{{ .MediaType.Type }}" href="{{ .Permalink }}">
-      {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
@@ -75,21 +79,28 @@
 {{/* ---- Static link relations ---- Emission is unconditional on the
      configured value being non-empty, on every page this module's head runs
      on, because each of these targets is constant sitewide. */}}
-{{- $links := $page.Param "seo.links" -}}
+{{- with $page.Param "seo.links" -}}
+{{- $links := . -}}
 {{- if reflect.IsMap $links -}}
   {{- $ogSiteName := $page.Param "seo.organization.name" | default ($page.Param "seo.website.name") | default site.Title -}}
   {{- range $key, $value := $links -}}
     {{- $k := lower (trim (printf "%v" $key) " \t\n\r") -}}
-    {{- $v := trim (printf "%v" $value) " \t\n\r" -}}
+    {{/* Absolutized through the shared routine rather than by piping into
+         absURL directly: a value that already starts with "/" -- which is
+         the form this module documents for all four keys -- resolves against
+         the protocol and host only, discarding the baseURL path, so the
+         direct form emits a 404 in the head of every page on a subpath
+         deployment. */}}
+    {{- $v := partial "seo/lib/absolute-url.html" (dict "value" $value "key" (printf "[seo.links] %s" $k)) -}}
     {{- if $v -}}
       {{- if eq $k "privacy_policy" }}
-<link rel="privacy-policy" href="{{ $v | absURL }}">
+<link rel="privacy-policy" href="{{ $v }}">
       {{- else if eq $k "author" }}
-<link rel="author" href="{{ $v | absURL }}">
+<link rel="author" href="{{ $v }}">
       {{- else if eq $k "license" }}
-<link rel="license" href="{{ $v | absURL }}">
+<link rel="license" href="{{ $v }}">
       {{- else if eq $k "search" }}
-<link rel="search" type="application/opensearchdescription+xml" title="{{ $ogSiteName }}" href="{{ $v | absURL }}">
+<link rel="search" type="application/opensearchdescription+xml" title="{{ $ogSiteName }}" href="{{ $v }}">
       {{- else -}}
         {{- partial "seo/lib/warn.html" (dict
             "key" (printf "seo:warn:unknown-link-rel:%s" $k)
@@ -97,4 +108,15 @@
       {{- end -}}
     {{- end -}}
   {{- end -}}
+{{- else -}}
+  {{/* Set but not a table -- the bracket array-of-tables form, say. Gating
+       silently would lose rel="license", rel="author", rel="search" and
+       rel="privacy-policy" from every page, which is the same
+       behaves-exactly-like-unset failure this file rejects for `formats`
+       twenty lines above. The else nests INSIDE the `with`, so the unset
+       case stays silent. */}}
+  {{- partial "seo/lib/warn.html" (dict
+      "key" "seo:warn:links-not-a-table"
+      "message" (printf "[seo] Ignoring [seo.links]: it expects a table of relation name to URL, but was given %q. Write it as [params.seo.links] with one key per relation." (printf "%v" $links))) -}}
+{{- end -}}
 {{- end -}}

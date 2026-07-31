@@ -1,0 +1,83 @@
+{{/*
+  seo/lib/as-map.html -- internal utility.
+
+  Purpose: return a consumer-authored value as a map, safe to dereference.
+
+  WHY IT EXISTS: every configurable sub-table in this module is read as
+  `$page.Param "seo.<table>" | default dict` and then dereferenced --
+  `$video.thumbnail_url`, `$org.type`, `$profile.given_name`. Hugo's `default`
+  substitutes only on a FALSY value, so a truthy non-map passes straight
+  through and the field access is then evaluated on a string, which Go's
+  template engine rejects outright. That STOPS THE CONSUMING SITE'S BUILD,
+  against this module's README: "The module never breaks a build over SEO
+  data: every misconfiguration degrades to a deduplicated warnf and a safe
+  fallback, so a broken schema declaration costs you one rich result, never
+  the site."
+
+  The trigger is ordinary. `seo: {video: 'dQw4w9WgXcQ'}` is the bare-id
+  spelling the module's own `video_id` alias encourages, and it is truthy, so
+  resolve/types.html types the page VideoObject and head-jsonld.html dispatches
+  to a builder that immediately reads `.thumbnail_url` off a string. A
+  site-level `[seo] organization = 'Acme'` fails the same way on every page.
+
+  A missing table and an unusable one are the same thing to every caller --
+  "this block is not configured" -- so both yield an empty dict, and the
+  caller's existing `with`/`default` chains degrade exactly as they already do
+  for the unset case.
+
+  PRESENCE IS TESTED WITH `ne nil`, NEVER WITH `with`, when the caller asks
+  for it. Go's `with` runs its body only for a NON-EMPTY value, so `false`,
+  `0` and `""` are indistinguishable from absent to it -- and `[params] seo =
+  false` is the natural shorthand a consumer reaches for to switch the module
+  off site-wide. Gated on `with`, that spelling produced no warning at all
+  while the module rendered its full head surface anyway: the consumer's one
+  line did nothing, silently, and the LESS likely truthy spelling of the same
+  mistake was the only one that got a diagnostic.
+
+  `.warn_falsy` distinguishes the two cases. A NAMESPACE read (`params.seo`,
+  `params.metadata`) passes true, because there is no sense in which `false`
+  is a valid value for a namespace. A LEAF table read (`seo.video`,
+  `seo.offer`) leaves it unset, because `video = false` is a reasonable way
+  for a page to say "no video here" when overriding a section cascade, and
+  warning about it would be noise.
+
+  Expected context (dict):
+  - .value      (any)    - the consumer-authored value.
+  - .key        (string) - the config key, named in the warning.
+  - .warn_falsy (bool)   - optional; true to treat a falsy non-map as a
+    mistake worth reporting rather than as "not configured".
+
+  Return value: a map, empty when the input was absent or unusable. ONE
+  terminal return.
+*/}}
+
+{{- $out := dict -}}
+{{- $v := .value -}}
+
+{{/* Two different tests, deliberately. `ne nil` is TRUE for false, so the
+     namespace case reports it; Go's truthiness is FALSE for false, so the
+     leaf case reads it as "not configured" and stays quiet. Note that
+     `$v | default ""` does NOT collapse false to "" -- Hugo returns false
+     unchanged -- so a `default`-based emptiness test would report both. */}}
+{{- $present := false -}}
+{{- if .warn_falsy | default false -}}
+  {{- $present = ne $v nil -}}
+{{- else if $v -}}
+  {{- $present = true -}}
+{{- end -}}
+
+{{- if $present -}}
+  {{- if reflect.IsMap $v -}}
+    {{- $out = $v -}}
+  {{- else -}}
+    {{/* The dedup key carries the VALUE, not just the config key: a scalar on
+         one page and false on another are two different mistakes under the
+         same key, and keyed by name alone they race for one warning slot in
+         page-render order, so which one surfaces is nondeterministic. */}}
+    {{- partial "seo/lib/warn.html" (dict
+        "key" (printf "seo:warn:not-a-table:%s:%v" .key $v)
+        "message" (printf "[seo] Ignoring %s: it expects a table but was given %q, so that block is treated as unconfigured. Write it as a table with its own keys (or the matching front-matter map)." .key (printf "%v" $v))) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $out -}}

@@ -26,7 +26,7 @@
 {{- $seo := $ctx.seo -}}
 {{- $result := dict -}}
 
-{{- $profile := $page.Param "seo.profile" | default dict -}}
+{{- $profile := partial "seo/lib/as-map.html" (dict "value" ($page.Param "seo.profile") "key" "seo.profile") -}}
 
 {{- if eq $page.Kind "page" -}}
   {{/* mainEntity.name: given_name + family_name assembled, else the resolved
@@ -89,14 +89,14 @@
          absolute-URL values from seo.social.* when this profile is the
          site owner (seo.profile.is_site_owner), deduped. */}}
     {{- $sameAs := slice -}}
-    {{- with $profile.same_as -}}
+    {{- with partial "seo/lib/as-list.html" $profile.same_as -}}
       {{- range . -}}
         {{- $sameAs = $sameAs | append . -}}
       {{- end -}}
     {{- end -}}
     {{- if $profile.is_site_owner -}}
-      {{- with $page.Site.Params.seo.social -}}
-        {{- range $k, $v := . -}}
+      {{- with (partial "seo/lib/as-map.html" (dict "value" (index $page.Site.Params "seo") "key" "params.seo" "warn_falsy" true)).social -}}
+        {{- range $k, $v := (cond (reflect.IsMap .) . dict) -}}
           {{- with $v -}}
             {{- $s := string . -}}
             {{- if or (hasPrefix $s "http://") (hasPrefix $s "https://") -}}
@@ -119,7 +119,7 @@
     {{- end -}}
 
     {{/* interactionStatistic[] (InteractionCounter; type enum-validated). */}}
-    {{- with $profile.interaction_statistic -}}
+    {{- with partial "seo/lib/as-map-list.html" $profile.interaction_statistic -}}
       {{- $stats := slice -}}
       {{- range . -}}
         {{- $t := partial "seo/lib/enum.html" (dict
@@ -146,7 +146,7 @@
     {{- end -}}
 
     {{/* agentInteractionStatistic[] (owner's own actions; type enum). */}}
-    {{- with $profile.agent_interaction_statistic -}}
+    {{- with partial "seo/lib/as-map-list.html" $profile.agent_interaction_statistic -}}
       {{- $stats := slice -}}
       {{- range . -}}
         {{- $t := partial "seo/lib/enum.html" (dict

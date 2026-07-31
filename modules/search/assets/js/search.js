@@ -629,13 +629,25 @@ function createListbox(core, config, listbox, seeAll, isInline) {
         terms,
       });
       if (item) {
-        item.addEventListener('click', () => {
+        item.addEventListener('click', (event) => {
           const link = item.querySelector('a');
+          const href = link ? link.getAttribute('href') : '';
           dispatch(core.root, 'search:select', {
-            href: link ? link.getAttribute('href') : '',
+            href,
             query: message.q,
             surface: config.surface,
           });
+          // Unstyled, every slot nests inside the anchor, which then
+          // navigates natively; consumer styling can pad the option BEYOND
+          // the anchor, and a click landing there would otherwise fire the
+          // activation event for a navigation that never happens. Mirror
+          // activateActive exactly: navigate whenever the click cannot
+          // reach the anchor itself, and only for a non-empty href -- an
+          // anchor without one resolves link.href to the empty string, and
+          // assigning that would reload the current page instead.
+          if (link && href && !link.contains(event.target)) {
+            window.location.assign(link.href);
+          }
         });
         listbox.appendChild(item);
         options.push(item);

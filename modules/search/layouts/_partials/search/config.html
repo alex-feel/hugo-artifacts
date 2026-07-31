@@ -148,11 +148,14 @@
      entry like "Blog" would otherwise silently empty the scope), stripped
      of one optional leading and one optional trailing slash, and prefixed
      with "/" (docs, /docs, docs/, and Docs all normalize to /docs). The
-     sentinel "mainSections" (any case) expands to site.MainSections. */}}
-{{- $rawSections := $cascade.sections | default (slice) -}}
-{{- if not (reflect.IsSlice $rawSections) -}}
-  {{- $rawSections = split (printf "%v" $rawSections) "," -}}
-{{- end -}}
+     sentinel "mainSections" (any case) expands to site.MainSections. A value
+     with no list spelling (a table, a boolean) is reported once and falls
+     back to the shipped default, because stringifying it would allow-list
+     one entry that matches no page and empty the entire index. */}}
+{{- $rawSections := partial "search/lib/listparam.html" (dict
+    "key" "sections"
+    "value" ($cascade.sections | default (slice))
+    "fallback" ($defaults.sections | default (slice))) -}}
 {{- $sections := slice -}}
 {{- range $rawSections -}}
   {{- $e := lower (trim (printf "%v" .) " \t\n\r") -}}
@@ -167,7 +170,10 @@
   {{- end -}}
 {{- end -}}
 
-{{/* Taxonomies: slice or comma-separated string of taxonomy plural names.
+{{/* Taxonomies: slice or comma-separated string of taxonomy plural names;
+     any other shape is reported once and falls back to the shipped default,
+     because a stringified table would double-book a record field under a
+     name no taxonomy has.
      Record keys are a flat namespace shared with the per-taxonomy term
      arrays, and Go's merge matches keys case-insensitively, so a taxonomy
      whose lowercased name equals a record field's would silently clobber
@@ -180,10 +186,10 @@
      byte-identical across Hugo's parallel page renders, letting the
      logger's duplicate suppression back up the store sentinel. */}}
 {{- $reservedTaxonomyNames := slice "href" "title" "section" "sectiontitle" "date" "description" "summary" "keywords" "content" "image" "headings" -}}
-{{- $rawTax := $cascade.taxonomies | default (slice) -}}
-{{- if not (reflect.IsSlice $rawTax) -}}
-  {{- $rawTax = split (printf "%v" $rawTax) "," -}}
-{{- end -}}
+{{- $rawTax := partial "search/lib/listparam.html" (dict
+    "key" "taxonomies"
+    "value" ($cascade.taxonomies | default (slice))
+    "fallback" ($defaults.taxonomies | default (slice))) -}}
 {{- $taxonomies := slice -}}
 {{- range $rawTax -}}
   {{- with trim (printf "%v" .) " \t\n\r" -}}
@@ -198,11 +204,12 @@
 {{- end -}}
 
 {{/* Extra stopwords: slice or comma-separated string, lowercased so they
-     match the client pipeline's normalized terms. */}}
-{{- $rawStop := $cascade.stopwords_extra | default (slice) -}}
-{{- if not (reflect.IsSlice $rawStop) -}}
-  {{- $rawStop = split (printf "%v" $rawStop) "," -}}
-{{- end -}}
+     match the client pipeline's normalized terms. Any other shape takes the
+     same warn-once-and-fall-back path as the two keys above. */}}
+{{- $rawStop := partial "search/lib/listparam.html" (dict
+    "key" "stopwords_extra"
+    "value" ($cascade.stopwords_extra | default (slice))
+    "fallback" ($defaults.stopwords_extra | default (slice))) -}}
 {{- $stopwordsExtra := slice -}}
 {{- range $rawStop -}}
   {{- with lower (trim (printf "%v" .) " \t\n\r") -}}
@@ -211,22 +218,43 @@
 {{- end -}}
 
 {{/* Per-field boosts: maps merge across tiers, so a tier overriding one
-     field keeps the shipped weights for the rest. */}}
+     field keeps the shipped weights for the rest. Consumer-tier PRESENCE is
+     tested with `ne nil`, never with `with`: Go's `with` runs its body only
+     for a non-empty value, so `false`, `0` and `""` are indistinguishable
+     from absent to it -- `boost = false` would be dropped in silence -- and
+     a truthy scalar would fall through the map check with no diagnostic
+     either. A scalar written where the table belongs is reported once and
+     ignored, so the shipped weights stay in force. */}}
 {{- $boost := dict -}}
 {{- with $defaults.boost -}}{{- if reflect.IsMap . -}}{{- $boost = merge $boost . -}}{{- end -}}{{- end -}}
-{{- with $sitep.boost -}}{{- if reflect.IsMap . -}}{{- $boost = merge $boost . -}}{{- end -}}{{- end -}}
-{{- if not $siteOnly -}}
-  {{- with $pagep.boost -}}{{- if reflect.IsMap . -}}{{- $boost = merge $boost . -}}{{- end -}}{{- end -}}
-  {{- with $args.boost -}}{{- if reflect.IsMap . -}}{{- $boost = merge $boost . -}}{{- end -}}{{- end -}}
+{{- $boostTiers := slice $sitep -}}
+{{- if not $siteOnly -}}{{- $boostTiers = slice $sitep $pagep $args -}}{{- end -}}
+{{- range $tier := $boostTiers -}}
+  {{- $tv := index $tier "boost" -}}
+  {{- if ne $tv nil -}}
+    {{- if reflect.IsMap $tv -}}{{- $boost = merge $boost $tv -}}
+    {{- else -}}{{- partial "search/lib/warn.html" (dict
+        "key" "search:warn:non-map-table:boost"
+        "message" (printf "[search] Ignoring a search boost value: it expects a table of per-field weights but was given %q, so every field keeps its shipped weight. Write it as [params.search.boost] (or the matching front-matter map)." (printf "%v" $tv))) -}}{{- end -}}
+  {{- end -}}
 {{- end -}}
 
 {{/* OpenSearch: a nested map merged tier by tier like boost, so a consumer
      overriding one key keeps the shipped values for the rest. SITE-SCOPED --
      the document is one published file per site, not a per-page surface --
-     so only the defaults and site tiers are read. */}}
+     so only the defaults and site tiers are read. Presence is `ne nil` for
+     the same reason as boost: `opensearch = true` is the natural shorthand
+     mis-write of `opensearch.enable = true`, and skipped in silence it
+     would leave the document unpublished with nothing said. */}}
 {{- $opensearch := dict -}}
 {{- with $defaults.opensearch -}}{{- if reflect.IsMap . -}}{{- $opensearch = merge $opensearch . -}}{{- end -}}{{- end -}}
-{{- with $sitep.opensearch -}}{{- if reflect.IsMap . -}}{{- $opensearch = merge $opensearch . -}}{{- end -}}{{- end -}}
+{{- $osv := index $sitep "opensearch" -}}
+{{- if ne $osv nil -}}
+  {{- if reflect.IsMap $osv -}}{{- $opensearch = merge $opensearch $osv -}}
+  {{- else -}}{{- partial "search/lib/warn.html" (dict
+      "key" "search:warn:non-map-table:opensearch"
+      "message" (printf "[search] Ignoring [params.search] opensearch: it expects a table but was given %q, so the document keeps its shipped default and stays unpublished. To publish it, write [params.search] opensearch.enable = true." (printf "%v" $osv))) -}}{{- end -}}
+{{- end -}}
 {{- $opensearch = merge $opensearch (dict "enable" (in (slice "true" "1" "yes" "on") (lower (printf "%v" ($opensearch.enable | default false))))) -}}
 
 {{/* Hotkey grammar (case-insensitive): zero or more modifiers from mod,
@@ -297,10 +325,17 @@
     {{- $pageURL = .RelPermalink -}}
     {{- $pageFound = true -}}
   {{- else -}}
-    {{- $pageURL = $pagePath | relLangURL -}}
+    {{/* The leading slash is stripped before relLangURL. Hugo resolves a
+         leading-slash input against the host root, DISCARDING the baseURL's
+         path -- `relLangURL "/search/"` under baseURL https://example.org/docs/
+         yields "/search/", not "/docs/search/" -- so on a subpath deployment
+         every fallback link, and the OpenSearch template built from this
+         value, would point outside the site. The no-leading-slash form keeps
+         the path. `.RelPermalink` above already carries it. */}}
+    {{- $pageURL = strings.TrimPrefix "/" $pagePath | relLangURL -}}
     {{- partial "search/lib/warn.html" (dict
-        "key" (printf "search:warn:missing-page:%s" site.Language.Lang)
-        "message" (printf "[search] No page exists at %q for language %q, so search-page links can land on a 404. Create content%s.md (or that language's equivalent) and place the search shortcode on it, or point params.search.page_path at your search page." $pagePath site.Language.Lang $pagePath)) -}}
+        "key" (printf "search:warn:missing-page:%s" site.Language.Name)
+        "message" (printf "[search] No page exists at %q for language %q, so search-page links can land on a 404. Create content%s.md (or that language's equivalent) and place the search shortcode on it, or point params.search.page_path at your search page." $pagePath site.Language.Name $pagePath)) -}}
   {{- end -}}
 
   {{/* Built page and worker scripts. fingerprint runs LAST so the hash

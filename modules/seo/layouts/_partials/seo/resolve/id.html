@@ -15,6 +15,13 @@
                    .kind is "content" to derive the lowercase fragment:
                    Article/BlogPosting/NewsArticle -> "article"; every other
                    supported type -> its lowercase name.
+  - .base (string) Optional. The absolute URL that served the document, used
+                   instead of .page's .Permalink for the page-scoped kinds
+                   (webpage, breadcrumb and the content fragments). It carries
+                   the pager URL on a pager beyond the first, where .Permalink
+                   is pinned to the first pager and two documents would
+                   otherwise publish one @id. Omitted or empty means
+                   .Permalink.
   - .n (int)       Optional 1-based trail index for extra breadcrumb trails; the
                    derived trail is trail 1 (bare "#breadcrumb"), extra trails
                    are "#breadcrumb-2", "#breadcrumb-3", ... (gapless).
@@ -23,7 +30,8 @@
   - website / organization: site.Home.Permalink + "#website" / "#organization"
     (one per language home; the organization anchor stays "#organization" even
     for a Person publisher).
-  - webpage / breadcrumb / content: .Permalink + "#<fragment>".
+  - webpage / breadcrumb / content: the served URL (.base, else .Permalink)
+    + "#<fragment>".
   - person: caller passes .page as the author page; .Permalink + "#person".
 
   Returns: the @id string. ONE terminal return.
@@ -33,6 +41,8 @@
 {{- $kind := .kind -}}
 {{- $type := .type | default "" -}}
 {{- $n := .n -}}
+{{/* The page-scoped kinds anchor on the URL that served the document. */}}
+{{- $base := .base | default $page.Permalink -}}
 
 {{- $id := "" -}}
 {{- if eq $kind "website" -}}
@@ -40,12 +50,12 @@
 {{- else if eq $kind "organization" -}}
   {{- $id = printf "%s#organization" site.Home.Permalink -}}
 {{- else if eq $kind "webpage" -}}
-  {{- $id = printf "%s#webpage" $page.Permalink -}}
+  {{- $id = printf "%s#webpage" $base -}}
 {{- else if eq $kind "breadcrumb" -}}
   {{- if and $n (gt (int $n) 1) -}}
-    {{- $id = printf "%s#breadcrumb-%d" $page.Permalink (int $n) -}}
+    {{- $id = printf "%s#breadcrumb-%d" $base (int $n) -}}
   {{- else -}}
-    {{- $id = printf "%s#breadcrumb" $page.Permalink -}}
+    {{- $id = printf "%s#breadcrumb" $base -}}
   {{- end -}}
 {{- else if eq $kind "person" -}}
   {{- $id = printf "%s#person" $page.Permalink -}}
@@ -62,7 +72,7 @@
       {{- $fragment = lower $type -}}
     {{- end -}}
   {{- end -}}
-  {{- $id = printf "%s#%s" $page.Permalink $fragment -}}
+  {{- $id = printf "%s#%s" $base $fragment -}}
 {{- end -}}
 
 {{- return $id -}}

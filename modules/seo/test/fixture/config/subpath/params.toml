@@ -1,0 +1,47 @@
+# The same surfaces the `configured` environment sets, so the subpath build
+# differs from it in exactly one respect: the baseURL carries a path. Every
+# value below is authored in the SITE-RELATIVE, leading-slash form the module
+# documents, which is precisely the form Hugo's absURL resolves against the
+# protocol and host alone.
+[seo]
+  content_license = 'https://creativecommons.org/licenses/by/4.0/'
+
+  # A site-level sub-table written as a scalar. jsonld/organization.html reads
+  # `.type` off it on EVERY page, so uncoerced this took the whole build down
+  # rather than degrading one node. Carried here rather than in `configured`
+  # because the person-@id specs read that tree and need a real organization.
+  organization = 'Acme'
+
+
+  # A site-root image path -- the form a static/ file must be written as,
+  # because static/ is invisible to resources.Get. It feeds og:image,
+  # og:image:secure_url, twitter:image and every JSON-LD image node.
+  default_image = '/img/og-default.png'
+
+  # A consumer-authored canonical override. rel="canonical" is the one tag
+  # whose entire job is to be exactly right, so a dropped path prefix here is
+  # the most damaging instance of the whole class.
+  canonical = '/canonical-override/'
+
+  # The SCALAR spelling of the site-level keywords the `configured`
+  # environment writes as a list. Only this form can tell the one-item-list
+  # coercion from a raw `delimit`, which accepts a bare string and iterates it
+  # BYTE-WISE; both trees must publish the identical comma-joined string.
+  keywords = 'alpha, beta'
+
+  # A site-root search template. Feeds the JSON-LD SearchAction target.
+  [seo.website]
+    search_url_template = '/search/?q={search_term_string}'
+
+  [seo.alternates]
+    # The SCALAR form. Gating on IsSlice made this behave exactly like unset,
+    # so the twins were published and never linked -- silently disabling the
+    # one surface alternates.html exists to provide.
+    formats = 'markdown'
+
+  [seo.links]
+    privacy_policy = '/privacy-policy/'
+    author = '/authors/jane-doe/'
+    search = '/opensearch.xml'
+    license = 'https://creativecommons.org/licenses/by/4.0/'
+    not_a_real_relation = '/nowhere/'

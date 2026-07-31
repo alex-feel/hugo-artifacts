@@ -27,6 +27,21 @@ hugo mod get github.com/alex-feel/hugo-artifacts/modules/agent-readiness
 
 A site-level template always overrides the module's, by Hugo's ordinary template lookup order. That applies to every template here: a local `layouts/page.markdown.md`, `layouts/home.llmstxt.txt`, or `layouts/home.agentskills.json` takes precedence over the module's.
 
+### Combining this module with other modules that wire output formats
+
+Your site configuration holds exactly ONE `[outputs]` table, and its lists are the union of every module's needs. A second `[outputs]` table in the same file fails the configuration load outright (`unmarshal failed: toml: table outputs already exists`); pasting one module README's `[outputs]` block over another's leaves a single table that loads cleanly, exits 0, warns about nothing -- and silently stops publishing every document the replaced list asked for. So do not copy the block above into a site that already has one: MERGE the names into the list already there.
+
+A site importing this module together with [`search`](../search/README.md) wires all of them at once:
+
+```toml
+[outputs]
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'agentfacts', 'agentskills', 'searchindex', 'opensearch']
+  section = ['html', 'rss', 'markdown']
+  page = ['html', 'markdown']
+```
+
+Only `[outputs]` needs this care. `[outputFormats]` and `[mediaTypes]` DO merge additively from module configuration, which is why `llmstxt`, `agentfacts`, `agentskills`, `searchindex` and `opensearch` are usable by name in the list above although the site defines none of them. Two names in that list stay INERT until their own parameters are set -- `agentskills` publishes nothing without `[[params.agent.skills]]` entries, and `opensearch` nothing without `params.search.opensearch.enable` -- so listing them early is harmless. The [`seo`](../seo/README.md) module defines no output format of its own, but it READS this list: `[seo.alternates] formats` advertises exactly the formats your `[outputs]` lists wire for that page kind. The combination is covered by the cross-module suite in [`modules/test-composition/`](../test-composition/README.md).
+
 ## Requirements
 
 - **Hugo v0.160.0+**, any edition. The module uses no extended-edition-exclusive feature.
@@ -62,7 +77,7 @@ Values resolve through a four-tier cascade, highest precedence first:
 
 Presence wins at every tier, so an explicit `false` or empty value overrides the tier below it. Nested maps (`robots`, `markdown`, `llms`, `facts`, `skills_index`, `frontmatter`, `license`) merge tier by tier rather than replacing, so overriding one key inside `[params.agent.markdown]` keeps the shipped values for the rest. Slice-valued keys are replaced, never combined.
 
-**SITE-SCOPED keys are honored at the defaults and `[params.agent]` tiers only**, because they shape site-wide artifacts that must select the same page set no matter which page renders them: `enable`, `sections`, `exclude_noindex`, `exclude_search_page`, `search_page_path`, `skills`, and the whole `robots` and `license` tables.
+**SITE-SCOPED keys are honored at the defaults and `[params.agent]` tiers only**, because they shape site-wide artifacts that must select the same page set no matter which page renders them: `enable`, `sections`, `exclude_noindex`, `exclude_search_page`, `search_page_path`, `skills`, every surface's own `enable` (`markdown.enable`, `llms.enable`, `facts.enable`, `skills_index.enable`), and the whole `robots` and `license` tables. Setting one of them lower down is a no-op and warns once; each surface's `enable` is site-scoped for the same reason as the master switch: these keys govern whether an artifact EXISTS, and a lower tier that switched one document off would leave every other surface still linking it with a URL that 404s. To remove a single page from every agent surface at once, use `agent: false` in its front matter.
 
 ### Top-level keys
 
@@ -114,7 +129,26 @@ The opt-out is honored by the shared page filter, so an opted-out page disappear
 
 The module never fails a build over its own configuration. Every misconfiguration degrades to a smaller correct document and emits exactly one deduplicated `WARN` per offending value per build, because a build that stops over a `robots.txt` token typo is worse than a `robots.txt` missing one group.
 
-Warnings are emitted for: a missing `data/agent-readiness/defaults.toml` (the module is not mounted correctly); an unknown `bots` key; a non-map `agent:` front-matter value that is not the documented `false` shorthand; a duplicate permalink across two pages; a per-section front-matter key that collides with a key the twin builder emits itself; and a skill whose remote source could not be fetched or whose fields are invalid.
+Warnings are emitted for:
+
+- a missing `data/agent-readiness/defaults.toml` -- the module is not mounted correctly;
+- an unknown `robots.bots` key, which is skipped rather than emitted as a literal `User-agent` token that matches no crawler;
+- a SITE-SCOPED key set in page front matter or at a call site, where it is discarded -- including `agent: {enable: false}`, which is **not** the per-page opt-out and does nothing (use `agent: false`);
+- a non-map `agent:` front-matter value that is not the documented `false` shorthand;
+- a duplicate permalink across two pages;
+- a per-section front-matter key that collides with a key the twin builder emits itself;
+- an `[[llms.sections]]` or `[[facts.sections]]` entry with an empty `section`, with no `name`, or matching no page -- each is skipped rather than published, because all three otherwise produce a plausible-looking document with the wrong contents;
+- a bare value where a table belongs, in ANY array-of-tables key (`skills`, `llms.sections`, `llms.optional`, `facts.sections`, `facts.identity.rows`, and a contact page's channels) -- skipped rather than dropped, because a dropped entry publishes a surface indistinguishable from one the consumer never configured;
+- a scalar written for a consumer sub-table (`facts.identity`, `facts.contact`) -- the whole block is ignored, because `[params.agent.facts] contact = '/contact'` is the natural mis-write of `[params.agent.facts.contact] page = '/contact'`;
+- a `markdown.sitemap_section_target` that is not `llms`, `sitemap`, or `none`, and a `sitemap_section_target = 'llms'` whose `llmstxt` format is not wired to the home page;
+- a `[params.agent.license]` with a `url` but no `name`, where the `llms.txt` line would render an empty link label;
+- a skill whose remote source could not be fetched, whose fields are invalid, or whose `name` repeats another entry's;
+- a scalar written where a list belongs (`robots.allow`, `robots.disallow`, `robots.bots`, `robots.bots_allow`, `robots.bots_disallow`, `robots.extra`, `llms.sections`, `llms.optional`, `facts.sections`, `frontmatter.<section>.keys`), which is read as a one-item list; and the two array-of-tables keys `skills` and `facts.identity.rows`, which are ignored;
+- a non-numeric `[[llms.sections]] limit`, which is read as `0` (complete).
+
+**Type mistakes are absorbed too, not raised.** A scalar written where a list belongs -- `bots = 'gptbot'` instead of `bots = ['gptbot']`, or `keys = 'title'` instead of `keys = ['title']` -- is read as a one-item list, and a non-numeric `limit` is read as `0`, meaning complete. Each emits one deduplicated warning naming the key and the offending value. This is not politeness: Go's `range` accepts no string, so an uncoerced scalar aborts template execution and **stops the consuming site's build** -- which is exactly what the contract above promises never to happen over this module's own configuration. A warning that names the key is strictly more useful than a template error that names a line in someone else's module.
+
+**Values cannot restructure the line-oriented documents.** `robots.txt`, `llms.txt`, `about.md` and the twins' pointer section carry their meaning in how the text divides into lines, so every interpolated value has any embedded line break collapsed to a space before it joins its line -- a description authored as a multi-line YAML block scalar stays text of its own entry instead of becoming list entries or headings of the generated document, and a robots path value cannot inject a directive line. Inside a Markdown link, the text additionally gets its backslashes and brackets backslash-escaped and the destination gets its spaces and parentheses percent-encoded, so a title containing `]` or a URL containing `(...)` cannot end the link's own syntax early. Neither treatment changes a byte of a value that carries none of those characters. Two slots are deliberately verbatim, embedded line breaks included: `llms.notes`, the document's free-prose block, and `robots.extra`, the escape hatch for whole `robots.txt` lines.
 
 ## robots.txt
 
@@ -127,17 +161,17 @@ The generated file carries, in order: a catch-all `User-agent: *` group with the
 ```toml
 [params.agent.robots]
 enable = true
-allow = ['/']
+allow = []
 disallow = []
 content_signal = 'search=yes, ai-train=yes, ai-input=yes'
 bots = ['gptbot', 'oai_searchbot', 'claudebot', 'google_extended', 'ccbot']
-bots_allow = ['/']
+bots_allow = []
 bots_disallow = []
 extra = []
 sitemap = true
 ```
 
-Defaults are permissive by construction: with no configuration at all the output is `User-agent: *`, `Allow: /`, and the sitemap line. Every restriction is opt-in, because a `Disallow` shipped as a module default would deindex a consumer's site on the build after they imported the module.
+Defaults are permissive by construction: with no configuration at all the output is a directive-free `User-agent: *` group and the sitemap line, which RFC 9309 reads as fully permissive. No `Allow: /` ships either: an `Allow` and a `Disallow` of equal path length tie, and RFC 9309 (section 2.2.2) resolves the tie in favor of `Allow` -- Google's parser does the same -- so a shipped `Allow: /` would sit in every group and silently neutralize exactly the `bots_disallow = ['/']` a consumer writes to block a crawler. Every restriction is opt-in, because a `Disallow` shipped as a module default would deindex a consumer's site on the build after they imported the module.
 
 ### The crawler registry
 
@@ -163,11 +197,24 @@ section = ['HTML', 'RSS', 'markdown']
 
 A site-level `[outputs] <kind>` key **replaces** Hugo's default list for that kind rather than extending it, so `HTML` and `RSS` must be restated to keep every existing feed. The module ships `home.markdown.md` and `section.markdown.md` alongside `page.markdown.md` precisely so a consumer who wires `markdown` into those kinds does not get Hugo's `WARN found no layout file` on every build.
 
+```toml
+[params.agent.markdown]
+enable                = true    # SITE-SCOPED. False emits no twin at all, and both listings fall back to HTML URLs.
+front_matter          = true    # Emit the leading YAML front-matter block.
+canonical             = true    # Emit `canonical:` pointing at the page's HTML URL. Always the last key.
+last_updated          = true    # Emit `last_updated:` when .Lastmod differs from .Date. See the precondition below.
+license               = false   # Emit `license:` -- requires [params.agent.license] url.
+sitemap_section       = true    # Append the trailing pointer section.
+sitemap_section_target = 'llms' # 'llms' | 'sitemap' | 'none'. Case-folded; an unrecognized value warns.
+```
+
 Twins never enter `sitemap.xml`: Hugo's sitemap enumerates pages and emits one `<loc>` per page from `.Permalink`, so no secondary output format can appear in it.
 
 ### Body source
 
-The body is `.RenderShortcodes` -- shortcodes expanded to their output, the surrounding Markdown left as Markdown. It is the only one of Hugo's four content accessors that yields a document that is both valid Markdown prose and complete: `.RawContent` leaves every shortcode call as unexpanded literal text, `.Content` renders the surrounding Markdown to HTML as well (an HTML document with a `.md` extension), and `.Plain` strips every tag and destroys headings, lists, links, and code fences. Hugo has no HTML-to-Markdown template function, so this is not the best of four options -- it is the only correct one.
+The body is `.RenderShortcodes` -- shortcodes expanded to their output, the surrounding Markdown left as Markdown. It is the only one of Hugo's four content accessors that yields a document that is both valid Markdown prose and complete: `.RawContent` leaves every shortcode call as unexpanded literal text, `.Content` renders the surrounding Markdown to HTML as well (an HTML document with a `.md` extension), and `.Plain` strips every tag and destroys headings, lists, links, and code fences.
+
+Reconstructing Markdown from `.Content` is possible -- `transform.HTMLToMarkdown` exists as of Hugo v0.151.0 -- but it is the wrong tool here: it is still flagged experimental with an API that may change, and it would put the twin through a lossy Markdown to HTML to Markdown round trip whose output is a converter's opinion of the source rather than the source. `.RenderShortcodes` never leaves Markdown in the first place, so no round trip and no experimental dependency is needed.
 
 **The documented consequence:** a twin of a shortcode-heavy page contains raw HTML blocks inline. That is valid CommonMark -- raw HTML is a first-class block type that every conformant parser passes through -- and for a page whose entire value is a rendered widget, the widget markup _is_ the content. Smoke-test one such page rather than discovering it later.
 
@@ -175,7 +222,7 @@ Relative links inside the body need no rewriting: `index.md` sits in the same pu
 
 ### Front matter
 
-Every value is emitted through `jsonify`. JSON is a strict subset of YAML 1.2, so this produces a valid mapping entry for every possible value -- a title containing a colon, a description containing a `#`, a list of tags -- with no quoting logic and no escaping hazard. Consumers should expect quoted scalars, including dates: `period_from: "2025-02-01"`.
+Every value is emitted through `jsonify`. JSON is a strict subset of YAML 1.2, so this produces a valid mapping entry for every possible value -- a title containing a colon, a description containing a `#`, a list of tags -- with no quoting logic and no escaping hazard. Consumers should expect quoted scalars, including dates: `period_from: "2025-02-01"`. A per-section key that is not a plain token of lowercase alphanumerics, `_` and `-` is emitted through the same `jsonify`, so a key carrying a line break or a colon becomes a double-quoted YAML key on one mapping line instead of restructuring the block.
 
 Fields are emitted in a fixed order:
 
@@ -212,6 +259,12 @@ The fix belongs in the CI build command -- fetch the full history before buildin
 
 Use `agent: false`, never `outputs: ['HTML']`. See [Per-page opt-out](#per-page-opt-out) above for why the `outputs` route silently does nothing.
 
+### Twins are withheld per page, which a `rel="alternate"` emitter cannot see
+
+The twin is withheld for a page carrying `agent: false`, for a `robots: noindex` page under the default `exclude_noindex = true`, for the search page, and for any page outside a configured `sections` allow-list. A withheld twin means **no file at all**, not an empty one.
+
+The module's own surfaces all agree about this, because they share one filter. Anything outside the module cannot: Hugo's `.OutputFormats.Get "markdown"` answers "is this format wired for this page kind", which is a fact about your `[outputs]` lists, and there is no template API for "did that format publish bytes". So a generic `<link rel="alternate" type="text/markdown">` emitter -- including the `seo` module's `[seo.alternates]` allow-list -- will advertise a twin on pages that have none. If you run both modules, keep `[seo.alternates] formats` and `[params.agent] sections` describing the same page set, or leave `formats` unset and let `llms.txt` be the discovery surface for twins.
+
 ## llms.txt
 
 Publishes `/llms.txt` through the module's `llmstxt` output format, wired by adding `llmstxt` to `[outputs] home`.
@@ -241,6 +294,12 @@ note = 'Every published URL.'
 ```
 
 The document is: exactly one H1 line, a blockquote summary, an optional blockquote license line, optional prose, one H2 per configured section listing `- [name](url): note` items, and a final `## Optional` heading. `Optional` is a protocol token fixed by the convention and is deliberately not translated.
+
+**Every URL is absolute**, including the ones you write in `[[params.agent.llms.optional]]`: a site-relative value there is resolved against the full `baseURL` **including its path**, whether or not you write the leading slash, while anything carrying a scheme (`https:`, `mailto:`, `tel:`) or a protocol-relative `//` prefix passes through untouched. This file is routinely ingested detached from the URL it was fetched from, where a bare `/sitemap.xml` has no origin to resolve against. `/about.md` follows the same rule, and so does the `href` on each `[params.agent.facts.contact]` channel.
+
+The "including its path" is load-bearing and is why the module normalizes rather than calling `absURL` directly: Hugo resolves a value that already begins with `/` against the protocol and host **only**, discarding the `baseURL` path. On a site at `https://example.org/docs/`, a naive `absURL "/sitemap.xml"` yields `https://example.org/sitemap.xml` -- a 404 -- while the correct result is `https://example.org/docs/sitemap.xml`.
+
+**A section entry needs both `section` and `name`, and is skipped with a warning without them.** Both omissions fail invisibly otherwise. An empty `section` matches _every_ page, because the prefix test degenerates to "starts with `/`" -- so a single `sections =` for `section =` typo would publish the whole site under one heading and look deliberate. An entry with no `name` has no H2 to open, so its bullets land under the previous entry's heading, where every Markdown parser reads them as that section's links.
 
 The `mediaType` is `text/plain`, not `text/markdown`, and that is deliberate: `text/markdown`'s suffixes are `md, mdown, markdown`, so it would publish `llms.md`. `root` is deliberately unset, so a multilingual site gets `/llms.txt` and `/ru/llms.txt` rather than one path every language overwrites.
 
@@ -324,11 +383,32 @@ Three consequences a consumer must understand:
 
 The index also gates on `site.Language.IsDefault`, because this format sets `root = true`, which pins one path for every language; a multilingual site emits the index once, from the default language.
 
-Field rules, validated before the fetch so a malformed entry costs no round trip: `name` is 1-64 characters of lowercase alphanumerics and hyphens with no leading, trailing, or consecutive hyphen (it becomes a published path segment); `description` is 1-1024 characters and should be copied verbatim from the skill's own `description` front matter rather than paraphrased; `source` must be absolute.
+Field rules, validated before the fetch so a malformed entry costs no round trip: `name` is 1-64 characters of lowercase alphanumerics and hyphens with no leading, trailing, or consecutive hyphen (it becomes a published path segment) and must be **unique** across the array; `description` is 1-1024 characters and should be copied verbatim from the skill's own `description` front matter rather than paraphrased; `source` must be absolute.
+
+Uniqueness is enforced for the same reason the digest is: the name is the sole path segment a skill is republished under, so two entries sharing one would resolve to a single published file carrying whichever bytes were copied last, while the index advertised two entries with two different digests for it. At least one of those digests could not match the bytes served at its own URL -- which a verifying agent is entitled to read as tampering. The duplicate is skipped with a warning rather than published.
 
 ### Index length is a curation decision, not a completeness metric
 
 The module accepts any number of entries and imposes no minimum. A consuming site should publish only the skills a fetching agent can **actually use on its own**: a repository holding several `SKILL.md` artifacts may correctly publish exactly one, and an artifact that is a component of a larger environment configuration is meaningless standalone and belongs out of the index. Record the exclusion and its reason in your own documentation, so the gap between the repository's artifact count and the index length reads as a decision rather than a defect.
+
+## Content license
+
+One statement of the license covering the site's editorial content, read by the twins' `license:` front-matter key and by the `llms.txt` license line. It is SITE-SCOPED and **ships inert**: every value is empty, so nothing is emitted until a consumer fills it in, and the two switches that consume it default to `false`.
+
+```toml
+[params.agent.license]
+name = 'CC BY 4.0'                                        # human label
+url  = 'https://creativecommons.org/licenses/by/4.0/'     # absolute deed or legal-code URL
+spdx = 'CC-BY-4.0'                                        # SPDX identifier; reserved for consumers, emitted nowhere today
+
+[params.agent.markdown]
+license = true    # emit `license:` in twin front matter
+
+[params.agent.llms]
+license = true    # emit the license blockquote line in llms.txt
+```
+
+`url` is required by both surfaces: with it empty nothing is emitted at all, whatever the switches say. `name` is required by the `llms.txt` line specifically, which renders as `> Content licensed under [name](url).` -- guarding on the URL alone would publish a Markdown link with an empty label, so a missing `name` warns once and the line is withheld. `spdx` is carried for consumers that want a machine identifier; this module emits it nowhere.
 
 ## i18n
 
@@ -379,10 +459,18 @@ modules/agent-readiness/
 │           ├── facts.html
 │           ├── skills.html
 │           └── lib/
+│               ├── absolute-url.html
+│               ├── flatten-value.html
+│               ├── inline.html
+│               ├── map-list.html
+│               ├── markdown-link.html
 │               ├── page-excluded.html
 │               ├── section.html
 │               └── warn.html
+├── test/                       # Validation suite: twelve Hugo fixture builds plus Node build-output assertions. See test/README.md.
 ├── go.mod
 ├── hugo.toml
 └── README.md
 ```
+
+`test/` ships inside the module, as it does for every other module in this repository. Run it with `bash modules/agent-readiness/test/run-tests.sh` (or `run-tests.cmd` on Windows).

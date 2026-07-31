@@ -87,27 +87,31 @@
   {{- with $seo.description -}}
     {{- $node = merge $node (dict "description" .) -}}
   {{- end -}}
-  {{- $node = merge $node (dict "url" $page.Permalink) -}}
+  {{- $node = merge $node (dict "url" $seo.pageUrl) -}}
   {{- with $seo.lang -}}
     {{- $node = merge $node (dict "inLanguage" .) -}}
   {{- end -}}
 
   {{/* keywords: .Keywords -> .Params.tags -> site seo.keywords (alias
        params.metadata.keywords), comma-joined string. The site keys are a
-       JSON-LD-only fallback; this module never emits <meta name=keywords>. */}}
+       JSON-LD-only fallback; this module never emits <meta name=keywords>.
+       Each list passes through seo/lib/as-scalar-list.html: `delimit` would
+       join a nested table as Go's debug form (map[...]), and an unusable
+       list must empty out so the chain falls through to its next source.
+       (.Keywords needs no filter: Hugo types it as a string slice.) */}}
   {{- $keywords := "" -}}
   {{- with $page.Keywords -}}
     {{- $keywords = delimit . ", " -}}
   {{- end -}}
   {{- if not $keywords -}}
-    {{- with $page.Params.tags -}}
+    {{- with partial "seo/lib/as-scalar-list.html" (dict "value" $page.Params.tags "key" "tags") -}}
       {{- $keywords = delimit . ", " -}}
     {{- end -}}
   {{- end -}}
   {{- if not $keywords -}}
-    {{- with $page.Param "seo.keywords" -}}
+    {{- with partial "seo/lib/as-scalar-list.html" (dict "value" ($page.Param "seo.keywords") "key" "seo.keywords") -}}
       {{- $keywords = delimit . ", " -}}
-    {{- else with site.Params.metadata.keywords -}}
+    {{- else with partial "seo/lib/as-scalar-list.html" (dict "value" (partial "seo/lib/as-map.html" (dict "value" (index $page.Site.Params "metadata") "key" "params.metadata" "warn_falsy" true)).keywords "key" "params.metadata.keywords") -}}
       {{- $keywords = delimit . ", " -}}
     {{- end -}}
   {{- end -}}
@@ -117,7 +121,13 @@
 
   {{/* articleSection: first category -> .Section. */}}
   {{- $section := "" -}}
-  {{- with $page.Params.categories -}}
+  {{/* Coerced and scalar-filtered like the OG surface in head-meta.html:
+       `delimit` and `index` do NOT reject a string, they iterate it
+       BYTE-WISE, so `tags: hugo` published articleSection as an integer and
+       keywords as a list of byte codes -- and a table nested in the list
+       stringifies as Go's debug form (map[...]) -- silently, to Google and
+       to every AI crawler. */}}
+  {{- with partial "seo/lib/as-scalar-list.html" (dict "value" $page.Params.categories "key" "categories") -}}
     {{- if gt (len .) 0 -}}
       {{- $section = index . 0 -}}
     {{- end -}}
@@ -154,10 +164,14 @@
     {{- $node = merge $node (dict "sameAs" .) -}}
   {{- end -}}
 
-  {{/* license -- a schema.org CreativeWork property, so it is valid on this
-       node and on nothing else this module emits. Deliberately NOT attached
-       to Person, Organization, WebSite or BreadcrumbList: a license
-       describes a creative work, not an entity or a navigational aid.
+  {{/* license -- a schema.org CreativeWork property. Emitted here because
+       this node represents the page's own editorial content, which is what
+       a site-wide content license covers. Other CreativeWork subtypes this
+       module emits (WebSite, ProfilePage, SoftwareApplication, VideoObject,
+       ImageObject) COULD carry it validly and deliberately do not: the
+       restriction is a SCOPE decision, not a validity one. Person,
+       Organization, Offer and BreadcrumbList are not CreativeWorks at all,
+       so they could never carry it.
        Inert until [seo] content_license is set. */}}
   {{- with $page.Param "seo.content_license" -}}
     {{- $node = merge $node (dict "license" .) -}}

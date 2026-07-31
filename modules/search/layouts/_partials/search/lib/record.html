@@ -6,12 +6,24 @@
   per-page computation (including the single .Plain/.Content render) runs
   exactly once per page per language.
 
-  Every text field is piped through plainify | htmlUnescape: plainify strips
-  tags but preserves entities, so without the unescape &amp;/&mdash; leak
-  into displayed titles. All fields are DATA ONLY -- no pre-rendered HTML
-  ever enters the index. href is sourced EXCLUSIVELY from .RelPermalink; the
-  client-side renderer trusts it as safe-by-construction, so any change that
-  sources href from anywhere else must revisit that trust boundary.
+  Every text field the module composes itself is htmlUnescaped -- the
+  authored front matter ones (title, sectionTitle, description, keywords)
+  and the rendered ones (summary, content, and the heading titles built in
+  search/lib/headings.html) alike -- so a title written with entities
+  (&amp;, &mdash;) is indexed as the characters a reader sees on the page
+  rather than as their entity spelling. Only the fields sourced from
+  RENDERED MARKUP -- the summary and the indexed body -- are ALSO piped
+  through plainify, because only those carry tags to strip. The fields
+  sourced from AUTHORED FRONT MATTER STRINGS (the title, the description)
+  must NOT be: plainify deletes every angle-bracket run and turns embedded
+  newlines into spaces, so it would index the authored title "Using <div>
+  elements" as "Using  elements" and make the result label describe a page
+  that does not exist. jsonify serializes angle brackets, ampersands, quotes
+  and newlines correctly on its own, so no field needs pre-escaping here.
+  All fields are DATA ONLY -- no pre-rendered HTML ever enters the index.
+  href is sourced EXCLUSIVELY from .RelPermalink; the client-side renderer
+  trusts it as safe-by-construction, so any change that sources href from
+  anywhere else must revisit that trust boundary.
 
   Expected context (dict):
   - .page (Page) - The page to serialize.
@@ -27,7 +39,7 @@
 
 {{- $record := dict
   "href" $page.RelPermalink
-  "title" ($page.Title | plainify | htmlUnescape)
+  "title" ($page.Title | htmlUnescape)
   "section" $page.Section
 -}}
 
@@ -37,7 +49,7 @@
 {{- if $page.Section -}}
   {{- $sectionTitle = humanize $page.Section -}}
   {{- with $page.FirstSection -}}
-    {{- with .Title -}}{{- $sectionTitle = . -}}{{- end -}}
+    {{- with .Title -}}{{- $sectionTitle = . | htmlUnescape -}}{{- end -}}
   {{- end -}}
 {{- end -}}
 {{- $record = merge $record (dict "sectionTitle" $sectionTitle) -}}
@@ -46,7 +58,7 @@
   {{- $record = merge $record (dict "date" ($page.Date.Format "2006-01-02")) -}}
 {{- end -}}
 
-{{- with $page.Description | plainify | htmlUnescape -}}
+{{- with $page.Description | htmlUnescape -}}
   {{- $record = merge $record (dict "description" .) -}}
 {{- end -}}
 
@@ -69,11 +81,25 @@
      that recall without duplicating them. Presence includes an explicitly
      EMPTY search.keywords list: it overrides the fallback into no
      keywords at all -- the author's way to keep this page's standard
-     keywords out of search matching. */}}
+     keywords out of search matching. Shape gates guard both levels,
+     because printf on a map, a nested list or a boolean would index a
+     stringified "map[...]" or the bare word "false" as a term: a map- or
+     boolean-shaped search.keywords has no term spelling, so it warns once
+     and degrades like an absent value (the standard keywords fallback
+     still applies); a map-, slice- or boolean-shaped entry inside a
+     keywords list is skipped with one warning while the scalar entries
+     beside it still index. */}}
 {{- $pagep := $page.Params.search -}}
 {{- $rawKeywords := $page.Keywords -}}
 {{- if and (reflect.IsMap $pagep) (isset $pagep "keywords") -}}
-  {{- $rawKeywords = index $pagep "keywords" -}}
+  {{- $kw := index $pagep "keywords" -}}
+  {{- if or (reflect.IsMap $kw) (eq (printf "%T" $kw) "bool") -}}
+    {{- partial "search/lib/warn.html" (dict
+        "key" (printf "search:warn:unusable-keywords:%s" $page.Path)
+        "message" (printf "[search] Ignoring search.keywords on %s: it expects a list or comma-separated string of terms but was given a map or a boolean, which has no term spelling; the page's standard keywords front matter still applies." $page.Path)) -}}
+  {{- else -}}
+    {{- $rawKeywords = $kw -}}
+  {{- end -}}
 {{- end -}}
 {{- if ne $rawKeywords nil -}}
   {{- if not (reflect.IsSlice $rawKeywords) -}}
@@ -81,8 +107,14 @@
   {{- end -}}
   {{- $keywords := slice -}}
   {{- range $rawKeywords -}}
-    {{- with trim (printf "%v" .) " \t\n\r" -}}
-      {{- $keywords = $keywords | append . -}}
+    {{- if or (reflect.IsMap .) (reflect.IsSlice .) (eq (printf "%T" .) "bool") -}}
+      {{- partial "search/lib/warn.html" (dict
+          "key" (printf "search:warn:unusable-keyword-entry:%s" $page.Path)
+          "message" (printf "[search] Skipping a keywords entry on %s: a map, a nested list or a boolean has no term spelling, so it cannot index; the scalar entries beside it still apply." $page.Path)) -}}
+    {{- else -}}
+      {{- with trim (printf "%v" . | htmlUnescape) " \t\n\r" -}}
+        {{- $keywords = $keywords | append . -}}
+      {{- end -}}
     {{- end -}}
   {{- end -}}
   {{- with $keywords -}}
@@ -90,7 +122,11 @@
   {{- end -}}
 {{- end -}}
 
-{{/* One array per configured taxonomy, term order as authored. */}}
+{{/* One array per configured taxonomy, term order as authored. The terms
+     are Hugo's own .LinkTitle values, emitted verbatim: Hugo title-cases a
+     title it derives from the term name, which rewrites an entity written
+     in the front matter list ("&amp;" arrives as "&Amp;"), so decoding
+     here would only half-undo a spelling the module does not own. */}}
 {{- range $name := $cfg.taxonomies -}}
   {{- $terms := slice -}}
   {{- range $page.GetTerms $name -}}
@@ -124,15 +160,47 @@
 
 {{/* Result thumbnail, only when the defaults or site tier enables it: the
      first images front matter entry, else a page-bundle image resource
-     whose name matches the feature, cover, or thumbnail patterns. Front
-     matter strings are emitted as authored; the client-side renderer's
-     scheme filter decides what may reach the img src attribute. */}}
+     whose name matches the feature, cover, or thumbnail patterns. An entry
+     is either a plain path/URL string or a map (the images shape Hugo's own
+     embedded templates read): a map contributes its src, url, or image key
+     -- the first usable scalar wins -- and is NEVER stringified whole,
+     because printf on a map would publish "map[...]" into the index, where
+     the client's scheme filter rejects it while its truthiness suppresses
+     the bundle fallback below. A key holding a boolean or another falsy
+     scalar (false, 0, "") has no path spelling and counts as absent for
+     the same reason: stringified, it would publish "false" or "0" as the
+     thumbnail path and suppress that fallback. A plain entry obeys the
+     same usability rule: a map with no usable key, and a first entry that
+     is itself a list or boolean, warn once and stay empty, so that
+     fallback still runs. Front matter strings are emitted as authored; the
+     client-side renderer's scheme filter decides what may reach the img
+     src attribute. */}}
 {{- if $cfg.show_image -}}
   {{- $image := "" -}}
   {{- with $page.Params.images -}}
     {{- $first := . -}}
     {{- if reflect.IsSlice . -}}{{- $first = index . 0 -}}{{- end -}}
-    {{- with $first -}}{{- $image = printf "%v" . -}}{{- end -}}
+    {{- if reflect.IsMap $first -}}
+      {{- range $k := slice "src" "url" "image" -}}
+        {{- if not $image -}}
+          {{- $v := index $first $k -}}
+          {{- if and $v (not (reflect.IsMap $v)) (not (reflect.IsSlice $v)) (ne (printf "%T" $v) "bool") -}}
+            {{- $image = printf "%v" $v -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+      {{- if not $image -}}
+        {{- partial "search/lib/warn.html" (dict
+            "key" (printf "search:warn:unusable-image-entry:%s" $page.Path)
+            "message" (printf "[search] The first images front matter entry on %s is a map without a usable src, url, or image key, so it contributes no thumbnail; a matching page-bundle image resource still applies." $page.Path)) -}}
+      {{- end -}}
+    {{- else if and $first (not (reflect.IsSlice $first)) (ne (printf "%T" $first) "bool") -}}
+      {{- $image = printf "%v" $first -}}
+    {{- else if or (reflect.IsSlice $first) (eq (printf "%T" $first) "bool") -}}
+      {{- partial "search/lib/warn.html" (dict
+          "key" (printf "search:warn:unusable-image-entry:%s" $page.Path)
+          "message" (printf "[search] The first images front matter entry on %s is a list or boolean rather than a path, so it contributes no thumbnail; a matching page-bundle image resource still applies." $page.Path)) -}}
+    {{- end -}}
   {{- end -}}
   {{- if not $image -}}
     {{- with ($page.Resources.ByType "image").GetMatch "{*feature*,*cover*,*thumbnail*}" -}}

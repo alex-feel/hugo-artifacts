@@ -28,7 +28,7 @@
 {{- $kind := $page.Kind -}}
 {{- $isSection := eq $kind "section" -}}
 {{- $isTaxTerm := or (eq $kind "taxonomy") (eq $kind "term") -}}
-{{- $onLists := $page.Site.Params.seo.webpage_on_lists | default false -}}
+{{- $onLists := (partial "seo/lib/as-map.html" (dict "value" (index $page.Site.Params "seo") "key" "params.seo" "warn_falsy" true)).webpage_on_lists | default false -}}
 
 {{/* Self-gate: taxonomy/term lists only when opted in. */}}
 {{- $emit := true -}}
@@ -47,7 +47,7 @@
   {{- $node := dict
     "@type" $wpType
     "@id" $seo.ids.webpage
-    "url" $page.Permalink
+    "url" $seo.pageUrl
   -}}
 
   {{- with $seo.title -}}
@@ -98,10 +98,14 @@
   {{- end -}}
 
 
-  {{/* license -- a schema.org CreativeWork property, so it is valid on this
-       node and on nothing else this module emits. Deliberately NOT attached
-       to Person, Organization, WebSite or BreadcrumbList: a license
-       describes a creative work, not an entity or a navigational aid.
+  {{/* license -- a schema.org CreativeWork property. Emitted here because
+       this node represents the page's own editorial content, which is what
+       a site-wide content license covers. Other CreativeWork subtypes this
+       module emits (WebSite, ProfilePage, SoftwareApplication, VideoObject,
+       ImageObject) COULD carry it validly and deliberately do not: the
+       restriction is a SCOPE decision, not a validity one. Person,
+       Organization, Offer and BreadcrumbList are not CreativeWorks at all,
+       so they could never carry it.
        Inert until [seo] content_license is set. */}}
   {{- with $page.Param "seo.content_license" -}}
     {{- $node = merge $node (dict "license" .) -}}

@@ -1,0 +1,13 @@
+{{ define "main" }}
+  <h1>{{ .Title }}</h1>
+  {{/* An EXPLICIT collection and an EXPLICIT pager size, which is how a real
+       consumer paginates and the only shape that can show whether something
+       else built this page's paginator first: a paginator built with the
+       site defaults instead would publish a different number of pagers with a
+       different number of entries each. */}}
+  {{ $pager := .Paginate .Pages 2 }}
+  <ul class="posts">
+    {{ range $pager.Pages }}<li>{{ .Title }}</li>{{ end }}
+  </ul>
+  <p class="pager-probe" data-page-number="{{ $pager.PageNumber }}" data-pager-url="{{ $pager.URL }}"></p>
+{{ end }}

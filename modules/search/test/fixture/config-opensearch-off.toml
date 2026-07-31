@@ -1,0 +1,14 @@
+# Overlay for a STATIC build (hugo --config hugo.toml,config-opensearch-off.toml).
+#
+# Proves the default-off gate. The module ships [search.opensearch] enable =
+# false, and the served fixture switches it ON, so without this overlay the OFF
+# state -- which is what every consumer gets until they opt in -- would have no
+# build to be asserted against.
+#
+# Note what this specifically catches: `opensearch` stays in [outputs] home, so
+# Hugo is still asked to render the format. Only the template's own gate stops
+# it. A build that dropped the format from [outputs] instead would emit no file
+# for a completely different reason and prove nothing about the gate.
+[params]
+  [params.search]
+    opensearch.enable = false

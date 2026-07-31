@@ -32,6 +32,14 @@
   whitespace-significant plain text, and line assembly is the only way to
   keep blank-line placement exact and reviewable.
 
+  Because the document is line-oriented, every interpolated value goes
+  through lib/inline.html -- or lib/markdown-link.html when it lands inside
+  a link -- before it joins its line: a value-borne line break is a
+  structure change here, not text, and an unescaped bracket in a link text
+  or parenthesis in a destination ends the link's own syntax early. The one
+  exception is the free-prose `notes` slot, which is block content by
+  design.
+
   Expected context (dict):
   - .page (Page) - The home page.
   - .cfg  (dict) - The resolved config from agent-readiness/config.html.
@@ -47,11 +55,11 @@
   {{- $lines := slice -}}
 
   {{/* 1. Exactly one H1. */}}
-  {{- $lines = $lines | append (printf "# %s" ($llms.title | default site.Title)) -}}
+  {{- $lines = $lines | append (printf "# %s" (partial "agent-readiness/lib/inline.html" ($llms.title | default site.Title))) -}}
 
   {{/* 2. The one-line summary. */}}
   {{- with $llms.summary -}}
-    {{- $lines = $lines | append "" | append (printf "> %s" .) -}}
+    {{- $lines = $lines | append "" | append (printf "> %s" (partial "agent-readiness/lib/inline.html" .)) -}}
   {{- end -}}
 
   {{/* 3. The license line. Composed as [name](url) and guarded on BOTH
@@ -59,7 +67,7 @@
          empty label the moment a consumer set url without name. */}}
   {{- if and $llms.license $cfg.license.url -}}
     {{- if $cfg.license.name -}}
-      {{- $lines = $lines | append "" | append (printf "> Content licensed under [%s](%s)." $cfg.license.name $cfg.license.url) -}}
+      {{- $lines = $lines | append "" | append (printf "> Content licensed under %s." (partial "agent-readiness/lib/markdown-link.html" (dict "name" $cfg.license.name "url" $cfg.license.url))) -}}
     {{- else -}}
       {{- partial "agent-readiness/lib/warn.html" (dict
           "key" "agent-readiness:warn:license-name-missing"
@@ -67,7 +75,10 @@
     {{- end -}}
   {{- end -}}
 
-  {{/* 4. Optional free prose. */}}
+  {{/* 4. Optional free prose. Appended verbatim, embedded line breaks
+         included: this is the document's one block-content slot, so a
+         multi-line value here is the consumer writing prose paragraphs,
+         not a field value leaking structure. */}}
   {{- with $llms.notes -}}
     {{- $lines = $lines | append "" | append . -}}
   {{- end -}}
@@ -78,31 +89,94 @@
          normalized by config.html, so a bare name and a slashed form resolve
          identically -- an unnormalized mismatch would render an empty H2
          with no warning, no error and exit 0. */}}
-  {{- $all := partial "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) -}}
+  {{- $all := partialCached "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) site.Language.Name -}}
   {{- range $entry := $llms.sections | default slice -}}
     {{- $section := $entry.section | default "" -}}
-    {{- $items := slice -}}
-    {{- range $all -}}
-      {{- $p := .Path -}}
-      {{- if or (eq $p $section) (hasPrefix $p (printf "%s/" $section)) (eq (printf "/%s" .Section) $section) -}}
-        {{- $items = $items | append . -}}
+    {{- $name := $entry.name | default "" -}}
+
+    {{/* Two entry shapes are refused rather than rendered, because both fail
+         INVISIBLY -- exit 0, plausible-looking output, wrong content.
+
+         An empty `section` matches EVERY page: the prefix test degenerates
+         to hasPrefix .Path "/", which every page in the site satisfies. A
+         single `sections =` for `section =` typo would therefore publish the
+         entire site under one heading and look deliberate.
+
+         An entry with no `name` has no H2 to open, and because the document
+         is assembled as one flat slice of lines its bullets would be
+         appended directly beneath the PREVIOUS entry's last bullet, where
+         every Markdown parser reads them as that section's links. */}}
+    {{- if not $section -}}
+      {{- partial "agent-readiness/lib/warn.html" (dict
+          "key" (printf "agent-readiness:warn:llms-section-empty:%s" $name)
+          "message" (printf "[agent-readiness] Skipping the [[params.agent.llms.sections]] entry named %q: its `section` is empty, and an empty section matches every page, so the entry would list the whole site under one heading. Set `section` to a section path such as '/blog' -- note the key is `section`, singular." $name)) -}}
+    {{- else if not $name -}}
+      {{- partial "agent-readiness/lib/warn.html" (dict
+          "key" (printf "agent-readiness:warn:llms-section-unnamed:%s" $section)
+          "message" (printf "[agent-readiness] Skipping the [[params.agent.llms.sections]] entry for %q: it has no `name`, so it has no H2 of its own and its links would be read as belonging to the section above it. Give the entry a `name`." $section)) -}}
+    {{- else -}}
+      {{- $items := slice -}}
+      {{- range $all -}}
+        {{- $p := .Path -}}
+        {{- if or (eq $p $section) (hasPrefix $p (printf "%s/" $section)) (eq (printf "/%s" .Section) $section) -}}
+          {{- $items = $items | append . -}}
+        {{- end -}}
       {{- end -}}
-    {{- end -}}
-    {{- $limit := int ($entry.limit | default 0) -}}
-    {{- if and (gt $limit 0) (gt (len $items) $limit) -}}
-      {{- $items = first $limit $items -}}
-    {{- end -}}
-    {{- with $entry.name -}}
-      {{- $lines = $lines | append "" | append (printf "## %s" .) | append "" -}}
-    {{- end -}}
-    {{- range $items -}}
-      {{- $url := .RelPermalink -}}
-      {{- if $llms.link_markdown -}}
-        {{- with .OutputFormats.Get "markdown" -}}{{- $url = .RelPermalink -}}{{- end -}}
+      {{/* `int` raises a template error on a non-numeric value, which would
+           stop the build over a config typo -- against the contract that this
+           module never does that. A non-numeric limit is reported and read as
+           0, which means "complete". */}}
+      {{- $rawLimit := printf "%v" ($entry.limit | default 0) -}}
+      {{- $limit := 0 -}}
+      {{- if findRE `^[0-9]+$` $rawLimit -}}
+        {{- $limit = int $rawLimit -}}
+      {{- else -}}
+        {{- partial "agent-readiness/lib/warn.html" (dict
+            "key" (printf "agent-readiness:warn:llms-bad-limit:%s" $rawLimit)
+            "message" (printf "[agent-readiness] The [[params.agent.llms.sections]] entry %q has a non-numeric `limit` (%q); listing the section complete. Use a non-negative whole number, where 0 means complete." $name $rawLimit)) -}}
       {{- end -}}
-      {{- $item := printf "- [%s](%s)" .Title $url -}}
-      {{- with .Description -}}{{- $item = printf "%s: %s" $item . -}}{{- end -}}
-      {{- $lines = $lines | append $item -}}
+      {{- if and (gt $limit 0) (gt (len $items) $limit) -}}
+        {{- $items = first $limit $items -}}
+      {{- end -}}
+
+      {{/* A section that matches NOTHING is the likeliest real instance of
+           the empty-H2 failure the guards above name -- `section = 'blogs'`
+           normalizes cleanly, passes both guards, matches no page, and
+           publishes a heading with no items under it. The heading is
+           withheld and the mismatch named, because an empty section in a
+           link index reads as "this site has no blog posts" rather than as
+           "this configuration is wrong". */}}
+      {{- if not $items -}}
+        {{- partial "agent-readiness/lib/warn.html" (dict
+            "key" (printf "agent-readiness:warn:llms-section-empty-result:%s" $section)
+            "message" (printf "[agent-readiness] The [[params.agent.llms.sections]] entry %q matches no page at %q, so its heading is omitted rather than published empty. Check the section path against your content tree, and check that it is admitted by the top-level `sections` allow-list if you set one." $name $section)) -}}
+      {{- else -}}
+        {{- $lines = $lines | append "" | append (printf "## %s" (partial "agent-readiness/lib/inline.html" $name)) | append "" -}}
+
+        {{/* Absolute URLs: llms.txt is routinely ingested detached from the
+             URL it was fetched from, and a relative path has no origin to
+             resolve against there.
+
+             The twin URL is substituted only when the twin will actually EXIST.
+             `.OutputFormats.Get "markdown"` answers "is the format wired for
+             this page kind", which is a question about the consumer's
+             [outputs] lists, NOT about whether this module rendered anything
+             into it -- markdown-page.html is the sole producer and it emits
+             nothing when the switch is off, which makes Hugo publish no file.
+             Consulting the format alone would therefore list a URL that 404s
+             for every page on a site that turned the twins off but left
+             `markdown` wired, which is exactly the configuration the module
+             tells consumers to use. */}}
+        {{- range $items -}}
+          {{- $url := .Permalink -}}
+          {{- if and $llms.link_markdown $cfg.markdown.enable -}}
+            {{- with .OutputFormats.Get "markdown" -}}{{- $url = .Permalink -}}{{- end -}}
+          {{- end -}}
+          {{- $item := printf "- %s" (partial "agent-readiness/lib/markdown-link.html" (dict "name" .Title "url" $url)) -}}
+          {{- with .Description -}}{{- $item = printf "%s: %s" $item (partial "agent-readiness/lib/inline.html" .) -}}{{- end -}}
+          {{- $lines = $lines | append $item -}}
+        {{- end -}}
+      {{- end -}}
     {{- end -}}
   {{- end -}}
 
@@ -113,12 +187,21 @@
   {{- $optional := slice -}}
   {{- range $llms.optional | default slice -}}
     {{- if reflect.IsMap . -}}
-      {{- $u := printf "%v" (.url | default "") -}}
+      {{/* Absolutized through the shared routine, which handles the
+           leading-slash form correctly -- passing it to absURL directly
+           would discard the baseURL's path on a subpath deployment. */}}
+      {{- $u := partial "agent-readiness/lib/absolute-url.html" (.url | default "") -}}
       {{- if $u -}}
-        {{- $item := printf "- [%s](%s)" (.name | default $u) $u -}}
-        {{- with .note -}}{{- $item = printf "%s: %s" $item . -}}{{- end -}}
+        {{- $item := printf "- %s" (partial "agent-readiness/lib/markdown-link.html" (dict "name" (.name | default $u) "url" $u)) -}}
+        {{- with .note -}}{{- $item = printf "%s: %s" $item (partial "agent-readiness/lib/inline.html" .) -}}{{- end -}}
         {{- $optional = $optional | append $item -}}
       {{- end -}}
+    {{- else -}}
+      {{/* A bare value inside a real slice. Dropped silently it removes the
+           whole `## Optional` heading, which reads as a deliberate omission. */}}
+      {{- partial "agent-readiness/lib/warn.html" (dict
+          "key" (printf "agent-readiness:warn:optional-not-a-table:%v" .)
+          "message" (printf "[agent-readiness] Skipping the [[params.agent.llms.optional]] entry %q: an entry must be a table with `name` and `url`, not a bare value." (printf "%v" .))) -}}
     {{- end -}}
   {{- end -}}
   {{- with $optional -}}

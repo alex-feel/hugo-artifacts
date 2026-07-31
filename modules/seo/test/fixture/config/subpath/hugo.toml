@@ -1,0 +1,16 @@
+# The `subpath` environment: the same configured surfaces, deployed under a
+# baseURL that carries a PATH.
+#
+# It exists because Hugo's absURL treats a value that already begins with "/"
+# as relative to the protocol and host ONLY, discarding the baseURL's path.
+# That is the form this module documents for every [seo.links] key and for the
+# `canonical` override, so it is the form consumers write -- and at a domain
+# root, which is what every other fixture uses, a broken implementation and a
+# correct one emit byte-identical output. Only a non-root baseURL can tell
+# them apart.
+#
+# What would ship without this build: `<link rel="privacy-policy">`,
+# `rel="author">` and `rel="search">` pointing outside the site on every page,
+# and a `rel="canonical"` declaring a URL the site does not serve -- the one
+# tag whose entire job is to be exactly right.
+baseURL = 'https://seo-fixture.example/docs/'

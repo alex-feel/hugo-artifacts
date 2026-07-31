@@ -1,0 +1,42 @@
+# The `pagination` environment: a two-language site whose `posts` section is
+# split across pagers. It is the only build in which a document is served from
+# a URL that is NOT the page's own .Permalink -- Hugo re-renders the same list
+# Page object for every pager, and .Permalink stays pinned to pager one. Every
+# URL the module emits for such a document (canonical, og:url, the JSON-LD
+# @ids and WebPage url, and the hreflang cluster) must name the URL that
+# actually served it, or two published documents claim one identity.
+#
+# The languages read from their own content directories, which no other
+# environment mounts, so the paginated section exists only here and the other
+# five builds are byte-identical to what they were before this environment was
+# added.
+defaultContentLanguage = 'en'
+
+# Deliberately DIFFERENT from the pager size the fixture list template passes
+# to .Paginate. The list template owns the pagination arguments; a module head
+# partial that reached for .Paginator would build the paginator FIRST, with
+# these default arguments, and Hugo would then hand the list template that
+# cached paginator instead of the one it asked for. The published pager count
+# is the visible difference, and 06-pagination.spec.js asserts it.
+[pagination]
+  pagerSize = 4
+
+[languages]
+
+  [languages.en]
+    locale = 'en-US'
+    weight = 1
+    contentDir = 'content-pgn'
+
+  [languages.de]
+    locale = 'de-DE'
+    weight = 2
+    contentDir = 'content-pgn-de'
+
+[params]
+
+  [params.seo]
+    # Environment builds other than the default are not production, and the
+    # non-production default would force noindex onto every page, suppressing
+    # the hreflang block this environment exists to inspect.
+    allow_index_nonprod = true

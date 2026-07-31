@@ -1,13 +1,18 @@
 {{/*
   Resolves the absolute canonical URL for the page
-  (seo.canonical -> canonical alias -> .Permalink). Pure value chooser: no HTML,
-  no side effects.
+  (seo.canonical -> canonical alias -> the URL that served the document).
+  Pure value chooser: no HTML, no side effects.
 
-  Context: the current Page, passed as the dot.
+  Context (dict):
+  - .page (page)   The current Page.
+  - .self (string) The absolute URL the document is published at, as resolved
+                   by seo/resolve/pager.html; "" on every document whose URL
+                   is its own .Permalink.
 
   Chain (first non-empty wins):
     seo.canonical (via .Param cascade)
     -> canonical (legacy front-matter alias)
+    -> .self, the pager URL when the document is a pager beyond the first
     -> .Permalink (Hugo-native, already absolute)
   An explicit override that is relative is absolutized with absURL; .Permalink
   is already absolute so it passes through. Resolving exactly one absolute
@@ -17,15 +22,35 @@
   Returns: the absolute canonical URL string. ONE terminal return.
 */}}
 
-{{- $page := . -}}
+{{- $page := .page -}}
+{{- $self := .self -}}
 
+{{/* Both consumer-authored overrides go through seo/lib/absolute-url.html
+     rather than straight into absURL: a value beginning with "/" resolves
+     against the protocol and host ONLY, discarding the baseURL's path, so on
+     a subpath deployment `canonical: '/about/'` would declare a canonical URL
+     outside the site -- the one tag whose whole job is to be exactly right. */}}
 {{- $canonical := "" -}}
 {{- with $page.Param "seo.canonical" -}}
-  {{- $canonical = . | absURL -}}
+  {{- $canonical = partial "seo/lib/absolute-url.html" (dict "value" . "key" "seo.canonical" "scope" $page.RelPermalink) -}}
 {{- else with $page.Params.canonical -}}
-  {{- $canonical = . | absURL -}}
-{{- else -}}
-  {{- $canonical = $page.Permalink -}}
+  {{- $canonical = partial "seo/lib/absolute-url.html" (dict "value" . "key" "canonical" "scope" $page.RelPermalink) -}}
+{{- end -}}
+
+{{/* The self-URL fallback is applied AFTER the override chain rather than
+     as its else branch, so it also catches an override that was PRESENT but
+     unusable -- a key written as a table, which `with` treats as present and
+     the absolutizer resolves to "". Emitting no canonical at all is the worst
+     of the three outcomes: the self-referencing permalink is always a correct
+     answer, so a malformed override degrades to it instead of removing the
+     tag the page would otherwise have had. */}}
+{{- if not $canonical -}}
+  {{/* .Permalink is pinned to the first pager on every pager of a paginated
+       list, so a document served at /posts/page/2/ would otherwise declare
+       /posts/ as its canonical URL -- a cross-page canonical between two
+       documents that both exist. The pager URL resolved upstream is the URL
+       that served THIS document, so it wins whenever there is one. */}}
+  {{- $canonical = $self | default $page.Permalink -}}
 {{- end -}}
 
 {{- return $canonical -}}

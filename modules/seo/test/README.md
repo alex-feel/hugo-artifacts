@@ -1,17 +1,23 @@
 # seo module test suite
 
-Node build-output assertions for `modules/seo`, run against the static HTML that two Hugo builds of [`fixture/`](fixture/) produce. The module ships zero JavaScript, so there is no browser behavior to test and the suite carries no Playwright dependency.
+Node build-output assertions for `modules/seo`, run against the static HTML that eight Hugo builds of [`fixture/`](fixture/) produce. The module ships zero JavaScript, so there is no browser behavior to test and the suite carries no Playwright dependency.
 
-## Why two builds
+## Why eight builds
 
-The suite builds the fixture twice, and both halves are load-bearing:
+The suite builds the fixture eight times, and every build is load-bearing:
 
 | Build | Environment | Destination | What it proves |
 | --- | --- | --- | --- |
 | baseline | default | `fixture/public/baseline/` | `[seo.alternates]`, `[seo.links]` and `[seo] content_license` are **absent** from the config, so every surface they drive must be absent from the output. This is what proves the additions are inert for consumers who do not opt in. |
 | configured | `configured` | `fixture/public/configured/` | All three blocks are set, so every surface must appear, exactly once, on every page shape. |
+| subpath | `subpath` | `fixture/public/subpath/` | The same configured surfaces under `baseURL = 'https://seo-fixture.example/docs/'`. Hugo's `absURL` resolves a value that already begins with `/` against the protocol and host **only**, discarding the baseURL path -- and the leading slash is the form this module documents for every `[seo.links]` key, for `canonical`, for `default_image` and for `search_url_template`. At a domain root a correct implementation and a broken one emit byte-identical output, so this is the only build in which the difference exists at all. |
+| badtypes | `badtypes` | `fixture/public/badtypes/` | The whole `seo` and legacy `metadata` param namespaces written as bare scalars -- the config shapes that used to stop the build or silently disable a surface. The build must complete, degrade to deduplicated warnings, and keep emitting every untouched surface. |
+| offswitch | `offswitch` | `fixture/public/offswitch/` | `[params] seo = false`, the natural falsy shorthand for the documented kill switch. The build must survive and the falsy spelling must be reported rather than swallowed. |
+| pagination | `pagination` | `fixture/public/pagination/` | A two-language site whose `posts` section is split across pagers. Hugo re-renders one list `Page` object per pager and `.Permalink` stays pinned to the first pager on all of them, so this is the only build in which a document is served from a URL that is not the page's own permalink -- the only place a canonical, an `og:url`, a JSON-LD `@id` or an hreflang entry can be checked for naming the URL that actually served it. The list template paginates an explicit collection with an explicit pager size that DIFFERS from the site default, so a partial that built the paginator first would publish a visibly different pager set. |
+| graph | `graph` | `fixture/public/graph/` | The baseline content published through the OTHER JSON-LD container: `seo.jsonld_container = 'graph'` collapses every page's node list into one `<script>` holding a `@graph` array. `seo/head-jsonld.html` serializes at two separate sites, one per container mode, and this is the only build that reaches the graph one, so without it half of that emitter ships unread by any assertion. |
+| multilingual | `multilingual` | `fixture/public/multilingual/` | A second language whose **language params** set a noindex robots baseline. `seo/head-meta.html` resolves every entry of `.AllTranslations` through `seo/resolve/robots.html`, so this is the only build that can tell a per-language params read (`$page.Site.Params`) from a rendering-language one (the global `site`): with the global read the default-language page cannot see the other language's baseline and emits an hreflang alternate pointing at a noindexed URL, which the hreflang block promises never happens. |
 
-An assertion that only ever saw the configured build could not distinguish "works" from "always on", which is the specific regression that matters here: `seo/head-meta.html` renders on every page of every consuming site.
+An assertion that only ever saw the configured build could not distinguish "works" from "always on", which is the specific regression that matters here: `seo/head-meta.html` renders on every page of every consuming site. The subpath build guards a second class entirely: output that is well-formed and plausible on every page, and points outside the site.
 
 ## Running
 
@@ -25,7 +31,7 @@ or, on Windows:
 modules\seo\test\run-tests.cmd
 ```
 
-Both runners perform the repository's pre-launch Hugo process check, fail hard on any `deprecat` or `ERROR` line in either build log, and then run the Node assertions. Re-run the assertions alone against an existing build with:
+Both runners perform the repository's pre-launch Hugo process check, fail hard on any `deprecat` or `ERROR` line in any build log, and then run the Node assertions. Re-run the assertions alone against an existing build with:
 
 ```bash
 FIXTURE_PUBLIC=fixture/public/baseline \
@@ -43,7 +49,10 @@ The fixture exists to exercise the page shapes where a head regression would oth
 - **a blog page** typed `BlogPosting`, and its section, typed `CollectionPage`, for the license property;
 - **the site-owner author page**, whose `ProfilePage` `mainEntity` anchor must equal the resolver's;
 - **a promo-shaped page with its own root `baseof`** that calls `seo/head.html` itself, mirroring a consuming site shape where a regression on that path would appear on no other page;
-- **`layouts/_partials/seo/jsonld-extra.html`**, the tier-3 hook, which publishes `$seo.ids.person` into the graph so a spec can observe the value the module hands consumers.
+- **`layouts/_partials/seo/jsonld-extra.html`**, the tier-3 hook, which publishes `$seo.ids.person` into the graph so a spec can observe the value the module hands consumers;
+- **a translated page in `content-ru/`**, mounted only by the `multilingual` environment, so the hreflang skip contract has a translation to skip;
+- **a paginated `posts` section in `content-pgn/` and `content-pgn-de/`**, mounted only by the `pagination` environment, with `layouts/posts/list.html` calling `.Paginate` with its own collection and its own pager size;
+- **two serialization-edge pages** whose title, description, tags, categories, `seo.keywords`, `seo.image`, `seo.image_alt` and `seo.video` values carry quotation marks, angle brackets, ampersands, an embedded newline, backslashes, non-ASCII and one long unbroken run -- one resolving to `VideoObject`, one to the article class, so both an HTML attribute and a JSON-LD document have to carry every one of those characters intact.
 
 The `configured` environment also sets one deliberately unregistered `[seo.links]` key, so the warn-and-skip path is proven to emit no tag rather than a bare relation token no client can interpret.
 
@@ -51,6 +60,11 @@ The `configured` environment also sets one deliberately unregistered `[seo.links
 
 | File | Covers |
 | --- | --- |
-| `tests/01-alternates.spec.js` | Alternate representations and the static link relations, in both builds. |
+| `tests/01-alternates.spec.js` | Alternate representations and the static link relations, in the baseline, configured and subpath builds. |
 | `tests/02-person-id.spec.js` | `$seo.ids.person` constancy across page shapes, its agreement with the `ProfilePage` `mainEntity` anchor, and its separation from the `#organization` anchor. |
 | `tests/03-content-rights.spec.js` | The `license` property on `WebPage`, `CollectionPage` and `BlogPosting`, and its absence from `Person`, `Organization`, `WebSite` and `BreadcrumbList`. |
+| `tests/04-never-fail.spec.js` | The never-fail contract: scalar-shaped config and front matter, undecodable cover images, map-shaped image candidates and the falsy kill-switch spelling all degrade to deduplicated warnings and safe output, never a broken build or a Go debug string. |
+| `tests/05-language-params.spec.js` | Per-language site params in the multilingual build: the translated page carries its own language's noindex robots baseline, and the default-language head emits no hreflang alternate pointing at it. |
+| `tests/06-pagination.spec.js` | The URL that served the document: canonical, `og:url`, the `WebPage` `@id` and `url`, the `BreadcrumbList` `@id` and the hreflang cluster all name the pager URL on `/posts/page/2/` and `/de/posts/page/2/`, the first pager is unchanged, a leaf page still emits its permalink, and the published pager set is still the one the list template asked for. |
+| `tests/07-serialization.spec.js` | Serialization structure: every JSON-LD block on every page parses as one JSON document and carries no raw angle bracket in BOTH container shapes (one block per node, and one `@graph` block per page), the node values and head attribute values decode back to the strings the fixture front matter authored, and no emitted head tag closes an attribute value early. |
+| `tests/08-readme.spec.js` | Documentation locks on the module README: every `[outputs]` example is introduced as a merge into the site's single table, and no line presents a module-side `[outputs]` table as effective. |

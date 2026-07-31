@@ -1,0 +1,37 @@
+{{/*
+  agent-readiness/lib/markdown-link.html -- utility (LIB tier).
+
+  Purpose: compose one Markdown link, [name](url), with each part made safe
+  for the position it lands in.
+
+  A link is the one place in the line-oriented documents where a value sits
+  INSIDE Markdown syntax rather than after it, so the line collapse of
+  lib/inline.html alone is not enough. CommonMark reads an unescaped bracket
+  in the link text as the text's own delimiter -- a title containing "]"
+  ends the link early and spills the rest of the line as literal text -- and
+  reads an unescaped parenthesis or space in the destination as the end of
+  the URL. So the text gets its backslashes and brackets backslash-escaped,
+  and the destination gets its spaces and parentheses percent-encoded. Both
+  treatments change no byte of a value that carries none of those
+  characters.
+
+  Expected context (dict):
+  - .name (string) - The link text.
+  - .url  (string) - The link destination.
+
+  Return value: the complete [name](url) string. ONE terminal return.
+*/}}
+
+{{- $name := partial "agent-readiness/lib/inline.html" (.name | default "") -}}
+{{- $name = replace $name "\\" "\\\\" -}}
+{{- $name = replace $name "[" "\\[" -}}
+{{- $name = replace $name "]" "\\]" -}}
+
+{{- $url := partial "agent-readiness/lib/inline.html" (.url | default "") -}}
+{{- $url = replace $url " " "%20" -}}
+{{- $url = replace $url "(" "%28" -}}
+{{- $url = replace $url ")" "%29" -}}
+
+{{- $out := printf "[%s](%s)" $name $url -}}
+
+{{- return $out -}}

@@ -1,9 +1,23 @@
-# The `configured` environment adds exactly the three Phase 7 config blocks,
+# The `configured` environment adds exactly those three config blocks,
 # so the suite can compare a configured build against the baseline one and
 # prove both halves of the contract: the surfaces appear when configured, and
 # nothing appears when they are not.
 [seo]
   content_license = 'https://creativecommons.org/licenses/by/4.0/'
+
+  # The sibling table jsonld/website.html reads .name, .alternate_name and
+  # .search_url_template off, on every language home page. The previous sweep
+  # routed `organization` four lines away in that same file and left this one
+  # raw, so uncoerced it stopped the home-page build. It lives here rather
+  # than in `subpath`, which declares a real [seo.website] table.
+  website = 'Acme Docs'
+
+  # The site-level JSON-LD keywords fallback, in its LIST spelling. It fills
+  # the BlogPosting keywords for article pages that carry neither keywords nor
+  # tags front matter; this module never emits <meta name=keywords>. The
+  # `subpath` environment writes the same value as one SCALAR, and the two
+  # trees must publish the identical comma-joined string.
+  keywords = ['alpha', 'beta']
 
   [seo.alternates]
     formats = ['markdown']

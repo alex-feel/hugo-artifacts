@@ -1,11 +1,21 @@
-# The `configured` environment adds exactly the content-license keys, so the
-# suite can compare a configured build against the baseline one and prove
-# both halves of the contract: every license surface appears when the table
-# is filled and both switches are on, and NOTHING appears when they are not.
+# The `configured` environment adds the content-license keys, so the suite
+# can compare a configured build against the baseline one and prove both
+# halves of the contract: every license surface appears when the table is
+# filled and both switches are on, and NOTHING appears when they are not.
+# It also carries the bot-group directive pair below.
 #
 # In a config/<environment>/params.toml the top level is already `params`, so
 # these tables are [agent.*] rather than [params.agent.*].
 [agent]
+
+  # The block-everything-except shape, and the only build in which the
+  # bots_allow emission path executes. It cannot live in `edge`: the edge
+  # bot groups prove that a bots_disallow configured WITHOUT bots_allow
+  # blocks cleanly, so edge must not set bots_allow. Here the pair also
+  # proves the in-group order -- Allow lines precede Disallow lines.
+  [agent.robots]
+    bots_allow = ['/public/']
+    bots_disallow = ['/']
 
   [agent.license]
     name = 'CC BY 4.0'

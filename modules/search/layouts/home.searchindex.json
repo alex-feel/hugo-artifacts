@@ -108,7 +108,7 @@
 {{- end -}}
 {{- $envelope := dict
   "schemaVersion" 1
-  "lang" site.Language.Lang
+  "lang" site.Language.Name
   "generated" (now.Format "2006-01-02T15:04:05Z07:00")
   "docCount" (len $docs)
   "digest" (hash.XxHash ($docs | jsonify))

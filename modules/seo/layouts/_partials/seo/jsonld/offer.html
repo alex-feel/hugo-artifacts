@@ -28,8 +28,8 @@
 {{- $ctx := . -}}
 {{- $page := $ctx.page -}}
 {{- $seo := $ctx.seo -}}
-{{- $offer := $ctx.offer | default dict -}}
-{{- $product := $ctx.product | default dict -}}
+{{- $offer := partial "seo/lib/as-map.html" (dict "value" ($ctx.offer) "key" "seo.offer") -}}
+{{- $product := partial "seo/lib/as-map.html" (dict "value" ($ctx.product) "key" "seo.product") -}}
 {{- $result := dict -}}
 
 {{- $aggregate := $offer.aggregate | default false -}}
@@ -164,7 +164,8 @@
 
 {{/* shippingDetails / hasMerchantReturnPolicy: reference the Organization
      policy @id when OnlineStore, else inline from seo.offer.*. */}}
-{{- $orgType := $page.Site.Params.seo.organization.type | default "Organization" -}}
+{{- $siteSeo := partial "seo/lib/as-map.html" (dict "value" (index $page.Site.Params "seo") "key" "params.seo" "warn_falsy" true) -}}
+{{- $orgType := (partial "seo/lib/as-map.html" (dict "value" ($siteSeo.organization) "key" "seo.organization")).type | default "Organization" -}}
 {{- if eq $orgType "OnlineStore" -}}
   {{- $orgId := $seo.ids.organization -}}
   {{- with $orgId -}}

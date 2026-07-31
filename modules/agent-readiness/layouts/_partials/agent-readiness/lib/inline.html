@@ -1,0 +1,30 @@
+{{/*
+  agent-readiness/lib/inline.html -- utility (LIB tier).
+
+  Purpose: make one value safe to interpolate into a single line of a
+  line-oriented document.
+
+  robots.txt, llms.txt, about.md and the twins' pointer section all carry
+  their meaning in how the text divides into lines, so a value containing an
+  embedded line break does not appear as text inside its line -- it changes
+  the structure of the document itself. A description authored as a
+  multi-line YAML block scalar becomes several output lines, and any of them
+  that happens to begin with a list or heading marker becomes a list entry
+  or a heading of the generated document; a robots path value carrying a
+  line break injects a directive line of its own. Every run of line-break
+  characters is therefore collapsed to one space before the value reaches
+  its line, which changes no byte of a value that carries none.
+
+  Expected context: the value, any scalar (the dot, not a dict).
+
+  Return value: the value as a one-line string, "" for nil. ONE terminal
+  return.
+*/}}
+
+{{- $out := "" -}}
+
+{{- if ne . nil -}}
+  {{- $out = printf "%v" . | strings.ReplaceRE `[\r\n]+` " " -}}
+{{- end -}}
+
+{{- return $out -}}

@@ -1,0 +1,57 @@
+{{/*
+  search/lib/listparam.html -- INTERNAL (lib tier).
+
+  Purpose: normalizes one of the module's list-valued configuration keys
+  (sections, taxonomies, stopwords_extra) into a slice of raw entries. Two
+  spellings are documented and equivalent: a list, and a comma-separated
+  string. Anything else -- a TOML table, a boolean, a number -- has neither
+  spelling, so stringifying it whole would publish a single bogus entry:
+  Go's map debug form ("map[t:tags]") or a bare word ("false"). A bogus
+  sections entry matches no page and empties the ENTIRE index; a bogus
+  taxonomies or stopwords_extra entry reaches the client options. Such a
+  value is therefore reported once and discarded to the shipped default,
+  which is this module's warn-and-fall-back idiom.
+
+  The warning carries no per-caller position on purpose. All three keys are
+  site-scoped, so the offending value lives in the site configuration or the
+  shipped defaults rather than at a call site, and a position-free message
+  stays byte-identical across Hugo's parallel page renders, letting the
+  logger's duplicate suppression back up the store sentinel -- the same
+  reasoning the reserved-taxonomy warning states.
+
+  Expected context (dict):
+  - .key      (string) - Configuration key name; names the offending key in
+    the warning and scopes the deduplication sentinel to it.
+  - .value    (any)    - The value the cascade resolved for that key.
+  - .fallback (any)    - The shipped default for the same key, used when the
+    resolved value has no list spelling.
+
+  Return value: one slice of raw entries, left exactly as written; the
+  caller owns trimming, casing and its own per-key rules. One terminal
+  return.
+*/}}
+
+{{- $value := .value -}}
+{{- $usable := or (reflect.IsSlice $value) (eq (printf "%T" $value) "string") -}}
+{{- if not $usable -}}
+  {{/* The observed shape is named in the consumer's own vocabulary; Go's
+       internal type spelling (hmaps.Params) would name nothing a consumer
+       can find in their configuration file. */}}
+  {{- $shape := printf "a %s value" (printf "%T" $value) -}}
+  {{- if reflect.IsMap $value -}}{{- $shape = "a table" -}}
+  {{- else if eq (printf "%T" $value) "bool" -}}{{- $shape = "a boolean" -}}
+  {{- end -}}
+  {{- partial "search/lib/warn.html" (dict
+      "key" (printf "search:warn:non-list:%s" .key)
+      "message" (printf "[search] Ignoring the %s value: it was written as %s, but the key expects a list or a comma-separated string, so serializing it would publish one entry that matches nothing. The shipped default applies." .key $shape)) -}}
+  {{- $value = .fallback -}}
+{{- end -}}
+
+{{- $entries := slice -}}
+{{- if reflect.IsSlice $value -}}
+  {{- $entries = $value -}}
+{{- else if ne $value nil -}}
+  {{- $entries = split (printf "%v" $value) "," -}}
+{{- end -}}
+
+{{- return $entries -}}

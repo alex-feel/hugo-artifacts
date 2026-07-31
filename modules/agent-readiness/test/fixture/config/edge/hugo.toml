@@ -1,0 +1,109 @@
+# The `edge` environment collects the misconfigurations and deployment shapes
+# that no other build can reach. They are grouped into one environment because
+# they do not interact: each drives a different guard, and none of them changes
+# what the others observe.
+#
+# What it reaches, and why nothing else can:
+#
+#   1. A SUBPATH baseURL. Every other fixture is at a domain root, which hides
+#      the one input form Hugo's absURL treats specially: a value that already
+#      starts with "/" resolves against the protocol and host only, DISCARDING
+#      the baseURL's path. A consumer-authored "/sitemap.xml" therefore has to
+#      be normalized before absolutizing, and only a non-root baseURL can tell
+#      a correct implementation from a broken one.
+#
+#   2. A license with a `url` but no `name`. The `configured` environment sets
+#      all three license keys together, so the guard that refuses to publish
+#      a Markdown link with an empty label never runs there.
+#
+#   3. An unrecognized `sitemap_section_target`. No other environment sets the
+#      key at all, so neither the enum's warn nor its non-default branches
+#      have ever executed.
+#
+#   4. A `sections` allow-list that admits /dupes, whose two pages publish to
+#      one URL. The collision guard sits after the allow-list in the filter,
+#      so the pages must be IN scope to reach it -- and they are out of scope
+#      everywhere else, which is what keeps every other build's counts intact.
+baseURL = 'https://example.org/docs/'
+
+[params]
+
+  [params.agent]
+    sections = ['/blog', 'projects/', '/dupes']
+
+    [params.agent.license]
+      # Deliberately no `name`. The llms.txt line is composed as [name](url),
+      # so emitting it would publish a link with an empty label.
+      url = 'https://creativecommons.org/licenses/by/4.0/'
+
+    [params.agent.robots]
+      # The directive emission paths execute in no other build: the module
+      # ships all four lists empty (correctly -- a Disallow shipped as a
+      # default would deindex a site on the build after import, and a
+      # shipped Allow would tie against a configured Disallow of equal path
+      # length, a tie RFC 9309 resolves in favor of Allow). The catch-all
+      # pair proves Allow and Disallow placement inside one group.
+      # bots_disallow is set WITHOUT bots_allow on purpose: this is the
+      # blocking shape the empty bots_allow default exists to keep working,
+      # so the bot groups here must carry no Allow line at all.
+      allow = ['/']
+      # The last entry carries an embedded line break (a TOML basic string
+      # with \n): the emitter must collapse it to one Disallow line rather
+      # than let a path value inject a directive line of its own.
+      disallow = ['/private/', '/tmp/', "/drafts/\n/old-drafts/"]
+      bots_disallow = ['/']
+      # A scalar where a list is expected. Go's range accepts no string, so
+      # without coercion this alone would stop the build -- against the
+      # module's published never-fail contract.
+      extra = '# a single extra line written as a bare string'
+
+    # A scalar where an array of field names belongs. This is the table every
+    # consuming site hand-authors, and a one-field vocabulary is ordinary, so
+    # `keys = 'title'` is at least as likely as the bots typo above -- and it
+    # aborted the build until it was coerced.
+    [params.agent.frontmatter]
+      [params.agent.frontmatter.dupes]
+        keys = 'title'
+
+    [params.agent.markdown]
+      sitemap_section_target = 'bogus'
+      # Nested-map merge, not replace: setting ONE key here must leave every
+      # other markdown key at its shipped value. That is a named acceptance
+      # criterion no build could reach, because no fixture had ever set a
+      # markdown content key at all.
+      canonical = false
+
+    # Restated in full, not extended: a higher-priority config REPLACES a
+    # slice rather than merging into it. Without a section entry that admits
+    # /dupes, the collision guard would still fire but nothing would list the
+    # surviving page, so "listed exactly once" would assert against zero.
+    [params.agent.llms]
+      license = true
+
+      [[params.agent.llms.sections]]
+        name = 'Blog'
+        section = 'blog'
+        limit = 0
+
+      [[params.agent.llms.sections]]
+        name = 'Projects'
+        section = '/projects/'
+        limit = 0
+
+      [[params.agent.llms.sections]]
+        name = 'Dupes'
+        section = '/dupes'
+        limit = 0
+
+      # A non-numeric limit. `int` raises a template error on it, which would
+      # stop the build over a one-character config typo, so it is reported and
+      # read as 0 -- complete -- instead.
+      [[params.agent.llms.sections]]
+        name = 'Bad Limit'
+        section = 'blog'
+        limit = 'all'
+
+      [[params.agent.llms.optional]]
+        name = 'Sitemap'
+        url = '/sitemap.xml'
+        note = 'Every published URL.'

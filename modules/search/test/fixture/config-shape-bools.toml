@@ -1,0 +1,12 @@
+# Overlay for a STATIC build (hugo --config hugo.toml,config-shape-bools.toml).
+#
+# Booleans written where the three list-valued keys belong -- the natural
+# mis-write of a key a consumer thinks is a switch. A bare `false` has no
+# list spelling either, so it takes the same warn-once-and-fall-back path as
+# a table; stringifying it would index the literal entry "false" and empty
+# the index just as silently.
+[params]
+  [params.search]
+    sections = false
+    taxonomies = true
+    stopwords_extra = false

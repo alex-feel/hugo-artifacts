@@ -1,0 +1,55 @@
+{{/*
+  agent-readiness/lib/flatten-value.html -- utility (LIB tier).
+
+  Purpose: render one front-matter value as the prose string the facts
+  document publishes.
+
+  A slice is joined with ", " and a map is rendered as sorted "key: value"
+  pairs, rather than stringified. Go's %v yields "[a b]" for a slice and
+  "map[k:v]" for a map -- debug representations, not something a reader or an
+  agent should meet in a published document, and not something the Markdown
+  twin emits for the same front-matter key (the twin runs it through jsonify,
+  so it publishes valid JSON). Both surfaces are documented as describing a
+  page with ONE vocabulary, so neither may leak Go internals. Scalars go
+  through %v unchanged.
+
+  Map keys come out sorted, which Go's template range guarantees, so the
+  published document is byte-stable across builds of identical content.
+
+  This exists as a shared routine because the facts document has TWO places
+  that render a front-matter value -- the identity rows and the per-section
+  nested bullets -- and only one of them flattened slices, so an identity row
+  naming a list-valued key published "[a b]" while a section bullet naming
+  the same key published "a, b".
+
+  Expected context: the value (the dot, not a dict). Any type.
+
+  Return value: the rendered string, "" for nil. ONE terminal return.
+*/}}
+
+{{- $out := "" -}}
+
+{{- if ne . nil -}}
+  {{- if reflect.IsSlice . -}}
+    {{- $parts := slice -}}
+    {{- range . -}}{{- $parts = $parts | append (printf "%v" .) -}}{{- end -}}
+    {{- $out = delimit $parts ", " -}}
+  {{- else if reflect.IsMap . -}}
+    {{/* Go's template range visits a map's keys in sorted order, so the
+         rendering is stable across builds without an explicit sort. */}}
+    {{- $parts := slice -}}
+    {{- range $k, $v := . -}}
+      {{- $parts = $parts | append (printf "%s: %v" $k $v) -}}
+    {{- end -}}
+    {{- $out = delimit $parts ", " -}}
+  {{- else -}}
+    {{- $out = printf "%v" . -}}
+  {{- end -}}
+  {{/* One line always: the prose string this returns lands inside a single
+       line of a line-oriented document, so an embedded line break in the
+       source value would change the document's structure, not the value's
+       text. */}}
+  {{- $out = partial "agent-readiness/lib/inline.html" $out -}}
+{{- end -}}
+
+{{- return $out -}}

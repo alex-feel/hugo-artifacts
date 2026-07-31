@@ -1,4 +1,4 @@
-// Steps 7.2 and 7.3 -- the person @id surface.
+// The person @id surface.
 //
 // The whole value of $seo.ids.person is that it is CONSTANT across the site:
 // a consumer emitting Person-graph nodes through the jsonld-extra hook used

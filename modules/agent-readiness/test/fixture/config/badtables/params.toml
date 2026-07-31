@@ -1,0 +1,39 @@
+# The `badtables` environment: the section arrays written as bare strings
+# instead of arrays of tables.
+#
+# It needs its own environment because TOML cannot mix an `[[a.b]]`
+# array-of-tables header with inline values under the same key -- the bare form
+# has to REPLACE the whole array, which no other environment can afford.
+#
+# `sections = ['blog']` is a real slice, so it passes the scalar coercion
+# untouched; every string entry then fails the entry-must-be-a-table test.
+# Dropped silently -- which is what shipped until this build existed -- it
+# publishes an llms.txt with an H1 and no sections at all, and an about.md with
+# no section listings: exit 0, zero warnings, documents that look deliberate.
+[agent]
+
+  # A REAL slice of bare strings. The scalar coercion cannot see it -- the
+  # value passes reflect.IsSlice -- and every entry then fails the
+  # entry-must-be-a-table test. Dropped silently it publishes no index at all,
+  # which is byte-indistinguishable from the documented zero-skills state.
+  skills = ['my-skill', 'another-skill']
+
+  [agent.llms]
+    sections = ['blog', 'projects']
+    # The same bare-string-array shape on the optional entries: dropped
+    # silently it removes the whole `## Optional` heading.
+    optional = ['sitemap']
+
+  [agent.facts]
+    sections = ['blog']
+
+  # The contact page below carries bare-string channels.
+  [agent.facts.contact]
+    page = '/contact-bare'
+    key = 'channels'
+
+  [agent.facts.identity]
+    page = '/'
+    # Bare strings inside a real slice. Dropped silently they withhold the
+    # entire `## Identity` block of the one-fetch facts document.
+    rows = ['role', 'based_in']

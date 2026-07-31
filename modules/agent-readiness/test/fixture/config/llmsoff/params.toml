@@ -1,0 +1,35 @@
+# The `llmsoff` environment: llms.txt switched off while `llmstxt` stays wired
+# in [outputs] home.
+#
+# It is the llms.txt counterpart of `notwins`, and it exists for the same
+# reason: an output format being WIRED is not the same as this module having
+# rendered anything into it. With the switch off, llms.html emits zero bytes
+# and Hugo publishes no /llms.txt at all -- yet `site.Home.OutputFormats.Get
+# "llmstxt"` still resolves, because that method answers a question about the
+# consumer's [outputs] lists.
+#
+# Two surfaces point at llms.txt: the trailing pointer block appended to every
+# Markdown twin, and the Sitemap block in about.md. Both would publish a dead
+# link on this configuration if they trusted the format alone.
+[agent]
+
+  # The falsy non-map on the ALL-TIERS loop, the counterpart of `license =
+  # false` in notwins. `frontmatter` is chosen because a falsy value replaces
+  # the whole table, and this build asserts nothing about per-section
+  # vocabularies.
+  frontmatter = false
+
+  [agent.llms]
+    enable = false
+
+  # A scalar written for a consumer-authored SUB-TABLE, carried here because
+  # the two builds that would otherwise host it need their own facts blocks
+  # intact. `[params.agent.facts] identity = '/'` is the natural mis-write of
+  # `[params.agent.facts.identity] page = '/'`, and Hugo's `default`
+  # substitutes only on a FALSY value -- so the string survived to facts.html,
+  # `.rows` was evaluated as a field on a string, and the build stopped.
+  [agent.facts]
+    identity = '/'
+    # The other half of the same loop. Both sub-tables must be covered, or
+    # dropping one from `range $t := slice "identity" "contact"` ships green.
+    contact = '/contact'

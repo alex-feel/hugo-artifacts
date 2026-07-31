@@ -40,24 +40,22 @@
 
 {{/* 2. Site-configurable extra front-matter keys (params.seo.image_params):
      each named top-level param contributes its value or values. */}}
-{{- with $page.Param "seo.image_params" -}}
-  {{- range . -}}
-    {{- $key := lower (printf "%v" .) -}}
-    {{- with index $page.Params $key -}}
-      {{- if reflect.IsSlice . -}}
-        {{- range . -}}
-          {{- $candidates = $candidates | append . -}}
-        {{- end -}}
-      {{- else -}}
+{{- range partial "seo/lib/as-list.html" ($page.Param "seo.image_params") -}}
+  {{- $key := lower (printf "%v" .) -}}
+  {{- with index $page.Params $key -}}
+    {{- if reflect.IsSlice . -}}
+      {{- range . -}}
         {{- $candidates = $candidates | append . -}}
       {{- end -}}
+    {{- else -}}
+      {{- $candidates = $candidates | append . -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
 
 {{/* 3. Native .Params.images; resolve/image.html resolves each entry as a
      bundle resource, a global resource, or a path/URL. */}}
-{{- with $page.Params.images -}}
+{{- with partial "seo/lib/as-list.html" $page.Params.images -}}
   {{- range . -}}
     {{- $candidates = $candidates | append . -}}
   {{- end -}}

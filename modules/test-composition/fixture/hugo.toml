@@ -1,0 +1,83 @@
+# A consuming site that imports seo, agent-readiness AND search at once.
+#
+# The ONE table this fixture exists for is [outputs]. Hugo REPLACES the output
+# list per page kind rather than merging it, and a module's own [outputs] table
+# is inert -- it does not reach the consumer configuration at all. Every module
+# README therefore shows an [outputs] block of its own, and a consumer that
+# copies them one after another either fails to load the configuration (TOML
+# refuses a second `[outputs]` table in the same file) or keeps only the last
+# block and silently loses every document the earlier ones asked for. The
+# single merged home list below is the shape that publishes all of them, and
+# the spec asserts every name in it.
+#
+# [outputFormats] and [mediaTypes] DO merge additively from module
+# configuration, which is why `llmstxt`, `agentfacts`, `agentskills`,
+# `searchindex` and `opensearch` are usable here by name although this file
+# defines none of them.
+baseURL = 'https://composition.example/'
+title = 'Composition Fixture'
+locale = 'en-us'
+
+# robots.txt comes from the agent-readiness module; this fixture deliberately
+# ships no layouts/robots.txt of its own, which would shadow it silently.
+enableRobotsTXT = true
+
+[outputs]
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'agentfacts', 'agentskills', 'searchindex', 'opensearch']
+  section = ['html', 'rss', 'markdown']
+  page = ['html', 'markdown']
+
+[module]
+
+  [module.hugoVersion]
+    min = "0.160.0"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/seo"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/agent-readiness"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/search"
+
+[params]
+
+  [params.seo]
+    description = 'A fixture site that imports the seo, agent-readiness and search modules together.'
+
+    [params.seo.organization]
+      name = 'Composition Fixture'
+      type = 'Organization'
+
+  [params.agent]
+    sections = ['/blog']
+
+    [params.agent.llms]
+      title = 'Composition Fixture'
+      summary = 'A fixture site that imports the seo, agent-readiness and search modules together.'
+
+      [[params.agent.llms.sections]]
+        name = 'Blog'
+        section = 'blog'
+        limit = 0
+
+    [params.agent.facts]
+      title = 'About This Fixture'
+      summary = 'Everything the fixture knows, in one fetch.'
+
+      [[params.agent.facts.sections]]
+        name = 'Blog'
+        section = 'blog'
+
+  # No [[params.agent.skills]] entries: every skill entry names a remote
+  # source the module fetches at build time, and this suite stays offline. The
+  # `agentskills` format therefore stays wired in the home list -- which is
+  # what the merged-list assertion reads -- while publishing no document, the
+  # documented behavior for an unconfigured skills surface.
+
+  [params.search]
+    sections = 'blog'
+    # Dotted rather than a [table] header, which would swallow the flat key
+    # above it into that table.
+    opensearch.enable = true

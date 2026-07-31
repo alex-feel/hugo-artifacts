@@ -1,4 +1,4 @@
-// Step 7.1 -- alternate representations and static link relations.
+// Alternate representations and static link relations.
 //
 // The load-bearing pair of assertions is that the Markdown alternate appears
 // AND the RSS alternate still appears: head-meta.html deliberately narrows
@@ -8,7 +8,7 @@
 // always on is indistinguishable from one that works unless both are checked.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {configuredDir, linkRels, rawHtml, warnCount, PAGES} from './helpers.js';
+import {configuredDir, linkRels, rawHtml, subpathDir, warnCount, PAGES} from './helpers.js';
 
 const markdownAlternates = (rel, dir) =>
   linkRels(rel, dir).filter((l) => l.rel === 'alternate' && l.type === 'text/markdown');
@@ -87,6 +87,58 @@ test('configured: registered relations carry their required attributes', () => {
   assert.match(privacy.href, /^https:\/\//, 'a site-relative value must be resolved to absolute');
 });
 
+test('a subpath baseURL survives into every emitted href', () => {
+  // Hugo's absURL resolves a value that already begins with "/" against the
+  // protocol and host ONLY, discarding the baseURL path -- and the leading
+  // slash is the form this module documents for all four [seo.links] keys and
+  // for the canonical override. At a domain root, which every other build
+  // uses, a broken implementation is byte-identical to a correct one, so this
+  // is the only place the difference exists.
+  const under = (rel) => linkRels(rel, subpathDir);
+  let checked = 0;
+  for (const [name, rel] of Object.entries(PAGES)) {
+    for (const l of under(rel)) {
+      if (!l.href?.startsWith('https://seo-fixture.example')) continue;
+      assert.ok(
+        l.href.startsWith('https://seo-fixture.example/docs/'),
+        `${name}: rel="${l.rel}" href ${l.href} dropped the baseURL path`,
+      );
+      checked += 1;
+    }
+  }
+  assert.ok(checked > 0, 'the subpath build must emit at least one on-site link');
+});
+
+test('every consumer-authored URL surface keeps the baseURL path', () => {
+  // The link relations were the first call sites normalized; these three were
+  // the ones the first sweep missed, each fed by a documented site-root form.
+  // Asserted on the raw HTML rather than through the link parser, because
+  // they land in meta content, JSON-LD and image tags rather than in <link>.
+  const html = rawHtml(PAGES.page, subpathDir);
+  const bad = [...html.matchAll(/https:\/\/seo-fixture\.example(?!\/docs\/)[^\s"'<]*/g)].map(
+    (m) => m[0],
+  );
+  assert.deepEqual(bad, [], 'no emitted URL may drop the /docs/ path component');
+
+  assert.ok(
+    html.includes('https://seo-fixture.example/docs/img/og-default.png'),
+    'default_image feeds og:image and the JSON-LD image nodes',
+  );
+  const home = rawHtml(PAGES.home, subpathDir);
+  assert.ok(
+    home.includes('https://seo-fixture.example/docs/search/?q={search_term_string}'),
+    'the SearchAction target keeps the path',
+  );
+});
+
+test('a consumer-authored canonical override keeps the baseURL path', () => {
+  // rel="canonical" is the one tag whose entire job is to be exactly right;
+  // a dropped path prefix declares a canonical URL the site does not serve.
+  const canonical = linkRels(PAGES.page, subpathDir).find((l) => l.rel === 'canonical');
+  assert.ok(canonical, 'a canonical link must be emitted');
+  assert.equal(canonical.href, 'https://seo-fixture.example/docs/canonical-override/');
+});
+
 test('an unregistered [seo.links] key warns exactly once and emits no tag', () => {
   assert.equal(
     warnCount(/unknown \[seo\.links\] key/, true),
@@ -110,6 +162,7 @@ test('the unset build emits nothing at all at the alternates call site', () => {
   // whitespace -- so the head stays byte-identical to a build from before the
   // partial existed. It is called immediately after feed discovery, so the
   // bytes following the feed link are the exact witness.
+  let checked = 0;
   for (const [name, rel] of Object.entries(PAGES)) {
     const head = /<head>([\s\S]*?)<\/head>/.exec(rawHtml(rel))?.[1] ?? '';
     const feed = head.indexOf('rss&#43;xml');
@@ -120,5 +173,12 @@ test('the unset build emits nothing at all at the alternates call site', () => {
       /^\n\n\S/,
       `${name}: exactly one blank line must follow the feed link, as it did before the partial existed`,
     );
+    checked += 1;
   }
+  // Without this the whole test degrades to zero assertions the day the feed
+  // anchor changes shape -- every iteration would take the `continue` above
+  // and the test would pass having proven nothing. This is the only standing
+  // guard for a byte-identity result that was measured once by hand against a
+  // pre-change worktree and cannot be re-measured in CI.
+  assert.equal(checked, Object.keys(PAGES).length, 'every page shape must carry the feed anchor');
 });

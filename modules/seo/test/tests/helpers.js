@@ -1,8 +1,9 @@
 /* global process */
 // Shared helpers for the build-output assertion specs. The runner exports
-// FIXTURE_PUBLIC (the baseline build, with the Phase 7 config blocks unset),
-// FIXTURE_PUBLIC_CONFIGURED (the build with all three blocks set), the two
-// captured hugo build logs, and HUGO_VERSION.
+// FIXTURE_PUBLIC (the baseline build, with those config blocks unset),
+// FIXTURE_PUBLIC_CONFIGURED (the build with all three blocks set), one
+// FIXTURE_PUBLIC_* variable per remaining environment, the captured hugo
+// build logs, and HUGO_VERSION.
 import {readFileSync, existsSync} from 'node:fs';
 import {resolve, join} from 'node:path';
 import {parse} from 'node-html-parser';
@@ -11,6 +12,35 @@ export const publicDir = resolve(process.env.FIXTURE_PUBLIC ?? 'fixture/public/b
 export const configuredDir = resolve(
   process.env.FIXTURE_PUBLIC_CONFIGURED ?? 'fixture/public/configured',
 );
+// The same configured surfaces under a baseURL that carries a PATH. At a
+// domain root a correct URL absolutization and a broken one emit identical
+// bytes, so this tree is the only place the difference is visible.
+export const subpathDir = resolve(process.env.FIXTURE_PUBLIC_SUBPATH ?? 'fixture/public/subpath');
+// The config shapes that used to stop the build or silently disable a surface.
+export const badtypesDir = resolve(
+  process.env.FIXTURE_PUBLIC_BADTYPES ?? 'fixture/public/badtypes',
+);
+// The module switched off the way a consumer actually reaches for it.
+export const offswitchDir = resolve(
+  process.env.FIXTURE_PUBLIC_OFFSWITCH ?? 'fixture/public/offswitch',
+);
+// A second language whose params set a noindex robots baseline: the only
+// build in which a per-language params read and a rendering-language one
+// produce different bytes.
+export const multilingualDir = resolve(
+  process.env.FIXTURE_PUBLIC_MULTILINGUAL ?? 'fixture/public/multilingual',
+);
+// A two-language site whose `posts` section is split across pagers: the only
+// build in which a document is served from a URL that is not the page's own
+// .Permalink, so it is the only place a self-referential URL can be checked.
+export const paginationDir = resolve(
+  process.env.FIXTURE_PUBLIC_PAGINATION ?? 'fixture/public/pagination',
+);
+// The baseline content published through the other JSON-LD container:
+// seo.jsonld_container = 'graph' collapses every page's nodes into one
+// <script> holding a @graph array, which is a serialization site no other
+// build reaches.
+export const graphDir = resolve(process.env.FIXTURE_PUBLIC_GRAPH ?? 'fixture/public/graph');
 
 export function rawHtml(rel, dir = publicDir) {
   return readFileSync(join(dir, rel), 'utf8');
@@ -58,23 +88,51 @@ export function linkRels(rel, dir = publicDir) {
     }));
 }
 
-export function buildLog(configured = false) {
-  const p = configured ? process.env.HUGO_BUILD_LOG_CONFIGURED : process.env.HUGO_BUILD_LOG;
+export function buildLog(which = 'baseline') {
+  const keys = {
+    baseline: 'HUGO_BUILD_LOG',
+    configured: 'HUGO_BUILD_LOG_CONFIGURED',
+    subpath: 'HUGO_BUILD_LOG_SUBPATH',
+    badtypes: 'HUGO_BUILD_LOG_BADTYPES',
+    offswitch: 'HUGO_BUILD_LOG_OFFSWITCH',
+    multilingual: 'HUGO_BUILD_LOG_MULTILINGUAL',
+    pagination: 'HUGO_BUILD_LOG_PAGINATION',
+    graph: 'HUGO_BUILD_LOG_GRAPH',
+  };
+  // A key map that throws, rather than a two-state boolean: the boolean form
+  // had no path to the third log at all, so a warning assertion against the
+  // subpath build would have silently read the baseline one.
+  if (typeof which === 'boolean') which = which ? 'configured' : 'baseline';
+  if (!Object.hasOwn(keys, which)) {
+    throw new Error(`buildLog: unknown build ${JSON.stringify(which)}`);
+  }
+  const p = process.env[keys[which]];
   return p ? readFileSync(resolve(p), 'utf8') : '';
 }
 
-export function warnCount(pattern, configured = false) {
-  return buildLog(configured)
+export function warnCount(pattern, which = 'baseline') {
+  return buildLog(which)
     .split(/\r?\n/)
     .filter((line) => line.startsWith('WARN') && pattern.test(line)).length;
 }
 
 // Every page the fixture builds, in both trees.
 export const PAGES = {
+  scalarTaxonomies: 'blog/scalar-taxonomies/index.html',
+  scalarSubtables: 'blog/scalar-subtables/index.html',
+  scalarSeoBlock: 'blog/scalar-seo-block/index.html',
+  falsySeoBlock: 'blog/falsy-seo-block/index.html',
+  keywordsFallback: 'blog/keywords-fallback/index.html',
   home: 'index.html',
   page: 'page/index.html',
   blogSection: 'blog/index.html',
   blogPost: 'blog/post/index.html',
   author: 'authors/jane-doe/index.html',
   promo: 'promo/thing/index.html',
+  undecodableRaster: 'undecodable-raster/index.html',
+  avifCover: 'avif-cover/index.html',
+  decodableRaster: 'decodable-raster/index.html',
+  mapImages: 'map-images/index.html',
+  mapTaxonomies: 'blog/map-taxonomies/index.html',
+  tableCanonical: 'blog/table-canonical/index.html',
 };
