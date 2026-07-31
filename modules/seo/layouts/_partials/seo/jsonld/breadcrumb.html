@@ -42,7 +42,7 @@
       {{- $items = $items | append (dict "name" .LinkTitle "url" .Permalink) -}}
     {{- end -}}
   {{- end -}}
-  {{- $items = $items | append (dict "name" $seo.title "url" $page.Permalink "last" true) -}}
+  {{- $items = $items | append (dict "name" $seo.title "url" $seo.pageUrl "last" true) -}}
 
   {{- if ge (len $items) 2 -}}
     {{- $elements := slice -}}
@@ -109,7 +109,7 @@
         {{- end -}}
         {{- $result = $result | append (dict
           "@type" "BreadcrumbList"
-          "@id" (printf "%s#breadcrumb-%d" $page.Permalink $n)
+          "@id" (printf "%s#breadcrumb-%d" $seo.pageUrl $n)
           "name" $trailName
           "itemListElement" $elements
         ) -}}

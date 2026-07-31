@@ -13,9 +13,15 @@
   Expected context: the current Page (the dot).
 
   Return value: the $seo dict with exactly these keys:
-    title, titleFull, description, canonical, images, datePublished,
-    dateModified, dateCreated, locale, lang, robots, robotsBots, ogType,
-    typeSet, authors, ids, isHome, is404, emitJsonld.
+    title, titleFull, description, canonical, pageUrl, pagerSuffix,
+    pagerNumber, images, datePublished, dateModified, dateCreated, locale,
+    lang, robots, robotsBots, ogType, typeSet, authors, ids, isHome, is404,
+    emitJsonld.
+
+  pageUrl is the absolute URL the document is published at, which differs
+  from .Permalink on every pager beyond the first; pagerSuffix is the path
+  segment that pager adds ("page/2/"), used to name the corresponding pager
+  of each translation; pagerNumber is its 1-based number.
 
   $seo.ids carries six keys: website, organization, webpage, breadcrumb,
   content, and person. `person` and `organization` are DIFFERENT anchors even
@@ -43,9 +49,21 @@
      surfaces can never diverge (see resolve/description.html). */}}
 {{- $description := partial "seo/resolve/description.html" $page -}}
 
-{{/* Absolute canonical URL: seo.canonical -> canonical alias -> .Permalink
-     (see resolve/canonical.html). */}}
-{{- $canonical := partial "seo/resolve/canonical.html" $page -}}
+{{/* Pager identity {number, suffix, url} (see resolve/pager.html). Called
+     EXACTLY ONCE per render, here, because the partial tracks renders of the
+     page in the page store to know when reading the paginator is safe; a
+     second call within one render would read a paginator that the consumer's
+     list template has not built yet. $pageUrl is the URL that served this
+     document -- the pager URL on a pager beyond the first, the page permalink
+     everywhere else -- and every self-referencing URL the module emits
+     (canonical, og:url, the page-scoped @ids, the WebPage url, the hreflang
+     self-entry) is derived from it. */}}
+{{- $pager := partial "seo/resolve/pager.html" $page -}}
+{{- $pageUrl := $pager.url | default $page.Permalink -}}
+
+{{/* Absolute canonical URL: seo.canonical -> canonical alias -> the served
+     URL (see resolve/canonical.html). */}}
+{{- $canonical := partial "seo/resolve/canonical.html" (dict "page" $page "self" $pager.url) -}}
 
 {{/* Ordered normalized image dicts {url,width,height,type,alt} (see
      resolve/images.html); images[0] is the primary OG/Twitter image, full
@@ -81,7 +99,7 @@
      resolved content type; when typeSet is empty there is no content node. */}}
 {{- $contentId := "" -}}
 {{- with $typesDict.typeSet -}}
-  {{- $contentId = partial "seo/resolve/id.html" (dict "page" $page "kind" "content" "type" (index . 0)) -}}
+  {{- $contentId = partial "seo/resolve/id.html" (dict "page" $page "base" $pageUrl "kind" "content" "type" (index . 0)) -}}
 {{- end -}}
 {{/* The site-owner Person anchor. Resolved from the AUTHOR PAGE, not from
      the current page, so the value is CONSTANT across the site -- the same
@@ -113,8 +131,8 @@
 {{- $ids := dict
   "website" (partial "seo/resolve/id.html" (dict "page" $page "kind" "website"))
   "organization" (partial "seo/resolve/id.html" (dict "page" $page "kind" "organization"))
-  "webpage" (partial "seo/resolve/id.html" (dict "page" $page "kind" "webpage"))
-  "breadcrumb" (partial "seo/resolve/id.html" (dict "page" $page "kind" "breadcrumb"))
+  "webpage" (partial "seo/resolve/id.html" (dict "page" $page "base" $pageUrl "kind" "webpage"))
+  "breadcrumb" (partial "seo/resolve/id.html" (dict "page" $page "base" $pageUrl "kind" "breadcrumb"))
   "content" $contentId
   "person" $personId
 -}}
@@ -142,6 +160,9 @@
   "titleFull" $titleDict.titleFull
   "description" $description
   "canonical" $canonical
+  "pageUrl" $pageUrl
+  "pagerSuffix" $pager.suffix
+  "pagerNumber" $pager.number
   "images" $images
   "datePublished" $dates.published
   "dateModified" $dates.modified

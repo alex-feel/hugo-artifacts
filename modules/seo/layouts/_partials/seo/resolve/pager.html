@@ -1,0 +1,78 @@
+{{/*
+  Resolves the PAGER IDENTITY of the document currently being rendered. Pure
+  value chooser plus one render-tracking store write: no HTML.
+
+  Context: the current Page, passed as the dot.
+
+  THE PROBLEM THIS EXISTS TO SOLVE: Hugo renders ONE list Page object once per
+  pager, and .Permalink / .RelPermalink stay pinned to the FIRST pager on all
+  of them. Every URL this module emits for the document -- canonical, og:url,
+  the JSON-LD @ids and the WebPage url, the hreflang cluster -- would
+  therefore name /posts/ while the document is published at /posts/page/2/,
+  so both documents would declare one identity. Only PAGER.URL carries the
+  URL that actually served the document.
+
+  WHY THE PAGINATOR IS NOT SIMPLY READ: pagination is built ONCE per page
+  output and the first invocation wins -- every later call returns that
+  cached paginator and ignores its own arguments. This partial runs from the
+  head, BEFORE the consumer's list template body. Calling .Paginator on the
+  first render would therefore build the paginator with the SITE DEFAULTS and
+  hand that back to a list template that asked for its own collection and its
+  own pager size, silently republishing the section with the wrong entries
+  and the wrong number of pagers.
+
+  So the paginator is read only on a render where it must already exist. A
+  page is re-rendered with the SAME .RelPermalink only when Hugo is walking
+  the pagers of an ALREADY-BUILT paginator: a second output format has its
+  own distinct .RelPermalink, so it cannot be mistaken for a pager render.
+  The first render records itself in the page store and reads nothing; every
+  later render with that same key reads the paginator that the list template
+  built in between.
+
+  The pager SUFFIX is derived from the pager's own URL rather than from a
+  pagination path setting, because the pager URL is the authoritative form of
+  what Hugo appended, per language and per baseURL path. It is used to name
+  the corresponding pager of each translation.
+
+  Returns a dict with exactly these keys:
+  - number (int)    The 1-based pager number, 1 when the document is not a
+                    pager beyond the first (or is not a list page at all).
+  - suffix (string) The path segment the pager adds to the page URL, e.g.
+                    "page/2/"; "" on the first pager.
+  - url    (string) The absolute URL that served this document, "" when it is
+                    the page's own .Permalink.
+
+  ONE terminal return.
+*/}}
+
+{{- $page := . -}}
+
+{{- $number := 1 -}}
+{{- $suffix := "" -}}
+{{- $url := "" -}}
+
+{{/* Pagination exists only on these kinds; .Paginator on any other kind is
+     an error, and the store write would be pointless there. */}}
+{{- if in (slice "home" "section" "taxonomy" "term") $page.Kind -}}
+  {{- $key := printf "seo:pager-rendered:%s" $page.RelPermalink -}}
+  {{- if $page.Store.Get $key -}}
+    {{- with $page.Paginator -}}
+      {{- if gt .PageNumber 1 -}}
+        {{/* The suffix is taken only when the pager URL genuinely extends
+             the page URL. Under a URL style where it does not, the document
+             keeps the page permalink it emitted before -- a correct URL for
+             the first pager and the previous behavior everywhere else --
+             rather than a URL assembled from a guess. */}}
+        {{- if hasPrefix .URL $page.RelPermalink -}}
+          {{- $suffix = strings.TrimPrefix $page.RelPermalink .URL -}}
+          {{- $number = .PageNumber -}}
+          {{- $url = printf "%s%s" $page.Permalink $suffix -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- else -}}
+    {{- $page.Store.Set $key true -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return dict "number" $number "suffix" $suffix "url" $url -}}

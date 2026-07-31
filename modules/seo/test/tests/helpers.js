@@ -30,6 +30,17 @@ export const offswitchDir = resolve(
 export const multilingualDir = resolve(
   process.env.FIXTURE_PUBLIC_MULTILINGUAL ?? 'fixture/public/multilingual',
 );
+// A two-language site whose `posts` section is split across pagers: the only
+// build in which a document is served from a URL that is not the page's own
+// .Permalink, so it is the only place a self-referential URL can be checked.
+export const paginationDir = resolve(
+  process.env.FIXTURE_PUBLIC_PAGINATION ?? 'fixture/public/pagination',
+);
+// The baseline content published through the other JSON-LD container:
+// seo.jsonld_container = 'graph' collapses every page's nodes into one
+// <script> holding a @graph array, which is a serialization site no other
+// build reaches.
+export const graphDir = resolve(process.env.FIXTURE_PUBLIC_GRAPH ?? 'fixture/public/graph');
 
 export function rawHtml(rel, dir = publicDir) {
   return readFileSync(join(dir, rel), 'utf8');
@@ -85,6 +96,8 @@ export function buildLog(which = 'baseline') {
     badtypes: 'HUGO_BUILD_LOG_BADTYPES',
     offswitch: 'HUGO_BUILD_LOG_OFFSWITCH',
     multilingual: 'HUGO_BUILD_LOG_MULTILINGUAL',
+    pagination: 'HUGO_BUILD_LOG_PAGINATION',
+    graph: 'HUGO_BUILD_LOG_GRAPH',
   };
   // A key map that throws, rather than a two-state boolean: the boolean form
   // had no path to the third log at all, so a warning assertion against the

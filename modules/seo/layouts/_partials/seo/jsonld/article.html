@@ -87,7 +87,7 @@
   {{- with $seo.description -}}
     {{- $node = merge $node (dict "description" .) -}}
   {{- end -}}
-  {{- $node = merge $node (dict "url" $page.Permalink) -}}
+  {{- $node = merge $node (dict "url" $seo.pageUrl) -}}
   {{- with $seo.lang -}}
     {{- $node = merge $node (dict "inLanguage" .) -}}
   {{- end -}}

@@ -1,0 +1,11 @@
+# The `graph` environment: the same content as the baseline build, published
+# through the OTHER JSON-LD container. `jsonld_container = 'graph'` routes
+# every page's node list through a single serialization site in
+# seo/head-jsonld.html -- one <script> holding a `@graph` array -- which no
+# other environment reaches, so without this build the whole graph branch is
+# published untested and only the per-node branch is checked. The
+# serialization-edge pages live in the default content directory this
+# environment mounts, so the same punctuation set that has to survive one node
+# per block also has to survive a document that nests every node under one key.
+[seo]
+  jsonld_container = 'graph'
