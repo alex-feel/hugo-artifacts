@@ -223,7 +223,7 @@
 
 {{- $boolKeys := dict
   "robots" (slice "enable" "sitemap")
-  "markdown" (slice "enable" "front_matter" "canonical" "last_updated" "license" "sitemap_section")
+  "markdown" (slice "enable" "front_matter" "canonical" "last_updated" "license" "sitemap_section" "section_pages")
   "llms" (slice "enable" "link_markdown" "license")
   "facts" (slice "enable" "link_markdown" "sitemap_section")
   "skills_index" (slice "enable")
@@ -413,6 +413,7 @@
      renderer calls T itself. */}}
 {{- $i18n := dict
   "sitemap_heading" (T "agent_sitemap_heading" | default "Sitemap")
+  "section_pages_heading" (T "agent_section_pages_heading" | default "Pages")
   "facts_title" (T "agent_facts_title" | default "About")
   "facts_identity_heading" (T "agent_facts_identity_heading" | default "Identity")
   "facts_contact_heading" (T "agent_facts_contact_heading" | default "Contact")

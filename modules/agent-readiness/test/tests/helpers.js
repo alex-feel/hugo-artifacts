@@ -1,7 +1,7 @@
 /* global process */
 // Shared helpers for the build-output assertion specs.
 //
-// The runner exports TWELVE published trees, and every one of them is
+// The runner exports THIRTEEN published trees, and every one of them is
 // load-bearing:
 // FIXTURE_PUBLIC (every content-license key unset), FIXTURE_PUBLIC_CONFIGURED
 // (the license table filled and both switches on, plus the bots_allow with
@@ -19,10 +19,14 @@
 // still wired -- the only shape that exercises the `enable` conjunct in any
 // renderer), FIXTURE_PUBLIC_BADTABLES (the section arrays written as bare
 // strings), FIXTURE_PUBLIC_NSOFF (the whole [params] agent namespace written
-// as a bare value), FIXTURE_PUBLIC_SHADOW (a fixture that ships its own
-// layouts/robots.txt), and FIXTURE_PUBLIC_PAGINATED (a fixture whose single
-// section spills past pagerSize, the only shape in which a surface can be
-// caught enumerating pager shells alongside the pages they list). It also
+// as a bare value), FIXTURE_PUBLIC_NOSECTIONPAGES (the single key
+// section_pages = false on top of the default configuration, the only build
+// in which stripping the roster block from a baseline section twin must
+// reproduce the published twin byte for byte), FIXTURE_PUBLIC_SHADOW (a
+// fixture that ships its own layouts/robots.txt), and FIXTURE_PUBLIC_PAGINATED
+// (a fixture whose single section spills past pagerSize, the only shape in
+// which a surface can be caught enumerating pager shells alongside the pages
+// they list). It also
 // exports the captured build logs, so
 // warning-count assertions read what Hugo actually said rather than
 // re-deriving it.
@@ -49,6 +53,9 @@ export const offDir = resolve(process.env.FIXTURE_PUBLIC_OFF ?? 'fixture/public/
 export const nsoffDir = resolve(process.env.FIXTURE_PUBLIC_NSOFF ?? 'fixture/public/nsoff');
 export const badtablesDir = resolve(
   process.env.FIXTURE_PUBLIC_BADTABLES ?? 'fixture/public/badtables',
+);
+export const nosectionpagesDir = resolve(
+  process.env.FIXTURE_PUBLIC_NOSECTIONPAGES ?? 'fixture/public/nosectionpages',
 );
 export const shadowDir = resolve(process.env.FIXTURE_PUBLIC_SHADOW ?? 'fixture-shadow/public');
 export const paginatedDir = resolve(
@@ -116,9 +123,16 @@ export function splitFrontMatter(text) {
   return {frontMatter: text.slice(4, end + 1), body: text.slice(end + 5)};
 }
 
-// All Markdown links in a document, as {text, url}.
+// All Markdown links in a document, as {text, url}. The text side tolerates
+// backslash-escaped characters, because the module's link builder emits `\]`
+// for a title carrying a bracket -- without that tolerance, every hostile-
+// title line silently drops out of every URL sweep built on this helper and
+// its URL is never resolution-checked.
 export function markdownLinks(text) {
-  return [...text.matchAll(/\[([^\]]*)\]\(([^)]+)\)/g)].map((m) => ({text: m[1], url: m[2]}));
+  return [...text.matchAll(/\[((?:\\.|[^\]\\])*)\]\(([^)]+)\)/g)].map((m) => ({
+    text: m[1],
+    url: m[2],
+  }));
 }
 
 // Top-level bullets under each `## ` heading, keyed by heading text. A nested
@@ -151,6 +165,7 @@ export function buildLog(which = 'baseline') {
     off: 'HUGO_BUILD_LOG_OFF',
     badtables: 'HUGO_BUILD_LOG_BADTABLES',
     nsoff: 'HUGO_BUILD_LOG_NSOFF',
+    nosectionpages: 'HUGO_BUILD_LOG_NOSECTIONPAGES',
     shadow: 'HUGO_BUILD_LOG_SHADOW',
     paginated: 'HUGO_BUILD_LOG_PAGINATED',
   };
