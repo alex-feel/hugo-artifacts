@@ -1,7 +1,7 @@
 /* global process */
 // Shared helpers for the build-output assertion specs.
 //
-// The runner exports ELEVEN published trees, and every one of them is
+// The runner exports TWELVE published trees, and every one of them is
 // load-bearing:
 // FIXTURE_PUBLIC (every content-license key unset), FIXTURE_PUBLIC_CONFIGURED
 // (the license table filled and both switches on, plus the bots_allow with
@@ -19,8 +19,11 @@
 // still wired -- the only shape that exercises the `enable` conjunct in any
 // renderer), FIXTURE_PUBLIC_BADTABLES (the section arrays written as bare
 // strings), FIXTURE_PUBLIC_NSOFF (the whole [params] agent namespace written
-// as a bare value), and FIXTURE_PUBLIC_SHADOW (a fixture that ships its own
-// layouts/robots.txt). It also exports the captured build logs, so
+// as a bare value), FIXTURE_PUBLIC_SHADOW (a fixture that ships its own
+// layouts/robots.txt), and FIXTURE_PUBLIC_PAGINATED (a fixture whose single
+// section spills past pagerSize, the only shape in which a surface can be
+// caught enumerating pager shells alongside the pages they list). It also
+// exports the captured build logs, so
 // warning-count assertions read what Hugo actually said rather than
 // re-deriving it.
 import {readFileSync, existsSync, readdirSync, statSync} from 'node:fs';
@@ -48,6 +51,9 @@ export const badtablesDir = resolve(
   process.env.FIXTURE_PUBLIC_BADTABLES ?? 'fixture/public/badtables',
 );
 export const shadowDir = resolve(process.env.FIXTURE_PUBLIC_SHADOW ?? 'fixture-shadow/public');
+export const paginatedDir = resolve(
+  process.env.FIXTURE_PUBLIC_PAGINATED ?? 'fixture-paginated/public',
+);
 
 export function read(rel, dir = publicDir) {
   return readFileSync(join(dir, rel), 'utf8');
@@ -146,6 +152,7 @@ export function buildLog(which = 'baseline') {
     badtables: 'HUGO_BUILD_LOG_BADTABLES',
     nsoff: 'HUGO_BUILD_LOG_NSOFF',
     shadow: 'HUGO_BUILD_LOG_SHADOW',
+    paginated: 'HUGO_BUILD_LOG_PAGINATED',
   };
   // Throwing rather than returning '' is deliberate. A missing build name
   // used to resolve process.env[undefined] to undefined and yield an empty

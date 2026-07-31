@@ -1,6 +1,6 @@
 # agent-readiness module test suite
 
-Node build-output assertions for `modules/agent-readiness`, run against the files that eleven Hugo builds publish. The module ships zero JavaScript, so there is no browser behavior to test and the suite carries no Playwright dependency.
+Node build-output assertions for `modules/agent-readiness`, run against the files that twelve Hugo builds publish. The module ships zero JavaScript, so there is no browser behavior to test and the suite carries no Playwright dependency.
 
 ## Running
 
@@ -14,7 +14,7 @@ or, on Windows:
 modules\agent-readiness\test\run-tests.cmd
 ```
 
-Both runners validate the shipped data files, perform the repository's pre-launch Hugo process check, build all eleven fixtures, fail hard on any `deprecat`, `ERROR`, or `found no layout file` line in any build log, and then run the assertions.
+Both runners validate the shipped data files, perform the repository's pre-launch Hugo process check, build all twelve fixtures, fail hard on any `deprecat`, `ERROR`, or `found no layout file` line in any build log, and then run the assertions.
 
 > **These specs need network access.** The Agent Skills specs exercise a real build-time `resources.GetRemote`, because the digest guarantee -- that the advertised hash matches the bytes actually served -- cannot be proven without one. On a run with no network, the module correctly omits every skill and emits no index file at all, and the first skills spec reports that as the cause rather than as a mysterious missing file.
 
@@ -22,7 +22,7 @@ Both runners validate the shipped data files, perform the repository's pre-launc
 
 `tests/00-data.spec.js` runs on its own, **before either fixture is built**. A malformed `data/agent-readiness/*.toml` otherwise surfaces as an opaque Hugo build failure at some unrelated template, leaving the reader to work backwards to the registry. Run first, it is reported as itself.
 
-## Eleven builds
+## Twelve builds
 
 | Build | Fixture | Environment | What it proves |
 | --- | --- | --- | --- |
@@ -37,10 +37,11 @@ Both runners validate the shipped data files, perform the repository's pre-launc
 | badtables | `fixture/` | `badtables` | The section arrays written as bare strings instead of arrays of tables, which TOML cannot express alongside the real tables, so they need a build of their own. |
 | nsoff | `fixture/` | `nsoff` | The whole `[params]` `agent` namespace written as a bare value, the shorthand a consumer reaches for as a kill switch. Every other environment declares `[agent]` as a table, which TOML cannot reconcile with a bare value. |
 | shadow | `fixture-shadow/` | default | The fixture ships its own `layouts/robots.txt`, proving the documented silent-override hazard. |
+| paginated | `fixture-paginated/` | default | A single section of five pages at `pagerSize = 2`, so Hugo publishes `/posts/page/2/` and `/posts/page/3/`. The only shape in which a surface can be caught enumerating a pager shell alongside the pages it lists, or emitting a Markdown twin for one. |
 
 **Why so many.** Each extra environment exists because a real contract is unreachable without it, and the pattern behind all of them is the same: a fixture that configures everything cannot test what happens when something is not configured. The `robots.txt` defect fixed in `d0bdfe7` lived in exactly the default shape and the whole suite stayed green through it. `notwins`, `multilingual` and `edge` each isolate gates whose deletion changes no byte in any other build; each was verified by deleting the gate and watching the suite go red. The `edge` build's subpath `baseURL` is the clearest case: every other fixture sits at a domain root, where Hugo's `absURL` treats a leading-slash input identically to a correct implementation, so a URL bug that 404s on every subpath deployment is invisible.
 
-Environments are used rather than extra fixture directories so the content tree, the module import and the `[outputs]` wiring stay defined in one place.
+Environments are used rather than extra fixture directories so the content tree, the module import and the `[outputs]` wiring stay defined in one place. The two exceptions are the concerns that config alone cannot express: `shadow` ships a `layouts/robots.txt`, and `paginated` needs a `list.html` that calls `.Paginate`, a content tree that spills past `pagerSize`, and no section allow-list -- the default fixture pins `sections` to blog and projects, which would drop a paginated section from every surface and make the assertions pass for the wrong reason.
 
 ## What the fixtures cover
 
@@ -71,6 +72,7 @@ It deliberately configures things that must fail gracefully:
 | `tests/03-llms-facts.spec.js` | `llms.txt` and `about.md`, including the exact license line, both authored section shapes, the complete-by-construction bullet counts, the line-oriented structural integrity locks (a multi-line description stays one line, a bracketed title cannot break its link text, a parenthesized destination is percent-encoded, a URL-only contact channel with a line break stays one line), and the cross-surface invariant that the twin set equals the set `llms.txt` lists. |
 | `tests/04-skills.spec.js` | The Agent Skills index: schema, published URLs, the SHA-256 digest verified against the bytes actually published, every omission path, and the default-language gate under two languages. |
 | `tests/05-guards.spec.js` | The configuration guards and the cross-surface invariants they protect: twin links falling back to HTML URLs when twins are off, nothing pointing at `llms.txt` when it is off, a subpath `baseURL` surviving into every consumer-authored URL, the section-entry refusals, both halves of the `limit` contract, the twin's trailing pointer bytes, site-scoped keys set at the page tier, a license `url` with no `name`, an unrecognized `sitemap_section_target`, colliding permalinks, a non-map `agent:` value, a robots `Disallow` value carrying an embedded line break, and skill-name uniqueness. |
+| `tests/06-pagination.spec.js` | What the enumerating surfaces publish for a paginated section: `llms.txt` and `about.md` list the section's five regular pages and no pager URL, every URL they advertise resolves to a published file, no Markdown twin is published for a pager shell, the section twin's `canonical` names the section rather than a pager, and the Agent Skills index names no pager URL. |
 
 Re-run the assertions alone against existing builds with:
 
@@ -81,13 +83,13 @@ FIXTURE_PUBLIC_MINIMAL=fixture/public/minimal \
 FIXTURE_PUBLIC_NOTWINS=fixture/public/notwins \
 FIXTURE_PUBLIC_MULTILINGUAL=fixture/public/multilingual FIXTURE_PUBLIC_LLMSOFF=fixture/public/llmsoff FIXTURE_PUBLIC_EDGE=fixture/public/edge FIXTURE_PUBLIC_OFF=fixture/public/off FIXTURE_PUBLIC_BADTABLES=fixture/public/badtables \
 FIXTURE_PUBLIC_NSOFF=fixture/public/nsoff \
-FIXTURE_PUBLIC_SHADOW=fixture-shadow/public \
+FIXTURE_PUBLIC_SHADOW=fixture-shadow/public FIXTURE_PUBLIC_PAGINATED=fixture-paginated/public \
 HUGO_BUILD_LOG=hugo-build.log \
 HUGO_BUILD_LOG_CONFIGURED=hugo-build-configured.log \
 HUGO_BUILD_LOG_MINIMAL=hugo-build-minimal.log \
 HUGO_BUILD_LOG_NOTWINS=hugo-build-notwins.log \
 HUGO_BUILD_LOG_MULTILINGUAL=hugo-build-multilingual.log HUGO_BUILD_LOG_LLMSOFF=hugo-build-llmsoff.log HUGO_BUILD_LOG_EDGE=hugo-build-edge.log HUGO_BUILD_LOG_OFF=hugo-build-off.log HUGO_BUILD_LOG_BADTABLES=hugo-build-badtables.log \
 HUGO_BUILD_LOG_NSOFF=hugo-build-nsoff.log \
-HUGO_BUILD_LOG_SHADOW=hugo-build-shadow.log \
+HUGO_BUILD_LOG_SHADOW=hugo-build-shadow.log HUGO_BUILD_LOG_PAGINATED=hugo-build-paginated.log \
 npm test
 ```

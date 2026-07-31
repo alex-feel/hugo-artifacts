@@ -84,6 +84,7 @@ jobs:
             modules/seo/test/fixture
             modules/agent-readiness/test/fixture
             modules/agent-readiness/test/fixture-shadow
+            modules/agent-readiness/test/fixture-paginated
           )
           for leaf in "${leaves[@]}"; do
             echo "::group::go mod edit -fmt -print -- ${leaf}/go.mod"

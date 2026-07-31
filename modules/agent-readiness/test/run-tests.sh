@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Validates the shipped data files, then builds ELEVEN fixture sites with hugo
+# Validates the shipped data files, then builds TWELVE fixture sites with hugo
 # (builds, not servers: no port binding, and a finite build exits by itself)
-# and runs the Node build-output assertion suite against all eleven.
+# and runs the Node build-output assertion suite against all twelve.
 #
 # The data-file check runs FIRST, before any build. That ordering is the
 # point: a malformed registry otherwise surfaces as an opaque Hugo failure at
 # some unrelated template, and the reader has to work backwards to it.
 #
-# The eleven builds:
+# The twelve builds:
 #   baseline   -- every content-license key unset, proving the license
 #                 surfaces are inert until a consumer opts in;
 #   configured -- the license table filled and both switches on, plus
@@ -37,7 +37,11 @@
 #                 the shorthand a consumer reaches for to switch the module
 #                 off;
 #   shadow     -- a fixture shipping its own layouts/robots.txt, proving the
-#                 documented silent-override hazard.
+#                 documented silent-override hazard;
+#   paginated  -- a fixture whose single section spills past pagerSize, so
+#                 Hugo publishes pager shells: the only shape in which a
+#                 surface can be caught enumerating a pager alongside the
+#                 pages it lists.
 #
 # Follows the repository's hugo process lifecycle rule with a pre-launch
 # process check, and hard-fails on any deprecation or error output in any
@@ -50,6 +54,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FIXTURE_DIR="$HERE/fixture"
 SHADOW_DIR="$HERE/fixture-shadow"
+PAGINATED_DIR="$HERE/fixture-paginated"
 LOG_FILE="$HERE/hugo-build.log"
 LOG_FILE_CONFIGURED="$HERE/hugo-build-configured.log"
 LOG_FILE_MINIMAL="$HERE/hugo-build-minimal.log"
@@ -61,6 +66,7 @@ LOG_FILE_OFF="$HERE/hugo-build-off.log"
 LOG_FILE_BADTABLES="$HERE/hugo-build-badtables.log"
 LOG_FILE_NSOFF="$HERE/hugo-build-nsoff.log"
 LOG_FILE_SHADOW="$HERE/hugo-build-shadow.log"
+LOG_FILE_PAGINATED="$HERE/hugo-build-paginated.log"
 
 # The logs are retained after a successful run so the documented re-run recipe
 # can read them; they are gitignored at the repo root. Only an interrupt
@@ -79,7 +85,7 @@ kill_stray_hugo() {
 }
 cleanup_interrupted() {
   kill_stray_hugo
-  rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_NOTWINS"     "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_LLMSOFF" "$LOG_FILE_EDGE" "$LOG_FILE_OFF"     "$LOG_FILE_BADTABLES" "$LOG_FILE_NSOFF" "$LOG_FILE_SHADOW"
+  rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_NOTWINS"     "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_LLMSOFF" "$LOG_FILE_EDGE" "$LOG_FILE_OFF"     "$LOG_FILE_BADTABLES" "$LOG_FILE_NSOFF" "$LOG_FILE_SHADOW" "$LOG_FILE_PAGINATED"
 }
 trap cleanup_interrupted INT TERM
 trap kill_stray_hugo EXIT
@@ -141,6 +147,7 @@ build "$FIXTURE_DIR" off public/off "$LOG_FILE_OFF"
 build "$FIXTURE_DIR" badtables public/badtables "$LOG_FILE_BADTABLES"
 build "$FIXTURE_DIR" nsoff public/nsoff "$LOG_FILE_NSOFF"
 build "$SHADOW_DIR" "" public "$LOG_FILE_SHADOW"
+build "$PAGINATED_DIR" "" public "$LOG_FILE_PAGINATED"
 
 export FIXTURE_PUBLIC="$FIXTURE_DIR/public/baseline"
 export FIXTURE_PUBLIC_CONFIGURED="$FIXTURE_DIR/public/configured"
@@ -153,6 +160,7 @@ export FIXTURE_PUBLIC_OFF="$FIXTURE_DIR/public/off"
 export FIXTURE_PUBLIC_BADTABLES="$FIXTURE_DIR/public/badtables"
 export FIXTURE_PUBLIC_NSOFF="$FIXTURE_DIR/public/nsoff"
 export FIXTURE_PUBLIC_SHADOW="$SHADOW_DIR/public"
+export FIXTURE_PUBLIC_PAGINATED="$PAGINATED_DIR/public"
 export HUGO_BUILD_LOG="$LOG_FILE"
 export HUGO_BUILD_LOG_CONFIGURED="$LOG_FILE_CONFIGURED"
 export HUGO_BUILD_LOG_MINIMAL="$LOG_FILE_MINIMAL"
@@ -164,6 +172,7 @@ export HUGO_BUILD_LOG_OFF="$LOG_FILE_OFF"
 export HUGO_BUILD_LOG_BADTABLES="$LOG_FILE_BADTABLES"
 export HUGO_BUILD_LOG_NSOFF="$LOG_FILE_NSOFF"
 export HUGO_BUILD_LOG_SHADOW="$LOG_FILE_SHADOW"
+export HUGO_BUILD_LOG_PAGINATED="$LOG_FILE_PAGINATED"
 HUGO_VERSION="$(hugo version | sed -E 's/^hugo v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
 export HUGO_VERSION
 
