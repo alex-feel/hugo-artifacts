@@ -95,13 +95,14 @@ test('every bots.toml entry carries a token and a vendor', () => {
   }
 });
 
-test('i18n ships the same four keys in every language', () => {
+test('i18n ships the same five keys in every language', () => {
   const en = parse(readFileSync(join(moduleRoot, 'i18n', 'en.toml'), 'utf8'));
   const ru = parse(readFileSync(join(moduleRoot, 'i18n', 'ru.toml'), 'utf8'));
   const expected = [
     'agent_facts_contact_heading',
     'agent_facts_identity_heading',
     'agent_facts_title',
+    'agent_section_pages_heading',
     'agent_sitemap_heading',
   ];
   assert.deepEqual(Object.keys(en).sort(), expected);

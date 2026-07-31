@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Validates the shipped data files, then builds TWELVE fixture sites with hugo
-# (builds, not servers: no port binding, and a finite build exits by itself)
-# and runs the Node build-output assertion suite against all twelve.
+# Validates the shipped data files, then builds THIRTEEN fixture sites with
+# hugo (builds, not servers: no port binding, and a finite build exits by
+# itself) and runs the Node build-output assertion suite against all thirteen.
 #
 # The data-file check runs FIRST, before any build. That ordering is the
 # point: a malformed registry otherwise surfaces as an opaque Hugo failure at
 # some unrelated template, and the reader has to work backwards to it.
 #
-# The twelve builds:
+# The thirteen builds:
 #   baseline   -- every content-license key unset, proving the license
 #                 surfaces are inert until a consumer opts in;
 #   configured -- the license table filled and both switches on, plus
@@ -36,6 +36,10 @@
 #   nsoff      -- the whole [params] agent namespace written as a bare value,
 #                 the shorthand a consumer reaches for to switch the module
 #                 off;
+#   nosectionpages -- the single key section_pages = false on top of the
+#                 default configuration, the only build in which stripping
+#                 the roster block from a baseline section twin must
+#                 reproduce the published twin byte for byte;
 #   shadow     -- a fixture shipping its own layouts/robots.txt, proving the
 #                 documented silent-override hazard;
 #   paginated  -- a fixture whose single section spills past pagerSize, so
@@ -65,6 +69,7 @@ LOG_FILE_EDGE="$HERE/hugo-build-edge.log"
 LOG_FILE_OFF="$HERE/hugo-build-off.log"
 LOG_FILE_BADTABLES="$HERE/hugo-build-badtables.log"
 LOG_FILE_NSOFF="$HERE/hugo-build-nsoff.log"
+LOG_FILE_NOSECTIONPAGES="$HERE/hugo-build-nosectionpages.log"
 LOG_FILE_SHADOW="$HERE/hugo-build-shadow.log"
 LOG_FILE_PAGINATED="$HERE/hugo-build-paginated.log"
 
@@ -85,7 +90,7 @@ kill_stray_hugo() {
 }
 cleanup_interrupted() {
   kill_stray_hugo
-  rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_NOTWINS"     "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_LLMSOFF" "$LOG_FILE_EDGE" "$LOG_FILE_OFF"     "$LOG_FILE_BADTABLES" "$LOG_FILE_NSOFF" "$LOG_FILE_SHADOW" "$LOG_FILE_PAGINATED"
+  rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_NOTWINS"     "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_LLMSOFF" "$LOG_FILE_EDGE" "$LOG_FILE_OFF"     "$LOG_FILE_BADTABLES" "$LOG_FILE_NSOFF" "$LOG_FILE_NOSECTIONPAGES"     "$LOG_FILE_SHADOW" "$LOG_FILE_PAGINATED"
 }
 trap cleanup_interrupted INT TERM
 trap kill_stray_hugo EXIT
@@ -146,6 +151,7 @@ build "$FIXTURE_DIR" edge public/edge "$LOG_FILE_EDGE"
 build "$FIXTURE_DIR" off public/off "$LOG_FILE_OFF"
 build "$FIXTURE_DIR" badtables public/badtables "$LOG_FILE_BADTABLES"
 build "$FIXTURE_DIR" nsoff public/nsoff "$LOG_FILE_NSOFF"
+build "$FIXTURE_DIR" nosectionpages public/nosectionpages "$LOG_FILE_NOSECTIONPAGES"
 build "$SHADOW_DIR" "" public "$LOG_FILE_SHADOW"
 build "$PAGINATED_DIR" "" public "$LOG_FILE_PAGINATED"
 
@@ -159,6 +165,7 @@ export FIXTURE_PUBLIC_EDGE="$FIXTURE_DIR/public/edge"
 export FIXTURE_PUBLIC_OFF="$FIXTURE_DIR/public/off"
 export FIXTURE_PUBLIC_BADTABLES="$FIXTURE_DIR/public/badtables"
 export FIXTURE_PUBLIC_NSOFF="$FIXTURE_DIR/public/nsoff"
+export FIXTURE_PUBLIC_NOSECTIONPAGES="$FIXTURE_DIR/public/nosectionpages"
 export FIXTURE_PUBLIC_SHADOW="$SHADOW_DIR/public"
 export FIXTURE_PUBLIC_PAGINATED="$PAGINATED_DIR/public"
 export HUGO_BUILD_LOG="$LOG_FILE"
@@ -171,6 +178,7 @@ export HUGO_BUILD_LOG_EDGE="$LOG_FILE_EDGE"
 export HUGO_BUILD_LOG_OFF="$LOG_FILE_OFF"
 export HUGO_BUILD_LOG_BADTABLES="$LOG_FILE_BADTABLES"
 export HUGO_BUILD_LOG_NSOFF="$LOG_FILE_NSOFF"
+export HUGO_BUILD_LOG_NOSECTIONPAGES="$LOG_FILE_NOSECTIONPAGES"
 export HUGO_BUILD_LOG_SHADOW="$LOG_FILE_SHADOW"
 export HUGO_BUILD_LOG_PAGINATED="$LOG_FILE_PAGINATED"
 HUGO_VERSION="$(hugo version | sed -E 's/^hugo v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"

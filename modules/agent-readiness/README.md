@@ -204,6 +204,7 @@ front_matter          = true    # Emit the leading YAML front-matter block.
 canonical             = true    # Emit `canonical:` pointing at the page's HTML URL. Always the last key.
 last_updated          = true    # Emit `last_updated:` when .Lastmod differs from .Date. See the precondition below.
 license               = false   # Emit `license:` -- requires [params.agent.license] url.
+section_pages         = true    # Emit the member roster in a SECTION twin. See "The member roster" below.
 sitemap_section       = true    # Append the trailing pointer section.
 sitemap_section_target = 'llms' # 'llms' | 'sitemap' | 'none'. Case-folded; an unrecognized value warns.
 ```
@@ -219,6 +220,14 @@ Reconstructing Markdown from `.Content` is possible -- `transform.HTMLToMarkdown
 **The documented consequence:** a twin of a shortcode-heavy page contains raw HTML blocks inline. That is valid CommonMark -- raw HTML is a first-class block type that every conformant parser passes through -- and for a page whose entire value is a rendered widget, the widget markup _is_ the content. Smoke-test one such page rather than discovering it later.
 
 Relative links inside the body need no rewriting: `index.md` sits in the same published directory as `index.html`, so every relative reference resolves identically from either.
+
+### The member roster
+
+A **section** twin carries a complete roster of the section's member pages between its body and the trailing pointer section: a `## Pages` heading (the `agent_section_pages_heading` i18n key) followed by one `- [title](url): description` line per member, the `: description` suffix omitted when a page has none. A site whose section `_index.md` files are front-matter-only would otherwise publish section twins with empty bodies -- no roster at all -- and the section twin is the surface that answers "what pages does this section hold" in one fetch.
+
+Membership is the same shared filter every other surface resolves through, narrowed to pages under the section's path at a segment boundary, so the roster is the identical set `llms.txt` and `/about.md` list for that section and is complete by definition -- never a first-N window, including for a section Hugo splits across pagers. Each item links the member's Markdown twin when the built-in `markdown` format is wired for the page kind, else its HTML permalink, and every URL is absolute, because a twin is routinely read detached from the site it came from. A section whose admitted member set is empty emits no heading and no list.
+
+The home twin never carries a roster: every regular page sits under `/`, so a home roster would enumerate the whole site, and that site-level enumeration is `llms.txt`'s job. Switch rosters off with `section_pages = false`, which restores the section twin to exactly its body plus the pointer section.
 
 ### Front matter
 
@@ -412,11 +421,12 @@ license = true    # emit the license blockquote line in llms.txt
 
 ## i18n
 
-The module authors exactly four user-facing strings, all of them headings in generated documents. English and Russian ship with the module; every lookup carries an English fallback, so a site whose language ships no translation still renders a real heading rather than an empty string.
+The module authors exactly five user-facing strings, all of them headings in generated documents. English and Russian ship with the module; every lookup carries an English fallback, so a site whose language ships no translation still renders a real heading rather than an empty string.
 
 | Key                            | English    |
 | ------------------------------ | ---------- |
 | `agent_sitemap_heading`        | `Sitemap`  |
+| `agent_section_pages_heading`  | `Pages`    |
 | `agent_facts_title`            | `About`    |
 | `agent_facts_identity_heading` | `Identity` |
 | `agent_facts_contact_heading`  | `Contact`  |
@@ -467,7 +477,7 @@ modules/agent-readiness/
 │               ├── page-excluded.html
 │               ├── section.html
 │               └── warn.html
-├── test/                       # Validation suite: twelve Hugo fixture builds plus Node build-output assertions. See test/README.md.
+├── test/                       # Validation suite: thirteen Hugo fixture builds plus Node build-output assertions. See test/README.md.
 ├── go.mod
 ├── hugo.toml
 └── README.md

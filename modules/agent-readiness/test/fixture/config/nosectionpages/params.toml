@@ -1,0 +1,15 @@
+# The `nosectionpages` environment: the ONE key `section_pages = false` on
+# top of the default configuration, so every published byte outside the
+# roster blocks is identical to the baseline build.
+#
+# That identity is the point. The roster spec strips the roster block from a
+# baseline section twin and requires the result to equal this build's twin
+# byte for byte, which proves the switch restores the pre-roster output
+# exactly -- and that the key touches nothing else: every non-section twin
+# must be byte-identical between the two builds. Setting the key in any other
+# environment would entangle that comparison with whatever that environment
+# exists to misconfigure.
+[agent]
+
+  [agent.markdown]
+    section_pages = false

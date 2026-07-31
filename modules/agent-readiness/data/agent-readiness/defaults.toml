@@ -72,6 +72,13 @@ canonical = true
 last_updated = true
 # Emit `license:` (one URL line) immediately before the always-last canonical.
 license = false
+# Emit a member roster in a SECTION twin, between the body and the trailing
+# pointer section: one `- [title](url): description` line per page the shared
+# filter admits under the section's path. Complete by definition -- never a
+# first-N window -- and never on the home twin, whose site-level enumeration
+# is llms.txt's job. Default ON, because the roster is the point of a section
+# twin: a front-matter-only _index.md would otherwise publish an empty body.
+section_pages = true
 # Append a trailing sitemap section linking the site map or llms.txt.
 sitemap_section = true
 sitemap_section_target = "llms"   # "llms" | "sitemap" | "none"
