@@ -85,8 +85,8 @@ test('the advertised template resolves to the real search page with the term pre
 });
 
 test('a hostile site title is XML-escaped rather than emitted raw', async () => {
-  // The overlay build sets title = "R&D <Search> Fixture". Unescaped, the
-  // bare ampersand is an undefined entity reference and the `<` opens a
+  // The overlay build sets title = 'R&D <Search> "Q" Fixture'. Unescaped,
+  // the bare ampersand is an undefined entity reference and the `<` opens a
   // bogus element -- either one makes the document unparseable.
   expect(hostileDir, 'the runner must export OPENSEARCH_HOSTILE_DIR').toBeTruthy();
   const xml = readFileSync(join(hostileDir, 'opensearch.xml'), 'utf8');
@@ -106,7 +106,39 @@ test('a hostile site title is XML-escaped rather than emitted raw', async () => 
   // the 16 characters "R&D <Search> Fix" and only then escapes. Escaping
   // first would spend the budget on entity text and cut mid-title -- or, far
   // worse, cut an entity in half and emit "&am".
-  expect(shortName).toBe('R&amp;D &lt;Search&gt; Fix');
+  expect(shortName).toBe('R&amp;D &lt;Search&gt; &#34;Q&#34;');
+});
+
+test('every escaped value decodes back to the authored text', async ({page}) => {
+  // Escaping is only half the contract: a document that escapes so
+  // aggressively that a consumer recovers different text than the site
+  // publishes is just as wrong as one that emits raw markup. The values are
+  // read back through a real XML parser, which decodes them exactly as an
+  // OpenSearch client would, and compared to what the site configures --
+  // element text and ATTRIBUTE values alike.
+  const xml = readFileSync(join(hostileDir, 'opensearch.xml'), 'utf8');
+  const parsed = await page.evaluate((text) => {
+    const doc = new DOMParser().parseFromString(text, 'application/xml');
+    return {
+      error: doc.querySelector('parsererror')?.textContent ?? null,
+      shortName: doc.querySelector('ShortName')?.textContent ?? null,
+      description: doc.querySelector('Description')?.textContent ?? null,
+      urls: [...doc.querySelectorAll('Url')].map((u) => ({
+        rel: u.getAttribute('rel'),
+        template: u.getAttribute('template'),
+      })),
+    };
+  }, xml);
+
+  expect(parsed.error).toBeNull();
+  expect(parsed.shortName).toBe('R&D <Search> "Q"');
+  expect(parsed.shortName).toHaveLength(16);
+  expect(parsed.description).toBe('R&D <Search> "Q" Fixture - Search this site');
+
+  const html = parsed.urls.find((u) => u.rel === null);
+  expect(html.template).toBe('http://localhost:1515/search/?q={searchTerms}');
+  const self = parsed.urls.find((u) => u.rel === 'self');
+  expect(self.template).toBe('http://localhost:1515/opensearch.xml');
 });
 
 test('the hostile-title document still parses as XML', async ({page}) => {

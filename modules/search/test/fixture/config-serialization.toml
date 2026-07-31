@@ -1,0 +1,11 @@
+# Overlay for a STATIC build (hugo --config hugo.toml,config-serialization.toml).
+#
+# Swaps the content directory for a single-page corpus whose front matter
+# carries every character class that has to survive the trip into
+# searchindex.json: both quote marks, angle brackets, an ampersand, an
+# embedded newline, a backslash, non-ASCII, and a 3000-character unbroken
+# run. It is a separate build rather than a page in the served fixture
+# because that fixture backs a hundred-odd assertions that count query
+# results, and a page full of edge-case vocabulary would put them at risk
+# for no gain.
+contentDir = "content-serialize"

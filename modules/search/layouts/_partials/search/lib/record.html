@@ -6,12 +6,24 @@
   per-page computation (including the single .Plain/.Content render) runs
   exactly once per page per language.
 
-  Every text field is piped through plainify | htmlUnescape: plainify strips
-  tags but preserves entities, so without the unescape &amp;/&mdash; leak
-  into displayed titles. All fields are DATA ONLY -- no pre-rendered HTML
-  ever enters the index. href is sourced EXCLUSIVELY from .RelPermalink; the
-  client-side renderer trusts it as safe-by-construction, so any change that
-  sources href from anywhere else must revisit that trust boundary.
+  Every text field the module composes itself is htmlUnescaped -- the
+  authored front matter ones (title, sectionTitle, description, keywords)
+  and the rendered ones (summary, content, and the heading titles built in
+  search/lib/headings.html) alike -- so a title written with entities
+  (&amp;, &mdash;) is indexed as the characters a reader sees on the page
+  rather than as their entity spelling. Only the fields sourced from
+  RENDERED MARKUP -- the summary and the indexed body -- are ALSO piped
+  through plainify, because only those carry tags to strip. The fields
+  sourced from AUTHORED FRONT MATTER STRINGS (the title, the description)
+  must NOT be: plainify deletes every angle-bracket run and turns embedded
+  newlines into spaces, so it would index the authored title "Using <div>
+  elements" as "Using  elements" and make the result label describe a page
+  that does not exist. jsonify serializes angle brackets, ampersands, quotes
+  and newlines correctly on its own, so no field needs pre-escaping here.
+  All fields are DATA ONLY -- no pre-rendered HTML ever enters the index.
+  href is sourced EXCLUSIVELY from .RelPermalink; the client-side renderer
+  trusts it as safe-by-construction, so any change that sources href from
+  anywhere else must revisit that trust boundary.
 
   Expected context (dict):
   - .page (Page) - The page to serialize.
@@ -27,7 +39,7 @@
 
 {{- $record := dict
   "href" $page.RelPermalink
-  "title" ($page.Title | plainify | htmlUnescape)
+  "title" ($page.Title | htmlUnescape)
   "section" $page.Section
 -}}
 
@@ -37,7 +49,7 @@
 {{- if $page.Section -}}
   {{- $sectionTitle = humanize $page.Section -}}
   {{- with $page.FirstSection -}}
-    {{- with .Title -}}{{- $sectionTitle = . -}}{{- end -}}
+    {{- with .Title -}}{{- $sectionTitle = . | htmlUnescape -}}{{- end -}}
   {{- end -}}
 {{- end -}}
 {{- $record = merge $record (dict "sectionTitle" $sectionTitle) -}}
@@ -46,7 +58,7 @@
   {{- $record = merge $record (dict "date" ($page.Date.Format "2006-01-02")) -}}
 {{- end -}}
 
-{{- with $page.Description | plainify | htmlUnescape -}}
+{{- with $page.Description | htmlUnescape -}}
   {{- $record = merge $record (dict "description" .) -}}
 {{- end -}}
 
@@ -70,20 +82,21 @@
      EMPTY search.keywords list: it overrides the fallback into no
      keywords at all -- the author's way to keep this page's standard
      keywords out of search matching. Shape gates guard both levels,
-     because printf on a map or nested list would index a stringified
-     "map[...]" as a term: a map-shaped search.keywords has no term
-     spelling, so it warns once and degrades like an absent value (the
-     standard keywords fallback still applies); a map- or slice-shaped
-     entry inside a keywords list is skipped with one warning while the
-     scalar entries beside it still index. */}}
+     because printf on a map, a nested list or a boolean would index a
+     stringified "map[...]" or the bare word "false" as a term: a map- or
+     boolean-shaped search.keywords has no term spelling, so it warns once
+     and degrades like an absent value (the standard keywords fallback
+     still applies); a map-, slice- or boolean-shaped entry inside a
+     keywords list is skipped with one warning while the scalar entries
+     beside it still index. */}}
 {{- $pagep := $page.Params.search -}}
 {{- $rawKeywords := $page.Keywords -}}
 {{- if and (reflect.IsMap $pagep) (isset $pagep "keywords") -}}
   {{- $kw := index $pagep "keywords" -}}
-  {{- if reflect.IsMap $kw -}}
+  {{- if or (reflect.IsMap $kw) (eq (printf "%T" $kw) "bool") -}}
     {{- partial "search/lib/warn.html" (dict
         "key" (printf "search:warn:unusable-keywords:%s" $page.Path)
-        "message" (printf "[search] Ignoring search.keywords on %s: it expects a list or comma-separated string of terms but was given a map, which has no term spelling; the page's standard keywords front matter still applies." $page.Path)) -}}
+        "message" (printf "[search] Ignoring search.keywords on %s: it expects a list or comma-separated string of terms but was given a map or a boolean, which has no term spelling; the page's standard keywords front matter still applies." $page.Path)) -}}
   {{- else -}}
     {{- $rawKeywords = $kw -}}
   {{- end -}}
@@ -94,12 +107,12 @@
   {{- end -}}
   {{- $keywords := slice -}}
   {{- range $rawKeywords -}}
-    {{- if or (reflect.IsMap .) (reflect.IsSlice .) -}}
+    {{- if or (reflect.IsMap .) (reflect.IsSlice .) (eq (printf "%T" .) "bool") -}}
       {{- partial "search/lib/warn.html" (dict
           "key" (printf "search:warn:unusable-keyword-entry:%s" $page.Path)
-          "message" (printf "[search] Skipping a keywords entry on %s: a map or nested list has no term spelling, so it cannot index; the scalar entries beside it still apply." $page.Path)) -}}
+          "message" (printf "[search] Skipping a keywords entry on %s: a map, a nested list or a boolean has no term spelling, so it cannot index; the scalar entries beside it still apply." $page.Path)) -}}
     {{- else -}}
-      {{- with trim (printf "%v" .) " \t\n\r" -}}
+      {{- with trim (printf "%v" . | htmlUnescape) " \t\n\r" -}}
         {{- $keywords = $keywords | append . -}}
       {{- end -}}
     {{- end -}}
@@ -109,7 +122,11 @@
   {{- end -}}
 {{- end -}}
 
-{{/* One array per configured taxonomy, term order as authored. */}}
+{{/* One array per configured taxonomy, term order as authored. The terms
+     are Hugo's own .LinkTitle values, emitted verbatim: Hugo title-cases a
+     title it derives from the term name, which rewrites an entity written
+     in the front matter list ("&amp;" arrives as "&Amp;"), so decoding
+     here would only half-undo a spelling the module does not own. */}}
 {{- range $name := $cfg.taxonomies -}}
   {{- $terms := slice -}}
   {{- range $page.GetTerms $name -}}

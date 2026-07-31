@@ -1,0 +1,16 @@
+# Overlay for a STATIC build (hugo --config hugo.toml,config-shape-tables.toml).
+#
+# TOML tables written where the three list-valued keys belong. A table has
+# no list spelling and no comma-separated spelling, so the resolver must
+# warn once per key and fall back to the shipped defaults rather than
+# stringify the table into a single bogus entry: a stringified sections
+# entry matches no page and empties the whole index, and a stringified
+# taxonomies or stopwords_extra entry reaches the client options.
+[params]
+  [params.search]
+    [params.search.sections]
+      blog = "blog"
+    [params.search.taxonomies]
+      t = "tags"
+    [params.search.stopwords_extra]
+      x = "foo"

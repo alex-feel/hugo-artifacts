@@ -4,11 +4,12 @@
 # selects Go's text/template and therefore escapes NOTHING on its own. Every
 # interpolated value in that document is the template's own responsibility, and
 # the only way to prove it discharges that responsibility is to feed it a title
-# that breaks XML when unescaped.
+# that breaks XML when unescaped: an ampersand, an angle-bracket pair, and a
+# quotation mark, which is the character an attribute value cannot carry raw.
 #
 # The title is overridden here rather than in the fixture's own config because
 # the served fixture backs a hundred-odd Playwright assertions; a site-wide
 # title change to prove one escaping contract would put all of them at risk for
 # no gain. The fixture already carries a hostile PAGE title for the same
 # reason, in content/hostile.md.
-title = "R&D <Search> Fixture"
+title = 'R&D <Search> "Q" Fixture'

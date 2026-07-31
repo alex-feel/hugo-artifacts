@@ -1,0 +1,12 @@
+# Overlay for a STATIC build (hugo --config hugo.toml,config-shape-lists.toml).
+#
+# The list spelling of the three keys the served fixture writes as
+# comma-separated strings. Both spellings are documented and equivalent, so
+# this build must emit the same shapes the CSV build does and log NO
+# shape warning at all -- the negative half of the shape matrix, which is
+# what keeps the warn-and-fall-back path from firing on valid configuration.
+[params]
+  [params.search]
+    sections = ["Blog", "docs/guides"]
+    taxonomies = ["tags"]
+    stopwords_extra = ["Zeta"]

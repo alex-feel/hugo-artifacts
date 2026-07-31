@@ -148,11 +148,14 @@
      entry like "Blog" would otherwise silently empty the scope), stripped
      of one optional leading and one optional trailing slash, and prefixed
      with "/" (docs, /docs, docs/, and Docs all normalize to /docs). The
-     sentinel "mainSections" (any case) expands to site.MainSections. */}}
-{{- $rawSections := $cascade.sections | default (slice) -}}
-{{- if not (reflect.IsSlice $rawSections) -}}
-  {{- $rawSections = split (printf "%v" $rawSections) "," -}}
-{{- end -}}
+     sentinel "mainSections" (any case) expands to site.MainSections. A value
+     with no list spelling (a table, a boolean) is reported once and falls
+     back to the shipped default, because stringifying it would allow-list
+     one entry that matches no page and empty the entire index. */}}
+{{- $rawSections := partial "search/lib/listparam.html" (dict
+    "key" "sections"
+    "value" ($cascade.sections | default (slice))
+    "fallback" ($defaults.sections | default (slice))) -}}
 {{- $sections := slice -}}
 {{- range $rawSections -}}
   {{- $e := lower (trim (printf "%v" .) " \t\n\r") -}}
@@ -167,7 +170,10 @@
   {{- end -}}
 {{- end -}}
 
-{{/* Taxonomies: slice or comma-separated string of taxonomy plural names.
+{{/* Taxonomies: slice or comma-separated string of taxonomy plural names;
+     any other shape is reported once and falls back to the shipped default,
+     because a stringified table would double-book a record field under a
+     name no taxonomy has.
      Record keys are a flat namespace shared with the per-taxonomy term
      arrays, and Go's merge matches keys case-insensitively, so a taxonomy
      whose lowercased name equals a record field's would silently clobber
@@ -180,10 +186,10 @@
      byte-identical across Hugo's parallel page renders, letting the
      logger's duplicate suppression back up the store sentinel. */}}
 {{- $reservedTaxonomyNames := slice "href" "title" "section" "sectiontitle" "date" "description" "summary" "keywords" "content" "image" "headings" -}}
-{{- $rawTax := $cascade.taxonomies | default (slice) -}}
-{{- if not (reflect.IsSlice $rawTax) -}}
-  {{- $rawTax = split (printf "%v" $rawTax) "," -}}
-{{- end -}}
+{{- $rawTax := partial "search/lib/listparam.html" (dict
+    "key" "taxonomies"
+    "value" ($cascade.taxonomies | default (slice))
+    "fallback" ($defaults.taxonomies | default (slice))) -}}
 {{- $taxonomies := slice -}}
 {{- range $rawTax -}}
   {{- with trim (printf "%v" .) " \t\n\r" -}}
@@ -198,11 +204,12 @@
 {{- end -}}
 
 {{/* Extra stopwords: slice or comma-separated string, lowercased so they
-     match the client pipeline's normalized terms. */}}
-{{- $rawStop := $cascade.stopwords_extra | default (slice) -}}
-{{- if not (reflect.IsSlice $rawStop) -}}
-  {{- $rawStop = split (printf "%v" $rawStop) "," -}}
-{{- end -}}
+     match the client pipeline's normalized terms. Any other shape takes the
+     same warn-once-and-fall-back path as the two keys above. */}}
+{{- $rawStop := partial "search/lib/listparam.html" (dict
+    "key" "stopwords_extra"
+    "value" ($cascade.stopwords_extra | default (slice))
+    "fallback" ($defaults.stopwords_extra | default (slice))) -}}
 {{- $stopwordsExtra := slice -}}
 {{- range $rawStop -}}
   {{- with lower (trim (printf "%v" .) " \t\n\r") -}}

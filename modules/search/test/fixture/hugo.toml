@@ -41,7 +41,7 @@ description = "Hugo search module Playwright validation fixture site."
 # small corpus), heading sub-records, the slash hotkey opt-in, and every
 # display toggle the result template ships.
 [params.search]
-sections = "Blog, docs/guides, hostile, excluded, search, map-image, bundle-image, falsy-image, list-image, map-keywords, mixed-keywords"
+sections = "Blog, docs/guides, hostile, excluded, search, map-image, bundle-image, falsy-image, list-image, map-keywords, mixed-keywords, bool-keywords, bool-entry-keywords, instruments"
 taxonomies = "tags, categories, keywords"
 headings = true
 hotkey_slash = true

@@ -18,10 +18,29 @@ node_modules/
 test-results/
 playwright-report/
 
-# Static overlay builds a test runner produces and removes; tracked here so an
-# interrupted run cannot leave an untracked build tree behind.
+# Static overlay builds, their captured logs, and the served-fixture log the
+# search test runner produces and removes; tracked here so a hard-killed run
+# cannot leave untracked artifacts behind. Extend this list whenever
+# modules/search/test/run-tests.sh gains an overlay.
 .opensearch-hostile/
 .opensearch-off/
+.subpath/
+.scalar-tables/
+.serialization/
+.shape-tables/
+.shape-bools/
+.shape-lists/
+.multilingual/
+.opensearch-hostile.log
+.opensearch-off.log
+.subpath.log
+.scalar-tables.log
+.serialization.log
+.shape-tables.log
+.shape-bools.log
+.shape-lists.log
+.multilingual.log
+.hugo-server.log
 
 # IDE
 .idea/
