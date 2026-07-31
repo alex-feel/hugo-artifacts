@@ -44,6 +44,21 @@ For local development against a checkout of this repository, use a `hugo.work` w
 
 Troubleshooting: if surfaces warn that the index is not wired even though you completed Step 3, check the import for `ignoreConfig = true` -- it suppresses the module's whole `hugo.toml`, including the output-format definition and the vendor mount. Diagnose with `hugo config | grep -i searchindex`. If the index file is missing with no warning, check `disableKinds` for `home` (the index is a home-page output) and inspect template resolution with `hugo build --logLevel debug`.
 
+### Combining this module with other modules that wire output formats
+
+Path A above edits a table you may already own: your site configuration holds exactly ONE `[outputs]` table, and its lists are the union of every module's needs. A second `[outputs]` table in the same file fails the configuration load outright (`unmarshal failed: toml: table outputs already exists`); pasting one module README's `[outputs]` block over another's leaves a single table that loads cleanly, exits 0, warns about nothing -- and silently stops publishing every document the replaced list asked for, this module's search corpus included. So do not copy the block above into a site that already has one: MERGE `searchindex` into the list already there.
+
+A site importing this module together with [`agent-readiness`](../agent-readiness/README.md) wires all of them at once:
+
+```toml
+[outputs]
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'agentfacts', 'agentskills', 'searchindex', 'opensearch']
+  section = ['html', 'rss', 'markdown']
+  page = ['html', 'markdown']
+```
+
+Only `[outputs]` needs this care. `[outputFormats]` and `[mediaTypes]` DO merge additively from module configuration, which is why `searchindex`, `opensearch`, `llmstxt`, `agentfacts` and `agentskills` are usable by name in the list above although the site defines none of them. Naming `opensearch` there is harmless while `params.search.opensearch.enable` is unset: the format stays wired and publishes nothing. The [`seo`](../seo/README.md) module defines no output format of its own, but it READS this list: `[seo.alternates] formats` advertises exactly the formats your `[outputs]` lists wire for that page kind. The combination is covered by the cross-module suite in [`modules/test-composition/`](../test-composition/README.md).
+
 ### Content Security Policy
 
 Under a granular CSP the module needs exactly this directive set: `script-src 'self'` (covers the fingerprinted module script AND the dynamic `import()` fallback), `worker-src 'self'` (browsers resolve workers through the `worker-src` -> `child-src` -> `script-src` fallback chain), `connect-src 'self'` (the index `fetch` -- a site whose `connect-src` is an explicit API-endpoint allow-list otherwise gets a permanently erroring search), and `img-src 'self'` plus any external thumbnail origins when `show_image` is on. The module defaults require NO `'unsafe-inline'` for scripts and NO `blob:`; only the consumer-side `blob:` worker wrapper described under Performance additionally needs `worker-src blob:`. A `style-src`/`style-src-attr` policy without `'unsafe-inline'` blocks the dual-hidden controls' inline `display:none` with console violations while the `hidden` attribute still applies -- functionally harmless, and exactly why the dual mechanism exists.

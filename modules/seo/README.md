@@ -21,6 +21,21 @@ hugo mod get github.com/alex-feel/hugo-artifacts/modules/seo
 
 Confirm resolution with `hugo mod graph`. For local development against a checkout of this repo, use a `hugo.work` workspace or a `[module.replacements]` block per the repo convention.
 
+### Combining this module with other modules that wire output formats
+
+This module defines no output format of its own, but it READS your `[outputs]` lists: `[seo.alternates]` advertises a format when the page CARRIES it, which is a fact about those lists. Your site configuration holds exactly ONE `[outputs]` table, and its lists are the union of every module's needs. A second `[outputs]` table in the same file fails the configuration load outright (`unmarshal failed: toml: table outputs already exists`); pasting one module README's `[outputs]` block over another's leaves a single table that loads cleanly, exits 0, warns about nothing -- and silently stops publishing every document the replaced list asked for, taking the alternates this module advertises with it. So do not copy any module's block wholesale into a site that already has one: MERGE the names into the list already there.
+
+A site importing this module together with [`agent-readiness`](../agent-readiness/README.md) and [`search`](../search/README.md) wires all of them at once:
+
+```toml
+[outputs]
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'agentfacts', 'agentskills', 'searchindex', 'opensearch']
+  section = ['html', 'rss', 'markdown']
+  page = ['html', 'markdown']
+```
+
+Only `[outputs]` needs this care: `[outputFormats]` and `[mediaTypes]` DO merge additively from module configuration, which is why the format names above are usable although the site defines none of them. The combination is covered by the cross-module suite in [`modules/test-composition/`](../test-composition/README.md).
+
 **Important -- template lookup precedence:** every partial the module ships is overridable by same-name placement. If your site has a file at `layouts/_partials/seo/<file>.html`, Hugo uses your local copy instead of the module's. This is the primary extension mechanism (see [Extension Hooks](#extension-hooks)); it also means a stray local `seo/` partial silently shadows the module, so delete any leftover copies you do not intend to override.
 
 ## Requirements

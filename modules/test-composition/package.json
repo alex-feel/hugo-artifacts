@@ -1,0 +1,9 @@
+{
+  "name": "composition-module-tests",
+  "private": true,
+  "type": "module",
+  "description": "Cross-module build-output assertion suite. Not a Hugo module: this directory holds the one fixture that imports modules/seo, modules/agent-readiness and modules/search TOGETHER, and asserts that a single merged [outputs] table publishes every module's documents from one build. It carries no dependencies -- node --test and node:assert are enough -- so it needs no npm install of its own.",
+  "scripts": {
+    "test": "node --test \"tests/*.spec.js\""
+  }
+}

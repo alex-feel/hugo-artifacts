@@ -27,6 +27,21 @@ hugo mod get github.com/alex-feel/hugo-artifacts/modules/agent-readiness
 
 A site-level template always overrides the module's, by Hugo's ordinary template lookup order. That applies to every template here: a local `layouts/page.markdown.md`, `layouts/home.llmstxt.txt`, or `layouts/home.agentskills.json` takes precedence over the module's.
 
+### Combining this module with other modules that wire output formats
+
+Your site configuration holds exactly ONE `[outputs]` table, and its lists are the union of every module's needs. A second `[outputs]` table in the same file fails the configuration load outright (`unmarshal failed: toml: table outputs already exists`); pasting one module README's `[outputs]` block over another's leaves a single table that loads cleanly, exits 0, warns about nothing -- and silently stops publishing every document the replaced list asked for. So do not copy the block above into a site that already has one: MERGE the names into the list already there.
+
+A site importing this module together with [`search`](../search/README.md) wires all of them at once:
+
+```toml
+[outputs]
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'agentfacts', 'agentskills', 'searchindex', 'opensearch']
+  section = ['html', 'rss', 'markdown']
+  page = ['html', 'markdown']
+```
+
+Only `[outputs]` needs this care. `[outputFormats]` and `[mediaTypes]` DO merge additively from module configuration, which is why `llmstxt`, `agentfacts`, `agentskills`, `searchindex` and `opensearch` are usable by name in the list above although the site defines none of them. Two names in that list stay INERT until their own parameters are set -- `agentskills` publishes nothing without `[[params.agent.skills]]` entries, and `opensearch` nothing without `params.search.opensearch.enable` -- so listing them early is harmless. The [`seo`](../seo/README.md) module defines no output format of its own, but it READS this list: `[seo.alternates] formats` advertises exactly the formats your `[outputs]` lists wire for that page kind. The combination is covered by the cross-module suite in [`modules/test-composition/`](../test-composition/README.md).
+
 ## Requirements
 
 - **Hugo v0.160.0+**, any edition. The module uses no extended-edition-exclusive feature.
