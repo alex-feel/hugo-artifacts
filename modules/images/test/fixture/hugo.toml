@@ -21,6 +21,15 @@ ignoreLogs = ['warning-goldmark-raw-html']
       block = true
       title = true
 
+# The built-in `markdown` output format gives every regular page a Markdown
+# twin (index.md beside index.html) rendered by layouts/page.markdown.md via
+# .RenderShortcodes, which selects the shortcodes' *.markdown.md variants.
+# Hugo REPLACES the outputs list per page kind rather than merging it, so
+# `html` must stay listed; home and section kinds keep their defaults.
+# Adding the format only ADDS published files -- no HTML output changes.
+[outputs]
+  page = ['html', 'markdown']
+
 [params]
 description = "Hugo images module build-output validation fixture site."
 

@@ -90,19 +90,10 @@
 
 {{/* JS-off / pre-enhancement fallback link preserves the zero-contact guarantee:
      it navigates AWAY to YouTube rather than embedding it. Playlist embeds link
-     to the playlist; single videos to the watch page (with t= when a start is set). */}}
-{{- $watchUrl := "" -}}
-{{- if $isPlaylist -}}
-  {{- $watchUrl = printf "https://www.youtube.com/playlist?list=%s" $list -}}
-{{- else -}}
-  {{- $watchUrl = printf "https://www.youtube.com/watch?v=%s" $id -}}
-  {{- if and $list (ne $list "") -}}
-    {{- $watchUrl = printf "%s&list=%s" $watchUrl $list -}}
-  {{- end -}}
-  {{- if gt $start 0 -}}
-    {{- $watchUrl = printf "%s&t=%ds" $watchUrl $start -}}
-  {{- end -}}
-{{- end -}}
+     to the playlist; single videos to the watch page (with t= when a start is
+     set). The URL itself is built by the shared watch-url.html lib partial,
+     which the youtube-embed.markdown.md output variant also consumes. */}}
+{{- $watchUrl := partial "youtube-embed/watch-url.html" (dict "id" $id "list" $list "start" $start) -}}
 
 {{/* Accessible UI strings, localizable via the shipped youtube_embed_* i18n
      keys. Every lookup pipes through an English default so a site language

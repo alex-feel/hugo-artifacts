@@ -86,6 +86,7 @@ jobs:
             modules/agent-readiness/test/fixture
             modules/agent-readiness/test/fixture-shadow
             modules/agent-readiness/test/fixture-paginated
+            modules/agent-readiness/test/fixture-widgets
             modules/copy-page/test/fixture
             modules/test-composition/fixture
           )

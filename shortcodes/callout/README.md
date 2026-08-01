@@ -172,6 +172,20 @@ Ordinary (non-alert) blockquotes pass through unchanged as a plain `<blockquote>
 
 For localized alert titles and the foldable extended syntax, enable Markdown attributes for blockquotes if you also use attribute syntax; the alert and foldable features themselves require no extra configuration on Hugo v0.160.0+.
 
+## Markdown output variant
+
+The module ships a second shortcode template, `layouts/_shortcodes/callout.markdown.md`, that Hugo's output-format-aware template lookup selects automatically when a page renders to a `markdown` output format (for example Markdown twin pages produced with `.RenderShortcodes`). The same shortcode call then emits a compact, pure-Markdown GitHub-style alert blockquote instead of the BEM HTML:
+
+```text
+> [!WARNING]- Radiation hazard
+>
+> Do not approach without protective gear.
+```
+
+The emitted syntax is exactly what the module's own [blockquote alert render hook](#blockquote-alert-render-hook) accepts, so the output round-trips: re-rendering it through this module reproduces the equivalent callout. The designator is the same canonical type the shared resolver produces for the HTML shortcode (aliases canonicalize identically -- `hint` emits `[!TIP]`), `collapsible`/`open` map onto the fold sign the hook already reads (`+` collapsible and open, `-` collapsible and collapsed, none static), a user-supplied title is emitted verbatim on the alert line where it round-trips into the hook's title handling, and an omitted title falls back to the same default type label on re-render. The body is the raw inner Markdown, never re-rendered, with every line prefixed by `>` and a space so the whole construct stays one blockquote.
+
+Two HTML-only niceties have no alert-syntax equivalent and degrade gracefully: `title=""` (head suppression) emits the bare designator line, which re-renders with the default label; and a custom type containing a digit or hyphen still emits the same `[!MY-TYPE]` marker, but Hugo's letters-only alert grammar re-parses it as a regular blockquote, so the type survives as literal text rather than as an alert. The `role`, `icon`, `id`, and `class` parameters have no Markdown representation and affect only the HTML render, which also validates them; warnings for bad input are deduplicated across both output formats, so one problem warns once per build.
+
 ## Styling
 
 The module outputs unstyled semantic HTML. All visual presentation is the consuming site's responsibility. The module ships no CSS, no color, no hex values, and no dark-mode rule.
@@ -267,6 +281,7 @@ shortcodes/callout/
   layouts/
     _shortcodes/
       callout.html              # Entry shortcode: params, type resolution, body render, dispatch
+      callout.markdown.md       # Markdown output-format variant: emits the GitHub-alert blockquote the render hook accepts
     _partials/
       callout/
         resolve-type.html       # Shared resolver: raw type -> canonical/role/iconName/label/known

@@ -19,10 +19,12 @@
 //     long file-path links overflow header column widths; MD060 would flag
 //     these legitimately but the test fixture documentation MUST NOT be
 //     restyled to preserve the regression-free Phase 7 status.
-//   - modules/images/test/fixture/content/ is deliberately hostile Markdown
-//     test DATA (paralleling the .prettierignore exclusion): bare URLs inside
-//     shortcode arguments, javascript: destinations, and attribute blocks
-//     whose line structure is semantically load-bearing.
+//   - modules/images/test/fixture/content/ and
+//     modules/agent-readiness/test/fixture-widgets/content/ are deliberately
+//     hostile Markdown test DATA (paralleling the .prettierignore
+//     exclusions): bare URLs inside shortcode arguments, javascript:
+//     destinations, bracketed-title probes, and attribute blocks whose line
+//     structure is semantically load-bearing.
 //   - **/layouts/**/*.md files are Hugo TEMPLATES, not Markdown documents:
 //     Hugo's output-format template naming is [kind].[format].[suffix], so a
 //     Markdown-emitting template is necessarily named *.md (page.markdown.md,
@@ -53,6 +55,7 @@
     "modules/pwa/test/README.md",
     "modules/pwa/test/IOS_MANUAL_MATRIX.md",
     "modules/images/test/fixture/content/**",
+    "modules/agent-readiness/test/fixture-widgets/content/**",
     "**/layouts/**/*.md",
     "**/test-results/**",
     "**/playwright-report/**",

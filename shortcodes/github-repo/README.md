@@ -1,6 +1,6 @@
 # github-repo
 
-Hugo shortcode module that renders a GitHub repository link in one of five display variants. The module outputs style-agnostic semantic HTML with [BEM](https://getbem.com/) CSS class hooks, delegating all visual styling to the consuming site.
+Hugo shortcode module that renders a GitHub repository reference in one of five display variants. The module outputs style-agnostic semantic HTML with [BEM](https://getbem.com/) CSS class hooks, delegating all visual styling to the consuming site, plus a compact pure-Markdown rendering for markdown output formats (see [Markdown output variant](#markdown-output-variant)).
 
 ## Installation
 
@@ -36,6 +36,8 @@ hugo mod get github.com/alex-feel/hugo-artifacts/shortcodes/github-repo
 
 The `variant` parameter selects one of five display modes. Default is `card`.
 
+The card-family variants (`card`, `stats`, `lang`, `hero`) use an `<article>` root; the title is the card's single real link (`github-repo__title-link`, opening in a new tab with `rel="noopener noreferrer"`). Only the `inline` variant -- and every degraded fallback, which renders the inline chip -- is an `<a>` element. This is a **breaking markup change** for consumers that styled `a.github-repo` selectors or relied on the whole card being clickable: switch to class-only selectors and add the stretched-link overlay from the [Styling](#styling) section to restore the full-card click area.
+
 #### inline -- Compact chip for running text
 
 ```go-html-template
@@ -51,7 +53,7 @@ A minimal `<a>` element showing the GitHub icon, the owner/name pair (the `name`
 {{</* github-repo url="https://github.com/gohugoio/hugo" variant="card" */>}}
 ```
 
-Displays a card with a title, description, and a metadata footer showing language (with colored dot), stars, forks, license, and last-updated time.
+Displays an `<article>` card with a linked title, description, and a metadata footer showing language (with colored dot), stars, forks, license, and last-updated time.
 
 #### stats -- Stats card with avatar
 
@@ -59,7 +61,7 @@ Displays a card with a title, description, and a metadata footer showing languag
 {{</* github-repo url="https://github.com/gohugoio/hugo" variant="stats" */>}}
 ```
 
-Shows an owner-initial avatar, eyebrow label, title, description, and a 4-column stat row (Language, Stars, Forks, License).
+Shows an `<article>` card with an owner-initial avatar, eyebrow label, linked title, description, and a 4-column stat row (Language, Stars, Forks, License).
 
 #### lang -- Language-bar card
 
@@ -67,7 +69,7 @@ Shows an owner-initial avatar, eyebrow label, title, description, and a 4-column
 {{</* github-repo url="https://github.com/gohugoio/hugo" variant="lang" */>}}
 ```
 
-Renders a card with a star/fork pill, topic tags, a language composition bar (proportional widths from the GitHub Languages API), and a color-coded legend.
+Renders an `<article>` card with a star/fork pill, linked title, topic tags, a language composition bar (proportional widths from the GitHub Languages API), and a color-coded legend.
 
 #### hero -- Hero card with sparkline
 
@@ -75,7 +77,7 @@ Renders a card with a star/fork pill, topic tags, a language composition bar (pr
 {{</* github-repo url="https://github.com/gohugoio/hugo" variant="hero" */>}}
 ```
 
-The largest variant. Includes a breadcrumb header, a 52-week commit sparkline (from the GitHub Participation API), topic tags, full metadata strip, and a "View on GitHub" call-to-action.
+The largest variant, an `<article>` card. Includes a breadcrumb header, a 52-week commit sparkline (from the GitHub Participation API), a linked title, topic tags, a full metadata strip, and a "View on GitHub" call-to-action (a decorative span -- the title link is the card's single real link).
 
 ## Parameters
 
@@ -224,10 +226,20 @@ Setting `HUGO_GITHUB_TOKEN` reduces the likelihood of hitting the primary rate l
 When all retries for an endpoint exhaust, the module does not break the build. It logs the structured warning described above and degrades:
 
 - **`inline` variant:** Unaffected -- it performs no API call and renders entirely from the URL.
-- **`card`, `stats`, `lang`, `hero` variants:** Fall back to the inline chip layout.
+- **`card`, `stats`, `lang`, `hero` variants:** Fall back to the inline chip layout (an `<a>` root -- the degraded rendering is a full link even though the healthy card-family root is an `<article>`).
 - **`lang` variant, languages endpoint failure:** The language bar and legend are omitted; the rest of the card renders normally.
 - **`hero` variant, participation endpoint failure or HTTP 202:** The sparkline is omitted; the rest of the card renders normally.
 - **Formatter safety:** an unparseable, non-finite, or implausibly large star/fork count passes through the compact-number formatter verbatim, and an unparseable `pushed_at` timestamp renders an empty relative time; neither breaks the build.
+
+## Markdown output variant
+
+The module ships a second shortcode template, `layouts/_shortcodes/github-repo.markdown.md`, selected automatically by Hugo's output-format-aware shortcode lookup whenever a page renders in a markdown output format -- for example when a markdown-format page template calls `.RenderShortcodes` to build a Markdown twin of the page. Consumers with a markdown output format get it automatically; no configuration is needed.
+
+It emits pure Markdown -- no HTML tags, no BEM classes, no SVG: one line citing the repository as an `[owner/repo](https://github.com/owner/repo)` link, enriched with the description and key stats (stars, primary language, license) when the fetched data carries them. The baseline link derives from the `url` parameter alone, so it renders even when the GitHub API fetch failed or was rate-limited. The data comes through the same cached fetch/derive partials as the HTML variants, so the Markdown rendering adds no network requests and emits no duplicate warnings.
+
+```markdown
+[gohugoio/hugo](https://github.com/gohugoio/hugo) — The world's fastest framework for building websites. (82.1k stars · Go · Apache-2.0)
+```
 
 ## Language Colors
 
@@ -262,7 +274,7 @@ The module outputs unstyled semantic HTML. All visual presentation is the consum
 
 ### The inline chip in flex and grid parents
 
-The root element is an unstyled `<a>`. As a flex or grid item it is stretched by the container's default alignment (`align-items: stretch` in a flex column; stretch on both axes in a grid cell), so the chip silently grows to fill the available space instead of hugging its content. If you place the chip inside such a container, size it to its content:
+The inline chip's root element is an unstyled `<a>`. As a flex or grid item it is stretched by the container's default alignment (`align-items: stretch` in a flex column; stretch on both axes in a grid cell), so the chip silently grows to fill the available space instead of hugging its content. If you place the chip inside such a container, size it to its content:
 
 ```css
 .github-repo--inline {
@@ -278,9 +290,30 @@ Everything else -- colors, spacing, hover and focus states -- is yours to design
 
 Every element uses BEM naming under the `github-repo` block:
 
-- **Block:** `github-repo` (root `<a>` element)
+- **Block:** `github-repo` (root element: `<article>` for the `card`, `stats`, `lang`, and `hero` variants, `<a>` for `inline` and for every degraded fallback)
 - **Variant modifiers:** `github-repo--inline`, `github-repo--card`, `github-repo--stats`, `github-repo--lang`, `github-repo--hero`
-- **Elements:** `github-repo__title`, `github-repo__description`, `github-repo__footer`, `github-repo__meta-item`, `github-repo__lang-dot`, `github-repo__sparkline`, `github-repo__topics`, `github-repo__topic`, `github-repo__cta`, and others
+- **Elements:** `github-repo__title`, `github-repo__title-link`, `github-repo__description`, `github-repo__footer`, `github-repo__meta-item`, `github-repo__lang-dot`, `github-repo__sparkline`, `github-repo__topics`, `github-repo__topic`, `github-repo__cta`, and others
+
+The text layer carries real separator characters and real whitespace between inline fields, so plain-text and Markdown extractions keep adjacent values apart: the inline chip's `github-repo__separator` and the hero breadcrumb's `github-repo__breadcrumb-sep` contain a literal `/`, the eyebrow and star-pill middots are literal `·` characters surrounded by spaces, and the lang legend separates each language name from its `github-repo__lang-pct` percentage with a real space. The whitespace between inline siblings is a visual no-op in the flex layouts these strips are typically given; a consuming site that draws its own dividers can hide the separator characters (for example with `font-size: 0`). The only empty elements are data visualizations that carry their values in inline styles: the language dot (the language name sits next to it as text), the language bar segments (the legend below is their textual equivalent), and the sparkline bars (summarized by the localized `title` tooltip on `github-repo__sparkline`).
+
+### Full-card click area (stretched link)
+
+The card-family variants deliberately do not wrap the whole card in an `<a>`: a card-wrapping anchor turns the entire card's text into one link accessible name and flattens it into a single glued link label in Markdown and plain-text extractions. The title link (`github-repo__title-link`) is the single real link, and its accessible name is its own text. To restore the full-card click area, use the standard stretched-link overlay:
+
+```css
+.github-repo--card,
+.github-repo--stats,
+.github-repo--lang,
+.github-repo--hero {
+  position: relative;
+}
+
+.github-repo__title-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+```
 
 ### CSS custom property
 
@@ -317,6 +350,7 @@ shortcodes/github-repo/
   layouts/
     _shortcodes/
       github-repo.html              # Main shortcode (parameter validation + dispatch)
+      github-repo.markdown.md       # Compact Markdown rendering for markdown output formats
     _partials/
       github-repo/
         fetch.html                  # API fetching, retry loop, data normalization

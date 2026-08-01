@@ -1,7 +1,7 @@
 /* global process */
 // Shared helpers for the build-output assertion specs.
 //
-// The runner exports THIRTEEN published trees, and every one of them is
+// The runner exports FOURTEEN published trees, and every one of them is
 // load-bearing:
 // FIXTURE_PUBLIC (every content-license key unset), FIXTURE_PUBLIC_CONFIGURED
 // (the license table filled and both switches on, plus the bots_allow with
@@ -23,10 +23,13 @@
 // section_pages = false on top of the default configuration, the only build
 // in which stripping the roster block from a baseline section twin must
 // reproduce the published twin byte for byte), FIXTURE_PUBLIC_SHADOW (a
-// fixture that ships its own layouts/robots.txt), and FIXTURE_PUBLIC_PAGINATED
+// fixture that ships its own layouts/robots.txt), FIXTURE_PUBLIC_PAGINATED
 // (a fixture whose single section spills past pagerSize, the only shape in
 // which a surface can be caught enumerating pager shells alongside the pages
-// they list). It also
+// they list), and FIXTURE_PUBLIC_WIDGETS (a fixture importing every widget
+// shortcode module, the only shape in which a page twin can be caught
+// embedding widget BEM HTML or inline SVG instead of the compact Markdown
+// citations the markdown shortcode variants emit). It also
 // exports the captured build logs, so
 // warning-count assertions read what Hugo actually said rather than
 // re-deriving it.
@@ -61,6 +64,7 @@ export const shadowDir = resolve(process.env.FIXTURE_PUBLIC_SHADOW ?? 'fixture-s
 export const paginatedDir = resolve(
   process.env.FIXTURE_PUBLIC_PAGINATED ?? 'fixture-paginated/public',
 );
+export const widgetsDir = resolve(process.env.FIXTURE_PUBLIC_WIDGETS ?? 'fixture-widgets/public');
 
 export function read(rel, dir = publicDir) {
   return readFileSync(join(dir, rel), 'utf8');
@@ -168,6 +172,7 @@ export function buildLog(which = 'baseline') {
     nosectionpages: 'HUGO_BUILD_LOG_NOSECTIONPAGES',
     shadow: 'HUGO_BUILD_LOG_SHADOW',
     paginated: 'HUGO_BUILD_LOG_PAGINATED',
+    widgets: 'HUGO_BUILD_LOG_WIDGETS',
   };
   // Throwing rather than returning '' is deliberate. A missing build name
   // used to resolve process.env[undefined] to undefined and yield an empty

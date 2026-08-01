@@ -19,7 +19,7 @@ Then fetch it:
 hugo mod get github.com/alex-feel/hugo-artifacts/shortcodes/youtube-embed
 ```
 
-**Important -- template lookup precedence:** If your site already has a file at `layouts/_shortcodes/youtube-embed.html`, Hugo uses the local file instead of the module's shortcode. Delete the local file for the module to take effect. The same applies to the partials under `layouts/_partials/youtube-embed/` and the asset at `assets/js/youtube-embed.js`.
+**Important -- template lookup precedence:** If your site already has a file at `layouts/_shortcodes/youtube-embed.html`, Hugo uses the local file instead of the module's shortcode. Delete the local file for the module to take effect. The same applies to the Markdown output variant at `layouts/_shortcodes/youtube-embed.markdown.md`, the partials under `layouts/_partials/youtube-embed/`, and the asset at `assets/js/youtube-embed.js`.
 
 For local development against a checkout of this repository, use `hugo.work` (preferred) or `[module.replacements]` as described in the repository's root `CLAUDE.md`.
 
@@ -98,7 +98,7 @@ Supply your own poster from the page bundle or the `assets/` directory. It is pr
 | `id` | string | one of `id`/`url`/`list` | -- | Raw 11-character video id. Wins the video-id slot over `url` when both are set; the URL's `list=` and `t=`/`start=` are still honored, and a **different** video id carried in `url` is dropped with a build warning. An invalid raw id fails the build even when `url` supplies a playlist. A pasted URL in `id` replaces `url` entirely (with a build warning when a `url` was supplied alongside). |
 | `url` | string | one of `id`/`url`/`list` | -- | Full YouTube URL. Recognized shapes: `youtu.be/`, `watch?v=` (including `&v=`), `embed/`, `v/`, `shorts/`, `youtube-nocookie.com/embed/`, `m.youtube.com`. A `&list=` and a `?t=`/`?start=` offset (`90`, `90s`, `1m30s`, `1h2m3s`; the legacy `#t=` fragment form also works) are honored -- also when `id` supplies the video id. |
 | `list` | string | one of `id`/`url`/`list` | -- | Playlist id. Without a video id, embeds the playlist; with a video id, appends `list=`. |
-| `title` | string | no | -- | Accessible button label, injected iframe title, and (with `show-title`) a visible title element. |
+| `title` | string | no | -- | Accessible button label, injected iframe title, and (with `show-title`) a visible title element. The [Markdown output variant](#markdown-output-variant) uses it as the link text. |
 | `start` | int | no | -- | Start offset in seconds. Emits `start=N` (and `t=Ns` on the fallback link). An explicit `0` (quoted or unquoted) counts as set and suppresses a url-carried offset. Values cap at nine digits, matching url-carried components. Falls back to a `?t=`/`?start=` carried in `url` when unset or invalid; a valid explicit parameter always wins (a non-numeric or out-of-range value is warned and treated as unset). |
 | `end` | int | no | -- | End offset in seconds. Emits `end=N`. Values cap at nine digits. |
 | `poster` | string | no | auto | Local poster override (page-resource name or `assets/` path). Highest poster priority. |
@@ -154,6 +154,14 @@ The module degrades safely along several independent axes:
 - **Missing remote thumbnail:** a neutral 16:9 box is rendered and the play button still works; the build is never broken.
 - **Network failure during build:** thumbnail fetch failures fall through the tier chain and ultimately to the neutral box, with a single deduplicated `warnf`. A host that never responds trips the circuit breaker described under [Poster resolution](#poster-resolution), so one outage never stalls more than roughly a single fetch window (about 30-40s).
 
+## Markdown output variant
+
+The module ships a second entry template, `layouts/_shortcodes/youtube-embed.markdown.md`, selected by Hugo automatically -- shortcode template lookup is output-format-aware -- whenever a page renders in a markdown output format (for example a Markdown twin produced with `.RenderShortcodes`). The same shortcode call renders the HTML facade in HTML output and the compact Markdown form in markdown output; no configuration is needed.
+
+Instead of the facade it renders one line of pure Markdown, `[Title](https://www.youtube.com/watch?v=dQw4w9WgXcQ)`, linking to the canonical watch URL: the watch page with `list=` and `t=Ns` appended when set, or the playlist page for a playlist-only embed. The URL is built by the same shared partial (`watch-url.html`) that builds the HTML facade's JS-off fallback link, so the two output formats cannot drift apart. When no `title` is given, the localized `youtube_embed_watch_on_youtube` label becomes the link text.
+
+Locator validation is identical to the HTML variant: a misused shortcode fails the build with the same error regardless of output format, and warnings carry byte-identical text so Hugo's log deduplication collapses them when both formats render the same call. Presentation-only parameters (`poster`, `params`, `loading`, `sizes`, `class`, `id-anchor`, `show-title`; `end` is validated but does not affect the output) are accepted and ignored, no HTML is emitted, and the poster machinery never runs, so a markdown render performs zero remote fetches.
+
 ## Localization
 
 All UI strings resolve through i18n keys shipped in the module's `i18n/` directory (English and Russian included). Every lookup falls back to the English string, so a site language without translations still renders correctly. Override any key in the consuming site's own `i18n/<lang>.toml` to translate or reword:
@@ -162,7 +170,7 @@ All UI strings resolve through i18n keys shipped in the module's `i18n/` directo
 | --- | --- | --- |
 | `youtube_embed_play_video` | `Play video: {{ .Title }}` | Play-button `aria-label` when a `title` is given (`{{ .Title }}` is the title) |
 | `youtube_embed_play_video_untitled` | `Play video` | Play-button `aria-label` without a `title` |
-| `youtube_embed_watch_on_youtube` | `Watch on YouTube` | JS-off fallback link text without a `title` |
+| `youtube_embed_watch_on_youtube` | `Watch on YouTube` | JS-off fallback link text and the Markdown output variant's link text without a `title` |
 | `youtube_embed_player_title` | `YouTube video player` | Injected iframe `title` without a `title` (carried via `data-title`) |
 
 ## Styling
@@ -236,10 +244,12 @@ shortcodes/youtube-embed/
   layouts/
     _shortcodes/
       youtube-embed.html            # Entry: param extraction, id parse/validate, dispatch
+      youtube-embed.markdown.md     # Markdown output variant: one line [Title](watch URL)
     _partials/
       youtube-embed/
         parse-id.html               # id/list extraction from id or url + 11-char validation
         poster.html                 # T1-T4 poster resolution -> same-origin <picture> data
         facade.html                 # BEM markup + once-per-page script injection
+        watch-url.html              # Canonical watch URL builder (shared by facade + markdown variant)
         icon.html                   # Inline-SVG play icon (currentColor, 1em, aria-hidden)
 ```

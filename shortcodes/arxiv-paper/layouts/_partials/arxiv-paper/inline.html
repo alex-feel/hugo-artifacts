@@ -29,7 +29,7 @@
   <span class="arxiv-paper__brand">arXiv</span>
   <span class="arxiv-paper__id">{{ .id }}{{ with .version }}<span class="arxiv-paper__version">v{{ . }}</span>{{ end }}</span>
   {{- if and .apiOk .title }}
-  <span class="arxiv-paper__sep"></span>
+  <span class="arxiv-paper__sep" aria-hidden="true">·</span>
   <span class="arxiv-paper__inline-title">{{ .title }}</span>
   {{- end }}
   {{- with .primaryCategory }}

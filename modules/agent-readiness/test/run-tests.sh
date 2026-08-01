@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Validates the shipped data files, then builds THIRTEEN fixture sites with
+# Validates the shipped data files, then builds FOURTEEN fixture sites with
 # hugo (builds, not servers: no port binding, and a finite build exits by
-# itself) and runs the Node build-output assertion suite against all thirteen.
+# itself) and runs the Node build-output assertion suite against all fourteen.
 #
 # The data-file check runs FIRST, before any build. That ordering is the
 # point: a malformed registry otherwise surfaces as an opaque Hugo failure at
 # some unrelated template, and the reader has to work backwards to it.
 #
-# The thirteen builds:
+# The fourteen builds:
 #   baseline   -- every content-license key unset, proving the license
 #                 surfaces are inert until a consumer opts in;
 #   configured -- the license table filled and both switches on, plus
@@ -45,20 +45,30 @@
 #   paginated  -- a fixture whose single section spills past pagerSize, so
 #                 Hugo publishes pager shells: the only shape in which a
 #                 surface can be caught enumerating a pager alongside the
-#                 pages it lists.
+#                 pages it lists;
+#   widgets    -- a fixture importing every widget shortcode module, whose
+#                 single regular page calls all eight widget shortcodes: the
+#                 only shape in which a page twin can be caught embedding
+#                 widget BEM HTML or inline SVG instead of the compact
+#                 Markdown citations the markdown shortcode variants emit.
 #
 # Follows the repository's hugo process lifecycle rule with a pre-launch
 # process check, and hard-fails on any deprecation or error output in any
 # build log.
 #
 # NETWORK: the agent-skills specs exercise a real build-time remote fetch,
-# because the digest guarantee cannot be proven without one.
+# because the digest guarantee cannot be proven without one. The widgets
+# build additionally fetches the widget modules' remote APIs (GitHub, the
+# Hugging Face Hub, arXiv, YouTube posters); those fetches degrade with
+# WARN lines when tokenless or rate-limited, which the log gates below
+# deliberately tolerate -- they hard-fail on deprecations and errors only.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FIXTURE_DIR="$HERE/fixture"
 SHADOW_DIR="$HERE/fixture-shadow"
 PAGINATED_DIR="$HERE/fixture-paginated"
+WIDGETS_DIR="$HERE/fixture-widgets"
 LOG_FILE="$HERE/hugo-build.log"
 LOG_FILE_CONFIGURED="$HERE/hugo-build-configured.log"
 LOG_FILE_MINIMAL="$HERE/hugo-build-minimal.log"
@@ -72,6 +82,7 @@ LOG_FILE_NSOFF="$HERE/hugo-build-nsoff.log"
 LOG_FILE_NOSECTIONPAGES="$HERE/hugo-build-nosectionpages.log"
 LOG_FILE_SHADOW="$HERE/hugo-build-shadow.log"
 LOG_FILE_PAGINATED="$HERE/hugo-build-paginated.log"
+LOG_FILE_WIDGETS="$HERE/hugo-build-widgets.log"
 
 # The logs are retained after a successful run so the documented re-run recipe
 # can read them; they are gitignored at the repo root. Only an interrupt
@@ -90,7 +101,7 @@ kill_stray_hugo() {
 }
 cleanup_interrupted() {
   kill_stray_hugo
-  rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_NOTWINS"     "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_LLMSOFF" "$LOG_FILE_EDGE" "$LOG_FILE_OFF"     "$LOG_FILE_BADTABLES" "$LOG_FILE_NSOFF" "$LOG_FILE_NOSECTIONPAGES"     "$LOG_FILE_SHADOW" "$LOG_FILE_PAGINATED"
+  rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_NOTWINS"     "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_LLMSOFF" "$LOG_FILE_EDGE" "$LOG_FILE_OFF"     "$LOG_FILE_BADTABLES" "$LOG_FILE_NSOFF" "$LOG_FILE_NOSECTIONPAGES"     "$LOG_FILE_SHADOW" "$LOG_FILE_PAGINATED" "$LOG_FILE_WIDGETS"
 }
 trap cleanup_interrupted INT TERM
 trap kill_stray_hugo EXIT
@@ -141,6 +152,14 @@ build() {
   fi
 }
 
+# ---- Stale-output purge ----
+# Hugo's --cleanDestinationDir never deletes dot-prefixed paths, so a stale
+# .well-known/ artifact -- or a whole abandoned destination directory --
+# survives every rebuild and can flip a published-surface assertion years
+# after the build that wrote it. Each destination root is removed outright
+# before its builds instead.
+rm -rf "$FIXTURE_DIR/public" "$SHADOW_DIR/public" "$PAGINATED_DIR/public" "$WIDGETS_DIR/public"
+
 build "$FIXTURE_DIR" "" public/baseline "$LOG_FILE"
 build "$FIXTURE_DIR" configured public/configured "$LOG_FILE_CONFIGURED"
 build "$FIXTURE_DIR" minimal public/minimal "$LOG_FILE_MINIMAL"
@@ -154,6 +173,7 @@ build "$FIXTURE_DIR" nsoff public/nsoff "$LOG_FILE_NSOFF"
 build "$FIXTURE_DIR" nosectionpages public/nosectionpages "$LOG_FILE_NOSECTIONPAGES"
 build "$SHADOW_DIR" "" public "$LOG_FILE_SHADOW"
 build "$PAGINATED_DIR" "" public "$LOG_FILE_PAGINATED"
+build "$WIDGETS_DIR" "" public "$LOG_FILE_WIDGETS"
 
 export FIXTURE_PUBLIC="$FIXTURE_DIR/public/baseline"
 export FIXTURE_PUBLIC_CONFIGURED="$FIXTURE_DIR/public/configured"
@@ -168,6 +188,7 @@ export FIXTURE_PUBLIC_NSOFF="$FIXTURE_DIR/public/nsoff"
 export FIXTURE_PUBLIC_NOSECTIONPAGES="$FIXTURE_DIR/public/nosectionpages"
 export FIXTURE_PUBLIC_SHADOW="$SHADOW_DIR/public"
 export FIXTURE_PUBLIC_PAGINATED="$PAGINATED_DIR/public"
+export FIXTURE_PUBLIC_WIDGETS="$WIDGETS_DIR/public"
 export HUGO_BUILD_LOG="$LOG_FILE"
 export HUGO_BUILD_LOG_CONFIGURED="$LOG_FILE_CONFIGURED"
 export HUGO_BUILD_LOG_MINIMAL="$LOG_FILE_MINIMAL"
@@ -181,6 +202,7 @@ export HUGO_BUILD_LOG_NSOFF="$LOG_FILE_NSOFF"
 export HUGO_BUILD_LOG_NOSECTIONPAGES="$LOG_FILE_NOSECTIONPAGES"
 export HUGO_BUILD_LOG_SHADOW="$LOG_FILE_SHADOW"
 export HUGO_BUILD_LOG_PAGINATED="$LOG_FILE_PAGINATED"
+export HUGO_BUILD_LOG_WIDGETS="$LOG_FILE_WIDGETS"
 HUGO_VERSION="$(hugo version | sed -E 's/^hugo v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
 export HUGO_VERSION
 

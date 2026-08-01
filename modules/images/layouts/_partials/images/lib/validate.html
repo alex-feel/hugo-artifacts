@@ -1,0 +1,58 @@
+{{/*
+  images/lib/validate.html -- INTERNAL lib (strict-surface validation).
+
+  Purpose: the single build-failing validation gate shared by every STRICT
+  surface -- the images/image.html public partial and both output-format
+  variants of the image shortcode (image.html and image.markdown.md) -- so
+  one misuse produces one consistent errorf contract no matter which surface
+  or output format renders the call. The render hook and the gallery items
+  deliberately do NOT route here: those surfaces demote every contradiction
+  to a deduplicated warning because a content batch has no single call site
+  to fail against.
+
+  Checks (each errorf carries the call location from opts.where):
+  - missing alt without decorative=true
+  - decorative=true combined with a non-empty alt
+  - decorative=true combined with lightbox=true
+  - layout=fixed without an explicit width or height
+  - process=fit/fill/crop without BOTH width and height
+
+  The missing page/src guard stays in each calling surface: it fires before
+  the cascade runs, so there is no opts dict to validate yet.
+
+  Context (dict):
+  - .opts (dict) The cascaded options from images/config.html (carries the
+                 "where" diagnostics origin).
+
+  Return value: bool -- true when at least one check failed (the caller
+  skips rendering; the build is already failing).
+
+  One terminal return.
+*/}}
+
+{{- $opts := .opts -}}
+{{- $where := $opts.where -}}
+
+{{- $fatal := false -}}
+{{- if and (not $opts.alt) (not $opts.decorative) -}}
+  {{- errorf "[images] alt is required: describe the image for assistive technology, or set decorative=true to emit the explicit empty alt of a purely decorative image. See %s" $where -}}
+  {{- $fatal = true -}}
+{{- end -}}
+{{- if and $opts.decorative $opts.alt -}}
+  {{- errorf "[images] decorative=true contradicts a non-empty alt: a decorative image is skipped by assistive technology, so its alt must be empty. Drop one of the two. See %s" $where -}}
+  {{- $fatal = true -}}
+{{- end -}}
+{{- if and $opts.decorative $opts.lightbox -}}
+  {{- errorf "[images] decorative=true contradicts lightbox=true: an anchor whose accessible name is the empty alt fails WCAG 2.4.4/4.1.2. Drop one of the two. See %s" $where -}}
+  {{- $fatal = true -}}
+{{- end -}}
+{{- if and (eq $opts.layout "fixed") (eq $opts.width 0) (eq $opts.height 0) -}}
+  {{- errorf "[images] layout=fixed requires an explicit width or height (the x-descriptor srcset is built from the width; a height alone derives the width proportionally from the source). See %s" $where -}}
+  {{- $fatal = true -}}
+{{- end -}}
+{{- if and (in (slice "fit" "fill" "crop") $opts.process) (or (eq $opts.width 0) (eq $opts.height 0)) -}}
+  {{- errorf "[images] process=%q requires BOTH width and height. See %s" $opts.process $where -}}
+  {{- $fatal = true -}}
+{{- end -}}
+
+{{- return $fatal -}}

@@ -1,10 +1,12 @@
 # Hugo github-profile module -- English UI strings.
 # The module ships its full i18n surface from this directory. Every template lookup pipes
 # through `| default "<English>"`, so a site language without these keys still renders.
-# Every plural table receives a map: `count` selects the form per Hugo's CLDR rules, and
-# `formatted` carries the same number already grouped for the locale. Always interpolate
-# `{{ .formatted }}`, never `{{ .count }}` -- i18n templates have no function map, so a
-# translation cannot format a number itself and raw digits would print ungrouped.
+# Sentence-shaped plural tables receive a map: `count` selects the form per Hugo's CLDR
+# rules, and `formatted` carries the same number already grouped for the locale. Always
+# interpolate `{{ .formatted }}`, never `{{ .count }}` -- i18n templates have no function
+# map, so a translation cannot format a number itself and raw digits would print
+# ungrouped. Bare unit-word tables (calendar_unit, the org_stat_* keys) instead receive
+# the raw count alone for form selection and contain no interpolation.
 
 github_profile_attribution_suffix = "on GitHub"
 github_profile_hireable = "Open to opportunities"
@@ -27,6 +29,12 @@ github_profile_orgs_label = "Organizations"
 github_profile_pinned_label = "Pinned repositories"
 github_profile_socials_label = "Elsewhere"
 github_profile_rank_label = "activity score"
+# Text-layer separators: real characters between headline metric groups and
+# before the floor note, so extractors and screen readers get boundaries the
+# CSS-drawn dividers never provide. Sites drawing their own dividers
+# clip-hide the carrying github-profile__sep elements.
+github_profile_sep = ", "
+github_profile_note_sep = " — "
 
 [github_profile_member_years]
 one = "1 year on GitHub"
@@ -52,3 +60,21 @@ other = "plus {{ .formatted }} private contributions"
 [github_profile_streak_days]
 one = "1 day"
 other = "{{ .formatted }} days"
+
+# Bare unit words for the org-rollup stats, where the count itself renders
+# separately as a compact-formatted number (the calendar_unit precedent).
+[github_profile_org_stat_commits]
+one = "commit"
+other = "commits"
+
+[github_profile_org_stat_prs]
+one = "pull request"
+other = "pull requests"
+
+[github_profile_org_stat_issues]
+one = "issue"
+other = "issues"
+
+[github_profile_org_stat_reviews]
+one = "review"
+other = "reviews"

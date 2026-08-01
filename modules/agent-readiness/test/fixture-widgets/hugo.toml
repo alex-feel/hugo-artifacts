@@ -1,0 +1,77 @@
+# The WIDGETS fixture. Its whole purpose is to pin what the Markdown twin of
+# a widget-heavy page contains once every widget shortcode ships a markdown
+# output-format variant: compact Markdown citations, and none of the widget
+# BEM HTML or inline SVG that .RenderShortcodes would otherwise expand
+# through the default HTML shortcode templates.
+#
+# It needs a fixture of its own rather than another environment of the
+# default one: module imports are per-fixture rather than per-environment,
+# and the default fixture must NOT import the widget modules -- its numeric
+# roster and count expectations are locked, and the sibling imports would
+# put every widget template and render hook on its lookup path.
+#
+# NETWORK: the widget modules fetch remote APIs at build time (GitHub, the
+# Hugging Face Hub, arXiv, YouTube poster images). Every fetch degrades
+# gracefully per the modules' resilience contract, so this build may WARN
+# (missing HUGO_* tokens, rate-limited APIs) but never errors, and the spec
+# asserts only the baseline lines derivable from the shortcode parameters
+# alone.
+baseURL = 'https://widgets.example/'
+title = 'Agent Readiness Widgets Fixture'
+locale = 'en-us'
+
+[outputs]
+  home = ['html']
+  section = ['html']
+  page = ['html', 'markdown']
+
+[module]
+
+  [module.hugoVersion]
+    min = "0.160.0"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/agent-readiness"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/images"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/shortcodes/arxiv-paper"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/shortcodes/callout"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/shortcodes/github-profile"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/shortcodes/github-repo"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/shortcodes/hf-space"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/shortcodes/youtube-embed"
+
+# The arXiv API responds with Content-Type application/atom+xml, which is
+# not in Hugo's default remote-fetch allow-list, and security configuration
+# does not merge from modules, so the CONSUMER carries this entry (the
+# arxiv-paper README documents it). Unanchored on the right because the
+# response carries a `; charset=utf-8` suffix; additive, so the
+# application/json responses the other widget modules rely on stay allowed.
+[security]
+
+  [security.http]
+    mediaTypes = ['^application/atom\+xml']
+
+[params]
+
+  [params.agent]
+
+    # The twins' trailing pointer targets the sitemap rather than llms.txt:
+    # this fixture wires only `html` on home (no llmstxt format), and the
+    # default "llms" target would warn about the unwired format on every
+    # twin render.
+    [params.agent.markdown]
+      sitemap_section_target = 'sitemap'

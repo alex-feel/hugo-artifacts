@@ -1,0 +1,11 @@
+go 1.22
+
+use ./
+use ../../
+use ../../../images
+use ../../../../shortcodes/arxiv-paper
+use ../../../../shortcodes/callout
+use ../../../../shortcodes/github-profile
+use ../../../../shortcodes/github-repo
+use ../../../../shortcodes/hf-space
+use ../../../../shortcodes/youtube-embed

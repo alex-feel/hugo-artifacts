@@ -32,7 +32,7 @@
     <span class="hf-space__owner">{{ .owner }}</span><span class="hf-space__slash">/</span>{{ .name -}}
   </span>
   {{- if .apiOk }}
-  <span class="hf-space__sep"></span>
+  <span class="hf-space__sep" aria-hidden="true">·</span>
   <span class="hf-space__likes">
     {{- partial "hf-space/icon.html" (dict "name" "heart" "class" "hf-space__icon hf-space__icon--heart") }}
     {{ .likesFormatted }}

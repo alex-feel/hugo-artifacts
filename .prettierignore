@@ -34,6 +34,11 @@ modules/search/assets/snowball/
 # semantically load-bearing; Prettier would join or rewrap them).
 modules/images/test/fixture/content/
 
+# Agent-readiness widgets-fixture content: the same class of trap-shaped
+# Markdown test data (bare URLs inside shortcode arguments and a bracketed
+# title probe whose line structure is semantically load-bearing).
+modules/agent-readiness/test/fixture-widgets/content/
+
 # Phase 7 locked Playwright test artifacts. Per master plan, these files
 # achieved 9 PASS / 0 SKIPPED / 0 FAIL and MUST NOT be modified to preserve
 # regression-free status. They use indent / quoting styles that differ from
