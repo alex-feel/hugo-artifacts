@@ -1,0 +1,72 @@
+{{/*
+  agent-readiness/lib/page-included.html -- INTERNAL (lib tier).
+
+  Purpose: decide whether ONE page publishes a Markdown twin under the
+  resolved config. This is the single implementation of the published-twin
+  membership decision, shared by agent-readiness/markdown-page.html (which
+  renders the twin and emits NOTHING AT ALL for a page this decision
+  rejects, so Hugo publishes no file) and by agent-readiness/twin-url.html
+  (which reports the published twin's URL to external consumers).
+  Duplicating the decision across those two call sites is precisely how a
+  URL resolver drifts out of agreement with the renderer, and drift here
+  means a consumer linking a file that does not exist.
+
+  The decision, in order:
+    1. The enable conjunct: cfg.enable AND cfg.markdown.enable. Both are
+       SITE-SCOPED, so every page of a site answers alike.
+    2. Kind "page": the page must appear in the shared enumeration
+       (agent-readiness/page-list.html), which is what keeps the twin set
+       identical to the set llms.txt and about.md list.
+    3. The home page and a section list page are never in that enumeration
+       -- site.RegularPages excludes them, because they are the containers
+       of an enumeration rather than members of one -- so they are tested
+       against the same per-page rules (lib/page-excluded.html) directly,
+       with the dedicated search page's path resolved once here.
+    4. The sections allow-list applies ONLY to kind "section" (a site
+       scoping its agent surface to /blog does not want a /projects/
+       section twin), and never to the home page, which is the site root
+       rather than a section member.
+
+  What is deliberately NOT decided here: whether the `markdown` output
+  format is WIRED for the page's kind in the consumer's [outputs].
+  markdown-page.html only executes when the format is wired, and
+  twin-url.html asks the page's own output formats itself, so the wired
+  question stays with the callers.
+
+  Expected context (dict):
+  - .page (Page) - The page to test.
+  - .cfg  (dict) - The resolved config from agent-readiness/config.html.
+
+  Return value: true when the page publishes a Markdown twin (provided the
+  format is wired for its kind). ONE terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $cfg := .cfg -}}
+
+{{- $included := false -}}
+{{- if and $cfg.enable $cfg.markdown.enable -}}
+  {{- if eq $page.Kind "page" -}}
+    {{- range partialCached "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) site.Language.Name -}}
+      {{- if eq .Path $page.Path -}}{{- $included = true -}}{{- end -}}
+    {{- end -}}
+  {{- else -}}
+    {{- $searchPagePath := "" -}}
+    {{- if $cfg.exclude_search_page -}}
+      {{- with site.GetPage $cfg.search_page_path -}}
+        {{- $searchPagePath = .Path -}}
+      {{- end -}}
+    {{- end -}}
+    {{- $included = not (partial "agent-readiness/lib/page-excluded.html" (dict "page" $page "cfg" $cfg "search_page_path" $searchPagePath)) -}}
+    {{- if and $included $cfg.sections (eq $page.Kind "section") -}}
+      {{- $inScope := false -}}
+      {{- $p := $page.Path -}}
+      {{- range $cfg.sections -}}
+        {{- if or (eq $p .) (hasPrefix $p (printf "%s/" .)) -}}{{- $inScope = true -}}{{- end -}}
+      {{- end -}}
+      {{- $included = $inScope -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $included -}}

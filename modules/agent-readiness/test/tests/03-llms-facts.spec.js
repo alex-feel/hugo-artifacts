@@ -50,11 +50,17 @@ test('llms.txt items link the Markdown twins by ABSOLUTE URL', () => {
   // `/index.md` suffix would pass for either form, so the origin is asserted
   // explicitly.
   const sections = sectionsWithTopLevelBullets(read('llms.txt'));
+  // The Optional section is the one part of the document whose bullets are
+  // NOT page twins: it carries consumer-declared links plus the module's
+  // derived Agent Skills index entry. Its URLs stay covered by the
+  // absolute-URL and resolution sweeps below; only the twin-shape rule
+  // does not apply to them.
+  sections.delete('Optional');
   let checked = 0;
   for (const bullets of sections.values()) {
     for (const line of bullets) {
       const [link] = markdownLinks(line);
-      if (!link || /\/sitemap/.test(link.url)) continue;
+      if (!link) continue;
       assert.match(link.url, /^https:\/\/fixture\.example\//, `${link.url} must be absolute`);
       assert.match(link.url, /\/index\.md$/, `${link.url} should be the twin URL`);
       checked += 1;

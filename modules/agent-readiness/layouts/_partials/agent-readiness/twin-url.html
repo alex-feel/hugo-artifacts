@@ -1,0 +1,71 @@
+{{/*
+  agent-readiness/twin-url.html -- PUBLIC ENTRY (resolver tier).
+
+  Purpose: the stable public answer to "does this page publish a Markdown
+  twin, and where". A consumer template (a copy-page widget, a rel-alternate
+  emitter, a footer link) calls:
+
+      {{ partial "agent-readiness/twin-url.html" . }}
+
+  or passes call-site config overrides:
+
+      {{ partial "agent-readiness/twin-url.html" (dict "page" . "args" (dict ...)) }}
+
+  and receives the published twin's absolute .Permalink, or "" when the page
+  publishes no twin.
+
+  WHY THIS EXISTS. `.OutputFormats.Get "markdown"` answers "is the format
+  WIRED for this page's kind", which is a question about the consumer's
+  [outputs] lists, NOT about whether this module rendered anything into it.
+  markdown-page.html is the sole producer and it emits nothing for a page
+  the membership decision rejects, which makes Hugo publish no file -- so a
+  consumer that consulted the format alone would render a link that 404s on
+  exactly the pages the module deliberately withholds. This partial consults
+  the SAME membership implementation the renderer consumes
+  (agent-readiness/lib/page-included.html), so the two can never drift.
+
+  Empty-string cases, exhaustive: the module master switch off
+  (enable = false); the twin surface off (markdown.enable = false); the page
+  excluded per page (front matter `agent: false` / `agent: {exclude: true}`,
+  the dedicated search page, a noindex robots value -- each honoring the
+  explicit `agent: {exclude: false}` include override); a kind "page" page
+  absent from the shared enumeration; a SECTION page outside a non-empty
+  `sections` allow-list (the allow-list applies to section kind only, never
+  home); the `markdown` output format not wired for the page's kind; and any
+  kind that never gets a twin (taxonomy, term, or anything else beyond home,
+  section and page -- the module ships twin templates for exactly those
+  three kinds, so no other kind can publish one no matter what is wired).
+
+  Expected context: the current Page, or a dict whose "page" key is the
+  current Page plus an optional "args" map of call-site config overrides
+  (the top tier of the module's four-tier cascade). Anything else is a
+  wiring mistake, not a content problem, and fails the build.
+
+  Return value: the published twin's absolute URL (string), or "". ONE
+  terminal return.
+*/}}
+
+{{- $arg := . -}}
+{{- $page := $arg -}}
+{{- $args := dict -}}
+{{- if not (reflect.IsPage $arg) -}}
+  {{- if reflect.IsMap $arg -}}
+    {{- $args = $arg.args | default dict -}}
+    {{- $page = $arg.page -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $result := "" -}}
+
+{{- if not (reflect.IsPage $page) -}}
+  {{- errorf "[agent-readiness] twin-url.html must be called with the current Page as its context ({{ partial \"agent-readiness/twin-url.html\" . }}) or as the \"page\" key of an options dict ({{ partial \"agent-readiness/twin-url.html\" (dict \"page\" . \"args\" (dict ...)) }})." -}}
+{{- else if in (slice "home" "section" "page") $page.Kind -}}
+  {{- $cfg := partial "agent-readiness/config.html" (dict "page" $page "args" $args) -}}
+  {{- if partial "agent-readiness/lib/page-included.html" (dict "page" $page "cfg" $cfg) -}}
+    {{- with $page.OutputFormats.Get "markdown" -}}
+      {{- $result = .Permalink -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $result -}}

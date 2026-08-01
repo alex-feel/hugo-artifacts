@@ -13,13 +13,27 @@ locale = 'en-us'
 # make every robots assertion pass for the wrong reason.
 enableRobotsTXT = true
 
+# A fixture-only dump surface for the module's two public partials. The
+# suite cannot call a partial directly, so the home page publishes one
+# plain-text file per language that records, for EVERY page of the site,
+# what twin-url.html returns, plus every entry surfaces.html returns --
+# and the specs assert both against the published tree in both directions.
+# It is fixture config, not module config: consumers never see it.
+[outputFormats]
+
+  [outputFormats.twindump]
+    mediaType = 'text/plain'
+    baseName = 'twindump'
+    isPlainText = true
+    notAlternative = true
+
 # Hugo REPLACES the outputs list per page kind rather than merging it, and
 # does not merge module [outputs] configuration at all. html and rss are
 # restated on section for exactly that reason: dropping rss here would
 # silently delete every section feed, which is what the index.xml assertion
 # in the suite guards.
 [outputs]
-  home = ['html', 'rss', 'markdown', 'llmstxt', 'agentfacts', 'agentskills']
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'agentfacts', 'agentskills', 'twindump']
   section = ['html', 'rss', 'markdown']
   page = ['html', 'markdown']
 

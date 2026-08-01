@@ -1,0 +1,81 @@
+{{/*
+  agent-readiness/surfaces.html -- PUBLIC ENTRY (resolver tier).
+
+  Purpose: the stable public enumeration of the site-level agent surfaces
+  this module actually PUBLISHES under the resolved config, so a consumer
+  can build a human-visible discovery page or a footer block with zero
+  hand-typed surface lists:
+
+      {{ range partial "agent-readiness/surfaces.html" . }}
+        <a href="{{ .url }}">{{ .label }}</a>
+      {{ end }}
+
+  Return value: an ordered slice of dicts, each {key, url, label} --
+  key "llms" (the llms.txt link index), then "facts" (the /about.md facts
+  document), then "skills" (the Agent Skills index at
+  /.well-known/agent-skills/index.json). Every url is ABSOLUTE. Every label
+  is the module's i18n-resolved display string (agent_surface_llms,
+  agent_surface_facts, agent_surface_skills), so a consumer renders without
+  authoring labels. An entry is present ONLY when its document publishes;
+  the slice may be empty. ONE terminal return.
+
+  PUBLISHED, not merely wired. Each surface's output format answers "is the
+  format wired in the consumer's [outputs]", while its renderer decides
+  whether any bytes exist -- and a template that renders zero bytes makes
+  Hugo publish NO file. So each entry reproduces its producer's own gates:
+
+  - llms:  cfg.enable AND llms.enable AND the llmstxt format wired on the
+    page's own language home. An enabled llms.html always emits at least
+    its H1 line, so enabled-and-wired IS published. Per-language file
+    (/llms.txt, /ru/llms.txt), so the answer follows the page's site.
+  - facts: cfg.enable AND facts.enable AND the agentfacts format wired on
+    the page's own language home; the same enabled-means-bytes reasoning,
+    and likewise per-language.
+  - skills: ALL FOUR gates of home.agentskills.json, evaluated against the
+    DEFAULT site. The gates live in lib/skills-index-url.html -- shared
+    with the llms.txt `## Optional` auto-entry in llms.html, so the two
+    callers cannot drift apart -- and that partial returns the index URL
+    only when the file actually publishes, resolving the default-site
+    config and the skills slice once per build.
+
+  Expected context: the current Page, or a dict whose "page" key is the
+  current Page plus an optional "args" map of call-site config overrides
+  (the top tier of the module's four-tier cascade). Anything else is a
+  wiring mistake, not a content problem, and fails the build.
+*/}}
+
+{{- $arg := . -}}
+{{- $page := $arg -}}
+{{- $args := dict -}}
+{{- if not (reflect.IsPage $arg) -}}
+  {{- if reflect.IsMap $arg -}}
+    {{- $args = $arg.args | default dict -}}
+    {{- $page = $arg.page -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $surfaces := slice -}}
+
+{{- if not (reflect.IsPage $page) -}}
+  {{- errorf "[agent-readiness] surfaces.html must be called with the current Page as its context ({{ partial \"agent-readiness/surfaces.html\" . }}) or as the \"page\" key of an options dict ({{ partial \"agent-readiness/surfaces.html\" (dict \"page\" . \"args\" (dict ...)) }})." -}}
+{{- else -}}
+  {{- $cfg := partial "agent-readiness/config.html" (dict "page" $page "args" $args) -}}
+
+  {{- if and $cfg.enable $cfg.llms.enable -}}
+    {{- with $page.Site.Home.OutputFormats.Get "llmstxt" -}}
+      {{- $surfaces = $surfaces | append (dict "key" "llms" "url" .Permalink "label" $cfg.i18n.surface_llms) -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- if and $cfg.enable $cfg.facts.enable -}}
+    {{- with $page.Site.Home.OutputFormats.Get "agentfacts" -}}
+      {{- $surfaces = $surfaces | append (dict "key" "facts" "url" .Permalink "label" $cfg.i18n.surface_facts) -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- with partial "agent-readiness/lib/skills-index-url.html" dict -}}
+    {{- $surfaces = $surfaces | append (dict "key" "skills" "url" . "label" $cfg.i18n.surface_skills) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $surfaces -}}

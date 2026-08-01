@@ -1,0 +1,23 @@
+{{- /*
+  Fixture-only dump of the module's two PUBLIC partials, published as
+  /twindump.txt per language by the twindump output format the fixture
+  config defines. Two blocks, tab-separated because a logical page path
+  can carry any other character:
+
+    <page .Path>\t<twin-url.html result, "" when no twin publishes>
+    == surfaces ==
+    <surface key>\t<surface url>
+
+  The first block covers EVERY page of this language's site -- home,
+  sections, regular pages, and taxonomy/term pages when present -- so the
+  specs can assert the non-empty results equal exactly the published twin
+  set, in both directions. The second block is the surfaces.html
+  enumeration for the same site.
+*/ -}}
+{{- range site.Pages -}}
+  {{- printf "%s\t%s\n" .Path (partial "agent-readiness/twin-url.html" .) -}}
+{{- end -}}
+{{- printf "== surfaces ==\n" -}}
+{{- range partial "agent-readiness/surfaces.html" . -}}
+  {{- printf "%s\t%s\n" .key .url -}}
+{{- end -}}

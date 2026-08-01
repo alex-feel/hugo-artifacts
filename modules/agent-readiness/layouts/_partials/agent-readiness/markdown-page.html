@@ -10,7 +10,10 @@
   and about.md about which pages of the site exist. A template that renders
   no bytes makes Hugo publish no file for that format, so an excluded page
   ends up with no index.md beside its index.html rather than an empty one --
-  which is what 02-twins.spec.js asserts.
+  which is what 02-twins.spec.js asserts. The decision itself lives in ONE
+  place, agent-readiness/lib/page-included.html, shared with the public
+  agent-readiness/twin-url.html resolver, so the renderer and the URL
+  resolver can never disagree about which pages publish a twin.
 
   BODY SOURCE: .RenderShortcodes, which is the only one of Hugo's four
   content accessors that yields a document that is simultaneously valid
@@ -42,159 +45,127 @@
 {{- $cfg := .cfg -}}
 {{- $md := $cfg.markdown -}}
 
-{{- if and $cfg.enable $md.enable -}}
-  {{/* MEMBERSHIP, by kind. A regular page must appear in the shared
-       enumeration, which is what keeps the twin set identical to the set
-       llms.txt and about.md list. The home page and a section list page are
-       never in that enumeration -- site.RegularPages excludes them, because
-       they are the containers of an enumeration rather than members of one
-       -- so they are tested against the same per-page rules directly. The
-       section allow-list still applies to a section page (a site scoping its
-       agent surface to /blog does not want a /projects/ section twin), but
-       never to the home page, which is the site root rather than a section
-       member. */}}
-  {{- $included := false -}}
-  {{- if eq $page.Kind "page" -}}
+{{/* MEMBERSHIP, including the enable conjunct, is the shared decision in
+     agent-readiness/lib/page-included.html -- one implementation for this
+     renderer and for the public agent-readiness/twin-url.html resolver. */}}
+{{- if partial "agent-readiness/lib/page-included.html" (dict "page" $page "cfg" $cfg) -}}
+  {{/* safeHTML because this partial lives in the .html template namespace
+       while the twin it feeds is a standalone plain-text document: without
+       it, the builder's quotes come out as &#34; and every front-matter
+       block is unparseable. .RenderShortcodes below needs no such marking
+       because it already returns template.HTML. */}}
+  {{- partial "agent-readiness/markdown-front-matter.html" (dict "page" $page "cfg" $cfg) | safeHTML -}}
+  {{- $page.RenderShortcodes -}}
+
+  {{/* Member roster, for a SECTION twin only. A section whose _index.md is
+       front-matter-only would otherwise publish a twin with an empty body
+       -- no roster of member pages -- while the section twin is the
+       surface that answers "what pages does this section hold" in one
+       fetch, complete. Membership is the SHARED filter narrowed to pages
+       under this section's path at a segment boundary, so the roster can
+       never disagree with llms.txt and about.md about which pages exist,
+       and it is complete by definition -- never a first-N window. The home
+       twin never carries one: every regular page sits under "/", so a home
+       roster would be the whole site, and that site-level enumeration is
+       llms.txt's job. An empty admitted set emits neither heading nor
+       list, because an empty H2 claims a roster that is not there.
+
+       The shared filter is ranged directly rather than through .Paginator:
+       reading .Paginator INITIALIZES pagination as a side effect, and on a
+       list URL whose first touch this render is, that would freeze the
+       pager size before the list template gets to choose one.
+
+       Each item links the member's Markdown twin when the built-in
+       `markdown` format is wired for the page kind, else its HTML
+       permalink -- llms.html's existence reasoning, with `markdown.enable`
+       already known true here because this twin is itself rendering, so
+       wired means published for every admitted member. URLs are ABSOLUTE
+       for the same reason the pointer section's is: a twin is routinely
+       read detached from the site it came from. Every interpolated value
+       passes the line-safety builders, because in a line-oriented document
+       a value-borne line break or bracket is a structure change, not
+       text. */}}
+  {{- if and (eq $page.Kind "section") $md.section_pages -}}
+    {{- $memberPrefix := printf "%s/" $page.Path -}}
+    {{- $items := slice -}}
     {{- range partialCached "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) site.Language.Name -}}
-      {{- if eq .Path $page.Path -}}{{- $included = true -}}{{- end -}}
-    {{- end -}}
-  {{- else -}}
-    {{- $searchPagePath := "" -}}
-    {{- if $cfg.exclude_search_page -}}
-      {{- with site.GetPage $cfg.search_page_path -}}
-        {{- $searchPagePath = .Path -}}
+      {{- if hasPrefix .Path $memberPrefix -}}
+        {{- $url := .Permalink -}}
+        {{- with .OutputFormats.Get "markdown" -}}{{- $url = .Permalink -}}{{- end -}}
+        {{- $item := printf "- %s" (partial "agent-readiness/lib/markdown-link.html" (dict "name" .Title "url" $url)) -}}
+        {{- with .Description -}}{{- $item = printf "%s: %s" $item (partial "agent-readiness/lib/inline.html" .) -}}{{- end -}}
+        {{- $items = $items | append $item -}}
       {{- end -}}
     {{- end -}}
-    {{- $included = not (partial "agent-readiness/lib/page-excluded.html" (dict "page" $page "cfg" $cfg "search_page_path" $searchPagePath)) -}}
-    {{- if and $included $cfg.sections (eq $page.Kind "section") -}}
-      {{- $inScope := false -}}
-      {{- $p := $page.Path -}}
-      {{- range $cfg.sections -}}
-        {{- if or (eq $p .) (hasPrefix $p (printf "%s/" .)) -}}{{- $inScope = true -}}{{- end -}}
-      {{- end -}}
-      {{- $included = $inScope -}}
+    {{/* Assembled with an explicit terminating newline for the same reason
+         the pointer section below is. */}}
+    {{- with $items -}}
+      {{- printf "\n\n## %s\n\n%s\n" (partial "agent-readiness/lib/inline.html" $cfg.i18n.section_pages_heading) (delimit . "\n") | safeHTML -}}
     {{- end -}}
   {{- end -}}
 
-  {{- if $included -}}
-    {{/* safeHTML because this partial lives in the .html template namespace
-         while the twin it feeds is a standalone plain-text document: without
-         it, the builder's quotes come out as &#34; and every front-matter
-         block is unparseable. .RenderShortcodes below needs no such marking
-         because it already returns template.HTML. */}}
-    {{- partial "agent-readiness/markdown-front-matter.html" (dict "page" $page "cfg" $cfg) | safeHTML -}}
-    {{- $page.RenderShortcodes -}}
+  {{/* Trailing pointer section, emitted as an ABSOLUTE URL because a twin
+       is routinely read detached from the site it came from, where a
+       relative path has no base to resolve against.
 
-    {{/* Member roster, for a SECTION twin only. A section whose _index.md is
-         front-matter-only would otherwise publish a twin with an empty body
-         -- no roster of member pages -- while the section twin is the
-         surface that answers "what pages does this section hold" in one
-         fetch, complete. Membership is the SHARED filter narrowed to pages
-         under this section's path at a segment boundary, so the roster can
-         never disagree with llms.txt and about.md about which pages exist,
-         and it is complete by definition -- never a first-N window. The home
-         twin never carries one: every regular page sits under "/", so a home
-         roster would be the whole site, and that site-level enumeration is
-         llms.txt's job. An empty admitted set emits neither heading nor
-         list, because an empty H2 claims a roster that is not there.
+       llms.txt IS a home output format and resolves through it. `sitemap`
+       is NOT -- it is a page KIND -- so that lookup never matches and the
+       absURL fallback always wins.
 
-         The shared filter is ranged directly rather than through .Paginator:
-         reading .Paginator INITIALIZES pagination as a side effect, and on a
-         list URL whose first touch this render is, that would freeze the
-         pager size before the list template gets to choose one.
+       The configured target is case-folded and trimmed before it is
+       matched. Every other enumerated value in this module is normalized
+       the same way, and here an unnormalized miss is invisible: "LLMS"
+       would match no branch, leave the target empty and emit nothing at
+       all, with no warning and exit 0. An unrecognized value now says so
+       once rather than silently dropping the section. */}}
+  {{- $wanted := lower (trim (printf "%v" ($md.sitemap_section_target | default "llms")) " \t\n\r") -}}
+  {{- if and $md.sitemap_section (ne $wanted "none") -}}
+    {{- $target := "" -}}
+    {{- $label := "" -}}
+    {{- if eq $wanted "llms" -}}
+      {{/* Gated on llms.enable as well as on the format being wired, for
+           the same reason the twin links are gated on markdown.enable: the
+           output format answers "is it wired", not "did llms.html render
+           anything into it". With the switch off, llms.html emits zero
+           bytes and Hugo publishes no /llms.txt, so pointing at it would
+           put a dead link in the tail of every twin.
 
-         Each item links the member's Markdown twin when the built-in
-         `markdown` format is wired for the page kind, else its HTML
-         permalink -- llms.html's existence reasoning, with `markdown.enable`
-         already known true here because this twin is itself rendering, so
-         wired means published for every admitted member. URLs are ABSOLUTE
-         for the same reason the pointer section's is: a twin is routinely
-         read detached from the site it came from. Every interpolated value
-         passes the line-safety builders, because in a line-oriented document
-         a value-borne line break or bracket is a structure change, not
-         text. */}}
-    {{- if and (eq $page.Kind "section") $md.section_pages -}}
-      {{- $memberPrefix := printf "%s/" $page.Path -}}
-      {{- $items := slice -}}
-      {{- range partialCached "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) site.Language.Name -}}
-        {{- if hasPrefix .Path $memberPrefix -}}
-          {{- $url := .Permalink -}}
-          {{- with .OutputFormats.Get "markdown" -}}{{- $url = .Permalink -}}{{- end -}}
-          {{- $item := printf "- %s" (partial "agent-readiness/lib/markdown-link.html" (dict "name" .Title "url" $url)) -}}
-          {{- with .Description -}}{{- $item = printf "%s: %s" $item (partial "agent-readiness/lib/inline.html" .) -}}{{- end -}}
-          {{- $items = $items | append $item -}}
+           Switched off deliberately, so no warning -- unlike the wired
+           case below, where the consumer asked for the pointer and the
+           format is missing, which they cannot see without being told. */}}
+      {{- if $cfg.llms.enable -}}
+        {{- with site.Home.OutputFormats.Get "llmstxt" -}}
+          {{- $target = .Permalink -}}
+          {{- $label = "llms.txt" -}}
+        {{- else -}}
+          {{- partial "agent-readiness/lib/warn.html" (dict
+              "key" "agent-readiness:warn:sitemap-section-no-llmstxt"
+              "message" "[agent-readiness] The Markdown twins are configured with sitemap_section_target = \"llms\", but the llmstxt output format is not wired to the home page, so the trailing pointer section is omitted. Add 'llmstxt' to your existing [outputs] home list -- the config list replaces the ENTIRE default home list, so keep every format you already wire there -- or set sitemap_section_target to \"sitemap\" or \"none\".") -}}
         {{- end -}}
       {{- end -}}
-      {{/* Assembled with an explicit terminating newline for the same reason
-           the pointer section below is. */}}
-      {{- with $items -}}
-        {{- printf "\n\n## %s\n\n%s\n" (partial "agent-readiness/lib/inline.html" $cfg.i18n.section_pages_heading) (delimit . "\n") | safeHTML -}}
+    {{- else if eq $wanted "sitemap" -}}
+      {{- with site.Home.OutputFormats.Get "sitemap" -}}
+        {{- $target = .Permalink -}}
+      {{- else -}}
+        {{- $target = "sitemap.xml" | absURL -}}
       {{- end -}}
+      {{- $label = "sitemap.xml" -}}
+    {{- else -}}
+      {{- partial "agent-readiness/lib/warn.html" (dict
+          "key" (printf "agent-readiness:warn:unknown-sitemap-target:%s" $wanted)
+          "message" (printf "[agent-readiness] Ignoring the unrecognized markdown.sitemap_section_target %q and omitting the twins' trailing pointer section. Use \"llms\", \"sitemap\", or \"none\"." $wanted)) -}}
     {{- end -}}
 
-    {{/* Trailing pointer section, emitted as an ABSOLUTE URL because a twin
-         is routinely read detached from the site it came from, where a
-         relative path has no base to resolve against.
-
-         llms.txt IS a home output format and resolves through it. `sitemap`
-         is NOT -- it is a page KIND -- so that lookup never matches and the
-         absURL fallback always wins.
-
-         The configured target is case-folded and trimmed before it is
-         matched. Every other enumerated value in this module is normalized
-         the same way, and here an unnormalized miss is invisible: "LLMS"
-         would match no branch, leave the target empty and emit nothing at
-         all, with no warning and exit 0. An unrecognized value now says so
-         once rather than silently dropping the section. */}}
-    {{- $wanted := lower (trim (printf "%v" ($md.sitemap_section_target | default "llms")) " \t\n\r") -}}
-    {{- if and $md.sitemap_section (ne $wanted "none") -}}
-      {{- $target := "" -}}
-      {{- $label := "" -}}
-      {{- if eq $wanted "llms" -}}
-        {{/* Gated on llms.enable as well as on the format being wired, for
-             the same reason the twin links are gated on markdown.enable: the
-             output format answers "is it wired", not "did llms.html render
-             anything into it". With the switch off, llms.html emits zero
-             bytes and Hugo publishes no /llms.txt, so pointing at it would
-             put a dead link in the tail of every twin.
-
-             Switched off deliberately, so no warning -- unlike the wired
-             case below, where the consumer asked for the pointer and the
-             format is missing, which they cannot see without being told. */}}
-        {{- if $cfg.llms.enable -}}
-          {{- with site.Home.OutputFormats.Get "llmstxt" -}}
-            {{- $target = .Permalink -}}
-            {{- $label = "llms.txt" -}}
-          {{- else -}}
-            {{- partial "agent-readiness/lib/warn.html" (dict
-                "key" "agent-readiness:warn:sitemap-section-no-llmstxt"
-                "message" "[agent-readiness] The Markdown twins are configured with sitemap_section_target = \"llms\", but the llmstxt output format is not wired to the home page, so the trailing pointer section is omitted. Add 'llmstxt' to your existing [outputs] home list -- the config list replaces the ENTIRE default home list, so keep every format you already wire there -- or set sitemap_section_target to \"sitemap\" or \"none\".") -}}
-          {{- end -}}
-        {{- end -}}
-      {{- else if eq $wanted "sitemap" -}}
-        {{- with site.Home.OutputFormats.Get "sitemap" -}}
-          {{- $target = .Permalink -}}
-        {{- else -}}
-          {{- $target = "sitemap.xml" | absURL -}}
-        {{- end -}}
-        {{- $label = "sitemap.xml" -}}
-      {{- else -}}
-        {{- partial "agent-readiness/lib/warn.html" (dict
-            "key" (printf "agent-readiness:warn:unknown-sitemap-target:%s" $wanted)
-            "message" (printf "[agent-readiness] Ignoring the unrecognized markdown.sitemap_section_target %q and omitting the twins' trailing pointer section. Use \"llms\", \"sitemap\", or \"none\"." $wanted)) -}}
-      {{- end -}}
-
-      {{/* Assembled with an explicit terminating newline rather than written
-           inline: the closing trim marker of an inline block eats the final
-           newline, and a text document ends with one -- the same standard
-           robots.txt, llms.txt and about.md are held to. The heading and the
-           link go through the same line-safety routines as every other
-           value in the line-oriented documents. safeHTML because this
-           partial is in the .html namespace while the twin is plain text,
-           so an ampersand in the URL would otherwise become an entity. */}}
-      {{- with $target -}}
-        {{- printf "\n\n## %s\n\n- %s\n" (partial "agent-readiness/lib/inline.html" $cfg.i18n.sitemap_heading) (partial "agent-readiness/lib/markdown-link.html" (dict "name" $label "url" .)) | safeHTML -}}
-      {{- end -}}
+    {{/* Assembled with an explicit terminating newline rather than written
+         inline: the closing trim marker of an inline block eats the final
+         newline, and a text document ends with one -- the same standard
+         robots.txt, llms.txt and about.md are held to. The heading and the
+         link go through the same line-safety routines as every other
+         value in the line-oriented documents. safeHTML because this
+         partial is in the .html namespace while the twin is plain text,
+         so an ampersand in the URL would otherwise become an entity. */}}
+    {{- with $target -}}
+      {{- printf "\n\n## %s\n\n- %s\n" (partial "agent-readiness/lib/inline.html" $cfg.i18n.sitemap_heading) (partial "agent-readiness/lib/markdown-link.html" (dict "name" $label "url" .)) | safeHTML -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}

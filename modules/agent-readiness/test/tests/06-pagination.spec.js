@@ -20,7 +20,15 @@
 // wrong reason.
 import {test as nodeTest} from 'node:test';
 import assert from 'node:assert/strict';
-import {exists, markdownLinks, paginatedDir, read, siteRelative, urlResolves} from './helpers.js';
+import {
+  exists,
+  markdownLinks,
+  paginatedDir,
+  read,
+  sectionsWithTopLevelBullets,
+  siteRelative,
+  urlResolves,
+} from './helpers.js';
 
 // Mutation-to-test attribution rests entirely on test titles: a red result
 // must trace to exactly one test, so a reused title makes it untraceable.
@@ -56,13 +64,21 @@ test('the fixture really does publish pager shells, and they resolve to the sect
 });
 
 test('llms.txt lists the five regular pages and no pager URL', () => {
-  const paths = advertisedPaths('llms.txt');
+  // The page sweep excludes the `## Optional` section, which carries the
+  // derived agent-skills index entry in this fixture, and stays EXACT over
+  // every page-listing section (an extraneous advertised page URL still
+  // fails); the pager sweep below runs over every advertised URL.
+  const sections = sectionsWithTopLevelBullets(read('llms.txt', paginatedDir));
+  sections.delete('Optional');
+  const pagePaths = [...sections.values()]
+    .flat()
+    .flatMap((line) => markdownLinks(line).map((link) => siteRelative(link.url)));
   assert.deepEqual(
-    paths.sort(),
+    pagePaths.sort(),
     POSTS.map((slug) => `/posts/${slug}/index.md`).sort(),
     'llms.txt must enumerate exactly the section-s regular pages',
   );
-  for (const path of paths) {
+  for (const path of advertisedPaths('llms.txt')) {
     assert.ok(!path.includes('/page/'), `llms.txt advertised the pager URL ${path}`);
   }
 });

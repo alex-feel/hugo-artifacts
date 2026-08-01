@@ -1,0 +1,43 @@
+{{/*
+  agent-readiness/lib/skills-index-url.html -- utility (LIB tier).
+
+  Purpose: the ONE answer to "does the Agent Skills index actually publish,
+  and at which URL". agent-readiness/surfaces.html reads it for the public
+  surface enumeration, and agent-readiness/llms.html reads it to append the
+  module's own index entry to llms.txt's `## Optional` section; factoring
+  the answer here keeps the two callers from ever drifting apart on the
+  gate set.
+
+  PUBLISHED, not merely wired. The answer reproduces ALL FOUR gates of
+  home.agentskills.json, evaluated against the DEFAULT site: cfg.enable,
+  cfg.skills_index.enable, the agentskills format wired on the default
+  site's home, and a NON-EMPTY slice surviving the skills.html
+  validation-and-fetch resolution (zero surviving skills emit no file at
+  all). The format sets root = true and the emitter renders only from the
+  default language, so ONE file exists for the whole site at one URL --
+  which is why the gates read hugo.Sites.Default rather than the rendering
+  language: a language whose params differ from the default's must still
+  answer with what actually publishes. Both lookups are partialCached under
+  constant keys, so the whole build resolves the default-site config and
+  the skills slice once, however many callers ask.
+
+  Expected context: none is read; pass an empty dict.
+
+  Return value: the index's ABSOLUTE Permalink (string) when the surface
+  publishes, else "". ONE terminal return.
+*/}}
+
+{{- $url := "" -}}
+
+{{- $defaultHome := hugo.Sites.Default.Home -}}
+{{- $dcfg := partialCached "agent-readiness/config.html" (dict "page" $defaultHome "site_only" true) "agent-readiness:skills-index:default-cfg" -}}
+{{- if and $dcfg.enable $dcfg.skills_index.enable -}}
+  {{- with $defaultHome.OutputFormats.Get "agentskills" -}}
+    {{- $permalink := .Permalink -}}
+    {{- with partialCached "agent-readiness/skills.html" (dict "page" $defaultHome "cfg" $dcfg) "agent-readiness:skills-index:skills" -}}
+      {{- $url = $permalink -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $url -}}
