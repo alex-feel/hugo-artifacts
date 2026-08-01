@@ -22,11 +22,11 @@
    rel="noopener noreferrer"
    data-repo="{{ .fullName }}"
    data-variant="{{ $variant }}">
-  {{- partial "github-repo/icon.html" (dict "name" "github" "class" "github-repo__icon") -}}
+  {{- partial "github-repo/icon.html" (dict "name" "github" "class" "github-repo__icon") }}
   <span class="github-repo__name">
     <span class="github-repo__owner">{{ .owner }}</span>
     <span class="github-repo__separator">/</span>
     {{ or .name .repo -}}
   </span>
-  {{- partial "github-repo/icon.html" (dict "name" "external" "class" "github-repo__external") -}}
+  {{ partial "github-repo/icon.html" (dict "name" "external" "class" "github-repo__external") -}}
 </a>

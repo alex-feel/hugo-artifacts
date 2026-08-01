@@ -35,6 +35,19 @@ test('the fallback search-page URL keeps the baseURL path', async () => {
   }
 });
 
+test('the noscript index pointer carries the baseURL path', async () => {
+  expect(subpathDir, 'the runner must export SUBPATH_DIR').toBeTruthy();
+  const file = join(subpathDir, 'search', 'index.html');
+  expect(existsSync(file)).toBe(true);
+  const html = readFileSync(file, 'utf8');
+
+  // The pointer href rides site.Home's searchindex .RelPermalink, which
+  // carries the baseURL path by construction; this locks the derivation at
+  // the only baseURL where dropping the path would be visible.
+  const href = /class="search__noscript-link" href="([^"]+)"/.exec(html)?.[1];
+  expect(href).toBe('/docs/searchindex.json');
+});
+
 test('the opensearch Url template carries the full subpath base exactly once', async () => {
   expect(subpathDir, 'the runner must export SUBPATH_DIR').toBeTruthy();
   const file = join(subpathDir, 'opensearch.xml');

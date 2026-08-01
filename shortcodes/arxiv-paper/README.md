@@ -1,6 +1,6 @@
 # arxiv-paper
 
-Hugo shortcode module that renders an [arXiv.org](https://arxiv.org/) paper reference in one of six display variants. The module outputs style-agnostic semantic HTML with [BEM](https://getbem.com/) CSS class hooks, delegating all visual styling to the consuming site. It is a sibling of [`shortcodes/github-repo`](../github-repo/README.md) and [`shortcodes/hf-space`](../hf-space/README.md) and follows the same conventions (build-time API fetch, header-aware retries, graceful degradation, data-driven lookups), acting as a single data provider that feeds any number of card designs.
+Hugo shortcode module that renders an [arXiv.org](https://arxiv.org/) paper reference in one of six display variants. The module outputs style-agnostic semantic HTML with [BEM](https://getbem.com/) CSS class hooks, delegating all visual styling to the consuming site, plus a compact pure-Markdown rendering for markdown output formats (see [Markdown output variant](#markdown-output-variant)). It is a sibling of [`shortcodes/github-repo`](../github-repo/README.md) and [`shortcodes/hf-space`](../hf-space/README.md) and follows the same conventions (build-time API fetch, header-aware retries, graceful degradation, data-driven lookups), acting as a single data provider that feeds any number of card designs.
 
 ## Installation
 
@@ -54,13 +54,15 @@ The `id` is the arXiv identifier: the modern scheme `2512.24601` (optionally ver
 
 The `variant` parameter selects one of six display modes. Default is `card`.
 
+The card-family variants (`card`, `wide`, `stats`, `hero`) render as an `<article>` root element; the paper title is the single real link -- an `<a class="arxiv-paper__title-link">` inside the title heading, pointing at the abstract page with `target="_blank" rel="noopener noreferrer"`. The link's accessible name is its visible text, so the root carries no `aria-label`. The `inline` variant is a single compact `<a>`, and the `cite` variant is a `<div>` with multiple real links. This is a **breaking markup change** for consumers that styled `a.arxiv-paper` selectors or relied on the whole card being clickable: switch to class-only selectors and, to restore the full-card click area on the card-family variants, use the stretched-link recipe in [Styling](#full-card-click-area-stretched-link).
+
 #### inline -- Compact chip for running text
 
 ```go-html-template
 {{< arxiv-paper id="2512.24601" variant="inline" >}}
 ```
 
-A minimal `<a>` element showing the "arXiv" brand, the identifier, the title, and the primary subject. Suitable for embedding within paragraphs. Also the degraded fallback for every other variant when the API is unavailable.
+A minimal `<a>` element showing the "arXiv" brand, the identifier, the title, and the primary subject, with a real `·` separator character (`arxiv-paper__sep`, `aria-hidden="true"`) between the identifier and the title so plain-text extractions keep them apart. Suitable for embedding within paragraphs. Also the degraded fallback for every other variant when the API is unavailable.
 
 #### card -- Editorial card (default)
 
@@ -77,7 +79,7 @@ A vertical card with an "arXiv / <subject>" eyebrow, title, truncated author lis
 {{< arxiv-paper id="2512.24601" variant="wide" >}}
 ```
 
-A two-column card with a subject tile on the left (primary category code and broad group) and, on the right, the title, authors, abstract snippet, and a footer with the cross-list subject tags. Ideal for paper round-ups. arXiv papers carry no thumbnail image, so the tile is data-driven (color it per archive/group via the `data-arxiv-archive` hook).
+A two-column card with a subject tile on the left (primary category code and broad group) and, on the right, the title, authors, abstract snippet, and a footer with the cross-list subject tags as a real `<ul class="arxiv-paper__categories">` list of `<li class="arxiv-paper__category">` items. Ideal for paper round-ups. arXiv papers carry no thumbnail image, so the tile is data-driven (color it per archive/group via the `data-arxiv-archive` hook).
 
 #### stats -- Stats card with metrics strip
 
@@ -93,7 +95,7 @@ A card with the header, abstract/TLDR, and a metrics strip. The strip leads with
 {{< arxiv-paper id="2512.24601" variant="hero" >}}
 ```
 
-The largest variant. A banner carrying the identifier and primary subject, followed by the full metadata (authors, TLDR, cross-list subject tags, submitted/revised dates, venue, citations, upvotes, a "code available" badge) and a "View on arXiv" call-to-action.
+The largest variant. A banner carrying the identifier and primary subject, followed by the full metadata (authors, TLDR, the cross-list subject tags as a real `<ul class="arxiv-paper__tags">` list of `<li class="arxiv-paper__tag">` items, submitted/revised dates, venue, citations, upvotes, a "code available" badge) and a "View on arXiv" call-to-action. The call-to-action is a visual affordance, not a second link; the stretched-link recipe in [Styling](#full-card-click-area-stretched-link) makes it clickable.
 
 #### cite -- Copy-ready citation block
 
@@ -101,7 +103,7 @@ The largest variant. A banner carrying the identifier and primary subject, follo
 {{< arxiv-paper id="2512.24601" variant="cite" >}}
 ```
 
-A `<div>` (not a single click-through) rendering a formal reference -- authors, year, title, `arXiv:ID [subject]`, and the journal reference when present -- plus real links to the versioned abstract page, the PDF, the always-present arXiv DataCite DOI (`10.48550/arXiv.<id>`), and the published-version journal DOI when the author supplied one.
+A `<div>` rendering a formal reference -- authors, year, title, `arXiv:ID [subject]`, and the journal reference when present -- plus real links to the versioned abstract page, the PDF, the always-present arXiv DataCite DOI (`10.48550/arXiv.<id>`), and the published-version journal DOI when the author supplied one. A citation block is a reference, not a navigation target, so this is the one variant with multiple links and no title link.
 
 ## Parameters
 
@@ -211,6 +213,18 @@ When the arXiv fetch fails or resolves no paper, the module does not break the b
 
 Enrichers degrade **independently**: if Semantic Scholar or Hugging Face is unavailable, the card still renders fully from arXiv data, just without the TLDR / venue / citation / upvote fields. Enricher warnings are deduplicated to one per build.
 
+## Markdown output variant
+
+The module ships a second shortcode template, `layouts/_shortcodes/arxiv-paper.markdown.md`, selected automatically by Hugo's output-format-aware shortcode lookup whenever a page renders in a markdown output format -- for example when a markdown-format page template calls `.RenderShortcodes` to build a Markdown twin of the page. Consumers with a markdown output format get it automatically; no configuration is needed.
+
+It emits pure Markdown -- no HTML tags, no BEM classes, no SVG: a one-line citation (authors, year, title, and an `arXiv:<id>` link to the abstract page) followed by the abstract as a blockquote. When the arXiv fetch failed, the output degrades to a bare `[arXiv:<id>](https://arxiv.org/abs/<id>)` link derived from the shortcode parameters alone. The data comes through the same cached fetch partials as the HTML variants, so the Markdown rendering adds no network requests and emits no duplicate warnings.
+
+```markdown
+Alex L. Zhang, Tim Kraska, Omar Khattab (2025). Recursive Language Models. [arXiv:2512.24601](https://arxiv.org/abs/2512.24601).
+
+> We study allowing large language models ...
+```
+
 ## Data Files
 
 The module ships two data files used to resolve objective arXiv codes to display values. Both are flat JSON maps, looked up via `index hugo.Data.<file>` and exposed as normalized fields.
@@ -243,9 +257,32 @@ The module outputs unstyled semantic HTML. All visual presentation is the consum
 
 Every element uses BEM naming under the `arxiv-paper` block:
 
-- **Block:** `arxiv-paper` (root `<a>` element, or `<div>` for the `cite` variant)
+- **Block:** `arxiv-paper` (root element: `<article>` for the `card`, `wide`, `stats`, and `hero` variants, `<a>` for `inline` and for every degraded fallback, `<div>` for `cite`)
 - **Variant modifiers:** `arxiv-paper--inline`, `arxiv-paper--card`, `arxiv-paper--wide`, `arxiv-paper--stats`, `arxiv-paper--hero`, `arxiv-paper--cite`
-- **Elements:** `arxiv-paper__brand`, `arxiv-paper__id`, `arxiv-paper__version`, `arxiv-paper__eyebrow`, `arxiv-paper__title`, `arxiv-paper__authors`, `arxiv-paper__author-list`, `arxiv-paper__author-count`, `arxiv-paper__abstract`, `arxiv-paper__tldr`, `arxiv-paper__categories`, `arxiv-paper__category`, `arxiv-paper__tags`, `arxiv-paper__tag`, `arxiv-paper__tile`, `arxiv-paper__footer`, `arxiv-paper__meta-item`, `arxiv-paper__stat`, `arxiv-paper__stat-label`, `arxiv-paper__stat-value`, `arxiv-paper__banner`, `arxiv-paper__cta`, `arxiv-paper__citations`, `arxiv-paper__upvotes`, `arxiv-paper__code`, `arxiv-paper__cite-ref`, `arxiv-paper__cite-links`, `arxiv-paper__open`, and others.
+- **Elements:** `arxiv-paper__brand`, `arxiv-paper__id`, `arxiv-paper__version`, `arxiv-paper__sep`, `arxiv-paper__eyebrow`, `arxiv-paper__title`, `arxiv-paper__title-link`, `arxiv-paper__authors`, `arxiv-paper__author-list`, `arxiv-paper__author-count`, `arxiv-paper__abstract`, `arxiv-paper__tldr`, `arxiv-paper__categories`, `arxiv-paper__category`, `arxiv-paper__tags`, `arxiv-paper__tag`, `arxiv-paper__tile`, `arxiv-paper__footer`, `arxiv-paper__meta-item`, `arxiv-paper__stat`, `arxiv-paper__stat-label`, `arxiv-paper__stat-value`, `arxiv-paper__banner`, `arxiv-paper__cta`, `arxiv-paper__citations`, `arxiv-paper__upvotes`, `arxiv-paper__code`, `arxiv-paper__cite-ref`, `arxiv-paper__cite-links`, `arxiv-paper__open`, and others.
+
+The subject tag runs are real lists: `arxiv-paper__tags` (hero) and `arxiv-paper__categories` (wide) are `<ul>` elements whose items are `<li class="arxiv-paper__tag">` / `<li class="arxiv-paper__category">`, so a consuming site typically resets list styling on them (`list-style: none; margin: 0; padding: 0`).
+
+The text layer carries real separator characters so plain-text and Markdown extractions keep adjacent fields apart: the inline variant's `arxiv-paper__sep` contains a literal `·` (with `aria-hidden="true"`), and the card and stats eyebrow separators (`arxiv-paper__eyebrow-sep`) are real `·` characters surrounded by whitespace. A consuming site that draws its own divider can hide the character (for example with `font-size: 0`).
+
+### Full-card click area (stretched link)
+
+The card-family variants deliberately do not wrap the whole card in an `<a>`: a card-wrapping anchor turns the entire card's text into one link accessible name and flattens it into a single glued link label in Markdown and plain-text extractions. The title link (`arxiv-paper__title-link`) is the single real link. To restore the full-card click area, use the standard stretched-link overlay:
+
+```css
+.arxiv-paper--card,
+.arxiv-paper--wide,
+.arxiv-paper--stats,
+.arxiv-paper--hero {
+  position: relative;
+}
+
+.arxiv-paper__title-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+```
 
 ### Data attributes
 
@@ -258,7 +295,7 @@ The module ships **no** subject colors -- those are design decisions. It exposes
 | `data-arxiv-category` | Primary category code (e.g. `cs.CL`) | Subject color-coding hook (also on each category badge) |
 | `data-arxiv-archive` | Archive prefix (e.g. `cs`, `hep-th`) | Broad-domain color-coding hook |
 | `data-arxiv-group` | Group name (e.g. `Physics`) | Group color-coding hook |
-| `data-arxiv-pdf` | Direct PDF URL | Lets a site wire its own PDF action (the card links to the abstract page) |
+| `data-arxiv-pdf` | Direct PDF URL | Lets a site wire its own PDF action (the title link points at the abstract page) |
 | `data-arxiv-doi` | `10.48550/arXiv.<id>` | DataCite DOI (`cite` variant) |
 | `data-arxiv-code` | Code repository URL | Code-badge hook (`hero` variant, when enriched) |
 | `data-arxiv-metrics-asof` | Build RFC3339 timestamp | Freshness hook on volatile counts |
@@ -291,6 +328,7 @@ shortcodes/arxiv-paper/
   layouts/
     _shortcodes/
       arxiv-paper.html            # Main shortcode (parameter validation + dispatch)
+      arxiv-paper.markdown.md     # Compact pure-Markdown variant for markdown output formats
     _partials/
       arxiv-paper/
         fetch.html                # Locator parse, arXiv fetch, enrichment merge, degradation

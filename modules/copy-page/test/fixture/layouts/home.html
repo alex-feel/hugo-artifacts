@@ -1,0 +1,11 @@
+{{ define "main" }}
+  <h1>{{ .Title }}</h1>
+  {{/* Home wires no markdown output format, so this placement must
+       self-gate and render nothing. */}}
+  {{ partial "copy-page/menu.html" . }}
+  <ul>
+    {{ range site.RegularPages }}
+      <li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>
+    {{ end }}
+  </ul>
+{{ end }}

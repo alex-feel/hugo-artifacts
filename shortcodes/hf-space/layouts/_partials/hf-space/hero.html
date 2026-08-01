@@ -8,23 +8,23 @@
   - .hardware, .hardwareLabel, .likesFormatted, .updated, .tags
   - .colorFrom, .colorTo, .colorFromHex, .colorToHex, .apiOk, .extraClass
 
-  Output: An <a> element with BEM class hf-space hf-space--hero
+  Output: An <article> element with BEM class hf-space hf-space--hero.
+  The title is the single real link (hf-space__title-link) to the Space page;
+  a consuming site restores the full-card click area with a stretched-link
+  overlay on hf-space__title-link (see the module README "Styling"), which
+  also keeps the "Open in Spaces" call-to-action span clickable.
 */}}
 
 {{- if .apiOk -}}
-<a href="{{ .url }}"
-   class="hf-space hf-space--hero{{ with .extraClass }} {{ . }}{{ end }}"
-   target="_blank"
-   rel="noopener noreferrer"
-   aria-label="{{ T "hf_space_aria_label" (dict "Title" (or .title .name) "Owner" .owner) | default (printf "%s, a Hugging Face Space by %s" (or .title .name) .owner) }}"
-   data-space="{{ .id }}"
-   data-variant="hero"
-   data-api-ok="{{ .apiOk }}"
-   {{- with .sdk }} data-sdk="{{ . }}"{{ end }}
-   {{- with .hardware }} data-hardware="{{ . }}"{{ end }}
-   {{- with .colorFrom }} data-color-from="{{ . }}"{{ end }}
-   {{- with .colorTo }} data-color-to="{{ . }}"{{ end }}
-   {{- if or .colorFromHex .colorToHex }} style="{{ with .colorFromHex }}--hf-space-color-from: {{ . }};{{ end }}{{ with .colorToHex }} --hf-space-color-to: {{ . }};{{ end }}"{{ end }}>
+<article class="hf-space hf-space--hero{{ with .extraClass }} {{ . }}{{ end }}"
+         data-space="{{ .id }}"
+         data-variant="hero"
+         data-api-ok="{{ .apiOk }}"
+         {{- with .sdk }} data-sdk="{{ . }}"{{ end }}
+         {{- with .hardware }} data-hardware="{{ . }}"{{ end }}
+         {{- with .colorFrom }} data-color-from="{{ . }}"{{ end }}
+         {{- with .colorTo }} data-color-to="{{ . }}"{{ end }}
+         {{- if or .colorFromHex .colorToHex }} style="{{ with .colorFromHex }}--hf-space-color-from: {{ . }};{{ end }}{{ with .colorToHex }} --hf-space-color-to: {{ . }};{{ end }}"{{ end }}>
   <div class="hf-space__banner">
     <span class="hf-space__chrome" aria-hidden="true"><span></span><span></span><span></span></span>
     {{- with .emoji }}<span class="hf-space__big-emoji">{{ . }}</span>{{ end }}
@@ -35,9 +35,7 @@
       <span class="hf-space__hero-sep">/</span>
       <span class="hf-space__hero-type">{{ T "hf_space_type_space" | default "SPACE" }}</span>
     </div>
-    <h3 class="hf-space__title hf-space__title--hero">
-      <span class="hf-space__owner">{{ .owner }} /</span> {{ .name }}
-    </h3>
+    <h3 class="hf-space__title hf-space__title--hero"><a class="hf-space__title-link" href="{{ .url }}" target="_blank" rel="noopener noreferrer"><span class="hf-space__owner">{{ .owner }} /</span> {{ .name }}</a></h3>
     {{- with .description }}
     <p class="hf-space__description">{{ . }}</p>
     {{- end }}
@@ -80,7 +78,7 @@
       </span>
     </div>
   </div>
-</a>
+</article>
 {{- else -}}
 {{/* Degraded output: delegate to inline chip partial on API failure. */}}
 {{- partial "hf-space/inline.html" (merge . (dict "variant" "hero")) -}}

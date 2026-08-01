@@ -35,6 +35,12 @@
 
   Expected context (dict):
   - .page      (Page) - The current page (already validated by the caller).
+    Its .Site is the site whose params and MainSections are read -- never
+    the global `site`, which is always the site being RENDERED -- so a
+    caller may resolve another language's site-scoped config by passing
+    that site's home page (agent-readiness/surfaces.html does, to answer
+    for the default language from any language's render). For every
+    same-site caller the two are the same object.
   - .args      (map)  - Call-site arguments (possibly empty).
   - .site_only (bool) - True when called from a site-wide artifact template
     (robots.txt): resolves the defaults and site tiers only and skips the
@@ -71,7 +77,7 @@
      opposite of what the consumer asked for. Presence is `ne nil`, not
      truthiness, or the falsy spelling -- the likelier one for a kill switch
      -- would be the one that goes unreported. */}}
-{{- $sitep := site.Params.agent -}}
+{{- $sitep := $page.Site.Params.agent -}}
 {{- if ne $sitep nil -}}
   {{- if not (reflect.IsMap $sitep) -}}
     {{- partial "agent-readiness/lib/warn.html" (dict
@@ -348,7 +354,7 @@
 {{- range $rawSections -}}
   {{- $e := lower (trim (printf "%v" .) " \t\n\r") -}}
   {{- if eq $e "mainsections" -}}
-    {{- range site.MainSections -}}
+    {{- range $page.Site.MainSections -}}
       {{- with partial "agent-readiness/lib/section.html" . -}}
         {{- $sections = $sections | append . -}}
       {{- end -}}
@@ -417,6 +423,11 @@
   "facts_title" (T "agent_facts_title" | default "About")
   "facts_identity_heading" (T "agent_facts_identity_heading" | default "Identity")
   "facts_contact_heading" (T "agent_facts_contact_heading" | default "Contact")
+  "surface_llms" (T "agent_surface_llms" | default "llms.txt")
+  "surface_facts" (T "agent_surface_facts" | default "Site facts")
+  "surface_skills" (T "agent_surface_skills" | default "Agent Skills index")
+  "skills_entry_name" (T "agent_skills_entry_name" | default "Agent Skills index")
+  "skills_entry_note" (T "agent_skills_entry_note" | default "Machine-readable index of this site's published agent skills")
 -}}
 
 {{- return (merge $maps (dict

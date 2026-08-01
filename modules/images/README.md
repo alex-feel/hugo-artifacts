@@ -201,7 +201,7 @@ The `Tiers` column states where each option may be set: `all four` cascades thro
 
 ### Validation
 
-Build-failing `errorf` -- ON THE PARTIAL AND SHORTCODE SURFACES ONLY -- covers exactly the parameter-shape authoring mistakes: missing `page`/`src`, missing `alt` without `decorative=true`, `decorative=true` combined with a non-empty `alt`, `decorative=true` combined with `lightbox=true`, `layout=fixed` without a `width` or `height`, and `process` of `fit`/`fill`/`crop` without BOTH `width` and `height` (either dimension missing fails, because these operations need a two-dimension target).
+Build-failing `errorf` -- ON THE PARTIAL AND SHORTCODE SURFACES ONLY, identically in both of the shortcode's output-format variants (see Markdown output variant), through the shared `images/lib/validate.html` -- covers exactly the parameter-shape authoring mistakes: missing `page`/`src`, missing `alt` without `decorative=true`, `decorative=true` combined with a non-empty `alt`, `decorative=true` combined with `lightbox=true`, `layout=fixed` without a `width` or `height`, and `process` of `fit`/`fill`/`crop` without BOTH `width` and `height` (either dimension missing fails, because these operations need a two-dimension target).
 
 Everything environmental degrades with ONE deduplicated build warning and a safe rendering: missing files (raw-src `<img>` fallback), remote failures (URL passthrough), unknown enum tokens (feature default), AVIF below the version gate (WebP plus original), unknown named shortcode parameters (a typo such as `captoin=` is ignored after one warning naming it), and feature requests on unprocessable sources (feature skipped).
 
@@ -314,6 +314,22 @@ Per-image attribute overrides use the block-attribute syntax ON ITS OWN LINE dir
 A trailing SAME-LINE `{...}` after the image silently delivers NO attributes and additionally makes the image non-standalone (inline form) -- always put the block below the image. Attribute names matching the Parameters table become call-tier overrides; remaining attributes pass through onto the `<img>`, except that every attribute name the module itself emits (`src`, `srcset`, `sizes`, `alt`, `width`, `height`, `loading`, `decoding`, `fetchpriority`, `class`, `style`, and the module's `data-*` names) is dropped with one warning, because a duplicate attribute would produce invalid HTML that silently ignores the author.
 
 Bypasses, per image to site-wide: the `#raw` destination fragment (`![alt](photo.jpg#raw)`) bypasses the pipeline for that one image with no configuration; `[params.img.hook] enable = false` (site) or `img: { hook: { enable: false } }` (page) makes the hook emit the neutral fallback while partial/shortcode call sites keep the full pipeline; and a project-level `layouts/_markup/render-image.html` replaces the module's hook entirely.
+
+## Markdown output variant
+
+Both shortcodes ship a second, output-format-selected rendering: `layouts/_shortcodes/image.markdown.md` and `layouts/_shortcodes/image-gallery.markdown.md`. Hugo's shortcode template lookup is output-format-aware, so selection is automatic -- when a page renders its built-in `markdown` output format (typically a Markdown twin template emitting `.RenderShortcodes`), the SAME content calls select the `.markdown.md` variants instead of the HTML templates, with no per-call opt-in and no configuration beyond wiring the output format:
+
+```toml
+# hugo.toml -- the outputs list REPLACES the per-kind default, so keep html
+[outputs]
+  page = ['html', 'markdown']
+```
+
+The `image` shortcode renders one compact Markdown image line, `![alt](URL)`, plus the caption as plain text on its own line directly below it when a caption is present; `decorative="true"` renders the empty label `![](URL)`. The `image-gallery` shortcode renders one such block per matched page resource -- the same `Resources.Match` set in the same order, with the same per-item alt/caption derivation as the HTML gallery -- separated by blank lines. The output is pure Markdown: no picture/img/svg markup, no BEM classes, no HTML at all.
+
+The URL is the ORIGINAL resource's absolute `.Permalink` for page and global resources -- a deliberate choice: calling `.Permalink` publishes the original file, so a Markdown reader gets one stable, full-fidelity URL instead of a derivative tied to a processing spec (the HTML path publishes the original anyway as part of source resolution). Remote and `data:` sources emit their raw URL verbatim (the Markdown variant never fetches or processes anything), and `/static` paths emit their absolute site URL. There is no srcset, no lightbox, no placeholder, and no dark variant in this rendering -- those are HTML features -- and credit/license surfaces are likewise HTML-only.
+
+The variants resolve through the same partial chain as the HTML path (the configuration cascade, the source classifier, the shared validation), so the same misuse fails the build with the same `errorf` contract in both formats, and environmental problems degrade with the same deduplicated warnings on the same keys -- the two formats never double-warn. A source that resolves nowhere emits the alt text alone (a Markdown image pointing at a nonexistent file would be a dead reference), and a gallery item without alt metadata renders the empty label, mirroring the HTML path's `alt=""` degradation. The `enable` kill switches do not change this output, because the neutral fallback -- original bytes, no processing -- is already exactly what the Markdown variant emits.
 
 ## Performance and caching
 
@@ -533,9 +549,13 @@ modules/images/
 │   │       │   └── placeholder.html        Placeholder data generator (probe/blur processing site)
 │   │       └── lib/
 │   │           ├── int.html                Guarded decimal-integer parser (never octal, never overflow)
+│   │           ├── md-text.html            PURE Markdown line-safety builder (labels and caption lines)
+│   │           ├── validate.html           Shared build-failing validation gate (strict surfaces, both formats)
 │   │           └── warn.html               Single deduplicated-warning helper
 │   └── _shortcodes/
 │       ├── image.html                      image shortcode (thin forwarding wrapper)
-│       └── image-gallery.html              image-gallery shortcode (thin forwarding wrapper)
+│       ├── image.markdown.md               image shortcode, markdown output variant (compact Markdown)
+│       ├── image-gallery.html              image-gallery shortcode (thin forwarding wrapper)
+│       └── image-gallery.markdown.md       image-gallery shortcode, markdown output variant (compact Markdown)
 └── test/                                   Fixture site + Node build-output assertion suite
 ```

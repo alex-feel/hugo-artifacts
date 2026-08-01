@@ -20,6 +20,7 @@ body:
         - modules/search/README.md
         - modules/images/README.md
         - modules/agent-readiness/README.md
+        - modules/copy-page/README.md
         - modules/pwa/README.md
         - modules/workbox/README.md
         - modules/idb/README.md

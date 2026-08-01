@@ -1,0 +1,42 @@
+{{/*
+  Builds the canonical YouTube watch URL for an embed target -- the URL a
+  human follows OUTSIDE the player: the watch page for a single video, or the
+  playlist page for a playlist-only embed.
+
+  INTERNAL lib partial and the single source of truth for this URL. It is
+  consumed by facade.html (the JS-off / pre-enhancement fallback link of the
+  HTML output) and by the youtube-embed.markdown.md output variant (the
+  Markdown link target), so the two output formats can never drift apart.
+
+  Inputs (context dict):
+  - .id    (string) 11-char video id, or "" for a playlist-only embed.
+  - .list  (string) Playlist id, or "".
+  - .start (int)    Start offset in seconds, normalized by the entry shortcode
+                    (0 = unset; >0 emits t=Ns). Ignored for a playlist-only
+                    embed, which has no single video to seek into.
+
+  Returns: (string) the absolute watch URL --
+  - https://www.youtube.com/playlist?list={LIST}            (playlist-only)
+  - https://www.youtube.com/watch?v={ID}[&list={LIST}][&t=Ns] (single video)
+
+  Side effects: none. One terminal return.
+*/}}
+
+{{- $id := .id | default "" -}}
+{{- $list := .list | default "" -}}
+{{- $start := .start | default 0 -}}
+
+{{- $watchUrl := "" -}}
+{{- if and (not $id) (ne $list "") -}}
+  {{- $watchUrl = printf "https://www.youtube.com/playlist?list=%s" $list -}}
+{{- else -}}
+  {{- $watchUrl = printf "https://www.youtube.com/watch?v=%s" $id -}}
+  {{- if and $list (ne $list "") -}}
+    {{- $watchUrl = printf "%s&list=%s" $watchUrl $list -}}
+  {{- end -}}
+  {{- if gt $start 0 -}}
+    {{- $watchUrl = printf "%s&t=%ds" $watchUrl $start -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $watchUrl -}}

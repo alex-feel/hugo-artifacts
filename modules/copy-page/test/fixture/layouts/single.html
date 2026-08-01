@@ -1,0 +1,11 @@
+{{ define "main" }}
+  <article>
+    <h1>{{ .Title }}</h1>
+    {{ .Content }}
+  </article>
+  {{/* Pages that exercise the shortcode exclusively (post-404) opt out of
+       the layout placement so locators stay unambiguous. */}}
+  {{ if not .Params.fixture_no_partial }}
+    {{ partial "copy-page/menu.html" . }}
+  {{ end }}
+{{ end }}

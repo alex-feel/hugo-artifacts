@@ -1,6 +1,8 @@
 # Hugo github-profile module -- Russian UI strings.
-# Plural tables receive `count` (form selection) and `formatted` (the locale-grouped
-# number); interpolate `{{ .formatted }}`, never `{{ .count }}`.
+# Sentence-shaped plural tables receive `count` (form selection) and `formatted` (the
+# locale-grouped number); interpolate `{{ .formatted }}`, never `{{ .count }}`. Bare
+# unit-word tables (calendar_unit, the org_stat_* keys) receive the raw count alone and
+# contain no interpolation.
 
 github_profile_attribution_suffix = "на GitHub"
 github_profile_hireable = "Открыт к предложениям"
@@ -23,6 +25,8 @@ github_profile_orgs_label = "Организации"
 github_profile_pinned_label = "Закрепленные репозитории"
 github_profile_socials_label = "Другие площадки"
 github_profile_rank_label = "оценка активности"
+github_profile_sep = ", "
+github_profile_note_sep = " — "
 
 [github_profile_member_years]
 one = "{{ .formatted }} год на GitHub"
@@ -53,3 +57,27 @@ one = "{{ .formatted }} день"
 few = "{{ .formatted }} дня"
 many = "{{ .formatted }} дней"
 other = "{{ .formatted }} дней"
+
+[github_profile_org_stat_commits]
+one = "коммит"
+few = "коммита"
+many = "коммитов"
+other = "коммитов"
+
+[github_profile_org_stat_prs]
+one = "пул-реквест"
+few = "пул-реквеста"
+many = "пул-реквестов"
+other = "пул-реквестов"
+
+[github_profile_org_stat_issues]
+one = "задача"
+few = "задачи"
+many = "задач"
+other = "задач"
+
+[github_profile_org_stat_reviews]
+one = "ревью"
+few = "ревью"
+many = "ревью"
+other = "ревью"

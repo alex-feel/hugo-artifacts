@@ -86,11 +86,22 @@
 {{- $descOverride := .description -}}
 {{- $position := .position -}}
 
-{{/* Parse owner/repo from URL. */}}
+{{/* Parse owner/repo from URL. A locator that does not reduce to exactly
+     two non-empty path segments stops the build with a clean errorf naming
+     the call site -- a malformed absolute URL (a missing repo segment, an
+     extra path level) otherwise slips past the regex unreduced and renders
+     a garbage citation, and a slash-free locator would fail the build with
+     a raw template error that names this partial instead of the mistake. */}}
 {{- $path := replaceRE `^https?://github\.com/([^/]+/[^/]+)/?.*$` "$1" $url -}}
 {{- $parts := split $path "/" -}}
-{{- $owner := index $parts 0 -}}
-{{- $repo := index $parts 1 -}}
+{{- $owner := "" -}}
+{{- $repo := "" -}}
+{{- if or (ne (len $parts) 2) (not (index $parts 0)) (not (index $parts 1)) -}}
+  {{- errorf "[github-repo] Could not parse a repository owner/name from %q. Provide url=\"https://github.com/owner/repo\". See %s" $url $position -}}
+{{- else -}}
+  {{- $owner = index $parts 0 -}}
+  {{- $repo = index $parts 1 -}}
+{{- end -}}
 
 {{/* Build fallback dict for API failure. The variant partials branch on
      `apiOk` and degrade to inline.html when it is false. */}}

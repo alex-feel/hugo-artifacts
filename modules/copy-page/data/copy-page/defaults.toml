@@ -1,0 +1,48 @@
+# Consumer-facing defaults for the copy-page module.
+#
+# Every key can be overridden, from lowest to highest precedence:
+#   1. this file (module defaults)
+#   2. site config:       [params.copy_page]
+#   3. page front matter: copy_page: (map)
+#   4. call-site args:    {{ partial "copy-page/menu.html" (dict "page" . "<key>" <value>) }}
+# Presence wins at every tier, so an explicit false or empty value overrides
+# the tier below it.
+
+# Rows rendered in the menu, in list order. Accepts any built-in slug from the
+# README Rows table (copy, view, llms, chatgpt, claude, perplexity, grok,
+# aistudio) plus consumer-defined [params.copy_page.rows_extra.*] slugs.
+# "copy" is a JavaScript-revealed button (and enables the primary copy half of
+# the split button); every other row renders as a plain link that works
+# without JavaScript. The shipped default lists only the rows every
+# Markdown-publishing site can honor.
+rows = [
+  "copy",
+  "view",
+]
+
+# Output format name used to derive the page's Markdown URL when no explicit
+# "url" call-site argument is given: the module reads
+# .OutputFormats.Get "<format>" on the current page. When neither an explicit
+# url nor this format resolves, the widget renders nothing.
+format = "markdown"
+
+# Open link rows in a new tab: adds target="_blank" plus a hidden
+# "(opens in a new window)" hint to each link's accessible name.
+new_tab = true
+
+# llms.txt URL for the "llms" row. When empty, the module probes
+# site.Home.OutputFormats.Get "llmstxt" and silently drops the row when that
+# does not resolve. The probe answers "is the format wired", not "was the
+# file published"; a site that suppresses the file while the format stays
+# wired should set this to the real URL or omit "llms" from rows.
+llms_url = ""
+
+# Override for the prompt sent to the AI-provider rows (chatgpt, claude,
+# perplexity, grok, aistudio). The literal token {url} is replaced with the
+# row's target URL. An empty string uses the localized default
+# ("Read from <url> so I can ask questions about it.").
+prompt = ""
+
+# Accessible name of the dropdown toggle. An empty string uses the localized
+# default ("More ways to use this page").
+toggle_label = ""

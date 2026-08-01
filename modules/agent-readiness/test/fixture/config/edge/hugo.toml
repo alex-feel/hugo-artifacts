@@ -24,6 +24,13 @@
 #      one URL. The collision guard sits after the allow-list in the filter,
 #      so the pages must be IN scope to reach it -- and they are out of scope
 #      everywhere else, which is what keeps every other build's counts intact.
+#
+#   5. A consumer-authored [[llms.optional]] entry restating the module's own
+#      Agent Skills index URL. llms.html dedups its derived index entry by
+#      absolutized URL against the consumer's entries, and only a build that
+#      lists the index manually -- here at the URL the subpath deployment
+#      actually publishes -- can prove the derived entry is suppressed rather
+#      than doubled.
 baseURL = 'https://example.org/docs/'
 
 [params]
@@ -107,3 +114,14 @@ baseURL = 'https://example.org/docs/'
         name = 'Sitemap'
         url = '/sitemap.xml'
         note = 'Every published URL.'
+
+      # The module's own Agent Skills index, restated by hand at the URL the
+      # build actually publishes: skills inherit from _default (params merge
+      # deep), the agentskills format is wired there, and the subpath baseURL
+      # keeps /docs/ in the published path. The name and note deliberately
+      # differ from the module's i18n strings so the output shows WHICH entry
+      # won: llms.html must keep this one and suppress its derived twin.
+      [[params.agent.llms.optional]]
+        name = 'Skills'
+        url = 'https://example.org/docs/.well-known/agent-skills/index.json'
+        note = 'Consumer-authored entry for the Agent Skills index.'

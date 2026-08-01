@@ -67,6 +67,11 @@ search_hint_close = "to close"
 # Default no-JavaScript guidance on the dedicated search page.
 search_noscript = "Searching this site requires JavaScript. Use the site navigation to browse instead."
 
+# Lead-in for the no-JavaScript pointer at the per-language JSON index,
+# appended only when the searchindex output format is wired; the index URL
+# itself is the link text, so the string carries no placeholder.
+search_noscript_index = "The full search index is available as JSON:"
+
 # Minimum-length status message; CLDR plural key resolved server-side with
 # the configured minimum, so "1 character" and "2 characters" both read
 # correctly.

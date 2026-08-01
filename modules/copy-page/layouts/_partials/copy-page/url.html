@@ -1,0 +1,49 @@
+{{/*
+  copy-page/url.html -- INTERNAL (lib tier).
+
+  Purpose: builds the fully encoded href for one external registry row. The
+  registry's endpoints already contain the query parameter name and end at
+  its "=" (e.g. "https://claude.ai/new?q="), so ONLY the percent-encoded
+  VALUE is appended -- no "?"/"&" joining and no "param=" prefix. The value
+  is URL-encoded exactly once via querify (with the leading "q=" stripped),
+  then has "+" rewritten to "%20". The rewrite is lossless because querify
+  has already encoded a literal "+" as "%2B", and %20 is the
+  encodeURIComponent-compatible space form the provider endpoints expect.
+
+  The appended value is the row's prompt: the resolved config prompt with
+  the literal token {url} replaced by the row's target URL, or, when the
+  config prompt is empty, the localized copy_page_prompt string invoked with
+  (dict "URL" <target>). The target is the page's own permalink for rows
+  with target "html", and the page's Markdown URL for rows with target
+  "markdown". Rows with target "none" get the endpoint verbatim (a plain
+  link, no prompt appended).
+
+  Expected context (dict):
+  - .entry (map) - Registry entry from rows.html: endpoint (string), target
+    ("html" | "markdown" | "none").
+  - .cfg   (map) - Resolved config from config.html; read here: url (the
+    Markdown URL), page_url (the page's own permalink), prompt.
+
+  Return value: the href string. One terminal return.
+*/}}
+
+{{- $entry := .entry -}}
+{{- $cfg := .cfg -}}
+
+{{- $href := printf "%v" ($entry.endpoint | default "") -}}
+{{- $target := printf "%v" ($entry.target | default "none") -}}
+
+{{- if ne $target "none" -}}
+  {{- $dest := $cfg.url -}}
+  {{- if eq $target "html" -}}{{- $dest = $cfg.page_url -}}{{- end -}}
+  {{- $prompt := "" -}}
+  {{- with $cfg.prompt -}}
+    {{- $prompt = replace . "{url}" $dest -}}
+  {{- else -}}
+    {{- $prompt = T "copy_page_prompt" (dict "URL" $dest) | default (printf "Read from %s so I can ask questions about it." $dest) -}}
+  {{- end -}}
+  {{- $value := strings.TrimPrefix "q=" (replace (querify "q" $prompt) "+" "%20") -}}
+  {{- $href = printf "%s%s" $href $value -}}
+{{- end -}}
+
+{{- return $href -}}

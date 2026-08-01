@@ -1,0 +1,34 @@
+{{/*
+  images/lib/md-text.html -- PURE lib (Markdown line-safety builder).
+
+  Purpose: normalizes a consumer-supplied value for interpolation into the
+  line-oriented Markdown emitted by the shortcode Markdown output variants
+  (image.markdown.md and image-gallery.markdown.md). In a line-oriented
+  document a value-borne line break is a structure change, not text, so
+  every interior newline run collapses to one space. When the value feeds
+  the LABEL slot of an image line (the text between the brackets of
+  "![label](url)"), backslashes and square brackets are additionally
+  backslash-escaped so a hostile or merely bracket-carrying alt text cannot
+  terminate the label early. Caption lines stay unescaped beyond the
+  newline collapse: they live outside any bracket context and legitimately
+  carry inline Markdown (emphasis, links), exactly like the HTML path,
+  which renders captions as inline Markdown.
+
+  Context (dict):
+  - .text  (any)  The raw value; stringified and normalized.
+  - .label (bool) true when the value fills an image-label bracket slot.
+
+  Return value: string -- the one-line, contextually escaped text.
+
+  One terminal return.
+*/}}
+
+{{- $s := printf "%v" (.text | default "") -}}
+{{- $s = replaceRE `[ \t]*(\r?\n[ \t]*)+` " " $s -}}
+{{- if .label -}}
+  {{- $s = replace $s `\` `\\` -}}
+  {{- $s = replace $s "[" `\[` -}}
+  {{- $s = replace $s "]" `\]` -}}
+{{- end -}}
+
+{{- return $s -}}

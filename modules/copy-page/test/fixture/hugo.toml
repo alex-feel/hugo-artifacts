@@ -1,0 +1,52 @@
+baseURL = "http://localhost:1616/"
+defaultContentLanguage = "en"
+title = "Copy Page Fixture"
+
+[languages]
+
+  [languages.en]
+    locale = "en-US"
+    weight = 1
+
+# A pagerSize small enough that the docs section spills past page one, so the
+# suite can pin the per-placement script emission on /docs/page/2/.
+[pagination]
+  pagerSize = 2
+
+# The built-in `markdown` output format gives every regular page and the docs
+# section a Markdown twin (index.md beside index.html), rendered by
+# layouts/page.markdown.md and layouts/section.markdown.md. Hugo REPLACES the
+# outputs list per page kind rather than merging it, so `html` must stay
+# listed. home deliberately wires NO llmstxt (and no markdown) format: the
+# llms row's home-format probe must fail so the row drops unless a page
+# supplies llms_url explicitly, and the widget on the home page must
+# self-gate to nothing.
+[outputs]
+  home = ['html']
+  section = ['html', 'markdown']
+  page = ['html', 'markdown']
+
+[params]
+description = "Hugo copy-page module Playwright validation fixture site."
+
+# Consumer extension rows (site params tier only). youcom's endpoint already
+# carries a query parameter and ends at its "="; the module appends only the
+# percent-encoded prompt value. insecure must be skipped with a warning:
+# rows_extra endpoints are https-only.
+[params.copy_page.rows_extra.youcom]
+label = "You.com"
+endpoint = "https://you.com/search?q="
+target = "markdown"
+
+[params.copy_page.rows_extra.insecure]
+label = "Insecure"
+endpoint = "http://insecure.example/search?q="
+target = "markdown"
+
+[module]
+
+  [module.hugoVersion]
+    min = "0.160.0"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/copy-page"

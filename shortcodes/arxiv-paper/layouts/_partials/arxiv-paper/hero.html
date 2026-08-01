@@ -12,33 +12,32 @@
     .citationCount, .metricsAsOf, .hasUpvotes, .upvotes, .codeRepo,
     .hasCodeStars, .codeStars, .aiKeywords.
 
-  Output: An <a> element with BEM class arxiv-paper arxiv-paper--hero.
+  Output: An <article> element with BEM class arxiv-paper arxiv-paper--hero.
+  The title is the single real link (arxiv-paper__title-link) to the abstract
+  page; a consuming site restores the full-card click area with a stretched-link
+  overlay on arxiv-paper__title-link (see the module README "Styling").
 */}}
 
 {{- if .apiOk -}}
-<a href="{{ .absURL }}"
-   class="arxiv-paper arxiv-paper--hero{{ with .extraClass }} {{ . }}{{ end }}"
-   target="_blank"
-   rel="noopener noreferrer"
-   aria-label="{{ .title }} — arXiv:{{ .id }}"
-   data-arxiv-id="{{ .id }}"
-   data-variant="hero"
-   data-api-ok="true"
-   data-arxiv-pdf="{{ .pdfURL }}"
-   {{- with .primaryCategory }} data-arxiv-category="{{ . }}"{{ end }}
-   {{- with .primaryArchive }} data-arxiv-archive="{{ . }}"{{ end }}
-   {{- with .primaryGroup }} data-arxiv-group="{{ . }}"{{ end }}>
+<article class="arxiv-paper arxiv-paper--hero{{ with .extraClass }} {{ . }}{{ end }}"
+         data-arxiv-id="{{ .id }}"
+         data-variant="hero"
+         data-api-ok="true"
+         data-arxiv-pdf="{{ .pdfURL }}"
+         {{- with .primaryCategory }} data-arxiv-category="{{ . }}"{{ end }}
+         {{- with .primaryArchive }} data-arxiv-archive="{{ . }}"{{ end }}
+         {{- with .primaryGroup }} data-arxiv-group="{{ . }}"{{ end }}>
   <div class="arxiv-paper__banner"{{ with .primaryArchive }} data-arxiv-archive="{{ . }}"{{ end }}>
     <span class="arxiv-paper__banner-brand">arXiv</span>
     <span class="arxiv-paper__banner-id">{{ .id }}{{ with .version }}<span class="arxiv-paper__version">v{{ . }}</span>{{ end }}</span>
-    {{- with .primaryCategoryLabel }}<span class="arxiv-paper__banner-cat">{{ . }}</span>{{ end }}
+    {{ with .primaryCategoryLabel }}<span class="arxiv-paper__banner-cat">{{ . }}</span>{{ end }}
   </div>
   <div class="arxiv-paper__hero-body">
     <div class="arxiv-paper__hero-top">
       {{- with .primaryGroup }}<span class="arxiv-paper__hero-type">{{ . }}</span>{{ end }}
-      {{- with .publishedYear }}<span class="arxiv-paper__hero-year">{{ . }}</span>{{ end }}
+      {{ with .publishedYear }}<span class="arxiv-paper__hero-year">{{ . }}</span>{{ end }}
     </div>
-    <h3 class="arxiv-paper__title arxiv-paper__title--hero">{{ .title }}</h3>
+    <h3 class="arxiv-paper__title arxiv-paper__title--hero"><a class="arxiv-paper__title-link" href="{{ .absURL }}" target="_blank" rel="noopener noreferrer">{{ .title }}</a></h3>
     {{- with (partial "arxiv-paper/authors.html" (dict "authors" .authors "max" 6)) }}
     <p class="arxiv-paper__authors">
       {{- partial "arxiv-paper/icon.html" (dict "name" "authors" "class" "arxiv-paper__icon") }}
@@ -54,11 +53,11 @@
     <p class="arxiv-paper__abstract">{{ . }}</p>
     {{- end }}{{ end }}
     {{- with .categories }}
-    <div class="arxiv-paper__tags">
+    <ul class="arxiv-paper__tags">
       {{- range . }}
-      <span class="arxiv-paper__tag{{ if .primary }} arxiv-paper__tag--primary{{ end }}" data-arxiv-category="{{ .code }}" data-arxiv-archive="{{ .archive }}">{{ .label }}</span>
+      <li class="arxiv-paper__tag{{ if .primary }} arxiv-paper__tag--primary{{ end }}" data-arxiv-category="{{ .code }}" data-arxiv-archive="{{ .archive }}">{{ .label }}</li>
       {{- end }}
-    </div>
+    </ul>
     {{- end }}
     <div class="arxiv-paper__footer arxiv-paper__hero-foot">
       {{- with .publishedYear }}
@@ -102,7 +101,7 @@
       </span>
     </div>
   </div>
-</a>
+</article>
 {{- else -}}
 {{- partial "arxiv-paper/inline.html" (merge . (dict "variant" "hero")) -}}
 {{- end -}}

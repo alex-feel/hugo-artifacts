@@ -35,6 +35,12 @@ test('dedicated page: form contract, defaults, noscript, live regions', async ({
   await expect(root.locator('.search__results')).toHaveAttribute('role', 'region');
   await expect(root.locator('.search__results')).toHaveAttribute('aria-label', 'Search results');
   await expect(root.locator('.search__noscript')).toHaveCount(1);
+  // The noscript guidance links the machine-readable index the module
+  // itself publishes; the href rides the resolved index_url, so it is
+  // per-language and only rendered when the index is wired.
+  const noscriptLink = root.locator('.search__noscript-link');
+  await expect(noscriptLink).toHaveCount(1);
+  await expect(noscriptLink).toHaveAttribute('href', '/searchindex.json');
   await expect(root.locator('.search__clear')).toBeHidden();
   await expect(root.locator('.search__more')).toBeHidden();
   await expect(root).not.toHaveClass(/search--enhanced/);
@@ -95,6 +101,10 @@ test('ru surfaces target ru URLs and a Cyrillic query round-trips', async ({page
   const root = page.locator('.search--page');
   await expect(root.locator('.search__form')).toHaveAttribute('action', '/ru/search/');
   await expect(root).toHaveAttribute('data-search-index-url', '/ru/searchindex.json');
+  await expect(root.locator('.search__noscript-link')).toHaveAttribute(
+    'href',
+    '/ru/searchindex.json',
+  );
   await expect(page.locator('.search--modal .search__form')).toHaveAttribute(
     'action',
     '/ru/search/',

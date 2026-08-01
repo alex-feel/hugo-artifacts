@@ -17,10 +17,9 @@
         data-lang="{{ .name }}"
         data-pct="{{ .pct }}"
         style="--github-profile-lang-share: {{ .pct }}%">
-      <span class="github-profile__lang-label">{{ .name }}</span>
-      <span class="github-profile__lang-pct">{{ .pct }}%</span>
+      <span class="github-profile__lang-label">{{ .name }}</span> <span class="github-profile__lang-pct">{{ .pct }}%</span>
     </li>
     {{- end }}
   </ul>
 </section>
-{{- end -}}
+{{- end }}

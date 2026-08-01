@@ -1,14 +1,18 @@
 @echo off
-rem Validates the shipped data files, then builds THIRTEEN fixture sites with
+rem Validates the shipped data files, then builds FOURTEEN fixture sites with
 rem hugo (builds, not servers: no port binding, and a finite build exits by
 rem itself) and runs the Node build-output assertion suite against all
-rem thirteen.
+rem fourteen.
 rem Windows mirror of run-tests.sh: data check first, pre-launch process
 rem check, then a hard fail on any deprecation, error, or missing-layout line
 rem in any build log.
 rem
 rem NETWORK: the agent-skills specs exercise a real build-time remote fetch,
-rem because the digest guarantee cannot be proven without one.
+rem because the digest guarantee cannot be proven without one. The widgets
+rem build additionally fetches the widget modules' remote APIs (GitHub, the
+rem Hugging Face Hub, arXiv, YouTube posters); those fetches degrade with
+rem WARN lines when tokenless or rate-limited, which the log gates below
+rem deliberately tolerate -- they hard-fail on deprecations and errors only.
 setlocal
 
 pushd "%~dp0"
@@ -39,8 +43,13 @@ set LOG_FILE_NSOFF=%~dp0hugo-build-nsoff.log
 set LOG_FILE_NOSECTIONPAGES=%~dp0hugo-build-nosectionpages.log
 set LOG_FILE_SHADOW=%~dp0hugo-build-shadow.log
 set LOG_FILE_PAGINATED=%~dp0hugo-build-paginated.log
+set LOG_FILE_WIDGETS=%~dp0hugo-build-widgets.log
 
 pushd "%~dp0fixture"
+rem Hugo --cleanDestinationDir never deletes dot-prefixed paths (a stale
+rem .well-known artifact survives every rebuild), so the destination root is
+rem removed outright before the builds.
+if exist public rmdir /s /q public
 hugo --gc --logLevel info --cleanDestinationDir --destination public\baseline > "%LOG_FILE%" 2>&1
 if errorlevel 1 (
   echo hugo build failed ^(baseline^):
@@ -121,6 +130,10 @@ if errorlevel 1 (
 popd
 
 pushd "%~dp0fixture-shadow"
+rem Hugo --cleanDestinationDir never deletes dot-prefixed paths (a stale
+rem .well-known artifact survives every rebuild), so the destination root is
+rem removed outright before the builds.
+if exist public rmdir /s /q public
 hugo --gc --logLevel info --cleanDestinationDir --destination public > "%LOG_FILE_SHADOW%" 2>&1
 if errorlevel 1 (
   echo hugo build failed ^(shadow^):
@@ -131,6 +144,10 @@ if errorlevel 1 (
 popd
 
 pushd "%~dp0fixture-paginated"
+rem Hugo --cleanDestinationDir never deletes dot-prefixed paths (a stale
+rem .well-known artifact survives every rebuild), so the destination root is
+rem removed outright before the builds.
+if exist public rmdir /s /q public
 hugo --gc --logLevel info --cleanDestinationDir --destination public > "%LOG_FILE_PAGINATED%" 2>&1
 if errorlevel 1 (
   echo hugo build failed ^(paginated^):
@@ -140,7 +157,21 @@ if errorlevel 1 (
 )
 popd
 
-for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_MINIMAL%" "%LOG_FILE_NOTWINS%" "%LOG_FILE_MULTILINGUAL%" "%LOG_FILE_LLMSOFF%" "%LOG_FILE_EDGE%" "%LOG_FILE_OFF%" "%LOG_FILE_BADTABLES%" "%LOG_FILE_NSOFF%" "%LOG_FILE_NOSECTIONPAGES%" "%LOG_FILE_SHADOW%" "%LOG_FILE_PAGINATED%") do (
+pushd "%~dp0fixture-widgets"
+rem Hugo --cleanDestinationDir never deletes dot-prefixed paths (a stale
+rem .well-known artifact survives every rebuild), so the destination root is
+rem removed outright before the builds.
+if exist public rmdir /s /q public
+hugo --gc --logLevel info --cleanDestinationDir --destination public > "%LOG_FILE_WIDGETS%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(widgets^):
+  type "%LOG_FILE_WIDGETS%"
+  popd
+  exit /b 1
+)
+popd
+
+for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_MINIMAL%" "%LOG_FILE_NOTWINS%" "%LOG_FILE_MULTILINGUAL%" "%LOG_FILE_LLMSOFF%" "%LOG_FILE_EDGE%" "%LOG_FILE_OFF%" "%LOG_FILE_BADTABLES%" "%LOG_FILE_NSOFF%" "%LOG_FILE_NOSECTIONPAGES%" "%LOG_FILE_SHADOW%" "%LOG_FILE_PAGINATED%" "%LOG_FILE_WIDGETS%") do (
   findstr /I "deprecat" %%L >nul 2>&1
   if not errorlevel 1 (
     echo Hugo reported deprecations in %%L:
@@ -174,6 +205,7 @@ set FIXTURE_PUBLIC_NSOFF=%~dp0fixture\public\nsoff
 set FIXTURE_PUBLIC_NOSECTIONPAGES=%~dp0fixture\public\nosectionpages
 set FIXTURE_PUBLIC_SHADOW=%~dp0fixture-shadow\public
 set FIXTURE_PUBLIC_PAGINATED=%~dp0fixture-paginated\public
+set FIXTURE_PUBLIC_WIDGETS=%~dp0fixture-widgets\public
 set HUGO_BUILD_LOG=%LOG_FILE%
 set HUGO_BUILD_LOG_CONFIGURED=%LOG_FILE_CONFIGURED%
 set HUGO_BUILD_LOG_MINIMAL=%LOG_FILE_MINIMAL%
@@ -187,6 +219,7 @@ set HUGO_BUILD_LOG_NSOFF=%LOG_FILE_NSOFF%
 set HUGO_BUILD_LOG_NOSECTIONPAGES=%LOG_FILE_NOSECTIONPAGES%
 set HUGO_BUILD_LOG_SHADOW=%LOG_FILE_SHADOW%
 set HUGO_BUILD_LOG_PAGINATED=%LOG_FILE_PAGINATED%
+set HUGO_BUILD_LOG_WIDGETS=%LOG_FILE_WIDGETS%
 for /f "tokens=2 delims=v " %%v in ('hugo version') do (
   set HUGO_VERSION_RAW=%%v
   goto gotversion

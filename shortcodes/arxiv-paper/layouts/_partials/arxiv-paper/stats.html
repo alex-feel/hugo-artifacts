@@ -11,22 +11,21 @@
   - . (dict) - Normalized paper data from fetch.html (see card.html), plus
     .hasUpvotes, .upvotes.
 
-  Output: An <a> element with BEM class arxiv-paper arxiv-paper--stats.
+  Output: An <article> element with BEM class arxiv-paper arxiv-paper--stats.
+  The title is the single real link (arxiv-paper__title-link) to the abstract
+  page; a consuming site restores the full-card click area with a stretched-link
+  overlay on arxiv-paper__title-link (see the module README "Styling").
 */}}
 
 {{- if .apiOk -}}
-<a href="{{ .absURL }}"
-   class="arxiv-paper arxiv-paper--stats{{ with .extraClass }} {{ . }}{{ end }}"
-   target="_blank"
-   rel="noopener noreferrer"
-   aria-label="{{ .title }} — arXiv:{{ .id }}"
-   data-arxiv-id="{{ .id }}"
-   data-variant="stats"
-   data-api-ok="true"
-   data-arxiv-pdf="{{ .pdfURL }}"
-   {{- with .primaryCategory }} data-arxiv-category="{{ . }}"{{ end }}
-   {{- with .primaryArchive }} data-arxiv-archive="{{ . }}"{{ end }}
-   {{- with .primaryGroup }} data-arxiv-group="{{ . }}"{{ end }}>
+<article class="arxiv-paper arxiv-paper--stats{{ with .extraClass }} {{ . }}{{ end }}"
+         data-arxiv-id="{{ .id }}"
+         data-variant="stats"
+         data-api-ok="true"
+         data-arxiv-pdf="{{ .pdfURL }}"
+         {{- with .primaryCategory }} data-arxiv-category="{{ . }}"{{ end }}
+         {{- with .primaryArchive }} data-arxiv-archive="{{ . }}"{{ end }}
+         {{- with .primaryGroup }} data-arxiv-group="{{ . }}"{{ end }}>
   <div class="arxiv-paper__head">
     <div class="arxiv-paper__eyebrow">
       <span class="arxiv-paper__brand">arXiv</span>
@@ -37,7 +36,7 @@
       {{- partial "arxiv-paper/icon.html" (dict "name" "external") -}}
     </span>
   </div>
-  <h3 class="arxiv-paper__title">{{ .title }}</h3>
+  <h3 class="arxiv-paper__title"><a class="arxiv-paper__title-link" href="{{ .absURL }}" target="_blank" rel="noopener noreferrer">{{ .title }}</a></h3>
   {{- with (partial "arxiv-paper/authors.html" (dict "authors" .authors "max" 4)) }}
   <p class="arxiv-paper__authors">
     {{- partial "arxiv-paper/icon.html" (dict "name" "authors" "class" "arxiv-paper__icon") }}
@@ -77,7 +76,7 @@
     </span>
     {{- end }}
   </div>
-</a>
+</article>
 {{- else -}}
 {{- partial "arxiv-paper/inline.html" (merge . (dict "variant" "stats")) -}}
 {{- end -}}

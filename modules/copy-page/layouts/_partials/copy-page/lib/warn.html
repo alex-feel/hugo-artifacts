@@ -1,0 +1,21 @@
+{{/*
+  copy-page/lib/warn.html -- INTERNAL (lib tier).
+
+  Purpose: single funnel for every module warning, deduplicated per build via
+  a hugo.Store sentinel, so a misconfiguration repeated across hundreds of
+  pages surfaces exactly once. The module never breaks a build over widget
+  configuration; its one errorf (a non-Page context) lives in menu.html.
+
+  Expected context (dict):
+  - .key     (string) - Deduplication key, unique per warning class and
+    offending value, e.g. "copy-page:warn:unknown-row:foo".
+  - .message (string) - Complete, actionable warning text, already formatted
+    and "[copy-page]"-prefixed by the caller.
+
+  Return value: none. Side effect: at most one warnf per key per build.
+*/}}
+
+{{- if not (hugo.Store.Get .key) -}}
+  {{- hugo.Store.Set .key true -}}
+  {{- warnf "%s" .message -}}
+{{- end -}}

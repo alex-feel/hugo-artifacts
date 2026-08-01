@@ -1,0 +1,46 @@
+{{/*
+  Renders the module's "Copy page" widget inside content:
+
+    {{< copy-page >}}
+    {{< copy-page "copy,view,claude" >}}
+    {{< copy-page rows="copy,view,claude" toggle_label="Use this page" >}}
+
+  This shortcode is a thin wrapper: it forwards only the parameters that are
+  actually present to the copy-page/menu.html partial, so omitted parameters
+  fall through the module's cascade (page front matter copy_page map, then
+  [params.copy_page], then the shipped defaults). The rendered markup is
+  identical to the partial's.
+
+  Parameters (all optional; named, with one positional shorthand):
+  - rows (positional 0, or rows=): comma-separated row slugs from the README
+    Rows table, e.g. "copy,view,claude".
+  - format: output format name used to derive the page's Markdown URL.
+  - url: explicit Markdown URL (overrides format derivation).
+  - llms_url: llms.txt URL for the llms row.
+  - prompt: AI-provider prompt override; the literal token {url} is replaced
+    with the row's target URL.
+  - toggle_label: accessible name of the dropdown toggle.
+  - new_tab: open link rows in a new tab (true/false/1/0/yes/no/on).
+  - class: extra class(es) appended to the root element.
+  - id: id attribute on the root element.
+
+  Never errorf: parameter problems degrade exactly as the partial documents
+  (deduplicated warnf or silent omission of the affected row).
+*/}}
+
+{{- $args := dict "page" .Page "position" .Position -}}
+
+{{- if .IsNamedParams -}}
+  {{- range $k := slice "rows" "format" "url" "llms_url" "prompt" "toggle_label" "class" "id" -}}
+    {{- if isset $.Params $k -}}
+      {{- $args = merge $args (dict $k ($.Get $k)) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if isset .Params "new_tab" -}}
+    {{- $args = merge $args (dict "new_tab" (in (slice "true" "1" "yes" "on") (lower (printf "%v" (.Get "new_tab"))))) -}}
+  {{- end -}}
+{{- else if gt (len .Params) 0 -}}
+  {{- $args = merge $args (dict "rows" (.Get 0)) -}}
+{{- end -}}
+
+{{- partial "copy-page/menu.html" $args -}}

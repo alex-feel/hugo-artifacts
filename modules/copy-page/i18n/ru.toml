@@ -1,0 +1,25 @@
+# Russian UI strings for the copy-page module. The key set mirrors
+# i18n/en.toml one to one. Brand names stay untranslated and in the
+# nominative case ("Открыть в {{ .Name }}" keeps the Latin brand name
+# unchanged).
+
+copy_page_copy = "Скопировать страницу"
+copy_page_copy_desc = "Скопировать страницу в формате Markdown для LLM"
+
+copy_page_view = "Открыть как Markdown"
+copy_page_view_desc = "Открыть эту страницу как обычный текст"
+
+copy_page_llms = "llms.txt"
+copy_page_llms_desc = "Открыть llms.txt этого сайта"
+
+copy_page_open_in = "Открыть в {{ .Name }}"
+copy_page_open_desc = "Задать вопросы об этой странице"
+
+copy_page_toggle = "Другие способы использовать эту страницу"
+
+copy_page_new_tab_hint = "(откроется в новом окне)"
+
+copy_page_copied = "Страница скопирована как Markdown"
+copy_page_copy_error = "Не удалось скопировать страницу"
+
+copy_page_prompt = "Прочитай {{ .URL }}, чтобы я мог задавать вопросы об этой странице."

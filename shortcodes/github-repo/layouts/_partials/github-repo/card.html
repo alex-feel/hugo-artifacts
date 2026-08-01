@@ -19,16 +19,17 @@
   - .apiOk (bool) - Whether API fetch succeeded
   - .extraClass (string) - Additional CSS classes
 
-  Output: An <a> element with BEM class github-repo github-repo--card
+  Output: An <article> element with BEM class github-repo github-repo--card.
+  The title is the single real link (github-repo__title-link) to the
+  repository (matching the arxiv-paper / hf-space card pattern). A consuming
+  site restores the full-card click area with a stretched-link overlay on
+  github-repo__title-link (see the module README "Styling").
 */}}
 
 {{- if .apiOk -}}
-<a href="{{ .url }}"
-   class="github-repo github-repo--card{{ with .extraClass }} {{ . }}{{ end }}"
-   target="_blank"
-   rel="noopener noreferrer"
-   data-repo="{{ .fullName }}"
-   data-variant="card">
+<article class="github-repo github-repo--card{{ with .extraClass }} {{ . }}{{ end }}"
+         data-repo="{{ .fullName }}"
+         data-variant="card">
   <div class="github-repo__top">
     <span class="github-repo__slug">
       {{- partial "github-repo/icon.html" (dict "name" "github" "class" "github-repo__icon") }} {{ T "github_repo_eyebrow_card" | default "GITHUB · REPOSITORY" }}</span>
@@ -36,9 +37,7 @@
       {{- partial "github-repo/icon.html" (dict "name" "external") -}}
     </span>
   </div>
-  <h3 class="github-repo__title">
-    <span class="github-repo__owner">{{ .owner }} /</span> {{ .name }}
-  </h3>
+  <h3 class="github-repo__title"><a class="github-repo__title-link" href="{{ .url }}" target="_blank" rel="noopener noreferrer"><span class="github-repo__owner">{{ .owner }} /</span> {{ .name }}</a></h3>
   {{- with .description }}
   <p class="github-repo__description">{{ . }}</p>
   {{- end }}
@@ -74,7 +73,7 @@
     </span>
     {{- end }}
   </div>
-</a>
+</article>
 {{- else -}}
 {{/* Degraded output: delegate to inline chip partial on API failure */}}
 {{- partial "github-repo/inline.html" (merge . (dict "variant" "card")) -}}

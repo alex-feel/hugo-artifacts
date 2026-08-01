@@ -4,9 +4,12 @@
 # ({{ T "key" | default "English" }}), so a site whose language ships no
 # translation still renders a real heading rather than an empty string.
 #
-# The module authors exactly five strings, all of them headings in generated
-# documents. "## Optional" in llms.txt is deliberately NOT a key here: it is
-# fixed by the llmstxt.org convention and is a protocol token, not prose.
+# The module authors exactly ten strings: five headings in generated
+# documents, three display labels for the surface entries returned by the
+# agent-readiness/surfaces.html public partial, and the name and note of
+# the derived Agent Skills index entry in llms.txt's `## Optional` section.
+# "## Optional" in llms.txt is deliberately NOT a key here: it is fixed by
+# the llmstxt.org convention and is a protocol token, not prose.
 #
 # This file carries flat keys only. Should a plural table ever be added, it
 # MUST sit LAST: a TOML table header claims every key-value pair that follows
@@ -27,3 +30,26 @@ agent_facts_identity_heading = "Идентификация"
 
 # H2 of the contact block in about.md.
 agent_facts_contact_heading = "Контакты"
+
+# Display label for the llms.txt entry returned by surfaces.html.
+# "llms.txt" is the llmstxt.org protocol token and stays untranslated in
+# every language.
+agent_surface_llms = "llms.txt"
+
+# Display label for the facts document (/about.md) entry returned by
+# surfaces.html.
+agent_surface_facts = "Факты о сайте"
+
+# Display label for the Agent Skills index entry returned by surfaces.html.
+# "Agent Skills" is the agentskills.io convention's proper name and stays
+# untranslated in every language.
+agent_surface_skills = "Индекс Agent Skills"
+
+# Link text of the derived Agent Skills index entry that llms.html appends
+# to llms.txt's `## Optional` section when the index publishes. "Agent
+# Skills" stays untranslated in every language, as above.
+agent_skills_entry_name = "Индекс Agent Skills"
+
+# Note of that same llms.txt entry, rendered after the `- [name](url): `
+# prefix.
+agent_skills_entry_note = "Машиночитаемый индекс Agent Skills, опубликованных на этом сайте"

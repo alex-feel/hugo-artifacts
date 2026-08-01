@@ -47,6 +47,10 @@ Universal build-time image module: one `{{ partial "images/image.html" (dict "pa
 
 Universal agent-readiness module: the agent-facing representations of a site your HTML already describes, all driven by one shared page-selection filter so they can never disagree -- a generated `robots.txt` with a 21-token AI-crawler registry and a `Content-Signal` declaration, per-page Markdown twins built from `.RenderShortcodes` with a duplicate-key-safe YAML front matter, an `llms.txt` link index, an aggregated `/about.md` facts document that is complete by construction rather than truncated, and a `/.well-known/agent-skills/` discovery index whose SHA-256 digests are computed from the exact bytes it republishes. Zero CSS, zero JavaScript, zero visual surface; a four-tier configuration cascade under `params.agent`; graceful degradation on every misconfiguration and every failed remote fetch. See [`modules/agent-readiness/README.md`](modules/agent-readiness/README.md).
 
+### `modules/copy-page`
+
+Universal "Copy page" widget: one `{{ partial "copy-page/menu.html" . }}` call (or the `copy-page` shortcode) renders a Mintlify-style split button for any page that publishes a Markdown representation -- a JavaScript-revealed primary half that copies the page's Markdown to the clipboard, plus a native `<details>` disclosure menu of rows (view as Markdown, open `llms.txt`, hand the page to ChatGPT, Claude, Perplexity, Grok, or Google AI Studio). Style-agnostic BEM markup, zero CSS, zero third-party contact before a deliberate click, a Safari-safe layered clipboard flow, full i18n (en/ru), a four-tier configuration cascade under `params.copy_page`, and a consumer-extensible row registry. See [`modules/copy-page/README.md`](modules/copy-page/README.md).
+
 ### `modules/pwa`
 
 Consumer-facing Progressive Web App module: web app manifest, RealFaviconGenerator icon set, Workbox-powered service worker, install prompt, and push subscription wiring. See [`modules/pwa/README.md`](modules/pwa/README.md).

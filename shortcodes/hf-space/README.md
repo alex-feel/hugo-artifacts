@@ -1,6 +1,6 @@
 # hf-space
 
-Hugo shortcode module that renders a [Hugging Face Space](https://huggingface.co/spaces) link in one of five display variants. The module outputs style-agnostic semantic HTML with [BEM](https://getbem.com/) CSS class hooks, delegating all visual styling to the consuming site. It is the sibling of [`shortcodes/github-repo`](../github-repo/README.md) and follows the same conventions (build-time API fetch, header-aware retries, graceful degradation, data-driven lookups).
+Hugo shortcode module that renders a [Hugging Face Space](https://huggingface.co/spaces) reference in one of five display variants. The module outputs style-agnostic semantic HTML with [BEM](https://getbem.com/) CSS class hooks, delegating all visual styling to the consuming site, plus a compact pure-Markdown rendering for markdown output formats (see [Markdown output variant](#markdown-output-variant)). It is the sibling of [`shortcodes/github-repo`](../github-repo/README.md) and follows the same conventions (build-time API fetch, header-aware retries, graceful degradation, data-driven lookups).
 
 ## Installation
 
@@ -38,13 +38,15 @@ The `id` is the Space identifier in `owner/name` form. You may pass a full URL v
 
 The `variant` parameter selects one of five display modes. Default is `card`.
 
+The card-family variants (`card`, `wide`, `stats`, `hero`) render as an `<article>` root element; the Space title is the single real link -- an `<a class="hf-space__title-link">` inside the title heading, pointing at the Space page with `target="_blank" rel="noopener noreferrer"`. The link's accessible name is its visible text (`owner / name`), so the root carries no `aria-label`. The `inline` variant is a single compact `<a>`, and every degraded fallback renders the inline chip, which stays an anchor. This is a **breaking markup change** for consumers that styled `a.hf-space` selectors or relied on the whole card being clickable: switch to class-only selectors and, to restore the full-card click area on the card-family variants, use the stretched-link recipe in [Styling](#full-card-click-area-stretched-link).
+
 #### inline -- Compact chip for running text
 
 ```go-html-template
 {{</* hf-space id="owner/name" variant="inline" */>}}
 ```
 
-A minimal `<a>` element showing the Space's emoji tile, owner/name, and the like count. Suitable for embedding within paragraphs.
+A minimal `<a>` element showing the Space's emoji tile, owner/name, and the like count, with a real `·` separator character (`hf-space__sep`, `aria-hidden="true"`) between the name and the like count so plain-text extractions keep them apart. Suitable for embedding within paragraphs. Also the degraded fallback for every other variant when the API is unavailable.
 
 #### card -- Editorial card (default)
 
@@ -77,7 +79,7 @@ A card with the emoji tile, an owner eyebrow, description, and a 3-column metric
 {{</* hf-space id="owner/name" variant="hero" */>}}
 ```
 
-The largest variant. A gradient banner carrying the big emoji and faux app-window chrome, followed by the full metadata (tags, SDK, hardware, likes, last-updated) and an "Open in Spaces" call-to-action.
+The largest variant. A gradient banner carrying the big emoji and faux app-window chrome, followed by the full metadata (tags, SDK, hardware, likes, last-updated) and an "Open in Spaces" call-to-action. The call-to-action is a visual affordance, not a second link; the stretched-link recipe in [Styling](#full-card-click-area-stretched-link) makes it clickable.
 
 ## Parameters
 
@@ -86,7 +88,7 @@ The largest variant. A gradient banner carrying the big emoji and faux app-windo
 | `id` | string | yes\* | -- | Space identifier as `owner/name` (e.g., `gradio/hello_world`) |
 | `url` | string | yes\* | -- | Full Space URL (e.g., `https://huggingface.co/spaces/owner/name`) |
 | `variant` | string | no | `card` | Display variant: `inline`, `card`, `wide`, `stats`, `hero` |
-| `title` | string | no | API/name | Display title override (used for the link's `aria-label`; defaults to the Space's card title, then its name) |
+| `title` | string | no | API/name | Display title override (feeds the `aria-label` of the inline chip and degraded fallback anchors and the [Markdown output variant](#markdown-output-variant)'s title clause; defaults to the Space's card title, then its name) |
 | `description` | string | no | API | Description override (defaults to the Space's `short_description`) |
 | `emoji` | string | no | API | Tile emoji override (defaults to the Space's card emoji) |
 | `class` | string | no | -- | Additional CSS class(es) appended to the root element |
@@ -119,7 +121,7 @@ A token is needed only to read **private or gated** Spaces and to raise the anon
 
 ### Rate limits
 
-The Hub applies an IETF-style rate limit per IP for anonymous API requests (observed quota: 500 requests per 300-second fixed window). A token raises the limit. Each shortcode invocation makes **one** API call per unique Space, regardless of variant. Hugo caches remote resources to disk (`caches.getresource`), so repeated builds do not re-fetch until the cache expires, and embedding the same Space in multiple shortcodes on a page fetches it at most once per build.
+The Hub applies an IETF-style rate limit per IP for anonymous API requests (observed quota: 500 requests per 300-second fixed window). A token raises the limit. Each shortcode invocation makes **one** API call per unique Space, regardless of variant or output format. Hugo caches remote resources to disk (`caches.getresource`), so repeated builds do not re-fetch until the cache expires, and embedding the same Space in multiple shortcodes on a page fetches it at most once per build.
 
 ## Resilience and Retries
 
@@ -169,8 +171,20 @@ timeout = '180s'
 When all retries exhaust, the module does not break the build. It logs the structured warning and degrades:
 
 - **`inline` variant:** Renders from the owner/name parsed from the locator; the like count is omitted (it is unknown without the API).
-- **`card`, `wide`, `stats`, `hero` variants:** Fall back to the inline chip layout. The root element carries `data-api-ok="false"` so the consuming site can style the degraded state.
+- **`card`, `wide`, `stats`, `hero` variants:** Fall back to the inline chip layout (a single `<a>`, even for the card-family variants that normally render an `<article>`). The root element carries `data-api-ok="false"` so the consuming site can style the degraded state.
 - **Formatter safety:** an unparseable, non-finite, or implausibly large like count passes through the compact-number formatter verbatim, and an unparseable `lastModified` renders an empty relative time; neither breaks the build.
+
+## Markdown output variant
+
+The module ships a second shortcode template, `layouts/_shortcodes/hf-space.markdown.md`, selected automatically by Hugo's output-format-aware shortcode lookup whenever a page renders in a markdown output format -- for example when a markdown-format page template calls `.RenderShortcodes` to build a Markdown twin of the page. Consumers with a markdown output format get it automatically; no configuration is needed.
+
+It emits pure Markdown -- no HTML tags, no BEM classes, no SVG: one line citing the Space as `[owner/name](https://huggingface.co/spaces/owner/name)`, enriched with the Space's emoji, display title (when it differs from the name), SDK, and like count when the Hub fetch succeeded:
+
+```markdown
+🤖 [owner/name](https://huggingface.co/spaces/owner/name) — Space Title (Gradio 4.44.0 · 1.2k likes)
+```
+
+When the Hub fetch failed, the output degrades to the bare `[owner/name](...)` link -- owner, name, and the canonical URL are parsed from the shortcode parameters alone, so the baseline never requires the Hub API. The data comes through the same cached fetch partial as the HTML variants, so the Markdown rendering adds no network requests and emits no duplicate warnings.
 
 ## Data Files
 
@@ -203,9 +217,9 @@ All UI strings resolve through i18n keys shipped in the module's `i18n/` directo
 | Key | English value | Used for |
 | --- | --- | --- |
 | `hf_space_type_space` | `SPACE` | Card/wide eyebrow and hero type label |
-| `hf_space_aria_label` | `{{ .Title }}, a Hugging Face Space by {{ .Owner }}` | Root link accessible label (all variants) |
+| `hf_space_aria_label` | `{{ .Title }}, a Hugging Face Space by {{ .Owner }}` | Accessible label of the inline chip and degraded fallback anchors (the card-family title link needs none: its accessible name is its visible text) |
 | `hf_space_stat_sdk` / `_hardware` / `_likes` | `SDK` / `Hardware` / `Likes` | Stats-card labels |
-| `hf_space_likes_word` | `like` / `likes` (plural forms) | Hero like-count word (raw counts below 1000 select their own plural form; a compact-formatted display such as `1.2k` selects the form of 1000, whose category fits a rounded quantity) |
+| `hf_space_likes_word` | `like` / `likes` (plural forms) | Hero and Markdown-variant like-count word (raw counts below 1000 select their own plural form; a compact-formatted display such as `1.2k` selects the form of 1000, whose category fits a rounded quantity) |
 | `hf_space_open_in_spaces` | `Open in Spaces` | Hero call-to-action |
 | `hf_space_just_now` / `hf_space_yesterday` | `just now` / `yesterday` | Relative time |
 | `hf_space_hours_ago` / `_days_ago` / `_months_ago` / `_years_ago` | `1 hour ago` / `{{ .Count }} hours ago` (plural forms) | Relative time |
@@ -218,9 +232,30 @@ The module outputs unstyled semantic HTML. All visual presentation is the consum
 
 Every element uses BEM naming under the `hf-space` block:
 
-- **Block:** `hf-space` (root `<a>` element)
+- **Block:** `hf-space` (root element: `<article>` for the `card`, `wide`, `stats`, and `hero` variants, `<a>` for `inline` and for every degraded fallback)
 - **Variant modifiers:** `hf-space--inline`, `hf-space--card`, `hf-space--wide`, `hf-space--stats`, `hf-space--hero`
-- **Elements:** `hf-space__tile`, `hf-space__emoji`, `hf-space__brand`, `hf-space__title`, `hf-space__owner`, `hf-space__description`, `hf-space__footer`, `hf-space__sdk`, `hf-space__sdk-dot`, `hf-space__likes`, `hf-space__meta-item`, `hf-space__stat`, `hf-space__stat-label`, `hf-space__stat-value`, `hf-space__tags`, `hf-space__tag`, `hf-space__banner`, `hf-space__chrome`, `hf-space__big-emoji`, `hf-space__cta`, `hf-space__open`, and others
+- **Elements:** `hf-space__tile`, `hf-space__emoji`, `hf-space__brand`, `hf-space__title`, `hf-space__title-link`, `hf-space__owner`, `hf-space__sep`, `hf-space__description`, `hf-space__footer`, `hf-space__sdk`, `hf-space__sdk-dot`, `hf-space__likes`, `hf-space__meta-item`, `hf-space__stat`, `hf-space__stat-label`, `hf-space__stat-value`, `hf-space__tags`, `hf-space__tag`, `hf-space__banner`, `hf-space__chrome`, `hf-space__big-emoji`, `hf-space__cta`, `hf-space__open`, and others
+
+The text layer carries a real separator character so plain-text and Markdown extractions keep adjacent fields apart: the inline chip's `hf-space__sep` contains a literal `·` (with `aria-hidden="true"`) between the name and the like count. A consuming site that draws its own divider can hide the character (for example with `font-size: 0`). The `hf-space__sdk-dot`, `hf-space__spacer`, and `hf-space__chrome` elements stay empty by design -- they are decorative (a colored dot, a flex spacer, faux window chrome), carry no implicit punctuation, and contribute nothing to text extraction.
+
+### Full-card click area (stretched link)
+
+The card-family variants deliberately do not wrap the whole card in an `<a>`: a card-wrapping anchor turns the entire card's text into one link accessible name and flattens it into a single glued link label in Markdown and plain-text extractions. The title link (`hf-space__title-link`) is the single real link. To restore the full-card click area, use the standard stretched-link overlay:
+
+```css
+.hf-space--card,
+.hf-space--wide,
+.hf-space--stats,
+.hf-space--hero {
+  position: relative;
+}
+
+.hf-space__title-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+```
 
 ### CSS custom properties
 
@@ -289,6 +324,7 @@ shortcodes/hf-space/
   layouts/
     _shortcodes/
       hf-space.html               # Main shortcode (parameter validation + dispatch)
+      hf-space.markdown.md        # Compact pure-Markdown variant for markdown output formats
     _partials/
       hf-space/
         fetch.html                # API fetch, retry loop, data normalization

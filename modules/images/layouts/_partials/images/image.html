@@ -54,28 +54,11 @@
 {{- $where := $opts.where -}}
 {{- $surface := $args.surface | default "partial" -}}
 
-{{/* ---- Parameter-shape validation (build-failing on this surface) ---- */}}
-{{- $fatal := false -}}
-{{- if and (not $opts.alt) (not $opts.decorative) -}}
-  {{- errorf "[images] alt is required: describe the image for assistive technology, or set decorative=true to emit the explicit empty alt of a purely decorative image. See %s" $where -}}
-  {{- $fatal = true -}}
-{{- end -}}
-{{- if and $opts.decorative $opts.alt -}}
-  {{- errorf "[images] decorative=true contradicts a non-empty alt: a decorative image is skipped by assistive technology, so its alt must be empty. Drop one of the two. See %s" $where -}}
-  {{- $fatal = true -}}
-{{- end -}}
-{{- if and $opts.decorative $opts.lightbox -}}
-  {{- errorf "[images] decorative=true contradicts lightbox=true: an anchor whose accessible name is the empty alt fails WCAG 2.4.4/4.1.2. Drop one of the two. See %s" $where -}}
-  {{- $fatal = true -}}
-{{- end -}}
-{{- if and (eq $opts.layout "fixed") (eq $opts.width 0) (eq $opts.height 0) -}}
-  {{- errorf "[images] layout=fixed requires an explicit width or height (the x-descriptor srcset is built from the width; a height alone derives the width proportionally from the source). See %s" $where -}}
-  {{- $fatal = true -}}
-{{- end -}}
-{{- if and (in (slice "fit" "fill" "crop") $opts.process) (or (eq $opts.width 0) (eq $opts.height 0)) -}}
-  {{- errorf "[images] process=%q requires BOTH width and height. See %s" $opts.process $where -}}
-  {{- $fatal = true -}}
-{{- end -}}
+{{/* ---- Parameter-shape validation (build-failing on this surface),
+     shared with the image shortcode's Markdown output variant through
+     images/lib/validate.html so both output formats fail identically on the
+     same misuse ---- */}}
+{{- $fatal := partial "images/lib/validate.html" (dict "opts" $opts) -}}
 
 {{- if not $fatal -}}
   {{- $source := partial "images/resolve/source.html" (dict "page" $page "src" $args.src) -}}

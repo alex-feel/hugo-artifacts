@@ -49,7 +49,7 @@ Only `[outputs]` needs this care. `[outputFormats]` and `[mediaTypes]` DO merge 
 
 ## Usage
 
-The site calls **no** `agent-readiness` partial directly. Every surface the module publishes is output-format-driven, so the entire wiring is the module import, the `[outputs]` lists, the `[params.agent]` configuration block, and the deletion of the site's own `layouts/robots.txt`.
+Every surface the module publishes is output-format-driven, so the wiring that makes the documents exist is the module import, the `[outputs]` lists, the `[params.agent]` configuration block, and the deletion of the site's own `layouts/robots.txt` -- no surface requires calling a partial. On top of that, the module exposes exactly two partials as public API, [`twin-url.html`](#twin-urlhtml) and [`surfaces.html`](#surfaceshtml), for the site templates that want to LINK what the module publishes: a copy-page widget, a footer block, a human-visible discovery page. Every other partial under the `agent-readiness` namespace is internal.
 
 Hugo does not merge a module's `[outputs]` configuration into the site's, and a site-level `[outputs]` key **replaces** the default list for that page kind rather than extending it. Every format below must therefore be wired by the consuming site, restating every entry that is already there:
 
@@ -63,6 +63,51 @@ section = ['HTML', 'RSS', 'markdown']
 `robots.txt` is the single exception: Hugo appends the built-in `robots` output format to the home page whenever `enableRobotsTXT = true`, independently of the `outputs.home` list.
 
 Hugo's defaults for the kinds above are `home = ['html', 'rss']` and `section = ['html', 'rss']`, so restating `HTML` and `RSS` is what keeps every existing feed alive. Dropping `RSS` from the `section` line silently deletes every section feed with no error.
+
+## Public partials
+
+The module exposes exactly two partials as public API: `agent-readiness/twin-url.html` and `agent-readiness/surfaces.html`. Every other partial under `layouts/_partials/agent-readiness/` is an internal implementation detail. Both public partials accept the same two call shapes -- the current Page as the context, or a dict whose `page` key is the current Page plus an optional `args` map of call-site config overrides, the top tier of the [four-tier cascade](#parameters) -- and calling either with anything else fails the build, because a missing Page is a wiring mistake in a template, not a content problem to degrade over. Both contracts are locked by `test/tests/09-public-partials.spec.js`, which dumps every page's results through a fixture-only output format and asserts them in both directions against the files each of the suite's builds actually publishes.
+
+### `twin-url.html`
+
+```go-html-template
+{{ partial "agent-readiness/twin-url.html" . }}
+{{ partial "agent-readiness/twin-url.html" (dict "page" . "args" (dict ...)) }}
+```
+
+Returns the page's published Markdown twin as an absolute URL (string), or the empty string when the page publishes no twin. The empty-string cases, exhaustively: the master switch off (`enable = false`); the twin surface off (`markdown.enable = false`); the page excluded by the per-page rules (front matter `agent: false` or `agent: {exclude: true}`, the dedicated search page, a `robots` value containing `noindex` -- each honoring the explicit `agent: {exclude: false}` include override); a regular page absent from the shared page enumeration; a **section** page outside a non-empty `sections` allow-list (the allow-list applies to section kind only, never to home); the built-in `markdown` output format not wired for the page's kind in `[outputs]`; and any kind that never gets a twin (taxonomy, term, or anything else beyond home, section, and page -- the module ships twin templates for exactly those three kinds).
+
+The partial exists because wired is not published. `.OutputFormats.Get "markdown"` cannot answer whether a twin exists, and the module's own comment in `llms.html` states why, verbatim:
+
+> The twin URL is substituted only when the twin will actually EXIST. `.OutputFormats.Get "markdown"` answers "is the format wired for this page kind", which is a question about the consumer's [outputs] lists, NOT about whether this module rendered anything into it -- markdown-page.html is the sole producer and it emits nothing when the switch is off, which makes Hugo publish no file. Consulting the format alone would therefore list a URL that 404s for every page on a site that turned the twins off but left `markdown` wired, which is exactly the configuration the module tells consumers to use.
+
+Inside the module, the twin renderer (`markdown-page.html`) and this partial read ONE membership implementation (`lib/page-included.html`), so the URL a consumer receives and the file the renderer writes can never drift apart. Duplicating that decision is precisely how a URL resolver ends up linking a file that does not exist.
+
+The intended pairing is a widget that needs the twin URL only when the twin exists, such as a copy-page widget:
+
+```go-html-template
+{{ with partial "agent-readiness/twin-url.html" . }}
+  {{ partial "copy-page/menu.html" (dict "page" $ "url" .) }}
+{{ end }}
+```
+
+The widget renders on exactly the pages whose twin publishes and receives the source-of-truth URL, instead of deriving a URL from the wired format and pointing at a file that does not exist on every excluded page.
+
+### `surfaces.html`
+
+```go-html-template
+{{ range partial "agent-readiness/surfaces.html" . }}
+  <a href="{{ .url }}">{{ .label }}</a>
+{{ end }}
+```
+
+Returns an ordered slice of dicts, each `{key, url, label}`, enumerating the site-level agent surfaces the module actually publishes under the resolved config: `llms` (the `llms.txt` link index), then `facts` (the `/about.md` facts document), then `skills` (the Agent Skills index at `/.well-known/agent-skills/index.json`). Every `url` is absolute. Every `label` is the module's i18n-resolved display string (`agent_surface_llms`, `agent_surface_facts`, `agent_surface_skills`), so a consumer renders the list without authoring labels. An entry is present only when its document publishes, and the slice may be empty.
+
+Each entry reproduces its producer's own publish gates rather than merely checking the wired format. `llms` requires the master switch, `llms.enable`, and the `llmstxt` format wired on the page's own language home -- an enabled `llms.txt` always emits at least its H1 line, so enabled-and-wired is published. `facts` requires the master switch, `facts.enable`, and the `agentfacts` format wired on the page's own language home, by the same reasoning. `skills` reproduces all four gates of the index file itself -- the master switch, `skills_index.enable`, the `agentskills` format wired on the default site's home, and at least one skill surviving validation and fetch -- through the same shared implementation that feeds the [derived `llms.txt` entry](#llmstxt), so the two callers can never disagree about whether the index exists.
+
+On a multilingual site the `llms` and `facts` entries follow the calling page's language, because those documents publish per language (`/llms.txt`, `/ru/llms.txt`). The `skills` entry is evaluated against the default language's site whatever language calls, because the index's format sets `root = true` and publishes once for the whole site, so every language must answer with the one file that actually exists.
+
+The intended consumer is a site-side discovery surface -- an `/agents/` page or a footer block presenting the machine-readable entry points to human visitors -- built with zero hand-typed surface lists, so a surface switched off in configuration disappears from that page in the same build instead of lingering as a hand-authored link that 404s.
 
 ## Parameters
 
@@ -272,7 +317,7 @@ Use `agent: false`, never `outputs: ['HTML']`. See [Per-page opt-out](#per-page-
 
 The twin is withheld for a page carrying `agent: false`, for a `robots: noindex` page under the default `exclude_noindex = true`, for the search page, and for any page outside a configured `sections` allow-list. A withheld twin means **no file at all**, not an empty one.
 
-The module's own surfaces all agree about this, because they share one filter. Anything outside the module cannot: Hugo's `.OutputFormats.Get "markdown"` answers "is this format wired for this page kind", which is a fact about your `[outputs]` lists, and there is no template API for "did that format publish bytes". So a generic `<link rel="alternate" type="text/markdown">` emitter -- including the `seo` module's `[seo.alternates]` allow-list -- will advertise a twin on pages that have none. If you run both modules, keep `[seo.alternates] formats` and `[params.agent] sections` describing the same page set, or leave `formats` unset and let `llms.txt` be the discovery surface for twins.
+The module's own surfaces all agree about this, because they share one filter, and a site template joins the agreement by calling [`twin-url.html`](#twin-urlhtml), which answers from that same filter. Anything that does not call it cannot see the withholding: Hugo's `.OutputFormats.Get "markdown"` answers "is this format wired for this page kind", which is a fact about your `[outputs]` lists, and there is no template API for "did that format publish bytes". So a generic `<link rel="alternate" type="text/markdown">` emitter that consults only the format -- including the `seo` module's `[seo.alternates]` allow-list -- will advertise a twin on pages that have none. If you run both modules, keep `[seo.alternates] formats` and `[params.agent] sections` describing the same page set, or leave `formats` unset and let `llms.txt` be the discovery surface for twins.
 
 ## llms.txt
 
@@ -302,11 +347,13 @@ url = '/sitemap.xml'
 note = 'Every published URL.'
 ```
 
-The document is: exactly one H1 line, a blockquote summary, an optional blockquote license line, optional prose, one H2 per configured section listing `- [name](url): note` items, and a final `## Optional` heading. `Optional` is a protocol token fixed by the convention and is deliberately not translated.
+The document is: exactly one H1 line, a blockquote summary, an optional blockquote license line, optional prose, one H2 per configured section listing `- [name](url): note` items, and a final `## Optional` section collecting the `[[params.agent.llms.optional]]` entries plus the module's own derived Agent Skills entry described below. The heading is emitted only when at least one entry of either kind survived, because an empty H2 claims a section that is not there. `Optional` is a protocol token fixed by the convention and is deliberately not translated.
 
 **Every URL is absolute**, including the ones you write in `[[params.agent.llms.optional]]`: a site-relative value there is resolved against the full `baseURL` **including its path**, whether or not you write the leading slash, while anything carrying a scheme (`https:`, `mailto:`, `tel:`) or a protocol-relative `//` prefix passes through untouched. This file is routinely ingested detached from the URL it was fetched from, where a bare `/sitemap.xml` has no origin to resolve against. `/about.md` follows the same rule, and so does the `href` on each `[params.agent.facts.contact]` channel.
 
 The "including its path" is load-bearing and is why the module normalizes rather than calling `absURL` directly: Hugo resolves a value that already begins with `/` against the protocol and host **only**, discarding the `baseURL` path. On a site at `https://example.org/docs/`, a naive `absURL "/sitemap.xml"` yields `https://example.org/sitemap.xml` -- a 404 -- while the correct result is `https://example.org/docs/sitemap.xml`.
+
+**The Optional section also advertises the module's own Agent Skills index, derived, with no consumer action.** When the index actually publishes -- the same four gates as the file itself: the master switch, `skills_index.enable`, the `agentskills` format wired on the default site's home, and at least one skill surviving validation and fetch -- `llms.txt` appends one entry linking the index's absolute URL, named and annotated through the `agent_skills_entry_name` and `agent_skills_entry_note` i18n keys. The index is otherwise reachable only by the `.well-known` path convention, so `llms.txt` is where an agent actually discovers it. A zero-skills or unwired build appends nothing: no entry, no warning, and -- absent any other Optional entry -- no `## Optional` heading. A consumer who already lists the index in `[[params.agent.llms.optional]]` keeps their own wording: URLs are compared after absolutization, and a match suppresses the derived entry rather than doubling it.
 
 **A section entry needs both `section` and `name`, and is skipped with a warning without them.** Both omissions fail invisibly otherwise. An empty `section` matches _every_ page, because the prefix test degenerates to "starts with `/`" -- so a single `sections =` for `section =` typo would publish the whole site under one heading and look deliberate. An entry with no `name` has no H2 to open, so its bullets land under the previous entry's heading, where every Markdown parser reads them as that section's links.
 
@@ -421,17 +468,22 @@ license = true    # emit the license blockquote line in llms.txt
 
 ## i18n
 
-The module authors exactly five user-facing strings, all of them headings in generated documents. English and Russian ship with the module; every lookup carries an English fallback, so a site whose language ships no translation still renders a real heading rather than an empty string.
+The module authors exactly ten user-facing strings: five headings in generated documents, three display labels for the surface entries returned by the [`surfaces.html`](#surfaceshtml) public partial, and the name and note of the derived Agent Skills index entry in `llms.txt`. English and Russian ship with the module; every lookup carries an English fallback, so a site whose language ships no translation still renders a real string rather than an empty one.
 
-| Key                            | English    |
-| ------------------------------ | ---------- |
-| `agent_sitemap_heading`        | `Sitemap`  |
-| `agent_section_pages_heading`  | `Pages`    |
-| `agent_facts_title`            | `About`    |
-| `agent_facts_identity_heading` | `Identity` |
-| `agent_facts_contact_heading`  | `Contact`  |
+| Key                            | English                                                        |
+| ------------------------------ | -------------------------------------------------------------- |
+| `agent_sitemap_heading`        | `Sitemap`                                                      |
+| `agent_section_pages_heading`  | `Pages`                                                        |
+| `agent_facts_title`            | `About`                                                        |
+| `agent_facts_identity_heading` | `Identity`                                                     |
+| `agent_facts_contact_heading`  | `Contact`                                                      |
+| `agent_surface_llms`           | `llms.txt`                                                     |
+| `agent_surface_facts`          | `Site facts`                                                   |
+| `agent_surface_skills`         | `Agent Skills index`                                           |
+| `agent_skills_entry_name`      | `Agent Skills index`                                           |
+| `agent_skills_entry_note`      | `Machine-readable index of this site's published agent skills` |
 
-`## Optional` in `llms.txt` is deliberately not a translation key: it is fixed by the llmstxt.org convention and is a protocol token, not prose.
+`## Optional` in `llms.txt` is deliberately not a translation key: it is fixed by the llmstxt.org convention and is a protocol token, not prose. Inside the translated values, `llms.txt` and `Agent Skills` stay untranslated in every language for the same reason: the former is the llmstxt.org protocol token and the latter is the agentskills.io convention's proper name.
 
 ## Non-goals
 
@@ -468,6 +520,8 @@ modules/agent-readiness/
 │           ├── llms.html
 │           ├── facts.html
 │           ├── skills.html
+│           ├── twin-url.html       # PUBLIC API. See "Public partials".
+│           ├── surfaces.html       # PUBLIC API. See "Public partials".
 │           └── lib/
 │               ├── absolute-url.html
 │               ├── flatten-value.html
@@ -475,9 +529,11 @@ modules/agent-readiness/
 │               ├── map-list.html
 │               ├── markdown-link.html
 │               ├── page-excluded.html
+│               ├── page-included.html
 │               ├── section.html
+│               ├── skills-index-url.html
 │               └── warn.html
-├── test/                       # Validation suite: thirteen Hugo fixture builds plus Node build-output assertions. See test/README.md.
+├── test/                       # Validation suite: fourteen Hugo fixture builds plus Node build-output assertions. See test/README.md.
 ├── go.mod
 ├── hugo.toml
 └── README.md

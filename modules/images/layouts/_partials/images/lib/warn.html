@@ -3,7 +3,8 @@
   sentinel so a given issue warns exactly once per build across all pages
   and output formats.
 
-  This is the single side-effecting helper in the images/lib/ tier; every
+  This is the single WARNING-emitting helper in the images/lib/ tier (its
+  sibling images/lib/validate.html owns the build-failing errorf side); every
   other partial routes its warnf calls through here so that a
   misconfiguration surfaces once (a maintainer should fix it) rather than
   screaming per page-render or per output format.

@@ -22,7 +22,9 @@
        first `## `.
     4. Optional free prose.
     5. One `## ` H2 per configured section, each listing `- [name](url): note`.
-    6. A final `## Optional` H2.
+    6. A final `## Optional` H2: the consumer's declared entries, plus ONE
+       derived entry for the module's own Agent Skills index when that
+       surface actually publishes.
 
   `Optional` is a protocol token fixed by the convention and is deliberately
   NOT translated.
@@ -181,10 +183,12 @@
   {{- end -}}
 
   {{/* 6. The Optional section: links an agent may drop when shortening
-         context. Emitted only when the consumer declared at least one entry
-         carrying a url, because an empty H2 claims a section that is not
-         there. */}}
+         context. It collects the consumer's declared entries plus the
+         module's own derived entry below, and the H2 is emitted only when
+         at least one entry of either kind survived, because an empty H2
+         claims a section that is not there. */}}
   {{- $optional := slice -}}
+  {{- $optionalUrls := slice -}}
   {{- range $llms.optional | default slice -}}
     {{- if reflect.IsMap . -}}
       {{/* Absolutized through the shared routine, which handles the
@@ -195,6 +199,7 @@
         {{- $item := printf "- %s" (partial "agent-readiness/lib/markdown-link.html" (dict "name" (.name | default $u) "url" $u)) -}}
         {{- with .note -}}{{- $item = printf "%s: %s" $item (partial "agent-readiness/lib/inline.html" .) -}}{{- end -}}
         {{- $optional = $optional | append $item -}}
+        {{- $optionalUrls = $optionalUrls | append $u -}}
       {{- end -}}
     {{- else -}}
       {{/* A bare value inside a real slice. Dropped silently it removes the
@@ -202,6 +207,23 @@
       {{- partial "agent-readiness/lib/warn.html" (dict
           "key" (printf "agent-readiness:warn:optional-not-a-table:%v" .)
           "message" (printf "[agent-readiness] Skipping the [[params.agent.llms.optional]] entry %q: an entry must be a table with `name` and `url`, not a bare value." (printf "%v" .))) -}}
+    {{- end -}}
+  {{- end -}}
+  {{/* The module's own Agent Skills index. The index file is otherwise
+       reachable only by well-known-path convention, so llms.txt is where
+       an agent actually discovers it; the entry is DERIVED from module
+       state, and no consumer action is needed. lib/skills-index-url.html
+       carries the four publish gates shared with surfaces.html, so a
+       zero-skills or unwired build appends nothing here -- no entry, no
+       warning. A consumer who already lists the index in
+       [[params.agent.llms.optional]] keeps their own wording: the URLs are
+       compared after absolutization, and a match suppresses the derived
+       entry rather than doubling it. */}}
+  {{- with partial "agent-readiness/lib/skills-index-url.html" dict -}}
+    {{- if not (in $optionalUrls .) -}}
+      {{- $item := printf "- %s" (partial "agent-readiness/lib/markdown-link.html" (dict "name" $cfg.i18n.skills_entry_name "url" .)) -}}
+      {{- $item = printf "%s: %s" $item (partial "agent-readiness/lib/inline.html" $cfg.i18n.skills_entry_note) -}}
+      {{- $optional = $optional | append $item -}}
     {{- end -}}
   {{- end -}}
   {{- with $optional -}}

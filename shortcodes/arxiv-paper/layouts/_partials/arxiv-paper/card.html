@@ -9,35 +9,33 @@
   - Enrichment (optional): .tldr, .venue, .hasCitations, .citationCount,
     .metricsAsOf
 
-  Output: An <a> element with BEM class arxiv-paper arxiv-paper--card.
-  The whole card links to the abstract page (matching the github-repo / hf-space
-  card pattern); the direct PDF URL is exposed as data-arxiv-pdf so a consuming
-  site can wire its own PDF action.
+  Output: An <article> element with BEM class arxiv-paper arxiv-paper--card.
+  The title is the single real link (arxiv-paper__title-link) to the abstract
+  page (matching the github-repo / hf-space card pattern); the direct PDF URL
+  is exposed as data-arxiv-pdf so a consuming site can wire its own PDF action.
+  A consuming site restores the full-card click area with a stretched-link
+  overlay on arxiv-paper__title-link (see the module README "Styling").
 */}}
 
 {{- if .apiOk -}}
-<a href="{{ .absURL }}"
-   class="arxiv-paper arxiv-paper--card{{ with .extraClass }} {{ . }}{{ end }}"
-   target="_blank"
-   rel="noopener noreferrer"
-   aria-label="{{ .title }} — arXiv:{{ .id }}"
-   data-arxiv-id="{{ .id }}"
-   data-variant="card"
-   data-api-ok="true"
-   data-arxiv-pdf="{{ .pdfURL }}"
-   {{- with .primaryCategory }} data-arxiv-category="{{ . }}"{{ end }}
-   {{- with .primaryArchive }} data-arxiv-archive="{{ . }}"{{ end }}
-   {{- with .primaryGroup }} data-arxiv-group="{{ . }}"{{ end }}>
+<article class="arxiv-paper arxiv-paper--card{{ with .extraClass }} {{ . }}{{ end }}"
+         data-arxiv-id="{{ .id }}"
+         data-variant="card"
+         data-api-ok="true"
+         data-arxiv-pdf="{{ .pdfURL }}"
+         {{- with .primaryCategory }} data-arxiv-category="{{ . }}"{{ end }}
+         {{- with .primaryArchive }} data-arxiv-archive="{{ . }}"{{ end }}
+         {{- with .primaryGroup }} data-arxiv-group="{{ . }}"{{ end }}>
   <div class="arxiv-paper__head">
     <div class="arxiv-paper__eyebrow">
       <span class="arxiv-paper__brand">arXiv</span>
-      {{- with .primaryCategoryLabel }}<span class="arxiv-paper__eyebrow-sep">·</span><span class="arxiv-paper__eyebrow-cat">{{ . }}</span>{{ end }}
+      {{ with .primaryCategoryLabel }}<span class="arxiv-paper__eyebrow-sep">·</span> <span class="arxiv-paper__eyebrow-cat">{{ . }}</span>{{ end }}
     </div>
     <span class="arxiv-paper__open">
       {{- partial "arxiv-paper/icon.html" (dict "name" "external") -}}
     </span>
   </div>
-  <h3 class="arxiv-paper__title">{{ .title }}</h3>
+  <h3 class="arxiv-paper__title"><a class="arxiv-paper__title-link" href="{{ .absURL }}" target="_blank" rel="noopener noreferrer">{{ .title }}</a></h3>
   {{- with (partial "arxiv-paper/authors.html" (dict "authors" .authors "max" 4)) }}
   <p class="arxiv-paper__authors">
     {{- partial "arxiv-paper/icon.html" (dict "name" "authors" "class" "arxiv-paper__icon") }}
@@ -71,7 +69,7 @@
     </span>
     {{- end }}
   </div>
-</a>
+</article>
 {{- else -}}
 {{/* Degraded output: delegate to inline chip on API failure. */}}
 {{- partial "arxiv-paper/inline.html" (merge . (dict "variant" "card")) -}}
