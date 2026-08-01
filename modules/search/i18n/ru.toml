@@ -47,6 +47,8 @@ search_hint_close = "закрыть"
 
 search_noscript = "Для поиска по сайту требуется JavaScript. Воспользуйтесь навигацией по разделам."
 
+search_noscript_index = "Полный индекс поиска доступен в формате JSON:"
+
 # The forms are declined for the «не менее N ...» genitive construction,
 # which is why few and many share a form while one and other share the other.
 [search_min_chars]
