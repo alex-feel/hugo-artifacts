@@ -1,0 +1,179 @@
+{{/*
+  copy-page/rows.html -- INTERNAL (resolver tier).
+
+  Purpose: the single source of truth for every built-in row, and the
+  resolver that turns the configured slug list into renderable items. The
+  registry lives in this template (not in data/) so a consumer data mount
+  cannot accidentally shadow it; deliberate extension happens through
+  [params.copy_page.rows_extra.<slug>] entries merged over the built-ins,
+  which lets a site add a new AI provider or patch an existing one
+  (endpoint, label) without forking the module.
+
+  Endpoint status: verified against live probes and Mintlify's deployed
+  convention as of 2026-08-01. ChatGPT's q parameter is de facto
+  (undocumented by OpenAI) with a benign failure mode; Claude's q parameter
+  is documented in the Claude Help Center for the desktop deep link that
+  mirrors the same web path.
+
+  Expected context (dict) - the resolved config from config.html; read here:
+  - .rows       (slice)  - Lowercased row slugs in render order.
+  - .url        (string) - The page's Markdown URL (non-empty; menu.html
+    gates on it before dispatching here).
+  - .llms_url   (string) - Explicit llms.txt URL or "".
+  - .rows_extra (map)    - Consumer extension entries (site params only).
+  - .where      (string) - Diagnostics origin for warnings.
+  Plus page_url and prompt, passed through to url.html for endpoint rows.
+
+  Entry schema (also the rows_extra contract):
+  - label         (string) - Brand display name, used verbatim (never
+    translated; brand names are proper nouns).
+  - label_key     (string, optional) - i18n key for the row title. Default
+    "copy_page_open_in"; built-in non-provider rows use dedicated keys.
+  - label_default (string, optional) - English fallback when the i18n key
+    has no translation. Default "Open in <label>".
+  - desc_key      (string, optional) - i18n key for the row description.
+    Default "copy_page_open_desc".
+  - desc_default  (string, optional) - English fallback for the description.
+    Default "Ask questions about this page".
+  - icon          (string, optional) - icon.html glyph name. Default: slug.
+  - endpoint      (string) - Absolute URL that ALREADY contains the query
+    parameter name and ends at its "=" (e.g. "https://you.com/search?q=");
+    the percent-encoded prompt value is appended verbatim. The scheme must
+    be https (enforced below). Unused by the built-in copy/view/llms rows.
+  - target        (string, optional) - Prompt target: "html" (the page's
+    own permalink), "markdown" (the Markdown URL), or "none" (plain link,
+    no prompt appended). Default "none".
+  - kind          (string, internal) - "link" (default) or "action" (the
+    JavaScript-revealed copy button). rows_extra entries are always links.
+  - source        (string, internal) - Same-origin href source for the
+    built-in view ("url") and llms ("llms") rows; endpoint rows omit it.
+
+  Return value: dict with
+  - .items    (slice) - Renderable row dicts in render order, each carrying
+    slug, kind, external (bool), href (links only), icon, label, label_key,
+    label_default, desc_key, desc_default.
+  - .has_copy (bool)  - Whether the resolved items include the copy action
+    (menu.html renders the primary split-button half iff true).
+
+  One terminal return.
+*/}}
+
+{{- $cfg := . -}}
+
+{{/* ---- Built-in rows ---- */}}
+{{- $entries := dict
+  "copy" (dict
+    "kind" "action"
+    "label_key" "copy_page_copy"
+    "label_default" "Copy page"
+    "desc_key" "copy_page_copy_desc"
+    "desc_default" "Copy page as Markdown for LLMs"
+  )
+  "view" (dict
+    "source" "url"
+    "label_key" "copy_page_view"
+    "label_default" "View as Markdown"
+    "desc_key" "copy_page_view_desc"
+    "desc_default" "View this page as plain text"
+  )
+  "llms" (dict
+    "source" "llms"
+    "label_key" "copy_page_llms"
+    "label_default" "llms.txt"
+    "desc_key" "copy_page_llms_desc"
+    "desc_default" "Open llms.txt for this site"
+  )
+  "chatgpt" (dict
+    "label" "ChatGPT"
+    "icon" "openai"
+    "endpoint" "https://chatgpt.com/?hints=search&q="
+    "target" "html"
+  )
+  "claude" (dict
+    "label" "Claude"
+    "icon" "anthropic"
+    "endpoint" "https://claude.ai/new?q="
+    "target" "markdown"
+  )
+  "perplexity" (dict
+    "label" "Perplexity"
+    "endpoint" "https://www.perplexity.ai/search?q="
+    "target" "markdown"
+  )
+  "grok" (dict
+    "label" "Grok"
+    "endpoint" "https://grok.com/?q="
+    "target" "markdown"
+  )
+  "aistudio" (dict
+    "label" "Google AI Studio"
+    "endpoint" "https://aistudio.google.com/prompts/new_chat?prompt="
+    "target" "markdown"
+  )
+-}}
+
+{{/* Consumer extension entries win over built-ins. merge is recursive for
+     maps, so an entry can patch a single field (for example just the
+     endpoint) without restating the rest. */}}
+{{- with $cfg.rows_extra -}}
+  {{- $entries = merge $entries . -}}
+{{- end -}}
+
+{{/* The llms row's href: the explicit llms_url wins; otherwise probe the
+     home page's output formats (the sibling agent-readiness convention).
+     When neither resolves, the row drops silently below -- the legitimate
+     state of a site that publishes no llms.txt. */}}
+{{- $llmsHref := $cfg.llms_url -}}
+{{- if not $llmsHref -}}
+  {{- with site.Home.OutputFormats.Get "llmstxt" -}}
+    {{- $llmsHref = .Permalink -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Resolve the requested slugs into renderable items: unknown slugs warn
+     once and drop out, endpoint rows must be https, and the unresolved
+     llms row drops silently. */}}
+{{- $items := slice -}}
+{{- $hasCopy := false -}}
+{{- range $slug := $cfg.rows -}}
+  {{- $entry := index $entries $slug -}}
+  {{- if not $entry -}}
+    {{- partial "copy-page/lib/warn.html" (dict
+        "key" (printf "copy-page:warn:unknown-row:%s" $slug)
+        "message" (printf "[copy-page] Unknown row %q was skipped. Use a built-in slug from the module README Rows table, or define [params.copy_page.rows_extra.%s]. See %s" $slug $slug $cfg.where)) -}}
+  {{- else -}}
+    {{- $label := printf "%v" ($entry.label | default $slug) -}}
+    {{- $item := dict
+      "slug" $slug
+      "icon" (printf "%v" ($entry.icon | default $slug))
+      "label" $label
+      "label_key" (printf "%v" ($entry.label_key | default "copy_page_open_in"))
+      "label_default" (printf "%v" ($entry.label_default | default (printf "Open in %s" $label)))
+      "desc_key" (printf "%v" ($entry.desc_key | default "copy_page_open_desc"))
+      "desc_default" (printf "%v" ($entry.desc_default | default "Ask questions about this page"))
+    -}}
+    {{- if eq ($entry.kind | default "link") "action" -}}
+      {{- $items = $items | append (merge $item (dict "kind" "action" "external" false)) -}}
+      {{- $hasCopy = true -}}
+    {{- else if eq ($entry.source | default "") "url" -}}
+      {{- $items = $items | append (merge $item (dict "kind" "link" "external" false "href" $cfg.url)) -}}
+    {{- else if eq ($entry.source | default "") "llms" -}}
+      {{- with $llmsHref -}}
+        {{- $items = $items | append (merge $item (dict "kind" "link" "external" false "href" .)) -}}
+      {{- end -}}
+    {{- else -}}
+      {{- $endpoint := printf "%v" ($entry.endpoint | default "") -}}
+      {{- $scheme := lower (index (split $endpoint ":") 0) -}}
+      {{- if ne $scheme "https" -}}
+        {{- partial "copy-page/lib/warn.html" (dict
+            "key" (printf "copy-page:warn:scheme:%s" $slug)
+            "message" (printf "[copy-page] Skipped %q: endpoint %q does not use the required https scheme. See %s" $slug $endpoint $cfg.where)) -}}
+      {{- else -}}
+        {{- $href := partial "copy-page/url.html" (dict "entry" $entry "cfg" $cfg) -}}
+        {{- $items = $items | append (merge $item (dict "kind" "link" "external" true "href" $href)) -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return (dict "items" $items "has_copy" $hasCopy) -}}

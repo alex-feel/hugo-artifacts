@@ -1,0 +1,14 @@
+{{ define "main" }}
+  <h1>{{ .Title }}</h1>
+  {{/* The widget sits on the section list page, whose paginator outputs
+       (/docs/page/2/ ...) all render THIS template for the SAME Page
+       object: the per-placement script emission must reach every one. */}}
+  {{ partial "copy-page/menu.html" . }}
+  {{ $paginator := .Paginate .Pages }}
+  <ul>
+    {{ range $paginator.Pages }}
+      <li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>
+    {{ end }}
+  </ul>
+  {{ partial "pagination.html" . }}
+{{ end }}

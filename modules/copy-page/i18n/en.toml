@@ -1,0 +1,32 @@
+# English UI strings for the copy-page module. Templates look up keys via
+# {{ T "copy_page_copy" }}; every lookup carries an English fallback, so a
+# site whose language ships no translation still renders accessible names.
+
+# Primary split-button half and the menu's copy row.
+copy_page_copy = "Copy page"
+copy_page_copy_desc = "Copy page as Markdown for LLMs"
+
+# "View as Markdown" row.
+copy_page_view = "View as Markdown"
+copy_page_view_desc = "View this page as plain text"
+
+# "llms.txt" row; the file name is a fixed convention, never translated.
+copy_page_llms = "llms.txt"
+copy_page_llms_desc = "Open llms.txt for this site"
+
+# AI-provider rows; {{ .Name }} is the brand label.
+copy_page_open_in = "Open in {{ .Name }}"
+copy_page_open_desc = "Ask questions about this page"
+
+# Accessible name of the dropdown toggle (real text in __toggle-label).
+copy_page_toggle = "More ways to use this page"
+
+# Hidden hint appended to a link's accessible name when it opens a new tab.
+copy_page_new_tab_hint = "(opens in a new window)"
+
+# Status-line announcements (live region) driven by the module script.
+copy_page_copied = "Page copied as Markdown"
+copy_page_copy_error = "Couldn't copy the page"
+
+# Prompt sent to the AI-provider rows; {{ .URL }} is the row's target URL.
+copy_page_prompt = "Read from {{ .URL }} so I can ask questions about it."

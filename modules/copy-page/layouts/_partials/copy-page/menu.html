@@ -1,0 +1,192 @@
+{{/*
+  copy-page/menu.html -- PUBLIC ENTRY (renderer tier).
+
+  Purpose: the module's single stable public API. A consumer places one line
+  in a layout (typically single.html, near the page title):
+
+      {{ partial "copy-page/menu.html" . }}
+
+  or passes an options dict for call-site overrides:
+
+      {{ partial "copy-page/menu.html" (dict
+        "page" .
+        "rows" (slice "copy" "view" "claude")
+        "url" $twinUrl
+      ) }}
+
+  and receives a complete, style-agnostic "Copy page" split button: a
+  JavaScript-revealed primary half that copies the page's Markdown to the
+  clipboard, plus a native <details> disclosure menu of rows -- view the
+  Markdown, open llms.txt, or hand the page to an AI provider. The link
+  rows are fully functional without JavaScript, with zero third-party
+  contact before a deliberate click. The module ships semantic BEM markup
+  and ZERO CSS -- the consuming site owns all visual styling. The
+  in-content equivalent is the copy-page shortcode, which dispatches here.
+
+  Expected context: the current Page, or a dict whose "page" key is the
+  current Page plus any of the option keys documented in config.html (rows,
+  format, new_tab, llms_url, prompt, toggle_label, url, class, id).
+  Anything else is the module's single build-failing errorf: a wiring
+  mistake, not a content problem.
+
+  Self-gate: when neither an explicit "url" argument nor the configured
+  output format resolves a Markdown URL for the page, the widget renders
+  NOTHING, silently -- the legitimate state of a page that publishes no
+  Markdown representation. Note that format derivation answers "wired",
+  not "published": a site whose producer selectively suppresses output
+  files passes "url" explicitly from its source of truth.
+
+  Kill switches: site params.copy_page.enable = false disables the module
+  everywhere; page front matter copy_page.disable = true is the per-page
+  escape hatch. Every other misconfiguration degrades: a deduplicated
+  warnf (unknown row, non-https endpoint, config of the wrong shape) or
+  silent omission of the affected row. The module NEVER breaks a build
+  over widget configuration.
+
+  Return value: none. This partial renders. It also emits the module's
+  progressive-enhancement script as a minified, fingerprinted
+  <script defer> with Subresource Integrity -- once per PLACEMENT, not once
+  per page (see the emission comment below for the paginator rationale).
+*/}}
+
+{{- $arg := . -}}
+{{- $page := $arg -}}
+{{- $args := dict -}}
+{{- if not (reflect.IsPage $arg) -}}
+  {{- if reflect.IsMap $arg -}}
+    {{- $args = $arg -}}
+    {{- $page = $args.page -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if not (reflect.IsPage $page) -}}
+  {{- errorf "[copy-page] menu.html must be called with the current Page as its context ({{ partial \"copy-page/menu.html\" . }}) or as the \"page\" key of an options dict ({{ partial \"copy-page/menu.html\" (dict \"page\" . ...) }})." -}}
+{{- else -}}
+
+{{/* Both config tiers must be maps; any other type (copy_page: false is a
+     natural first guess for disabling the widget) is discarded with a
+     warning instead of crashing the field accesses below -- the never-break
+     contract covers config of the wrong shape too. */}}
+{{- $sitep := site.Params.copy_page -}}
+{{- if not (reflect.IsMap $sitep) -}}
+  {{- if ne $sitep nil -}}
+    {{- partial "copy-page/lib/warn.html" (dict
+        "key" "copy-page:warn:nonmap-config:site"
+        "message" (printf "[copy-page] Ignoring params.copy_page: expected a map, got %v. To disable the module site-wide, set params.copy_page.enable = false." $sitep)) -}}
+  {{- end -}}
+  {{- $sitep = dict -}}
+{{- end -}}
+{{- $pagep := $page.Params.copy_page -}}
+{{- if not (reflect.IsMap $pagep) -}}
+  {{- if ne $pagep nil -}}
+    {{- partial "copy-page/lib/warn.html" (dict
+        "key" (printf "copy-page:warn:nonmap-config:%s" $page.RelPermalink)
+        "message" (printf "[copy-page] Ignoring the copy_page front matter value on %s: expected a map, got %v. To disable the widget on this page, set copy_page.disable: true." $page.RelPermalink $pagep)) -}}
+  {{- end -}}
+  {{- $pagep = dict -}}
+{{- end -}}
+{{/* Kill switches accept bool and string forms alike. */}}
+{{- $enabled := not (in (slice "false" "0" "no" "off") (lower (printf "%v" ($sitep.enable | default true)))) -}}
+{{- $disabled := in (slice "true" "1" "yes" "on") (lower (printf "%v" ($pagep.disable | default false))) -}}
+{{- if and $enabled (not $disabled) -}}
+
+{{- $cfg := partial "copy-page/config.html" (dict "page" $page "args" $args) -}}
+{{- if $cfg.url -}}
+{{- $resolved := partial "copy-page/rows.html" $cfg -}}
+{{- if $resolved.items -}}
+{{- $copiedLabel := T "copy_page_copied" | default "Page copied as Markdown" -}}
+{{- $errorLabel := T "copy_page_copy_error" | default "Couldn't copy the page" -}}
+{{- $toggleLabel := $cfg.toggle_label | default (T "copy_page_toggle" | default "More ways to use this page") -}}
+{{- $newTabHint := T "copy_page_new_tab_hint" | default "(opens in a new window)" -}}
+<div class="copy-page{{ with $cfg.class }} {{ . }}{{ end }}"
+  {{- with $cfg.id }} id="{{ . }}"{{ end }}
+  data-copy-page-url="{{ $cfg.url }}"
+  data-copy-page-copied-label="{{ $copiedLabel }}"
+  data-copy-page-error-label="{{ $errorLabel }}">
+  {{- if $resolved.has_copy }}
+  {{/* The primary split-button half is JavaScript-only, so it ships
+       dual-hidden. The inline display:none backs up the weak [hidden] UA
+       rule: an ordinary consumer rule like `.copy-page__copy {display:
+       inline-flex}` would override [hidden] and expose a dead control, but
+       it cannot override an inline declaration. This is functional
+       capability gating, not a design decision, so it does not breach the
+       zero-CSS contract; the script removes both when it reveals the
+       control. */}}
+  <button type="button" class="copy-page__copy" data-copy-page-action="copy" hidden style="display:none">
+    <span class="copy-page__icon">{{- partial "copy-page/icon.html" (dict "name" "copy") -}}</span>
+    <span class="copy-page__label">{{ T "copy_page_copy" | default "Copy page" }}</span>
+  </button>
+  {{- end }}
+  <details class="copy-page__menu">
+    <summary class="copy-page__toggle">
+      <span class="copy-page__toggle-label">{{ $toggleLabel }}</span>
+      <span class="copy-page__icon copy-page__icon--chevron">{{- partial "copy-page/icon.html" (dict "name" "chevron") -}}</span>
+    </summary>
+    <ul class="copy-page__list">
+      {{- range $item := $resolved.items }}
+      {{- $title := T $item.label_key (dict "Name" $item.label) | default $item.label_default -}}
+      {{- $desc := T $item.desc_key | default $item.desc_default -}}
+      {{- if eq $item.kind "action" }}
+      {{/* The copy row is JavaScript-only: dual-hidden for the same reason
+           as the primary half above. */}}
+      <li class="copy-page__item copy-page__item--{{ $item.slug }}" hidden style="display:none">
+        <button type="button" class="copy-page__row copy-page__row--{{ $item.slug }}" data-copy-page-action="copy">
+          <span class="copy-page__icon">{{- partial "copy-page/icon.html" (dict "name" $item.icon) -}}</span>
+          <span class="copy-page__text">
+            <span class="copy-page__title">{{ $title }}</span>
+            <span class="copy-page__desc">{{ $desc }}</span>
+          </span>
+        </button>
+      </li>
+      {{- else }}
+      {{/* Same-origin rows (view, llms) carry NO rel: the site's own
+           content -- nofollow would be wrong, and modern browsers imply
+           noopener on target="_blank". External rows get the full policy.
+           The __newtab hint and __external glyph accompany target="_blank"
+           on every link row; the consumer clip-hides the hint. */}}
+      <li class="copy-page__item copy-page__item--{{ $item.slug }}">
+        <a class="copy-page__row copy-page__row--{{ $item.slug }}" href="{{ $item.href }}" data-copy-page-row="{{ $item.slug }}"
+          {{- if $item.external }} rel="noopener noreferrer nofollow"{{ end }}{{ if $cfg.new_tab }} target="_blank"{{ end }}>
+          <span class="copy-page__icon">{{- partial "copy-page/icon.html" (dict "name" $item.icon) -}}</span>
+          <span class="copy-page__text">
+            <span class="copy-page__title">{{ $title }}</span>
+            <span class="copy-page__desc">{{ $desc }}</span>
+          </span>
+          {{- if $cfg.new_tab }}
+          <span class="copy-page__external">{{- partial "copy-page/icon.html" (dict "name" "external") -}}</span>
+          <span class="copy-page__newtab">{{ $newTabHint }}</span>
+          {{- end }}
+        </a>
+      </li>
+      {{- end }}
+      {{- end }}
+    </ul>
+  </details>
+  {{- if $resolved.has_copy }}
+  <span class="copy-page__status" role="status"></span>
+  {{- end }}
+</div>
+
+{{/* ---- Progressive-enhancement script, once per PLACEMENT ----
+
+     Deliberately NOT deduplicated behind a Page.Store sentinel: a Page.Store
+     sentinel is shared by every paginator output of one Page object, so the
+     tag would reach only the first-rendered output (/blog/ but never
+     /blog/page/2/). Emitting per placement is safe: browsers fetch duplicate
+     same-src deferred scripts once, and re-execution is a no-op behind the
+     script's window-level run guard plus its per-root wired guard. The
+     script never causes any third-party contact. */}}
+{{- with resources.Get "js/copy-page.js" -}}
+  {{- $built := . | js.Build (dict "minify" true) -}}
+  {{- with $built | fingerprint -}}
+<script defer src="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" crossorigin="anonymous"></script>
+  {{- end -}}
+{{- else -}}
+  {{- partial "copy-page/lib/warn.html" (dict
+      "key" "copy-page:warn:missing-script"
+      "message" "[copy-page] assets/js/copy-page.js was not found; the module is not mounted correctly. Link rows still work, but the copy button and menu enhancements stay inactive.") -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}

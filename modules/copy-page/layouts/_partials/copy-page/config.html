@@ -1,0 +1,116 @@
+{{/*
+  copy-page/config.html -- INTERNAL (resolver tier).
+
+  Purpose: resolves the module's entire configuration through the four-tier
+  cascade, so menu.html renders from one consistent dict and no downstream
+  partial re-derives a value. Precedence, highest first: call-site args >
+  page front matter (copy_page map) > site params ([params.copy_page]) >
+  data/copy-page/defaults.toml. Presence wins at every tier (isset, not
+  truthiness), so an explicit false or empty string overrides the tier
+  below it.
+
+  Expected context (dict):
+  - .page (Page) - The current page (already validated by menu.html).
+  - .args (map)  - Call-site arguments (possibly empty): rows, format,
+    new_tab, llms_url, prompt, toggle_label, url, class, id, position.
+
+  Return value: dict with every key menu.html needs:
+  - rows (slice)  - Lowercased, trimmed row slugs in render order.
+  - format (string), new_tab (bool), llms_url, prompt, toggle_label
+    (strings) - Resolved options.
+  - url (string) - The page's Markdown URL: the explicit call-site "url"
+    argument when present, else the permalink of the page's <format> output
+    format, else "" (menu.html renders nothing on "").
+  - page_url (string) - The page's own permalink (the "html" prompt target).
+  - rows_extra (map) - Consumer extension entries (site params only).
+  - class, id (strings) - Root element extras (call-site only).
+  - where (string) - Diagnostics origin for warnings: the shortcode call
+    position when available, else the page path.
+
+  One terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $args := .args | default dict -}}
+
+{{- $data := index hugo.Data "copy-page" | default dict -}}
+{{- $defaults := index $data "defaults" | default dict -}}
+{{- if not $defaults -}}
+  {{- partial "copy-page/lib/warn.html" (dict
+      "key" "copy-page:warn:missing-defaults"
+      "message" "[copy-page] data/copy-page/defaults.toml was not found; the module is not mounted correctly, so only explicitly configured values apply.") -}}
+{{- end -}}
+
+{{/* Non-map tier values were already warned about in menu.html; here they
+     just collapse to empty maps so the isset chains below stay safe. */}}
+{{- $sitep := site.Params.copy_page -}}
+{{- if not (reflect.IsMap $sitep) -}}{{- $sitep = dict -}}{{- end -}}
+{{- $pagep := $page.Params.copy_page -}}
+{{- if not (reflect.IsMap $pagep) -}}{{- $pagep = dict -}}{{- end -}}
+
+{{/* Uniform presence-wins cascade for every defaults-backed key. */}}
+{{- $cascade := dict -}}
+{{- range $k := slice "rows" "format" "new_tab" "llms_url" "prompt" "toggle_label" -}}
+  {{- $v := index $defaults $k -}}
+  {{- if isset $sitep $k -}}{{- $v = index $sitep $k -}}{{- end -}}
+  {{- if isset $pagep $k -}}{{- $v = index $pagep $k -}}{{- end -}}
+  {{- if isset $args $k -}}{{- $v = index $args $k -}}{{- end -}}
+  {{- if ne $v nil -}}{{- $cascade = merge $cascade (dict $k $v) -}}{{- end -}}
+{{- end -}}
+
+{{/* Rows: accept a slice or a comma-separated string at any tier; normalize
+     each slug to lowercased, trimmed form. */}}
+{{- $rawRows := $cascade.rows | default (slice) -}}
+{{- if not (reflect.IsSlice $rawRows) -}}
+  {{- $rawRows = split (printf "%v" $rawRows) "," -}}
+{{- end -}}
+{{- $rows := slice -}}
+{{- range $rawRows -}}
+  {{- with lower (trim (printf "%v" .) " \t\n\r") -}}
+    {{- $rows = $rows | append . -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* new_tab: any tier may deliver a real bool, a string, or an integer
+     form; stringify once so every shape compares alike. */}}
+{{- $newTab := true -}}
+{{- if isset $cascade "new_tab" -}}
+  {{- $newTab = in (slice "true" "1" "yes" "on") (lower (printf "%v" $cascade.new_tab)) -}}
+{{- end -}}
+
+{{- $format := trim (printf "%v" ($cascade.format | default "markdown")) " \t\n\r" -}}
+{{- $llmsUrl := trim (printf "%v" ($cascade.llms_url | default "")) " \t\n\r" -}}
+{{- $prompt := trim (printf "%v" ($cascade.prompt | default "")) " \t\n\r" -}}
+{{- $toggleLabel := trim (printf "%v" ($cascade.toggle_label | default "")) " \t\n\r" -}}
+
+{{/* The Markdown URL: an explicit call-site value wins; otherwise derive it
+     from the page's own output formats. Derivation answers "is the format
+     WIRED for this page's kind", not "was the file PUBLISHED" -- a site
+     whose producer selectively suppresses files passes "url" explicitly
+     from its source of truth (the README documents this caveat). */}}
+{{- $url := "" -}}
+{{- if isset $args "url" -}}
+  {{- $url = trim (printf "%v" (index $args "url")) " \t\n\r" -}}
+{{- else -}}
+  {{- with $page.OutputFormats.Get $format -}}
+    {{- $url = .Permalink -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $where := printf "%v" $page.Path -}}
+{{- with $args.position -}}{{- $where = printf "%s" . -}}{{- end -}}
+
+{{- return (dict
+  "rows" $rows
+  "format" $format
+  "new_tab" $newTab
+  "llms_url" $llmsUrl
+  "prompt" $prompt
+  "toggle_label" $toggleLabel
+  "url" $url
+  "page_url" $page.Permalink
+  "rows_extra" ($sitep.rows_extra | default dict)
+  "class" (printf "%v" ($args.class | default ""))
+  "id" (printf "%v" ($args.id | default ""))
+  "where" $where
+) -}}
