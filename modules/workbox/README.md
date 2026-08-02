@@ -2,7 +2,7 @@
 
 Vendor-mount companion Hugo module that exposes [`github.com/GoogleChrome/workbox`](https://github.com/GoogleChrome/workbox) v7.4.1 source files to consuming sites as Hugo assets, so a consumer's service worker can be compiled at Hugo build time via `js.Build` (esbuild) without any npm toolchain.
 
-This module is the sibling of [`modules/pwa`](../pwa/README.md), the consumer-facing PWA module. Consumers do **not** import `modules/workbox` directly -- it is a transitive dependency of `modules/pwa`. External consumers add it (and `modules/idb`) as a direct `go.mod` `require` so the chain's placeholder pseudo-versions are outranked; see [`modules/pwa` README -> Installation](../pwa/README.md#installation). The upstream `github.com/GoogleChrome/workbox` is fetched normally as a `+incompatible` Go module -- no local replacement or vendoring is required.
+This module is the sibling of [`modules/pwa`](../pwa/README.md), the consumer-facing PWA module. Consumers do **not** import or require `modules/workbox` directly -- it is a transitive dependency of `modules/pwa`, which records it at a real commit pseudo-version, so one `hugo mod get` of `modules/pwa` resolves it; see [`modules/pwa` README -> Installation](../pwa/README.md#installation). The upstream `github.com/GoogleChrome/workbox` is fetched normally as a `+incompatible` Go module -- no local replacement or vendoring is required.
 
 ## Status
 
@@ -68,7 +68,19 @@ The `+incompatible` suffix is required because `github.com/GoogleChrome/workbox`
 
 Hugo's `[[module.imports]] path = "github.com/GoogleChrome/workbox"` defers version resolution to `go.mod` -- there is intentionally no `version` field in `hugo.toml`.
 
-If a future hotfix is required against an untagged commit, the equivalent Go pseudo-version syntax is `vX.0.0-<UTC-tagger-date-YYYYMMDDHHMMSS>-<12-char-commit-prefix>`. Pseudo-versions are NOT used in this module by default; tagged `+incompatible` pinning is the canonical path.
+If a future hotfix is required against an untagged commit, the equivalent Go pseudo-version syntax is `vX.0.0-<UTC-tagger-date-YYYYMMDDHHMMSS>-<12-char-commit-prefix>`. Tagged `+incompatible` pinning is the canonical path for the UPSTREAM requirement.
+
+### The sibling pin
+
+`go.mod` also requires `github.com/alex-feel/hugo-artifacts/modules/idb` at a real commit pseudo-version of this repository:
+
+```text
+require github.com/alex-feel/hugo-artifacts/modules/idb v0.0.0-20260802210047-4f8fca370e07
+```
+
+That is what lets a consumer resolve the whole chain from one `hugo mod get`. It is deliberately NOT the placeholder `v0.0.0-00010101000000-000000000000`: a placeholder is the sentinel Go writes for a module resolved through a workspace or a `replace`, it can never be fetched, and shipping one in a published module's `go.mod` forces every consuming site to carry a compensating direct `require` that no tooling protects. Test fixtures in this repository do use the placeholder, correctly -- each one pairs it with a `replace` pointing at the local directory, so it is never fetched.
+
+Because a commit cannot name its own hash, moving this pin is always a FOLLOW-UP commit: change `modules/idb/`, commit it, then run `npm run check:pins -- --fix` from the repository root and commit the rewritten `require`. `npm run check:pins` fails when the pin lags behind the sibling's latest commit, so CI catches a forgotten bump on the pull request.
 
 ### Why v7.4.1?
 
@@ -84,7 +96,7 @@ This module depends on the upstream `packages/workbox-*/src/` layout staying int
 
 `modules/workbox` is a sibling of [`modules/idb`](../idb/README.md), another vendor-mount module that exposes [`github.com/jakearchibald/idb`](https://github.com/jakearchibald/idb) v8.0.3 source files as Hugo assets. The `idb` mount is REQUIRED whenever `modules/workbox` is imported, because two Workbox v7 packages -- `workbox-expiration` and `workbox-background-sync` -- begin their source files with `import {openDB} from 'idb'`. Without the idb mount, esbuild fails the service-worker build with a bare-import resolution error.
 
-`modules/workbox/hugo.toml` declares `[[module.imports]] path = "github.com/alex-feel/hugo-artifacts/modules/idb"` BEFORE the workbox upstream import to ensure idb's mount is established when esbuild walks the workbox source tree. External consumers using `modules/pwa` (which transitively imports `modules/workbox` and `modules/idb`) follow the [Consuming modules that wrap non-Go upstreams](../../CLAUDE.md#consuming-modules-that-wrap-non-go-upstreams) recipe -- add `modules/workbox` and `modules/idb` as direct `go.mod` requires; no upstream replacement is needed. See [`modules/idb/README.md`](../idb/README.md) for idb's vendor-mount mechanics and version-pin rationale.
+`modules/workbox/hugo.toml` declares `[[module.imports]] path = "github.com/alex-feel/hugo-artifacts/modules/idb"` BEFORE the workbox upstream import to ensure idb's mount is established when esbuild walks the workbox source tree. `modules/workbox/go.mod` pins that sibling at a real commit pseudo-version, so external consumers using `modules/pwa` get both mounts from a single `hugo mod get` with no direct requires of their own; see [Consuming modules that wrap non-Go upstreams](../../CLAUDE.md#consuming-modules-that-wrap-non-go-upstreams) in root `CLAUDE.md`. See [`modules/idb/README.md`](../idb/README.md) for idb's vendor-mount mechanics and version-pin rationale.
 
 ## Smoke-test recommendation
 
@@ -116,11 +128,11 @@ If any of these steps fail, document the layout drift, revert the version bump, 
 
 If upstream ships a major version that preserves the `packages/*/src/` layout, the upgrade is one line:
 
-1. Edit the `require` line in `go.mod` to `v8.X.Y+incompatible`.
+1. Edit the upstream `require` line in `go.mod` to `v8.X.Y+incompatible`.
 2. Run the smoke test above.
-3. If pass, commit; tag with `modules/workbox/v1.1.0` (or similar).
+3. If it passes, commit, then bump the `modules/pwa` pin at this module with `npm run check:pins -- --fix` in a follow-up commit so consumers actually receive the upgrade.
 
-If upstream changes the layout (e.g., flattens `packages/*` to `packages/`), update `hugo.toml` mount tables to match the new layout, test, and bump the major version of this module (`modules/workbox/v2.0.0`).
+If upstream changes the layout (for example flattens `packages/*` to `packages/`), update the `hugo.toml` mount tables to match the new layout, test, and note the incompatibility in this README. This repository carries no release tags; every module is consumed at a commit pseudo-version, so a breaking change reaches consumers when they move their own pin forward.
 
 ## Local development
 
@@ -138,7 +150,7 @@ use ../hugo-artifacts/modules/pwa
 use ../hugo-artifacts/modules/workbox
 ```
 
-Both modules MUST appear in the workspace because `modules/pwa` requires `modules/workbox`, and `hugo.work` resolves transitive dependencies via the listed `use` paths.
+List every module you intend to EDIT. A module left out of the workspace still resolves, from its recorded commit pseudo-version over the module proxy, so a workspace holding only `modules/pwa` gives you a live-edited `pwa` against the published `workbox` and `idb`. Include `modules/workbox` when you are changing the mount table, and `modules/idb` too when you are changing both.
 
 Add `hugo.work` to your site's `.gitignore`; the `use` paths are machine-specific.
 
@@ -154,10 +166,10 @@ github.com/alex-feel/hugo-artifacts/modules/workbox -> ../hugo-artifacts/modules
 '''
 ```
 
-Either way, confirm resolution with `hugo mod graph` before you tag a release.
+Either way, confirm resolution with `hugo mod graph` before you push.
 
 ## External consumer setup
 
-External consumers reach `modules/workbox` transitively through `modules/pwa` and never import it directly. The `+incompatible` upstream `github.com/GoogleChrome/workbox` fetches normally over the standard Go module proxy -- a plain `go mod download github.com/GoogleChrome/workbox@v7.4.1+incompatible` succeeds with no local checkout, replacement, or vendoring. The only resolution wrinkle is the placeholder pseudo-version that `modules/pwa` records for `modules/workbox` (and `modules/workbox` for `modules/idb`): import `modules/pwa`, then add `modules/workbox` and `modules/idb` as direct `require`s in the consumer `go.mod` pinned to real commit pseudo-versions, and Go's minimal-version selection outranks the placeholders so the whole chain resolves with no `replace`, no `_vendor/`, and no workspace.
+External consumers reach `modules/workbox` transitively through `modules/pwa` and never import or require it directly. Every edge of the chain is a real, fetchable version: `modules/pwa` records `modules/workbox` and `modules/workbox` records `modules/idb` at commit pseudo-versions of this repository, and the `+incompatible` upstream `github.com/GoogleChrome/workbox` fetches normally over the standard Go module proxy -- a plain `go mod download github.com/GoogleChrome/workbox@v7.4.1+incompatible` succeeds with no local checkout, replacement, or vendoring. A consumer therefore runs one `hugo mod get github.com/alex-feel/hugo-artifacts/modules/pwa` and the whole chain resolves, with no direct `require`, no `replace`, no `_vendor/`, and no workspace.
 
-See [`modules/pwa` README -> Installation](../pwa/README.md#installation) for the step-by-step recipe and the [Consuming modules that wrap non-Go upstreams](../../CLAUDE.md#consuming-modules-that-wrap-non-go-upstreams) convention in root `CLAUDE.md`. `[module.replacements]` / `hugo.work` (see "Local development" above) remain options for live-editing the module locally, and `hugo mod vendor` is available for a hermetic, network-free CI build -- none of them is required.
+See [`modules/pwa` README -> Installation](../pwa/README.md#installation) for the consumer steps and the [Consuming modules that wrap non-Go upstreams](../../CLAUDE.md#consuming-modules-that-wrap-non-go-upstreams) convention in root `CLAUDE.md`. `[module.replacements]` / `hugo.work` (see "Local development" above) remain options for live-editing the module locally, and `hugo mod vendor` is available for a hermetic, network-free CI build -- none of them is required.
