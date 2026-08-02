@@ -171,9 +171,13 @@ If a provider changes its URL shape, patch the row from site config via [`rows_e
 
 ### Why ChatGPT alone targets the live page
 
-`chatgpt` is the only provider row whose prompt carries the page's own permalink; `claude`, `perplexity`, `grok` and `aistudio` all carry the Markdown twin. That is deliberate. The ChatGPT endpoint includes `hints=search`, which opens ChatGPT in search mode, and search mode resolves an address through a search index rather than fetching it directly. A Markdown twin is a secondary representation of a page that sites commonly keep out of that index, so the canonical HTML page is the address that mode can actually resolve.
+`chatgpt` is the only provider row whose prompt carries the page's own permalink; `claude`, `perplexity`, `grok` and `aistudio` all carry the Markdown twin. That is deliberate, and it rests on an observed retrieval test rather than on reasoning about search indexes.
 
-The alternative -- point the row at the twin like the other four, with or without `hints=search` -- was considered and rejected on 2026-08-02. Its precondition is an observed test showing that ChatGPT's search mode reliably RETRIEVES a `.md` URL, and no such evidence exists to cite: OpenAI documents neither `?q=` nor `hints=search`, so the behavior is knowable only by running it. The signed-in browser test that day confirmed the prompt arrives at ChatGPT, which is a different question -- delivery, not retrieval -- and leaves this one open. Swapping a shape that is verified to work for one that cannot be verified is not an improvement. If you run that test and find that search mode does retrieve the twin, flip the row in your own config and patch its description in the same block, because the shipped one names the surface the row would no longer send:
+**ChatGPT could not read a Markdown twin, tested 2026-08-02.** Handed a twin URL and asked only to fetch it and report the outcome, ChatGPT answered that the URL does serve a resource of type `text/markdown` but that its retrieval tool **rejected that as an unsupported format**. So the failure is not about whether the address is indexed or reachable; the tool declines the media type outright. Pointing this row at the twin would hand ChatGPT an address it cannot open, and the prompt would land with nothing behind it.
+
+The `hints=search` parameter reinforces that choice -- it opens ChatGPT in search mode, which resolves an address through a search index rather than fetching it directly, and a twin is a secondary representation sites commonly keep out of that index -- but the media-type rejection is the load-bearing reason, because it applies whether or not the twin is indexed.
+
+The alternative -- point the row at the twin like the other four, with or without `hints=search` -- is therefore rejected on evidence. Delivery and retrieval are separate questions, and this row needs both: the [signed-in browser test](#deep-link-caveats) confirmed the prompt arrives, and the test above shows what happens next. If a future ChatGPT release accepts `text/markdown`, flip the row in your own config and patch its description in the same block, because the shipped one names the surface the row would no longer send:
 
 ```toml
 [params.copy_page.rows_extra.chatgpt]
@@ -183,6 +187,8 @@ desc_default = 'Ask questions about the Markdown version'
 ```
 
 `rows_extra` merges per field, so the endpoint, label and icon stay intact. Clearing `desc_key` alone is not enough -- `desc_default` survives as the fallback -- which is why both are restated. Open an issue if you confirm it, so the module default can follow.
+
+**The same question is open for the other four rows, and the module has not answered it.** They all hand over a `text/markdown` URL, and only ChatGPT has been tested for retrieval. If an assistant rejects the media type the way ChatGPT does, that row delivers a prompt pointing at something the assistant cannot open -- a silent, benign failure that looks like a working link. Testing one takes a minute: hand it a twin URL, ask only whether it could fetch it, and watch for a media-type complaint. A useful discriminator is to ask the same assistant for the site's `/llms.txt`, which is served as `text/plain`: if that one succeeds where the twin fails, the media type is the blocker rather than the address.
 
 What kept making this a question was not the target but its invisibility: every provider row used to carry the same description, so the differing links had no explanation anywhere near them. Each row now states its own surface, and the `chatgpt` row additionally names the search mode, so the answer lives where the difference is.
 
