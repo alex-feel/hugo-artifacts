@@ -78,7 +78,7 @@ Only the entry contract above is public API. Internal partials can change betwee
 
 Built-in row slugs, what each renders, and the caveats you accept by enabling it. "Prompt target" is the URL the AI-provider prompt carries: `markdown` sends the page's Markdown URL, `html` sends the page's own permalink. Every provider endpoint already contains its query parameter and receives ONLY the percent-encoded prompt value.
 
-Each row's default description follows its own prompt target, so a reader comparing two rows in the open menu sees which surface each one hands the assistant instead of two identical sentences over two different links: a `markdown` row reads "Ask questions about the Markdown version", an `html` row reads "Ask questions about the live page", and a row with no prompt target keeps the plain "Ask questions about this page". That derivation applies to `rows_extra` rows too. A row that declares its own `desc_key` overrides it, which is how `chatgpt` states its search-mode reason -- see [Why ChatGPT alone targets the live page](#why-chatgpt-alone-targets-the-live-page).
+Each row's default description follows its own prompt target, so a reader comparing two rows in the open menu sees which surface each one hands the assistant instead of two identical sentences over two different links: a `markdown` row reads "Ask questions about the Markdown version", an `html` row reads "Ask questions about the live page", and a row with no prompt target keeps the plain "Ask questions about this page". That derivation applies to `rows_extra` rows too. A row that declares its own `desc_key` overrides it, which is how `chatgpt` states its search-mode reason -- see [Which rows target the live page, and why](#which-rows-target-the-live-page-and-why).
 
 | Slug | Kind | Destination | Prompt target | Caveats |
 | --- | --- | --- | --- | --- |
@@ -87,11 +87,13 @@ Each row's default description follows its own prompt target, so a reader compar
 | `llms` | link (same-origin) | `llms_url`, else the home page's `llmstxt` output format permalink | -- | Drops silently when neither resolves. The probe answers "wired", not "published" -- see [Configuration](#configuration). |
 | `chatgpt` | link (external) | `https://chatgpt.com/?hints=search&q=` | `html` | The `q` parameter is de facto (undocumented by OpenAI); its auto-submit behavior shifted twice in 2025. Failure mode is benign: the prompt lands in the composer, or the home page opens -- never a 404. `hints=search` pairs with the `html` target so ChatGPT fetches the live page, and this row's own description says so at the widget. Probed 2026-08-01; prompt delivery observed in a signed-in browser on 2026-08-02. |
 | `claude` | link (external) | `https://claude.ai/new?q=` | `markdown` | The Claude Help Center documents `q` for the desktop `claude://claude.ai/new?q=` deep link that mirrors this web path (URL encoding required, roughly 14,000-character cap); the bare web shape is the convention Mintlify ships at scale. A public report claims the web chat dropped `q` in October 2025; **prefill observed working in the signed-in web chat on 2026-08-02**, so the report does not hold. |
-| `perplexity` | link (external) | `https://www.perplexity.ai/search?q=` | `markdown` | Redirects to `/search/new` with the query preserved, then Perplexity's bot filter returns 403 to CLI probes -- real browsers pass. Probed 2026-08-01; prompt delivery observed in a signed-in browser on 2026-08-02. |
+| `perplexity` | link (external) | `https://www.perplexity.ai/search?q=` | `html` | Redirects to `/search/new` with the query preserved, then Perplexity's bot filter returns 403 to CLI probes -- real browsers pass. Targets the live page because it cannot retrieve a Markdown twin and says so; see [retrieval](#which-rows-target-the-live-page-and-why). Probed 2026-08-01; prompt delivery observed in a signed-in browser on 2026-08-02. |
 | `grok` | link (external) | `https://grok.com/?q=` | `markdown` | Returns 200. Probed 2026-08-01; prompt delivery observed in a signed-in browser on 2026-08-02. |
-| `aistudio` | link (external) | `https://aistudio.google.com/prompts/new_chat?prompt=` | `markdown` | Redirects signed-out visitors to Google sign-in with the full deep link preserved in the `continue` parameter -- the prompt survives the auth flow. Probed 2026-08-01; prompt delivery observed in a signed-in browser on 2026-08-02. |
+| `aistudio` | link (external) | `https://aistudio.google.com/prompts/new_chat?prompt=` | `html` | Redirects signed-out visitors to Google sign-in with the full deep link preserved in the `continue` parameter -- the prompt survives the auth flow. Targets the live page because it cannot retrieve a Markdown twin and says so. It reaches a page only when URL context is enabled on the AI Studio side, so an answer may be composed without any fetch at all; see [retrieval](#which-rows-target-the-live-page-and-why). Probed 2026-08-01; prompt delivery observed in a signed-in browser on 2026-08-02. |
 
-The prompt sent to the provider rows defaults to the localized `copy_page_prompt` string -- `Read from <url> so I can ask questions about it.` (Mintlify's verbatim convention) -- and can be overridden with the `prompt` key, where the literal token `{url}` is replaced with the row's target URL. The value is URL-encoded exactly once, with `%20` for spaces (never `+`).
+The prompt sent to the provider rows defaults to the localized `copy_page_prompt` string -- `Read from <url> so I can ask questions about it. If you cannot retrieve it, say so instead of answering from memory.` -- and can be overridden with the `prompt` key, where the literal token `{url}` is replaced with the row's target URL. The value is URL-encoded exactly once, with `%20` for spaces (never `+`).
+
+The first sentence is Mintlify's verbatim convention. The second is this module's own, added after three of the five assistants turned out to be unable to open a Markdown twin, and one of them answered anyway from material that did not match the live page: an assistant that cannot open the URL should say so rather than reconstruct an answer, and the prompt is the only lever the module has over what happens once the link is clicked. Override the whole string with `prompt` if you would rather ship the bare convention.
 
 ## Configuration
 
@@ -165,19 +167,33 @@ The provider rows ride on prefill conventions, not contracted APIs. What you acc
 
 **What kind of evidence backs each row**, because "verified" can cover two very different things. All five rows were probed live as of 2026-08-01, which establishes the URL shape and that the endpoint answers -- and a probe can establish nothing more, because an application ignores a query parameter it does not recognize and still returns 200, so the probe result is identical whether the parameter works or was removed. All five were then OPENED IN A SIGNED-IN BROWSER on 2026-08-02, and the prompt arrived in every one. That second test is the one that means the row does its job; the first only means the link is not broken.
 
-What the browser test does NOT settle is what each assistant then does with the URL inside the prompt. It confirms delivery, not retrieval -- see [Why ChatGPT alone targets the live page](#why-chatgpt-alone-targets-the-live-page) for the one place that difference decides a design choice.
+What the browser test does NOT settle is what each assistant then does with the URL inside the prompt. It confirms delivery, not retrieval -- see [Which rows target the live page, and why](#which-rows-target-the-live-page-and-why) for the one place that difference decides a design choice.
 
 If a provider changes its URL shape, patch the row from site config via [`rows_extra`](#custom-rows-rows_extra) -- no module update needed.
 
-### Why ChatGPT alone targets the live page
+### Which rows target the live page, and why
 
-`chatgpt` is the only provider row whose prompt carries the page's own permalink; `claude`, `perplexity`, `grok` and `aistudio` all carry the Markdown twin. That is deliberate, and it rests on an observed retrieval test rather than on reasoning about search indexes.
+Three provider rows carry the page's own permalink -- `chatgpt`, `perplexity` and `aistudio` -- while `claude` and `grok` carry the Markdown twin. The split is not a rule about media types or search indexes; it is a table of observations, because the five assistants do not behave alike.
 
-**ChatGPT could not read a Markdown twin, tested 2026-08-02.** Handed a twin URL and asked only to fetch it and report the outcome, ChatGPT answered that the URL does serve a resource of type `text/markdown` but that its retrieval tool **rejected that as an unsupported format**. So the failure is not about whether the address is indexed or reachable; the tool declines the media type outright. Pointing this row at the twin would hand ChatGPT an address it cannot open, and the prompt would land with nothing behind it.
+**Every target was set by a retrieval test, run 2026-08-02.** Each assistant was handed a twin URL, asked only whether it could fetch that exact address, and pressed for proof rather than a summary:
 
-The `hints=search` parameter reinforces that choice -- it opens ChatGPT in search mode, which resolves an address through a search index rather than fetching it directly, and a twin is a secondary representation sites commonly keep out of that index -- but the media-type rejection is the load-bearing reason, because it applies whether or not the twin is indexed.
+| Row | Result | What it showed |
+| --- | --- | --- |
+| `claude` | reads the twin | Reported the final URL with no redirect, the MIME type `text/markdown; charset=utf-8`, and the real front-matter keys. |
+| `grok` | reads the twin | Reproduced the file verbatim, front matter included, down to figures no summary could reconstruct. |
+| `chatgpt` | cannot, and says so | Reported that the URL serves `text/markdown` and that its retrieval tool rejected that as an unsupported format. |
+| `perplexity` | cannot, and says so | Stated it could not retrieve the URL, then fetched the site's HTML page successfully in the same session -- which is what isolates the `.md` as the problem rather than the host. |
+| `aistudio` | cannot, and says so | On Gemini 3.6 Flash with URL context enabled, reported the `.md` address as returning an error or being inaccessible, fell back to the site's HTML page, and said that is what it had done. |
 
-The alternative -- point the row at the twin like the other four, with or without `hints=search` -- is therefore rejected on evidence. Delivery and retrieval are separate questions, and this row needs both: the [signed-in browser test](#deep-link-caveats) confirmed the prompt arrives, and the test above shows what happens next. If a future ChatGPT release accepts `text/markdown`, flip the row in your own config and patch its description in the same block, because the shipped one names the surface the row would no longer send:
+Two conclusions follow, and the second is the one worth carrying elsewhere.
+
+**The media type is not a general blocker.** Claude and Grok read `text/markdown` without complaint, so there is no case for changing how a site publishes its twins. A single counterexample looked like a pattern until the other four were tested.
+
+**All three failures were honest, and that is not guaranteed.** Each of the three said it could not open the twin, which is the behavior a reader can act on. But an endpoint opens whatever model and tools the visitor has configured on the other side, and retrieval is not always among them -- `aistudio` reaches a page only when URL context is enabled there -- so the same row can answer with a fetch or without one, depending on settings no template can see. Perplexity showed what that looks like: it reported the twin failure honestly, then answered from other material whose details did not match the live page. That is why the default prompt now asks an assistant to state a failed fetch rather than answer regardless: the prompt is the module's only lever over what happens after the link is clicked.
+
+For all three, the `html` target is a fix rather than a guess: the canonical page always exists, any fetcher can read `text/html`, and each of the three was observed reaching it successfully in the same session in which the twin failed. `chatgpt`'s endpoint additionally carries `hints=search`, which opens search mode; that reinforces its pairing but is not the reason for it.
+
+These are observations of five products on one day, not properties of the module. If an assistant's fetcher changes, flip the row in your own config and patch its description in the same block, because the shipped one names the surface the row would no longer send:
 
 ```toml
 [params.copy_page.rows_extra.chatgpt]

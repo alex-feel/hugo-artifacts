@@ -40,7 +40,7 @@
   {{- with $cfg.prompt -}}
     {{- $prompt = replace . "{url}" $dest -}}
   {{- else -}}
-    {{- $prompt = T "copy_page_prompt" (dict "URL" $dest) | default (printf "Read from %s so I can ask questions about it." $dest) -}}
+    {{- $prompt = T "copy_page_prompt" (dict "URL" $dest) | default (printf "Read from %s so I can ask questions about it. If you cannot retrieve it, say so instead of answering from memory." $dest) -}}
   {{- end -}}
   {{- $value := strings.TrimPrefix "q=" (replace (querify "q" $prompt) "+" "%20") -}}
   {{- $href = printf "%s%s" $href $value -}}

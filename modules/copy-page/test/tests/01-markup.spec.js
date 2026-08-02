@@ -87,8 +87,10 @@ test.describe('encoding matrix (provider rows)', () => {
   test('renders every provider row with its exact percent-encoded href', async ({page}) => {
     await page.goto('/docs/enc-[matrix]-42/');
     const root = page.locator('.copy-page');
-    // ChatGPT is the one html-target row: it receives the page's own
-    // permalink; every other provider receives the Markdown URL.
+    // Three rows carry the page's own permalink and two carry the Markdown
+    // URL, and which is which was decided by testing whether each assistant
+    // can actually retrieve a twin -- see the module README. This asserts the
+    // shipped split, so a target flipped without that evidence fails here.
     await expect(root.locator('a.copy-page__row--chatgpt')).toHaveAttribute(
       'href',
       `https://chatgpt.com/?hints=search&q=${enc(pageUrl)}`,
@@ -99,7 +101,7 @@ test.describe('encoding matrix (provider rows)', () => {
     );
     await expect(root.locator('a.copy-page__row--perplexity')).toHaveAttribute(
       'href',
-      `https://www.perplexity.ai/search?q=${enc(mdUrl)}`,
+      `https://www.perplexity.ai/search?q=${enc(pageUrl)}`,
     );
     await expect(root.locator('a.copy-page__row--grok')).toHaveAttribute(
       'href',
@@ -107,7 +109,7 @@ test.describe('encoding matrix (provider rows)', () => {
     );
     await expect(root.locator('a.copy-page__row--aistudio')).toHaveAttribute(
       'href',
-      `https://aistudio.google.com/prompts/new_chat?prompt=${enc(mdUrl)}`,
+      `https://aistudio.google.com/prompts/new_chat?prompt=${enc(pageUrl)}`,
     );
     // Belt and suspenders on the encoding discipline itself: spaces become
     // %20 (never a raw +) and brackets are escaped.
@@ -133,7 +135,10 @@ test.describe('encoding matrix (provider rows)', () => {
 
     // The one html-target row also names WHY it is the odd one out.
     await expect(descOf('chatgpt')).toHaveText('Search mode, which reads the live page');
-    for (const slug of ['claude', 'perplexity', 'grok', 'aistudio']) {
+    for (const slug of ['perplexity', 'aistudio']) {
+      await expect(descOf(slug)).toHaveText('Ask questions about the live page');
+    }
+    for (const slug of ['claude', 'grok']) {
       await expect(descOf(slug)).toHaveText('Ask questions about the Markdown version');
     }
     // The asymmetry in the hrefs is matched by an asymmetry in the copy: if
@@ -202,7 +207,7 @@ test.describe('rows_extra (consumer extension rows)', () => {
 
     // youcom's endpoint already ends at its "=": only the percent-encoded
     // default-prompt value is appended -- no extra joining characters.
-    const defaultPrompt = `Read from ${mdUrl} so I can ask questions about it.`;
+    const defaultPrompt = `Read from ${mdUrl} so I can ask questions about it. If you cannot retrieve it, say so instead of answering from memory.`;
     const youcom = root.locator('a.copy-page__row--youcom');
     await expect(youcom).toHaveAttribute(
       'href',
