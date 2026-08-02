@@ -48,13 +48,13 @@
   {{- with .languages }}
   <div class="github-repo__langbar">
     {{- range . }}
-    <span style="width: {{ .pct }}%; background: {{ .color }}"></span>
+    <span class="github-repo__langbar-segment" style="--github-repo-lang-color: {{ .color }}; --github-repo-lang-share: {{ .pct }}%"></span>
     {{- end }}
   </div>
   <div class="github-repo__lang-legend">
     {{- range . }}
     <span class="github-repo__lang-legend-item">
-      <span class="github-repo__lang-dot" style="background: {{ .color }}"></span>
+      <span class="github-repo__lang-dot" style="--github-repo-lang-color: {{ .color }}"></span>
       {{ .name }} <span class="github-repo__lang-pct">{{ .pct }}%</span>
     </span>
     {{- end }}
