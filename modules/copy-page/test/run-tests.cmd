@@ -59,7 +59,11 @@ if not errorlevel 1 (
 
 pushd "%~dp0"
 set FIXTURE_URL=http://localhost:%PORT%
-call npx playwright test %*
+rem npm rather than npx: npx resolves the binary through its own global cache
+rem first, and when that cache holds a Playwright of its own the run loads two
+rem copies and dies with "No tests found". npm runs this package's own script,
+rem which resolves the binary from this directory's node_modules.
+call npm test %*
 set EXITCODE=%ERRORLEVEL%
 popd
 
