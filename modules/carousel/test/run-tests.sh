@@ -147,4 +147,12 @@ if grep -qi "deprecat" "$LOG_FILE"; then
   exit 1
 fi
 
-FIXTURE_URL="http://localhost:$PORT" npx playwright test "$@"
+# `npm test` rather than `npx playwright test`: npx resolves the binary
+# through its own global cache first, and when that cache holds a Playwright
+# of its own the run loads two copies at once and dies with "No tests found"
+# -- a failure that reads like a missing spec rather than a resolution
+# collision. npm runs the package's own script, which resolves the binary
+# from this directory's node_modules. Pass Playwright flags after a `--`
+# separator.
+cd "$HERE"
+FIXTURE_URL="http://localhost:$PORT" npm test "$@"
