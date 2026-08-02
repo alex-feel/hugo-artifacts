@@ -1,0 +1,36 @@
+# The EXTRA fixture. Its whole purpose is to pin the twin-extra hook contract
+# (layouts/_partials/agent-readiness/twin-extra.html, consumer-authored,
+# module-shipped-none) together with the consumer-side agent_sitemap_heading
+# i18n override, which must win over BOTH target-derived defaults
+# (agent_sitemap_heading_sitemap / agent_sitemap_heading_llms).
+#
+# It needs a fixture of its own rather than another environment of the
+# default one: the hook partial is a real template file under layouts/, which
+# every environment of the same fixture would share, and the override key
+# lives in i18n/en.toml, which -- like [module] imports -- is per-fixture
+# rather than per-environment.
+baseURL = 'https://extra.example/'
+title = 'Agent Readiness Extra Fixture'
+locale = 'en-us'
+
+[outputs]
+  home = ['html', 'markdown', 'llmstxt']
+  section = ['html', 'markdown']
+  page = ['html', 'markdown']
+
+[module]
+
+  [module.hugoVersion]
+    min = "0.160.0"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/agent-readiness"
+
+[params]
+
+  [params.agent]
+    # Both sections this fixture carries: the allow-list applies to regular
+    # pages too (agent-readiness/page-list.html), not only to section twins,
+    # so `extra` must be named here or its two regular pages would drop out
+    # of every enumerating surface and out of twin membership.
+    sections = ['blog', 'extra']

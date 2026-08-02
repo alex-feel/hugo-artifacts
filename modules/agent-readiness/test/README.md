@@ -1,6 +1,6 @@
 # agent-readiness module test suite
 
-Node build-output assertions for `modules/agent-readiness`, run against the files that fourteen Hugo builds publish. The module ships zero JavaScript, so there is no browser behavior to test and the suite carries no Playwright dependency.
+Node build-output assertions for `modules/agent-readiness`, run against the files that fifteen Hugo builds publish. The module ships zero JavaScript, so there is no browser behavior to test and the suite carries no Playwright dependency.
 
 ## Running
 
@@ -14,7 +14,7 @@ or, on Windows:
 modules\agent-readiness\test\run-tests.cmd
 ```
 
-Both runners validate the shipped data files, perform the repository's pre-launch Hugo process check, build all fourteen fixtures, fail hard on any `deprecat`, `ERROR`, or `found no layout file` line in any build log, and then run the assertions.
+Both runners validate the shipped data files, perform the repository's pre-launch Hugo process check, build all fifteen fixtures, fail hard on any `deprecat`, `ERROR`, or `found no layout file` line in any build log, and then run the assertions.
 
 > **These specs need network access.** The Agent Skills specs exercise a real build-time `resources.GetRemote`, because the digest guarantee -- that the advertised hash matches the bytes actually served -- cannot be proven without one. On a run with no network, the module correctly omits every skill and emits no index file at all, and the first skills spec reports that as the cause rather than as a mysterious missing file. The widgets build additionally fetches the widget modules' remote APIs (GitHub, the Hugging Face Hub, arXiv, YouTube posters); those fetches degrade with `WARN` lines when tokenless or rate-limited, which the log gates deliberately tolerate, and the widget-twin spec asserts only the baseline lines each markdown shortcode variant derives from the shortcode parameters alone, never fetched-only enrichment.
 
@@ -22,7 +22,7 @@ Both runners validate the shipped data files, perform the repository's pre-launc
 
 `tests/00-data.spec.js` runs on its own, **before either fixture is built**. A malformed `data/agent-readiness/*.toml` otherwise surfaces as an opaque Hugo build failure at some unrelated template, leaving the reader to work backwards to the registry. Run first, it is reported as itself.
 
-## Fourteen builds
+## Fifteen builds
 
 | Build | Fixture | Environment | What it proves |
 | --- | --- | --- | --- |
@@ -40,10 +40,11 @@ Both runners validate the shipped data files, perform the repository's pre-launc
 | shadow | `fixture-shadow/` | default | The fixture ships its own `layouts/robots.txt`, proving the documented silent-override hazard. |
 | paginated | `fixture-paginated/` | default | A single section of five pages at `pagerSize = 2`, so Hugo publishes `/posts/page/2/` and `/posts/page/3/`. The only shape in which a surface can be caught enumerating a pager shell alongside the pages it lists, or emitting a Markdown twin for one. |
 | widgets | `fixture-widgets/` | default | A fixture importing every widget shortcode module (`github-repo`, `github-profile`, `hf-space`, `arxiv-paper`, `callout`, `youtube-embed`, and `images` for `image` and `image-gallery`) next to `agent-readiness`, whose single regular page calls all eight widget shortcodes. The only shape in which a page twin can be caught embedding widget BEM HTML or inline SVG instead of the compact Markdown citations the modules' markdown output-format variants emit. |
+| extra | `fixture-extra/` | default | A fixture carrying a consumer-authored `layouts/_partials/agent-readiness/twin-extra.html` hook partial and an `agent_sitemap_heading` i18n override. The only shape in which the twin-extra hook contract (placement, trimming, blank-line padding, membership gating) and the override-wins-over-both-target-defaults precedence for the trailing pointer heading can be proven together. |
 
 **Why so many.** Each extra environment exists because a real contract is unreachable without it, and the pattern behind all of them is the same: a fixture that configures everything cannot test what happens when something is not configured. The `robots.txt` defect fixed in `d0bdfe7` lived in exactly the default shape and the whole suite stayed green through it. `notwins`, `multilingual` and `edge` each isolate gates whose deletion changes no byte in any other build; each was verified by deleting the gate and watching the suite go red. The `edge` build's subpath `baseURL` is the clearest case: every other fixture sits at a domain root, where Hugo's `absURL` treats a leading-slash input identically to a correct implementation, so a URL bug that 404s on every subpath deployment is invisible.
 
-Environments are used rather than extra fixture directories so the content tree, the module import and the `[outputs]` wiring stay defined in one place. The three exceptions are the concerns that config alone cannot express: `shadow` ships a `layouts/robots.txt`; `paginated` needs a `list.html` that calls `.Paginate`, a content tree that spills past `pagerSize`, and no section allow-list -- the default fixture pins `sections` to blog and projects, which would drop a paginated section from every surface and make the assertions pass for the wrong reason; and `widgets` needs the widget module imports themselves, which are per-fixture rather than per-environment and must stay out of the default fixture, whose numeric roster and count expectations are locked and whose lookup path must not carry the widget templates and render hooks.
+Environments are used rather than extra fixture directories so the content tree, the module import and the `[outputs]` wiring stay defined in one place. The four exceptions are the concerns that config alone cannot express: `shadow` ships a `layouts/robots.txt`; `paginated` needs a `list.html` that calls `.Paginate`, a content tree that spills past `pagerSize`, and no section allow-list -- the default fixture pins `sections` to blog and projects, which would drop a paginated section from every surface and make the assertions pass for the wrong reason; `widgets` needs the widget module imports themselves, which are per-fixture rather than per-environment and must stay out of the default fixture, whose numeric roster and count expectations are locked and whose lookup path must not carry the widget templates and render hooks; and `extra` needs a real `layouts/_partials/agent-readiness/twin-extra.html` file and an `i18n/en.toml` override, both of which every environment of the same fixture would share, so the hook contract needs a fixture of its own.
 
 ## What the fixtures cover
 
@@ -68,7 +69,7 @@ It deliberately configures things that must fail gracefully:
 
 | File | Covers |
 | --- | --- |
-| `tests/00-data.spec.js` | The shipped data files: both TOMLs parse, the registry holds exactly 21 entries with no retired token, every license value ships inert, facts sections carry no `limit` key, and both i18n files carry the same ten keys. |
+| `tests/00-data.spec.js` | The shipped data files: both TOMLs parse, the registry holds exactly 21 entries with no retired token, every license value ships inert, facts sections carry no `limit` key, and both i18n files carry the same eleven keys. |
 | `tests/01-robots.spec.js` | The generated `robots.txt`, the registry lookup and its warn-and-skip path, and the shadowing hazard proven against the shadow fixture. |
 | `tests/02-twins.spec.js` | Markdown twins: fixed field order, strict YAML with duplicate-key detection, `jsonify` quoting on both sides of the mapping (a key carrying a line break is emitted as its JSON-quoted form), the `present` sentinel, `last_updated`, body source, home and section twins, section feed survival, the opt-outs, sitemap purity, and the license variants. |
 | `tests/03-llms-facts.spec.js` | `llms.txt` and `about.md`, including the exact license line, both authored section shapes, the complete-by-construction bullet counts, the line-oriented structural integrity locks (a multi-line description stays one line, a bracketed title cannot break its link text, a parenthesized destination is percent-encoded, a URL-only contact channel with a line break stays one line), and the cross-surface invariant that the twin set equals the set `llms.txt` lists. |
@@ -78,6 +79,7 @@ It deliberately configures things that must fail gracefully:
 | `tests/07-section-roster.spec.js` | The section twins' member rosters: placement between body and pointer block, count and URL identity with the `llms.txt` listings, absolute twin URLs that resolve, exclusions honored, the hostile-value one-line locks, the paginated section's complete five-member roster, the `section_pages = false` byte-for-byte restoration against the `nosectionpages` build, non-section twins byte-identical across the two builds, and strict YAML front matter in both. |
 | `tests/08-widget-twins.spec.js` | The widget-twin structural contract, against the widgets build: the demo page twin carries no `<svg` and no `class=` attribute naming any of the eight widget BEM blocks, each shortcode's network-free baseline line is present (the repo, profile, Space and arXiv citation links, the escaped-bracket titled watch link, the `> [!WARNING]` alert line with title and body, the image and gallery lines with their captions), and the twin still parses as strict-YAML front matter plus body with the surrounding prose intact. |
 | `tests/09-public-partials.spec.js` | The two public partials, through the fixture-only `twindump` surface (`/twindump.txt` per language records every page's `twin-url.html` result plus the `surfaces.html` enumeration): across all eleven environment builds, the non-empty twin URLs equal exactly the published twin set and the surfaces set equals exactly the surfaces present in the tree, in both directions; home keeps its twin under the non-empty allow-list, `notwins` and `off` report all-empty, and the `llms.txt` Agent Skills auto-entry appears exactly once where the index publishes, never where it does not, with the edge build's consumer-authored duplicate suppressing the derived entry at the subpath-correct URL. |
+| `tests/10-twin-extra.spec.js` | The twin-extra hook contract, against the extra build: the hook output appears exactly once in an included page's twin, after the body and before the roster/pointer sections, in the section twin and the home twin alike; the excluded page publishes no twin at all; the front-matter-only page's twin body is byte-exact; and every twin's trailing pointer heading is the consumer's `agent_sitemap_heading` override, winning over the module's target-derived default, with zero warnings for the build. |
 
 Re-run the assertions alone against existing builds with:
 
@@ -91,6 +93,7 @@ FIXTURE_PUBLIC_NSOFF=fixture/public/nsoff \
 FIXTURE_PUBLIC_NOSECTIONPAGES=fixture/public/nosectionpages \
 FIXTURE_PUBLIC_SHADOW=fixture-shadow/public FIXTURE_PUBLIC_PAGINATED=fixture-paginated/public \
 FIXTURE_PUBLIC_WIDGETS=fixture-widgets/public \
+FIXTURE_PUBLIC_EXTRA=fixture-extra/public \
 HUGO_BUILD_LOG=hugo-build.log \
 HUGO_BUILD_LOG_CONFIGURED=hugo-build-configured.log \
 HUGO_BUILD_LOG_MINIMAL=hugo-build-minimal.log \
@@ -100,5 +103,6 @@ HUGO_BUILD_LOG_NSOFF=hugo-build-nsoff.log \
 HUGO_BUILD_LOG_NOSECTIONPAGES=hugo-build-nosectionpages.log \
 HUGO_BUILD_LOG_SHADOW=hugo-build-shadow.log HUGO_BUILD_LOG_PAGINATED=hugo-build-paginated.log \
 HUGO_BUILD_LOG_WIDGETS=hugo-build-widgets.log \
+HUGO_BUILD_LOG_EXTRA=hugo-build-extra.log \
 npm test
 ```

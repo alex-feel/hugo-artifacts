@@ -2,8 +2,8 @@
   agent-readiness/markdown-page.html -- renderer (RENDERER tier).
 
   Purpose: render one Markdown twin -- the front-matter block, the page body,
-  a member roster when the page is a section, and an optional trailing
-  pointer section.
+  an optional consumer-authored twin-extra block, a member roster when the
+  page is a section, and an optional trailing pointer section.
 
   MEMBERSHIP: the twin emits NOTHING AT ALL for a page the shared filter
   excludes, so the twin surface can never disagree with robots.txt, llms.txt
@@ -56,6 +56,31 @@
        because it already returns template.HTML. */}}
   {{- partial "agent-readiness/markdown-front-matter.html" (dict "page" $page "cfg" $cfg) | safeHTML -}}
   {{- $page.RenderShortcodes -}}
+
+  {{/* Consumer twin-extra hook, for a page whose substance lives in front
+       matter or site data rather than in the page body. The module ships
+       no layouts/_partials/agent-readiness/twin-extra.html, so the
+       templates.Exists guard is false and the hook costs nothing until a
+       consumer creates the file -- the seo module's head-extra /
+       jsonld-extra precedent. The hook receives the same {page, cfg} dict
+       as every other partial here. Its output is trimmed and prefixed so
+       an absent, empty, or whitespace-only hook emits zero bytes and a
+       non-empty one gets exactly one blank line on each side; membership
+       gating is inherited from the outer if, so an excluded page's twin
+       stays entirely unpublished. A failure inside the hook is the
+       consumer's own template error -- the module adds no guard, same as
+       seo. strings.TrimSpace exists as of v0.136.3, below this module's
+       0.160.0 floor. It is called in function form, not pipe form: piping
+       a partial's return value into strings.TrimSpace hands the value
+       through UNTRIMMED (verified against this hook's own fixture, where
+       the pipe form left the trailing newline in place and doubled the
+       blank line before the next section), while the function-call form
+       trims correctly. */}}
+  {{- if templates.Exists "_partials/agent-readiness/twin-extra.html" -}}
+    {{- with strings.TrimSpace (partial "agent-readiness/twin-extra.html" (dict "page" $page "cfg" $cfg)) -}}
+      {{- printf "\n\n%s" . | safeHTML -}}
+    {{- end -}}
+  {{- end -}}
 
   {{/* Member roster, for a SECTION twin only. A section whose _index.md is
        front-matter-only would otherwise publish a twin with an empty body

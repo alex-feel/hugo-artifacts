@@ -266,6 +266,42 @@ Reconstructing Markdown from `.Content` is possible -- `transform.HTMLToMarkdown
 
 Relative links inside the body need no rewriting: `index.md` sits in the same published directory as `index.html`, so every relative reference resolves identically from either.
 
+### The twin-extra hook
+
+Some pages carry their substance outside the page body: a contact page whose channels live in front matter and are rendered by a layout, a home page whose hero prose is assembled from site data. Their twins publish a front-matter block over an empty body, because `.RenderShortcodes` faithfully returns the nothing the content file holds. The twin-extra hook is the supported way to put that substance into the twin: author `layouts/_partials/agent-readiness/twin-extra.html` in your site, and the twin renderer calls it immediately after the page body -- before the member roster and the trailing pointer section -- behind a `templates.Exists` guard. The module intentionally ships no such file, so the hook is zero-cost until you create it, mirroring the [`seo`](../seo/README.md) module's `head-extra`/`jsonld-extra` hooks.
+
+The hook receives the same `{page, cfg}` dict as every internal renderer: `page` is the page whose twin is rendering, and `cfg` is the resolved configuration from the four-tier cascade. Membership gating is inherited from the renderer, so an excluded page's twin stays entirely unpublished, hook or no hook -- but within the published set the hook runs on EVERY twin, so the hook itself decides which pages it adds content to. Its output is trimmed with `strings.TrimSpace` and prefixed with one blank line: a hook that emits nothing (or only whitespace) for a page adds zero bytes to that page's twin, and a non-empty emission is separated from the body above and from any section below by exactly one blank line, whatever newline discipline the hook's own template uses. Emit Markdown, not HTML -- the twin is a plain-Markdown document. A failure inside the hook is your own template error and fails the build like any other site template; the module adds no guard around it.
+
+A worked example for a contact page whose channels live in front matter. The content file:
+
+```yaml
+---
+title: Contact
+channels:
+  - label: Email
+    value: team@example.org
+    href: mailto:team@example.org
+  - label: GitHub
+    value: example
+    href: https://github.com/example
+---
+```
+
+And the hook, `layouts/_partials/agent-readiness/twin-extra.html`:
+
+```go-html-template
+{{- $page := .page -}}
+{{- if eq $page.Path "/contact" -}}
+  {{- $lines := slice "## Channels" "" -}}
+  {{- range $page.Params.channels -}}
+    {{- $lines = $lines | append (printf "- [%s](%s): %s" .label .href .value) -}}
+  {{- end -}}
+  {{- delimit $lines "\n" | safeHTML -}}
+{{- end -}}
+```
+
+The `safeHTML` matters for the same reason it does inside the module's own renderers: the partial lives in the `.html` template namespace while the twin is a plain-text document, so without it an ampersand in a value would be HTML-escaped into an entity.
+
 ### The member roster
 
 A **section** twin carries a complete roster of the section's member pages between its body and the trailing pointer section: a `## Pages` heading (the `agent_section_pages_heading` i18n key) followed by one `- [title](url): description` line per member, the `: description` suffix omitted when a page has none. A site whose section `_index.md` files are front-matter-only would otherwise publish section twins with empty bodies -- no roster at all -- and the section twin is the surface that answers "what pages does this section hold" in one fetch.
@@ -541,5 +577,7 @@ modules/agent-readiness/
 ├── hugo.toml
 └── README.md
 ```
+
+One consumer-authored hook file (`layouts/_partials/agent-readiness/twin-extra.html`) is intentionally NOT shipped: the twin renderer calls it only behind a `templates.Exists` guard, so the hook is zero-cost until a consuming site creates the file. See [The twin-extra hook](#the-twin-extra-hook).
 
 `test/` ships inside the module, as it does for every other module in this repository. Run it with `bash modules/agent-readiness/test/run-tests.sh` (or `run-tests.cmd` on Windows).
