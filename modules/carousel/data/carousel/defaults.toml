@@ -1,0 +1,59 @@
+# Consumer-facing defaults for the carousel module.
+#
+# Every key can be overridden, from lowest to highest precedence:
+#   1. this file (module defaults)
+#   2. site config:       [params.carousel]
+#   3. page front matter: carousel: (map)
+#   4. call-site args:    {{< carousel <key>=<value> ... >}}
+# Presence wins at every tier, so an explicit false or empty value overrides
+# the tier below it.
+
+# Kill switch. false strips the carousel's markup and script entirely,
+# rendering nothing for that call.
+enable = true
+
+# JS enhancement strategy: "scroll" (buttons scrollIntoView on the track;
+# current slide synced from scrollend/IntersectionObserver; never inert --
+# safe for multi-visible shelves) or "slide" (JS toggles the current slide;
+# inert plus aria-hidden applied to non-current slides only after a
+# concealment guard confirms consumer CSS actually hides them).
+mode = "scroll"
+
+# JS wraps the index at the ends (never DOM cloning) when true. When false,
+# the previous/next controls get aria-disabled at the boundaries while
+# keeping focus.
+loop = false
+
+# 1-based initially current slide. Out-of-range values clamp with one
+# deduplicated warning.
+start = 1
+
+# Emit Previous/Next buttons, [hidden] until JS init so the no-JS baseline
+# carries no dead controls.
+controls = true
+
+# Emit the optional grouped-variant slide-picker button group ([hidden]
+# until JS init).
+picker = false
+
+# Render figcaption from resource metadata when present. Alt emission is
+# unconditional regardless of this toggle.
+captions = true
+
+# Number of leading slides with loading="eager" (the first also gets
+# fetchpriority="high"); the rest are loading="lazy" decoding="async". 0
+# makes every slide lazy.
+eager = 1
+
+# Wrap each slide image in a full-resolution anchor: the images pipeline
+# (capped derivative plus data-full-src/-width/-height) when composed with
+# modules/images, or a plain carousel__link anchor standalone. Suppressed
+# per-slide when alt is missing.
+lightbox = false
+
+# Zero-pad width for data-index. The effective width is
+# max(digits(count), index_pad) -- the same rule modules/images uses for its
+# image-gallery shortcode, so the two modules' item indexes stay drop-in
+# consistent. 0 (the default) means "derive from digits(count)": no
+# padding beyond what the slide count itself requires.
+index_pad = 0

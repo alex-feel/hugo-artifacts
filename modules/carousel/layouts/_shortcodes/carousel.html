@@ -1,0 +1,78 @@
+{{/*
+  Renders a build-time, no-JS-baseline, progressively-enhanced carousel from
+  page-bundle resources or an explicit source list:
+
+    {{< carousel match="gallery/*" >}}
+    {{< carousel items="gallery/one.jpg, gallery/two.jpg, /static/img/three.jpg" label="Trip photos" >}}
+    {{< carousel match="gallery/*" mode="slide" loop="true" picker="true" lightbox="true" >}}
+
+  This shortcode is a thin wrapper over the carousel/slides.html partial: it
+  forwards only the parameters that are actually present, so an omitted
+  parameter falls through the module's four-tier cascade (call-site args >
+  page front matter carousel: map > site params.carousel > data/carousel/
+  defaults.toml). See carousel/slides.html for the full markup contract,
+  input-resolution rules, and composition-with-modules/images behavior.
+
+  Parameters (all named; exactly one of match/items is REQUIRED):
+  - match (string) A page-resource glob (e.g. "gallery/*"), matched in
+    filename order via .Resources.Match. Mutually exclusive with items.
+  - items (string) A comma-separated ORDERED source list; each entry
+    resolves as a bundle resource, an assets/ resource, a leading-slash
+    static path, or an absolute URL, first match wins. Mutually exclusive
+    with match.
+  - id (string) Root <section> id. Default "carousel-{Ordinal}".
+  - class (string) Extra class(es) appended to the root <section>.
+  - label (string) Accessible name (aria-label) for the root region.
+    Ignored when labelledby is also set. Default from i18n carousel_label.
+  - labelledby (string) Id of an existing visible heading; wins over label
+    per APG guidance (aria-labelledby takes precedence).
+  - start (int) 1-based initially current slide. Out-of-range values clamp
+    to 1 with a one-shot warning. Default 1.
+  - loop (bool) Wrap navigation at the ends. Default false.
+  - mode (string) "scroll" or "slide". Default "scroll".
+  - controls (bool) Emit Previous/Next buttons. Default true.
+  - picker (bool) Emit the slide-picker button group. Default false.
+  - captions (bool) Render figcaption from resource title/credit metadata.
+    Default true.
+  - eager (int) Leading-slide count to load eagerly (loading="eager"; the
+    first also gets fetchpriority="high"). Default 1.
+  - lightbox (bool) Wrap each slide image in a full-resolution anchor.
+    Default false.
+  - index_pad (int) Minimum zero-pad width for data-index (0 derives the
+    width from the slide count's own digit width). Default 0.
+  - enable (bool) Kill switch; false renders nothing at all. Default true.
+  - plus the modules/images pass-through vocabulary, forwarded verbatim to
+    images/image.html per slide ONLY when modules/images is composed:
+    widths, sizes, sizes_auto, formats, placeholder, quality, layout,
+    responsive, anchor, resample, bg, hint, compression, max_density, dark,
+    theme_strategy.
+
+  Validation and degradation: match and items are mutually exclusive and
+  both errorf (via carousel/slides.html) when misused -- one, the other, or
+  neither is present is an authoring mistake worth a build failure. Every
+  other problem (an empty match, an unresolvable items entry, an alt-less
+  bundle resource, a bad int/enum value, a missing images composition)
+  degrades with a one-shot warning; see carousel/slides.html and
+  carousel/config.html for the exact contracts. A named parameter outside
+  the vocabulary above (a typo) warns once and is ignored.
+*/}}
+
+{{- $args := dict "page" .Page "position" (printf "%s" .Position) "Ordinal" .Ordinal -}}
+
+{{- $vocab := slice "match" "items" "id" "class" "label" "labelledby" "start" "loop" "mode" "controls" "picker" "captions" "eager" "lightbox" "index_pad" "enable" "widths" "sizes" "sizes_auto" "formats" "placeholder" "quality" "layout" "responsive" "anchor" "resample" "bg" "hint" "compression" "max_density" "dark" "theme_strategy" -}}
+{{- if .IsNamedParams -}}
+  {{- range $k := $vocab -}}
+    {{- if isset $.Params $k -}}
+      {{- $args = merge $args (dict $k ($.Get $k)) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- range $k, $_ := .Params -}}
+    {{- if not (in $vocab $k) -}}
+      {{- partial "carousel/lib/warn.html" (dict
+          "key" (printf "carousel:warn:unknown-param:carousel:%s:%s" $k (printf "%s" $.Position))
+          "message" (printf "[carousel] Ignoring the unknown carousel shortcode parameter %q (see the README Parameters table for the accepted names). See %s" $k $.Position)) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- partial "carousel/slides.html" $args -}}

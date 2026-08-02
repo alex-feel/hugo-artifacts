@@ -136,6 +136,8 @@ resources:
       credit: Photographer name
 ```
 
+The gallery above renders a static, all-at-once grid; for a sequential walkthrough or a slider-style, one-slide-at-a-time presentation, reach for [`modules/carousel`](../carousel/README.md) instead, which composes with this module by calling `images/image.html` per slide.
+
 ### Remote images
 
 ```go-html-template
@@ -401,6 +403,8 @@ Which element is root follows one fixed precedence -- figure, else lightbox anch
 | Bare render, single chain or passthrough | `<img>` | `image__img` |
 
 On every one of these forms the root carries the block class `image`, the applicable modifiers from the inventory above, your `root_class` value (always the final entry in the class list, emitted after the root-only element class), the `id`, the `data-kind`/`data-layout` pair, and the placeholder style. Consequence: `.image` always selects the root, `.image__img` always selects the img, and your `root_class` classes always close the root's `class` attribute, on every variant.
+
+The figure-or-not precedence is a PUBLIC CONTRACT, not an incidental rendering detail: `images/image.html` emits a `<figure>` wrapper if and only if at least one of `caption`, `credit`, or `license` is present in a block context, and a call supplying none of the three never wraps its render in a `<figure>`. Composing modules -- `modules/carousel` chief among them -- rely on this guarantee: a carousel slide calls `images/image.html` with no caption/credit/license and can assume the returned markup is bare (picture/img, or the lightbox anchor/class-swap span when those are active), never a nested `<figure>` competing with the carousel's own slide semantics.
 
 ### data-\* attributes
 

@@ -1,0 +1,6 @@
+# Overlay config for the site-wide kill-switch build. Merged AFTER hugo.toml
+# via --config hugo.toml,../killed.toml (run from within fixture/), so only
+# this key differs from the served fixture: the master switch alone must
+# strip every carousel root and every script tag from the whole build.
+[params.carousel]
+enable = false

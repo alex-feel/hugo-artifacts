@@ -1,0 +1,25 @@
+# Overlay config for the multilingual build pass. Merged AFTER hugo.toml via
+# --config hugo.toml,../multilingual.toml (run from within fixture/), mirroring
+# the killed.toml sibling-overlay convention already used by this fixture, and
+# the modules/agent-readiness precedent's multilingual environment: a second
+# language is the only shape in which module output routed through i18n (here
+# i18n/ru.toml) can be proven to resolve for a non-default language rather than
+# only ever exercising the English defaults every other build uses.
+#
+# content/gallery/index.ru.md is the ru translation (translate-by-filename,
+# the fixture's implicit convention: no contentDir is set for either
+# language) of content/gallery/index.md, sharing the same page-bundle image
+# resources and calling the same carousel shortcode, so /ru/gallery/ is a
+# carousel-bearing page whose aria strings (aria-roledescription="карусель",
+# etc.) resolve through the module's i18n/ru.toml rather than the English
+# fallback.
+[languages]
+
+  [languages.en]
+    locale = "en-US"
+    weight = 1
+
+  [languages.ru]
+    locale = "ru-RU"
+    weight = 2
+    title = "Фикстура карусели"

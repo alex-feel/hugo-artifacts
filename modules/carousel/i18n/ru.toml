@@ -1,0 +1,18 @@
+# Russian UI strings for the carousel module. The key set mirrors
+# i18n/en.toml one to one.
+
+carousel_label = "Галерея изображений"
+
+carousel_roledescription = "карусель"
+
+carousel_slide_roledescription = "слайд"
+
+carousel_slide_label = "{{ .Index }} из {{ .Count }}"
+
+carousel_previous = "Предыдущий слайд"
+
+carousel_next = "Следующий слайд"
+
+carousel_picker_label = "Выбрать слайд"
+
+carousel_picker_item = "Слайд {{ .Index }}"

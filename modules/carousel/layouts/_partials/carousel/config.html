@@ -1,0 +1,173 @@
+{{/*
+  carousel/config.html -- INTERNAL (resolver tier).
+
+  Purpose: resolves the module's entire configuration through the four-tier
+  cascade, so shortcode/slides renderers draw from ONE consistent options
+  dict and no downstream partial re-derives a value. Precedence, highest
+  first: call-site args > page front matter (carousel: map) > site params
+  ([params.carousel]) > data/carousel/defaults.toml. Presence wins at every
+  tier (isset, not truthiness), so an explicit false or 0 overrides the
+  tier below it.
+
+  Because shortcode named parameters deliver STRINGS only, every typed key
+  is normalized here, at one place, with one uniform contract per type
+  class:
+  - bool: truthy iff "true"/"1"/"yes"/"on" (case-insensitive); native bools
+    pass through.
+  - int:  decimal parse after stringifying (carousel/lib/int.html: leading
+    zeros are tolerated and never octal, oversized digit strings are
+    garbage); garbage warns once and falls back to the key's shipped
+    default.
+  - enum: unknown tokens warn once and fall back to the feature default.
+
+  Expected context (dict):
+  - .page (Page) - The current page (already validated by the caller).
+  - .args (map)  - Call-site arguments (possibly empty): enable, mode,
+    loop, start, controls, picker, captions, eager, lightbox, index_pad,
+    class, id, position, plus any renderer-only passthrough keys the
+    caller ignores here.
+
+  Return value: dict with every key the renderer needs:
+  - enable (bool)          - Kill switch; false means render nothing.
+  - mode (string)           - "scroll" or "slide".
+  - loop (bool)             - Wrap at the ends when true.
+  - start (int)             - 1-based initially current slide (clamped by
+    the caller once the slide count is known; this resolver only parses
+    the raw integer).
+  - controls (bool)         - Emit Previous/Next buttons.
+  - picker (bool)           - Emit the slide-picker button group.
+  - captions (bool)         - Render figcaption from resource metadata.
+  - eager (int)             - Leading-slide eager-load count (0 or more).
+  - lightbox (bool)         - Wrap each slide image in a full-resolution
+    anchor.
+  - index_pad (int)         - Zero-pad width for data-index (0 means
+    "derive from digits(count)"; the renderer computes the effective
+    width).
+  - i18n (dict)             - Pre-resolved translated strings: label,
+    roledescription, slide_roledescription, previous, next, picker_label.
+    carousel_slide_label and carousel_picker_item are deliberately NOT
+    resolved here -- both take a per-item {{ .Index }} (and, for
+    slide_label, {{ .Count }}) argument that only the renderer has once it
+    is iterating slides, so the renderer calls
+    `T "carousel_slide_label" (dict "Index" .. "Count" ..)` and
+    `T "carousel_picker_item" (dict "Index" ..)` itself, falling back to
+    `printf "%d of %d"` and `printf "Slide %d"` respectively when the key
+    resolves empty.
+  - class, id (strings)     - Root element extras (call-site only).
+  - where (string)          - Diagnostics origin for warnings: the
+    shortcode call position when available, else the page path.
+
+  One terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $args := .args | default dict -}}
+
+{{- $data := index hugo.Data "carousel" | default dict -}}
+{{- $defaults := index $data "defaults" | default dict -}}
+{{- if not $defaults -}}
+  {{- partial "carousel/lib/warn.html" (dict
+      "key" "carousel:warn:missing-defaults"
+      "message" "[carousel] data/carousel/defaults.toml was not found; the module is not mounted correctly, so only explicitly configured values apply.") -}}
+{{- end -}}
+
+{{- $sitep := site.Params.carousel -}}
+{{- if not (reflect.IsMap $sitep) -}}
+  {{- if ne $sitep nil -}}
+    {{- partial "carousel/lib/warn.html" (dict
+        "key" "carousel:warn:nonmap-config:site"
+        "message" (printf "[carousel] Ignoring params.carousel: expected a map, got %v. To disable the module site-wide, set params.carousel.enable = false." $sitep)) -}}
+  {{- end -}}
+  {{- $sitep = dict -}}
+{{- end -}}
+{{- $pagep := $page.Params.carousel -}}
+{{- if not (reflect.IsMap $pagep) -}}
+  {{- if ne $pagep nil -}}
+    {{- partial "carousel/lib/warn.html" (dict
+        "key" (printf "carousel:warn:nonmap-config:%s" $page.RelPermalink)
+        "message" (printf "[carousel] Ignoring the carousel front matter value on %s: expected a map, got %v. To disable the module on this page, set carousel: { enable: false }." $page.RelPermalink $pagep)) -}}
+  {{- end -}}
+  {{- $pagep = dict -}}
+{{- end -}}
+
+{{- $where := printf "%v" $page.Path -}}
+{{- with $args.position -}}{{- $where = printf "%s" . -}}{{- end -}}
+
+{{- $opts := dict "where" $where -}}
+{{- $truthy := slice "true" "1" "yes" "on" -}}
+
+{{/* ---- Bool keys cascading across all four tiers ---- */}}
+{{- range $k := slice "enable" "loop" "controls" "picker" "captions" "lightbox" -}}
+  {{- $v := index $defaults $k -}}
+  {{- if isset $sitep $k -}}{{- $v = index $sitep $k -}}{{- end -}}
+  {{- if isset $pagep $k -}}{{- $v = index $pagep $k -}}{{- end -}}
+  {{- if isset $args $k -}}{{- $v = index $args $k -}}{{- end -}}
+  {{- $opts = merge $opts (dict $k (in $truthy (lower (printf "%v" $v)))) -}}
+{{- end -}}
+
+{{/* ---- mode: enum key cascading across all four tiers ---- */}}
+{{- $modeAllowed := slice "scroll" "slide" -}}
+{{- $modeFallback := "scroll" -}}
+{{- $mode := printf "%v" (index $defaults "mode" | default $modeFallback) -}}
+{{- if isset $sitep "mode" -}}{{- $mode = printf "%v" (index $sitep "mode") -}}{{- end -}}
+{{- if isset $pagep "mode" -}}{{- $mode = printf "%v" (index $pagep "mode") -}}{{- end -}}
+{{- if isset $args "mode" -}}{{- $mode = printf "%v" (index $args "mode") -}}{{- end -}}
+{{- $mode = lower (trim $mode " \t\n\r") -}}
+{{- if not (in $modeAllowed $mode) -}}
+  {{- if ne $mode "" -}}
+    {{- partial "carousel/lib/warn.html" (dict
+        "key" (printf "carousel:warn:unknown-enum:mode:%s" $mode)
+        "message" (printf "[carousel] Unknown mode value %q; falling back to %q. See %s" $mode $modeFallback $where)) -}}
+  {{- end -}}
+  {{- $mode = $modeFallback -}}
+{{- end -}}
+{{- $opts = merge $opts (dict "mode" $mode) -}}
+
+{{/* ---- Int keys cascading across all four tiers. A garbage value warns
+     once and falls back to the key's shipped default rather than the tier
+     below, matching the images module's per-key int contract. ---- */}}
+{{- $intDefs := dict
+    "start" 1
+    "eager" 1
+    "index_pad" 0 -}}
+{{- range $k, $fallback := $intDefs -}}
+  {{- $raw := index $defaults $k | default $fallback -}}
+  {{- if isset $sitep $k -}}{{- $raw = index $sitep $k -}}{{- end -}}
+  {{- if isset $pagep $k -}}{{- $raw = index $pagep $k -}}{{- end -}}
+  {{- if isset $args $k -}}{{- $raw = index $args $k -}}{{- end -}}
+  {{- $rawStr := printf "%v" $raw -}}
+  {{- $v := partial "carousel/lib/int.html" $rawStr -}}
+  {{- if lt $v 0 -}}
+    {{- partial "carousel/lib/warn.html" (dict
+        "key" (printf "carousel:warn:bad-int:%s:%s" $k $rawStr)
+        "message" (printf "[carousel] Ignoring %s value %q (must be a non-negative integer); using %d. See %s" $k $rawStr $fallback $where)) -}}
+    {{- $v = $fallback -}}
+  {{- end -}}
+  {{- $opts = merge $opts (dict $k $v) -}}
+{{- end -}}
+
+{{/* ---- i18n: the six item-independent keys are resolved once here so
+     slides.html and the entry template never repeat the T lookup or its
+     inline English default. carousel_slide_label and carousel_picker_item
+     are excluded (see the docstring above) -- the renderer resolves those
+     itself, once per slide/picker item, with the {{ .Index }} /
+     {{ .Count }} context T needs. ---- */}}
+{{- $i18n := dict
+    "label" (T "carousel_label" | default "Image gallery")
+    "roledescription" (T "carousel_roledescription" | default "carousel")
+    "slide_roledescription" (T "carousel_slide_roledescription" | default "slide")
+    "previous" (T "carousel_previous" | default "Previous slide")
+    "next" (T "carousel_next" | default "Next slide")
+    "picker_label" (T "carousel_picker_label" | default "Choose a slide") -}}
+{{- $opts = merge $opts (dict "i18n" $i18n) -}}
+
+{{/* ---- Call-only strings ---- */}}
+{{- range $k := slice "class" "id" -}}
+  {{- $v := "" -}}
+  {{- if isset $args $k -}}
+    {{- $v = trim (printf "%v" (index $args $k)) " \t\n\r" -}}
+  {{- end -}}
+  {{- $opts = merge $opts (dict $k $v) -}}
+{{- end -}}
+
+{{- return $opts -}}

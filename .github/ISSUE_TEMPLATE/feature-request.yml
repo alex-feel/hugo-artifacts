@@ -32,6 +32,7 @@ body:
         - modules/social-share
         - modules/search
         - modules/images
+        - modules/carousel
         - modules/agent-readiness
         - modules/copy-page
         - modules/pwa

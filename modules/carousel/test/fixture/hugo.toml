@@ -1,0 +1,39 @@
+baseURL = "http://localhost:1717/"
+defaultContentLanguage = "en"
+title = "Carousel Fixture"
+
+[languages]
+
+  [languages.en]
+    locale = "en-US"
+    weight = 1
+
+[markup]
+
+  [markup.goldmark.parser]
+    wrapStandAloneImageWithinParagraph = false
+
+    [markup.goldmark.parser.attribute]
+      block = true
+      title = true
+
+# The built-in `markdown` output format gives every regular page a Markdown
+# twin (index.md beside index.html), rendered via .RenderShortcodes, which
+# selects the carousel.markdown.md twin variant. Hugo REPLACES the outputs
+# list per page kind rather than merging it, so `html` must stay listed.
+[outputs]
+  page = ['html', 'markdown']
+
+[params]
+description = "Hugo carousel module Playwright validation fixture site (composed with modules/images)."
+
+[module]
+
+  [module.hugoVersion]
+    min = "0.160.0"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/carousel"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/images"
