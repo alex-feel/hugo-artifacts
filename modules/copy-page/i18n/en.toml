@@ -40,4 +40,4 @@ copy_page_copied = "Page copied as Markdown"
 copy_page_copy_error = "Couldn't copy the page"
 
 # Prompt sent to the AI-provider rows; {{ .URL }} is the row's target URL.
-copy_page_prompt = "Read from {{ .URL }} so I can ask questions about it."
+copy_page_prompt = "Read from {{ .URL }} so I can ask questions about it. If you cannot retrieve it, say so instead of answering from memory."

@@ -20,35 +20,56 @@
   that Claude's web chat dropped q in October 2025.
 
   That test confirms DELIVERY, not retrieval: it says the prompt reaches the
-  assistant, not what the assistant does with the URL inside it. The one
-  place that difference decides anything is the chatgpt target, below.
+  assistant, not what the assistant does with the URL inside it. Retrieval is
+  what decides every target below, and it was tested separately.
 
   ChatGPT's q is de facto and undocumented by OpenAI, with a benign failure
   mode; Claude's is documented in the Claude Help Center for the desktop deep
   link mirroring this web path.
 
-  WHY CHATGPT IS THE ONE ROW WITH target "html", settled 2026-08-02 on an
-  OBSERVED retrieval test. Handed a Markdown twin URL and asked only to fetch
-  it and report the outcome, ChatGPT answered that the URL does serve a
-  resource of type text/markdown but that its retrieval tool REJECTED that as
-  an unsupported format. The twin is therefore an address this row's
-  assistant cannot open, whatever the prompt says about it. The hints=search
-  parameter reinforces the pairing -- search mode resolves an address through
-  an index rather than fetching it, and a twin is a secondary representation
-  sites keep out of that index -- but the media-type rejection is the
-  load-bearing reason, because it holds whether or not the twin is indexed.
+  EVERY TARGET BELOW IS SET BY AN OBSERVED RETRIEVAL TEST, run 2026-08-02:
+  each assistant was handed a Markdown twin URL, asked only whether it could
+  fetch that exact address, and pressed for proof rather than a summary. The
+  results do NOT follow one rule, which is why the targets differ.
 
-  The alternative, aligning this row on the twin like the other four, is
-  rejected on that evidence rather than on the absence of it. If a future
-  release accepts text/markdown, flip the target and delete this paragraph.
+    claude     -- CAN. Reported the final URL with no redirect, the MIME type
+                  text/markdown; charset=utf-8, and the real front-matter keys.
+    grok       -- CAN. Reproduced the file verbatim, front matter included,
+                  down to figures no summary could reconstruct.
+    chatgpt    -- CANNOT, and says so. It reported the URL serves
+                  text/markdown and that its retrieval tool rejected that as
+                  an unsupported format.
+    perplexity -- CANNOT, and says so. It stated it could not retrieve the
+                  URL, then fetched the site's HTML page successfully in the
+                  same session, which is what isolates the .md as the problem.
+    aistudio   -- CANNOT, and says so. On Gemini 3.6 Flash with URL context
+                  enabled it reported the .md address as returning an error or
+                  being inaccessible, fell back to the site's HTML page, and
+                  said that is what it had done.
 
-  UNANSWERED, and worth stating where the registry lives: only ChatGPT has
-  been tested for RETRIEVAL. The other four rows hand over the same
-  text/markdown URL, and an assistant that rejects the media type the same
-  way would receive a prompt pointing at something it cannot open -- a silent
-  failure that looks like a working link. See the README for the one-minute
-  test and for the text/plain discriminator that separates a media-type
-  problem from an address problem.
+  So the media type is NOT the discriminator: two assistants read text/markdown
+  without complaint. It is per-assistant tooling, which is why this list is a
+  table of observations rather than a rule, and why a row's target may change
+  when an assistant's fetcher does.
+
+  What the html target buys the three that cannot read a twin: the canonical
+  page always exists and any fetcher can read text/html, so the prompt points
+  at something openable rather than at an address the assistant declines. All
+  three were observed reaching the HTML page successfully, so this is a fix
+  for each of them rather than a guess.
+
+  A caveat the module cannot control, and the aistudio row shows it best: one
+  of these endpoints opens whatever model the visitor has selected, with
+  whatever tools are enabled there. Selecting a model with no retrieval, or
+  leaving URL context off, produces an answer composed without fetching
+  anything -- confidently, and with no sign that a fetch was skipped. That is
+  why the default prompt now asks an assistant to state a failed fetch rather
+  than answer regardless; see copy_page_prompt in i18n/en.toml. Perplexity is
+  the case that shows the value: it reported the twin failure honestly, then
+  answered from other material whose details did not match the live page.
+
+  ChatGPT's endpoint additionally carries hints=search, which opens search
+  mode; that reinforces its html pairing but is not the reason for it.
 
   What made the asymmetry a recurring report was not the target choice but
   its INVISIBILITY: every provider row carried the same description, so a
@@ -146,7 +167,7 @@
   "perplexity" (dict
     "label" "Perplexity"
     "endpoint" "https://www.perplexity.ai/search?q="
-    "target" "markdown"
+    "target" "html"
   )
   "grok" (dict
     "label" "Grok"
@@ -156,7 +177,7 @@
   "aistudio" (dict
     "label" "Google AI Studio"
     "endpoint" "https://aistudio.google.com/prompts/new_chat?prompt="
-    "target" "markdown"
+    "target" "html"
   )
 -}}
 
