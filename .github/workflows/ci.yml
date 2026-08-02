@@ -5,6 +5,13 @@ on:
   push:
     branches:
       - main
+  # The network suite runs on a schedule rather than on every push: it fetches
+  # the GitHub, Hugging Face, arXiv and YouTube APIs at build time, so an
+  # outage or a rate limit on somebody else's service would otherwise block an
+  # unrelated merge. Nightly still catches a break within a day.
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -130,15 +137,22 @@ jobs:
         run: npm run format:check
 
       - name: Markdown lint (markdownlint-cli2)
-        uses: DavidAnson/markdownlint-cli2-action@v23
-        with:
-          globs: |
-            **/*.md
+        # The pinned devDependency that `npm ci` just installed, not the
+        # action's own bundled copy: two independently versioned engines over
+        # the same files disagree the moment either side moves, and the
+        # disagreement surfaces as a lint that passes locally and fails here.
+        # This also uses the repo's .markdownlint-cli2.jsonc glob set rather
+        # than a glob restated in this file.
+        run: npm run lint:md
 
       - name: YAML lint (yamllint)
         uses: ibiqlik/action-yamllint@v3
         with:
-          file_or_dir: .github
+          # `.` rather than `.github`: the repo root carries tracked YAML of
+          # its own -- including .yamllint.yml, the config governing this very
+          # step -- which a .github-only scope never checks. The action's own
+          # ignore rules keep node_modules out.
+          file_or_dir: .
           config_file: .yamllint.yml
           strict: true
 
@@ -155,3 +169,146 @@ jobs:
           # newline, and trailing whitespace rules from .editorconfig.
           go install github.com/editorconfig-checker/editorconfig-checker/v3/cmd/editorconfig-checker@v3.0.3
           "$(go env GOPATH)/bin/editorconfig-checker"
+
+  # Every suite that is deterministic offline, one job per suite so a failure
+  # names the module that broke rather than a single opaque red X, and so the
+  # slowest suite does not set the wall clock for all of them. Before this
+  # existed CI ran lints only: it never rendered a template, so no template
+  # error of any kind could turn it red, and three suites were silently broken
+  # on a maintainer machine for an unknown length of time without anything
+  # surfacing it.
+  suites:
+    name: Suite (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      # Every suite reports, always. Stopping at the first failure would hide
+      # whether one module broke or all of them did, which is the single most
+      # useful thing to know when a shared convention changes.
+      fail-fast: false
+      matrix:
+        include:
+          - name: images
+            dir: modules/images/test
+            run: bash run-tests.sh
+          - name: seo
+            dir: modules/seo/test
+            run: bash run-tests.sh
+          - name: carousel
+            dir: modules/carousel/test
+            run: bash run-tests.sh
+            browser: true
+          - name: copy-page
+            dir: modules/copy-page/test
+            run: bash run-tests.sh
+            browser: true
+          - name: search
+            dir: modules/search/test
+            run: bash run-tests.sh
+            browser: true
+          - name: social-share
+            dir: modules/social-share/test
+            run: bash run-tests.sh
+            browser: true
+          - name: github-profile
+            dir: shortcodes/github-profile/test
+            run: bash run-tests.sh
+          - name: composition
+            dir: modules/test-composition
+            run: bash run-tests.sh
+          - name: pwa
+            dir: modules/pwa/test
+            run: |
+              npm run --silent test:subpath
+              npm run --silent test:offline-gating
+              bash run-matrix.sh
+            browser: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.22'
+          cache: false
+
+      - name: Set up Hugo (extended)
+        uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: '0.161.1'
+          extended: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ${{ matrix.dir }}/package-lock.json
+
+      - name: Install suite dependencies
+        working-directory: ${{ matrix.dir }}
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Chromium
+        if: matrix.browser
+        working-directory: ${{ matrix.dir }}
+        # --with-deps pulls the shared libraries the bundled browser needs on a
+        # bare runner image; without them Playwright fails at launch rather
+        # than at install, which reads as a test failure instead of a setup one.
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the suite
+        working-directory: ${{ matrix.dir }}
+        run: ${{ matrix.run }}
+
+  # Held out of the blocking set on purpose. This suite proves the remote-fetch
+  # digest guarantee, which cannot be proven without a real fetch, and its
+  # widgets build calls the GitHub, Hugging Face, arXiv and YouTube APIs. Those
+  # degrade to WARN lines when tokenless or rate-limited, by design -- but an
+  # outage on somebody else's service must not block an unrelated pull request,
+  # so it runs nightly and on demand instead.
+  suites-network:
+    name: Suite (agent-readiness, network)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.22'
+          cache: false
+
+      - name: Set up Hugo (extended)
+        uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: '0.161.1'
+          extended: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: modules/agent-readiness/test/package-lock.json
+
+      - name: Install suite dependencies
+        working-directory: modules/agent-readiness/test
+        run: npm ci --no-audit --no-fund
+
+      - name: Run the suite
+        working-directory: modules/agent-readiness/test
+        # The token raises the GitHub API rate limit for the widgets build.
+        # Absent it the build still succeeds and degrades with WARN lines,
+        # which the runner's log gates tolerate deliberately.
+        env:
+          HUGO_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash run-tests.sh

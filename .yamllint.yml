@@ -13,7 +13,24 @@
 #
 # All other default rules (indentation, key-duplicates, trailing-spaces,
 # new-line-at-end-of-file) remain enabled to catch real defects.
+#
+# The scope is the whole repository, not just .github, because the repo root
+# carries tracked YAML of its own -- this file included. `ignore` keeps the
+# lint to files the repository actually owns: dependency trees and tool caches
+# are untracked and carry YAML whose style is somebody else's decision.
 extends: default
+
+ignore: |
+  node_modules/
+  .playwright-cli/
+  .serena/
+  .claude/
+  .context_server/
+  .code-review-graph/
+  test-results/
+  playwright-report/
+  public/
+  resources/
 
 rules:
   line-length: disable
