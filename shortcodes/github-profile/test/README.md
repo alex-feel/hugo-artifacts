@@ -39,7 +39,7 @@ npm test
 
 ## Specs
 
-46 assertions across 5 spec files plus the shared `helpers.js`, run with Node's own `node --test`.
+53 assertions across 6 spec files plus the shared `helpers.js`, run with Node's own `node --test`.
 
 | File | Assertions | Covers |
 | --- | --- | --- |
@@ -49,6 +49,7 @@ npm test
 | `tests/03-minify-whitespace-guard.spec.js` | 8 | The structural rule the fix consists of, asserted directly rather than only through its currently visible consequence: no wrapper in the strip ends with a trailing whitespace text node, every wrapping metric group's markup ends in the literal `</span></span>`, masking the separators out of the strip leaves no whitespace immediately before any closing tag, the rank-group-to-note-separator byte run is published as one literal in both trees, and the minified build glues the floor note straight onto the separator with no whitespace of its own. |
 | `tests/04-calendar-summary.spec.js` | 9 | The second live instance of the same defect class: the calendar summary's total and window stay separated in the text layer, its total wrapper never ends with trailing whitespace, both streak lines keep their label apart from their value, the minified build publishes exactly one whitespace character between the total and the window, and the calendar grid's `data-total` attribute agrees with the number the summary prints. |
 | `tests/05-build-log.spec.js` | 10 | A second, independent gate on top of the runner's own log grep: each captured log is a real Hugo build log (banner plus a `Total in N ms` completion line), and it carries zero `WARN` lines, zero case-insensitive `deprecat` mentions, zero `ERROR` or `found no layout file` lines, and zero mentions of `github-profile` itself -- the last of which would mean the canned-data seam stopped working and every other spec was passing against a degraded rendering instead of the real one. |
+| `tests/06-sibling-boundaries.spec.js` | 7 | The same whitespace rule at the two boundaries that lie OUTSIDE the headline strip and the calendar summary, which specs 01 through 04 are scoped to and therefore cannot reach: the two `github-profile__streak` spans are siblings of the calendar summary rather than children of it, and the identity section's meta items are in neither scope, so a revert there republishes the defect one section down while every other assertion stays green. Structural rather than textual, because the identity section prints a tenure derived from the wall clock: each streak and meta-item wrapper closes on its last child, the website item closes directly on its anchor, the minified build keeps exactly one whitespace character at both boundaries, and a page-wide backstop states the invariant over every INLINE wrapper in the widget so a section added later inherits it. |
 
 ## The fixture's shadowed fetch seam
 
