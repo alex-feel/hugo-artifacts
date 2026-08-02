@@ -148,11 +148,27 @@ v1_to_v2_watcher() {
 
 # ----- Pre-launch (Hugo Development Rule R3 Section 3.1) -----------------------------
 
-if pgrep -af hugo >/dev/null 2>&1; then
-  echo "ERROR: a hugo process is already running. Terminate it before re-running the matrix."
-  echo "       pkill hugo            # graceful"
-  echo "       pkill -9 hugo         # force"
-  exit 1
+# `pgrep -x` matches the process NAME, the semantic twin of the tasklist
+# IMAGENAME filter in the fallback branch. `-f` would match the whole command
+# line, and this checkout is named hugo-artifacts, so a runner invoked by
+# absolute path matches ITSELF and aborts -- which is exactly what a CI
+# workspace path such as /home/runner/work/hugo-artifacts/hugo-artifacts
+# produces. The `command -v` guard is what the sibling runners already carry:
+# Git Bash on Windows ships no pgrep, so a bare call here exits non-zero and
+# the check silently passes over a live server.
+if command -v pgrep >/dev/null 2>&1; then
+  if pgrep -x hugo >/dev/null 2>&1; then
+    echo "ERROR: a hugo process is already running. Terminate it before re-running the matrix."
+    echo "       pkill hugo            # graceful"
+    echo "       pkill -9 hugo         # force"
+    exit 1
+  fi
+elif command -v tasklist >/dev/null 2>&1; then
+  if tasklist //FI "IMAGENAME eq hugo.exe" 2>/dev/null | grep -qi "hugo.exe"; then
+    echo "ERROR: a hugo process is already running. Terminate it before re-running the matrix."
+    echo "       taskkill /F /IM hugo.exe"
+    exit 1
+  fi
 fi
 if command -v lsof >/dev/null 2>&1; then
   if lsof -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then

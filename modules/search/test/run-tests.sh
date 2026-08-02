@@ -37,9 +37,12 @@ MULTILINGUAL_DIR="$HERE/.multilingual"
 # fall back to the Windows-native tasklist/taskkill equivalents there;
 # without the fallback the pre-launch check silently passes and the cleanup
 # leaks an orphaned hugo.exe.
+# `pgrep -x` matches the process NAME, the semantic twin of the tasklist
+# IMAGENAME filter; `-f` would match the whole command line, and this
+# checkout is named hugo-artifacts, so the runner would match ITSELF.
 hugo_running() {
   if command -v pgrep >/dev/null 2>&1; then
-    pgrep -f hugo >/dev/null 2>&1
+    pgrep -x hugo >/dev/null 2>&1
   else
     tasklist 2>/dev/null | grep -qi "hugo.exe"
   fi
