@@ -27,7 +27,9 @@
 #
 # --fix reads the sibling's latest commit from git history, so run it AFTER
 # committing the change to that sibling. Push before relying on the result: the
-# module proxy can only serve a commit that exists on the remote.
+# module proxy can only serve a commit that exists on the remote, which is also
+# why a pull request that moves a pin is merged with its commits preserved and
+# never squashed.
 set -euo pipefail
 
 MODULE_PREFIX='github.com/alex-feel/hugo-artifacts/'

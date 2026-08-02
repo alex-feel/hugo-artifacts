@@ -108,6 +108,8 @@ NEVER ship the PLACEHOLDER pseudo-version `v0.0.0-00010101000000-000000000000` i
 
 Because a commit cannot name its own hash, a sibling pin is always moved by a FOLLOW-UP commit, and a chain is edited in DEPENDENCY ORDER: commit the change to `modules/idb`, then run `npm run check:pins -- --fix` and commit the rewritten `modules/workbox` require, then do the same for `modules/pwa`. `npm run check:pins` -- part of `npm run check`, and a CI step -- fails when an intra-repository require is the placeholder or lags behind its sibling's latest commit, so a forgotten bump becomes a red pull request instead of consumers silently resolving stale content.
 
+A pull request that moves a pin MUST be merged in a way that PRESERVES its individual commits (a merge commit, or a rebase), never SQUASHED. A pin names a commit, and squashing replaces the named commit with a new one; the module proxy can then fail to resolve a version that resolved a moment earlier, for consumers only, with nothing in the repository looking wrong. `npm run check:pins` does catch the aftermath on `main` -- the pin now lags the squash commit -- so if it ever happens, re-point the pin at the squash commit and push.
+
 `[module.replacements]` and `hugo.work` remain useful for LOCAL development against a local checkout, and `hugo mod vendor` (committed `_vendor/`) is a valid choice when a consumer wants a fully hermetic, network-free CI build -- but none of the three is REQUIRED to consume the chain.
 
 When authoring a new module that wraps a non-Go upstream, document this consumption recipe in the module README (Installation section) and surface it in the root `README.md` Modules section AND in this section.
