@@ -16,6 +16,21 @@
   dividers never enter the DOM text layer. The space between each value and
   its label is an explicit literal for the same reason.
 
+  MINIFIER CONSTRAINT, and the reason every wrapper below closes on the SAME
+  line as its last child rather than on a line of its own: Hugo's --minify
+  collapses each run of whitespace to a single character and then deletes any
+  whitespace that immediately follows it, even across a tag boundary. A
+  newline-plus-indent sitting just inside a wrapper's closing tag is such a
+  run, so it wins and the note separator's own LEADING space -- the one that
+  makes " — " read as " — " -- is deleted, publishing "90— plus" to an
+  extractor that trims each element. The separator can only carry its own
+  spacing while NO whitespace text node precedes it: none inside the previous
+  wrapper, and none between that wrapper and the separator (which is what the
+  {{- -}} markers on the control lines between the groups guarantee). Do not
+  reformat a closing tag onto its own line and do not drop those markers. A
+  numeric character reference (&#32;) is not a workaround: it is decoded
+  before the whitespace pass and dropped with it.
+
   Context: the render.html context dict (.d carries the normalized data).
 */}}
 
@@ -24,51 +39,44 @@
 <section class="github-profile__section github-profile__section--headline">
   <span class="github-profile__metric" data-metric="commits" data-raw="{{ $d.totals.commits }}">
     {{- partial "github-profile/icon.html" (dict "name" "commit" "class" "github-profile__icon") }}
-    <span class="github-profile__metric-value">{{ partial "github-profile/compact-number.html" $d.totals.commits }}</span> <span class="github-profile__metric-label">{{ T "github_profile_metric_commits" | default "commits" }}</span>
-  </span>
+    <span class="github-profile__metric-value">{{ partial "github-profile/compact-number.html" $d.totals.commits }}</span> <span class="github-profile__metric-label">{{ T "github_profile_metric_commits" | default "commits" }}</span></span>
   {{- $first = false -}}
   {{- if ge $d.mergedPrCount 0 -}}
   {{- if not $first }}<span class="github-profile__sep">{{ T "github_profile_sep" | default ", " }}</span>{{ end }}
   <span class="github-profile__metric" data-metric="prs-merged" data-raw="{{ $d.mergedPrCount }}">
     {{- partial "github-profile/icon.html" (dict "name" "pull-request" "class" "github-profile__icon") }}
-    <span class="github-profile__metric-value">{{ partial "github-profile/compact-number.html" $d.mergedPrCount }}</span> <span class="github-profile__metric-label">{{ T "github_profile_metric_merged_prs" | default "merged pull requests" }}</span>
-  </span>
+    <span class="github-profile__metric-value">{{ partial "github-profile/compact-number.html" $d.mergedPrCount }}</span> <span class="github-profile__metric-label">{{ T "github_profile_metric_merged_prs" | default "merged pull requests" }}</span></span>
   {{- $first = false -}}
   {{- else -}}
   {{- if not $first }}<span class="github-profile__sep">{{ T "github_profile_sep" | default ", " }}</span>{{ end }}
   <span class="github-profile__metric" data-metric="prs" data-raw="{{ $d.totals.prs }}">
     {{- partial "github-profile/icon.html" (dict "name" "pull-request" "class" "github-profile__icon") }}
-    <span class="github-profile__metric-value">{{ partial "github-profile/compact-number.html" $d.totals.prs }}</span> <span class="github-profile__metric-label">{{ T "github_profile_metric_prs" | default "pull requests (authored)" }}</span>
-  </span>
+    <span class="github-profile__metric-value">{{ partial "github-profile/compact-number.html" $d.totals.prs }}</span> <span class="github-profile__metric-label">{{ T "github_profile_metric_prs" | default "pull requests (authored)" }}</span></span>
   {{- $first = false -}}
   {{- end -}}
   {{- if gt $d.externalRepos 0 -}}
   {{- if not $first }}<span class="github-profile__sep">{{ T "github_profile_sep" | default ", " }}</span>{{ end }}
   <span class="github-profile__metric" data-metric="external-repos" data-raw="{{ $d.externalRepos }}">
     {{- partial "github-profile/icon.html" (dict "name" "repo" "class" "github-profile__icon") }}
-    <span class="github-profile__metric-value">{{ partial "github-profile/compact-number.html" $d.externalRepos }}</span> <span class="github-profile__metric-label">{{ T "github_profile_metric_external_repos" | default "external repositories" }}</span>
-  </span>
+    <span class="github-profile__metric-value">{{ partial "github-profile/compact-number.html" $d.externalRepos }}</span> <span class="github-profile__metric-label">{{ T "github_profile_metric_external_repos" | default "external repositories" }}</span></span>
   {{- $first = false -}}
   {{- end -}}
   {{- if gt $d.externalOrgs 0 -}}
   {{- if not $first }}<span class="github-profile__sep">{{ T "github_profile_sep" | default ", " }}</span>{{ end }}
   <span class="github-profile__metric" data-metric="external-orgs" data-raw="{{ $d.externalOrgs }}">
     {{- partial "github-profile/icon.html" (dict "name" "org" "class" "github-profile__icon") }}
-    <span class="github-profile__metric-value">{{ partial "github-profile/compact-number.html" $d.externalOrgs }}</span> <span class="github-profile__metric-label">{{ T "github_profile_metric_external_orgs" | default "organizations" }}</span>
-  </span>
+    <span class="github-profile__metric-value">{{ partial "github-profile/compact-number.html" $d.externalOrgs }}</span> <span class="github-profile__metric-label">{{ T "github_profile_metric_external_orgs" | default "organizations" }}</span></span>
   {{- $first = false -}}
   {{- end -}}
   {{- if not $first }}<span class="github-profile__sep">{{ T "github_profile_sep" | default ", " }}</span>{{ end }}
   <span class="github-profile__metric" data-metric="recent-90d-days" data-raw="{{ $d.recentActive }}">
     {{- partial "github-profile/icon.html" (dict "name" "issue" "class" "github-profile__icon") }}
-    <span class="github-profile__metric-value">{{ $d.recentActive }}</span> <span class="github-profile__metric-label">{{ T "github_profile_metric_recent_days" | default "active days in the last 90" }}</span>
-  </span>
+    <span class="github-profile__metric-value">{{ $d.recentActive }}</span> <span class="github-profile__metric-label">{{ T "github_profile_metric_recent_days" | default "active days in the last 90" }}</span></span>
   {{- $first = false -}}
   {{- with $d.rankLevel -}}
   {{- if not $first }}<span class="github-profile__sep">{{ T "github_profile_sep" | default ", " }}</span>{{ end }}
   <span class="github-profile__rank" data-rank-level="{{ . }}" data-rank-percentile="{{ $d.rankPercentile }}">
-    <span class="github-profile__metric-value">{{ . }}</span> <span class="github-profile__metric-label">{{ T "github_profile_rank_label" | default "activity score" }}</span>
-  </span>
+    <span class="github-profile__metric-value">{{ . }}</span> <span class="github-profile__metric-label">{{ T "github_profile_rank_label" | default "activity score" }}</span></span>
   {{- $first = false -}}
   {{- end -}}
   {{- if gt $d.totals.restricted 0 -}}

@@ -72,8 +72,7 @@
   {{- end }}
   {{- with $identity.websiteUrl }}
   <span class="github-profile__meta-item" data-meta="website">
-    {{- partial "github-profile/icon.html" (dict "name" "link" "class" "github-profile__icon") }} <a href="{{ . }}" target="_blank" rel="noopener noreferrer">{{ . }}</a>
-  </span>
+    {{- partial "github-profile/icon.html" (dict "name" "link" "class" "github-profile__icon") }} <a href="{{ . }}" target="_blank" rel="noopener noreferrer">{{ . }}</a></span>
   {{- end }}
   {{- if gt $d.tenureYears 0 }}
   <span class="github-profile__meta-item" data-meta="tenure" data-raw="{{ $d.tenureYears }}">

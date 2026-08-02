@@ -44,8 +44,7 @@
          the suffix, without fighting a single text run. */}}
     <p class="github-profile__attribution">
       <a href="{{ $d.identity.profileUrl }}" target="_blank" rel="noopener noreferrer">
-        {{- partial "github-profile/icon.html" (dict "name" "github" "class" "github-profile__icon github-profile__attribution-icon") }} <span class="github-profile__attribution-login">@{{ $d.login }}</span> <span class="github-profile__attribution-suffix">{{ T "github_profile_attribution_suffix" | default "on GitHub" }}</span>
-      </a>
+        {{- partial "github-profile/icon.html" (dict "name" "github" "class" "github-profile__icon github-profile__attribution-icon") }} <span class="github-profile__attribution-login">@{{ $d.login }}</span> <span class="github-profile__attribution-suffix">{{ T "github_profile_attribution_suffix" | default "on GitHub" }}</span></a>
     </p>
     {{- end -}}
   {{- else -}}

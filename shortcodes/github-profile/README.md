@@ -298,6 +298,16 @@ The rendering is pure Markdown with no HTML tags, BEM classes, or SVG: a profile
 
 The variant calls the same cached fetch and derive partials with the same arguments as the HTML entry template, so it adds no network requests and the fetch layer's warning deduplication covers both output formats. The `variant`, `sections`, `avatar`, `attribution`, and `class` parameters shape only the HTML widget and are accepted but ignored here; parameter validation lives in the HTML entry template, which renders the same page in the HTML output format and stops the build with `errorf` on a missing or malformed `user`.
 
+## Validation
+
+The module cannot build standalone -- Hugo builds require a consuming site -- so [`test/`](test/) ships a fixture site plus Node build-output assertions. The fixture is fully offline: it shadows `github-profile/fetch.html` with a canned payload, so `derive.html`, `render.html` and every section partial run for real with no network access and no `HUGO_GITHUB_TOKEN`.
+
+It is the only suite in this repository that builds with `--minify`, and that is the point of it. The strip's separators carry their punctuation and spacing as real text inside dedicated elements so an HTML-to-text extractor reads the metrics as sentences rather than as one glued run -- and a whitespace defect in that text layer is **invisible in an unminified build**, because Hugo's minifier is what relocates and deletes the spacing. The suite therefore builds the same fixture twice, plainly and with `--minify`, and asserts the published bytes of both. Run it with Node.js 22+:
+
+```bash
+bash shortcodes/github-profile/test/run-tests.sh   # or run-tests.cmd on Windows
+```
+
 ## Module Structure
 
 ```text
@@ -333,4 +343,5 @@ shortcodes/github-profile/
         to-int.html                 # Guarded integer cast for remote-derived values
         compact-number.html         # Number formatting (1500 -> "1.5k")
         icon.html                   # Centralized SVG icon rendering
+  test/                             # Validation suite: two builds of one offline fixture. See test/README.md.
 ```

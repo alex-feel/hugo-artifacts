@@ -1,0 +1,9 @@
+{
+  "name": "github-profile-module-tests",
+  "private": true,
+  "type": "module",
+  "description": "Build-output assertion suite for the github-profile Hugo shortcode module, proving that the headline strip's metric separators -- especially the note separator's leading space before the private-contributions floor note -- survive Hugo's --minify whitespace collapse. Run against one offline fixture built twice (public/normal and public/minified) from a canned data seam, since the defect this suite pins is invisible without the minified build.",
+  "scripts": {
+    "test": "node --test \"tests/*.spec.js\""
+  }
+}
