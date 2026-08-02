@@ -10,8 +10,6 @@
 <section class="github-profile__section github-profile__section--reviews">
   <span class="github-profile__metric" data-metric="reviews" data-raw="{{ $d.totals.reviews }}">
     {{- partial "github-profile/icon.html" (dict "name" "review" "class" "github-profile__icon") }}
-    <span class="github-profile__metric-value">{{ partial "github-profile/compact-number.html" $d.totals.reviews }}</span>
-    <span class="github-profile__metric-label">{{ T "github_profile_metric_reviews" | default "pull request reviews given" }}</span>
-  </span>
+    <span class="github-profile__metric-value">{{ partial "github-profile/compact-number.html" $d.totals.reviews }}</span> <span class="github-profile__metric-label">{{ T "github_profile_metric_reviews" | default "pull request reviews given" }}</span></span>
 </section>
 {{- end }}

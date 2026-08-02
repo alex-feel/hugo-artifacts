@@ -12,6 +12,15 @@
   1 1 10") -- a WCAG 1.3.1 failure; a consumer that prefers icon-only visuals
   clip-hides the unit words and separators.
 
+  Every stat wrapper closes on the SAME line as its last child, because Hugo's
+  --minify collapses a whitespace run to one character and then deletes any
+  whitespace that follows it: a newline-plus-indent inside a wrapper would win
+  over the next separator's own text and corrupt it. The comma separator here
+  carries no LEADING space, so today it survives either way -- but a
+  translation that gives github_profile_sep a leading space would lose it, and
+  the rule is the same one section-headline.html states in full. Do not
+  reformat a closing tag onto its own line.
+
   Context: the render.html context dict (.d carries the normalized data).
 */}}
 
@@ -34,29 +43,25 @@
       {{- if gt .commits 0 }}
       {{- if not $statFirst }}<span class="github-profile__sep">{{ T "github_profile_sep" | default ", " }}</span>{{ end }}
       <span class="github-profile__org-roll-stat" data-metric="commits">
-        {{- partial "github-profile/icon.html" (dict "name" "commit" "class" "github-profile__icon") }} {{ partial "github-profile/compact-number.html" .commits }} <span class="github-profile__org-roll-stat-unit">{{ T "github_profile_org_stat_commits" .commits | default (cond (eq .commits 1) "commit" "commits") }}</span>
-      </span>
+        {{- partial "github-profile/icon.html" (dict "name" "commit" "class" "github-profile__icon") }} {{ partial "github-profile/compact-number.html" .commits }} <span class="github-profile__org-roll-stat-unit">{{ T "github_profile_org_stat_commits" .commits | default (cond (eq .commits 1) "commit" "commits") }}</span></span>
       {{- $statFirst = false }}
       {{- end }}
       {{- if gt .prs 0 }}
       {{- if not $statFirst }}<span class="github-profile__sep">{{ T "github_profile_sep" | default ", " }}</span>{{ end }}
       <span class="github-profile__org-roll-stat" data-metric="prs">
-        {{- partial "github-profile/icon.html" (dict "name" "pull-request" "class" "github-profile__icon") }} {{ partial "github-profile/compact-number.html" .prs }} <span class="github-profile__org-roll-stat-unit">{{ T "github_profile_org_stat_prs" .prs | default (cond (eq .prs 1) "pull request" "pull requests") }}</span>
-      </span>
+        {{- partial "github-profile/icon.html" (dict "name" "pull-request" "class" "github-profile__icon") }} {{ partial "github-profile/compact-number.html" .prs }} <span class="github-profile__org-roll-stat-unit">{{ T "github_profile_org_stat_prs" .prs | default (cond (eq .prs 1) "pull request" "pull requests") }}</span></span>
       {{- $statFirst = false }}
       {{- end }}
       {{- if gt .issues 0 }}
       {{- if not $statFirst }}<span class="github-profile__sep">{{ T "github_profile_sep" | default ", " }}</span>{{ end }}
       <span class="github-profile__org-roll-stat" data-metric="issues">
-        {{- partial "github-profile/icon.html" (dict "name" "issue" "class" "github-profile__icon") }} {{ partial "github-profile/compact-number.html" .issues }} <span class="github-profile__org-roll-stat-unit">{{ T "github_profile_org_stat_issues" .issues | default (cond (eq .issues 1) "issue" "issues") }}</span>
-      </span>
+        {{- partial "github-profile/icon.html" (dict "name" "issue" "class" "github-profile__icon") }} {{ partial "github-profile/compact-number.html" .issues }} <span class="github-profile__org-roll-stat-unit">{{ T "github_profile_org_stat_issues" .issues | default (cond (eq .issues 1) "issue" "issues") }}</span></span>
       {{- $statFirst = false }}
       {{- end }}
       {{- if gt .reviews 0 }}
       {{- if not $statFirst }}<span class="github-profile__sep">{{ T "github_profile_sep" | default ", " }}</span>{{ end }}
       <span class="github-profile__org-roll-stat" data-metric="reviews">
-        {{- partial "github-profile/icon.html" (dict "name" "review" "class" "github-profile__icon") }} {{ partial "github-profile/compact-number.html" .reviews }} <span class="github-profile__org-roll-stat-unit">{{ T "github_profile_org_stat_reviews" .reviews | default (cond (eq .reviews 1) "review" "reviews") }}</span>
-      </span>
+        {{- partial "github-profile/icon.html" (dict "name" "review" "class" "github-profile__icon") }} {{ partial "github-profile/compact-number.html" .reviews }} <span class="github-profile__org-roll-stat-unit">{{ T "github_profile_org_stat_reviews" .reviews | default (cond (eq .reviews 1) "review" "reviews") }}</span></span>
       {{- $statFirst = false }}
       {{- end }}
     </li>

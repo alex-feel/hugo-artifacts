@@ -1,0 +1,26 @@
+# The `nolinkmd` environment: the ONE key `link_markdown = false` on top of the
+# default configuration, with the twins themselves left ON.
+#
+# It reaches a state no other build can. `notwins` switches the twins off, so
+# there are no twin URLs to link and every llms.txt link emitter falls back to
+# the HTML permalink through its OTHER conjunct, `markdown.enable`. Here the
+# twins publish normally -- /index.md exists for every admitted page -- and the
+# consumer has said only "do not point llms.txt at them". That is the one
+# configuration in which the `link_markdown` conjunct is the sole reason a link
+# is an HTML permalink rather than a twin URL, so dropping that conjunct from
+# either emitter would leave every other build green.
+#
+# Two emitters read it, and this build holds both: the per-section bullets,
+# which must carry `/blog/post-one/` rather than `/blog/post-one/index.md`, and
+# the derived `## Start here` entry, which must not be emitted at all -- the
+# whole point of that section is to name the home page's TWIN, so a site that
+# asked llms.txt not to link twins gets no heading rather than a heading over
+# the HTML home page it already sits on.
+#
+# The twins themselves are unaffected: they still publish, still carry their
+# own trailing pointer section, and are still listed by about.md, because the
+# key is scoped to llms.txt's link shape and nothing else.
+[agent]
+
+  [agent.llms]
+    link_markdown = false

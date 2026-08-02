@@ -93,6 +93,7 @@ jobs:
             modules/agent-readiness/test/fixture-widgets
             modules/agent-readiness/test/fixture-extra
             modules/copy-page/test/fixture
+            shortcodes/github-profile/test/fixture
             modules/test-composition/fixture
           )
           for leaf in "${leaves[@]}"; do

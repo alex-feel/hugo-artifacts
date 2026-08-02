@@ -1,8 +1,8 @@
 @echo off
-rem Validates the shipped data files, then builds FIFTEEN fixture sites with
+rem Validates the shipped data files, then builds SIXTEEN fixture sites with
 rem hugo (builds, not servers: no port binding, and a finite build exits by
 rem itself) and runs the Node build-output assertion suite against all
-rem fifteen.
+rem sixteen.
 rem Windows mirror of run-tests.sh: data check first, pre-launch process
 rem check, then a hard fail on any deprecation, error, or missing-layout line
 rem in any build log.
@@ -41,6 +41,7 @@ set LOG_FILE_OFF=%~dp0hugo-build-off.log
 set LOG_FILE_BADTABLES=%~dp0hugo-build-badtables.log
 set LOG_FILE_NSOFF=%~dp0hugo-build-nsoff.log
 set LOG_FILE_NOSECTIONPAGES=%~dp0hugo-build-nosectionpages.log
+set LOG_FILE_NOLINKMD=%~dp0hugo-build-nolinkmd.log
 set LOG_FILE_SHADOW=%~dp0hugo-build-shadow.log
 set LOG_FILE_PAGINATED=%~dp0hugo-build-paginated.log
 set LOG_FILE_WIDGETS=%~dp0hugo-build-widgets.log
@@ -128,6 +129,13 @@ if errorlevel 1 (
   popd
   exit /b 1
 )
+hugo -e nolinkmd --gc --logLevel info --cleanDestinationDir --destination public\nolinkmd > "%LOG_FILE_NOLINKMD%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(nolinkmd^):
+  type "%LOG_FILE_NOLINKMD%"
+  popd
+  exit /b 1
+)
 popd
 
 pushd "%~dp0fixture-shadow"
@@ -186,7 +194,7 @@ if errorlevel 1 (
 )
 popd
 
-for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_MINIMAL%" "%LOG_FILE_NOTWINS%" "%LOG_FILE_MULTILINGUAL%" "%LOG_FILE_LLMSOFF%" "%LOG_FILE_EDGE%" "%LOG_FILE_OFF%" "%LOG_FILE_BADTABLES%" "%LOG_FILE_NSOFF%" "%LOG_FILE_NOSECTIONPAGES%" "%LOG_FILE_SHADOW%" "%LOG_FILE_PAGINATED%" "%LOG_FILE_WIDGETS%" "%LOG_FILE_EXTRA%") do (
+for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_MINIMAL%" "%LOG_FILE_NOTWINS%" "%LOG_FILE_MULTILINGUAL%" "%LOG_FILE_LLMSOFF%" "%LOG_FILE_EDGE%" "%LOG_FILE_OFF%" "%LOG_FILE_BADTABLES%" "%LOG_FILE_NSOFF%" "%LOG_FILE_NOSECTIONPAGES%" "%LOG_FILE_NOLINKMD%" "%LOG_FILE_SHADOW%" "%LOG_FILE_PAGINATED%" "%LOG_FILE_WIDGETS%" "%LOG_FILE_EXTRA%") do (
   findstr /I "deprecat" %%L >nul 2>&1
   if not errorlevel 1 (
     echo Hugo reported deprecations in %%L:
@@ -218,6 +226,7 @@ set FIXTURE_PUBLIC_OFF=%~dp0fixture\public\off
 set FIXTURE_PUBLIC_BADTABLES=%~dp0fixture\public\badtables
 set FIXTURE_PUBLIC_NSOFF=%~dp0fixture\public\nsoff
 set FIXTURE_PUBLIC_NOSECTIONPAGES=%~dp0fixture\public\nosectionpages
+set FIXTURE_PUBLIC_NOLINKMD=%~dp0fixture\public\nolinkmd
 set FIXTURE_PUBLIC_SHADOW=%~dp0fixture-shadow\public
 set FIXTURE_PUBLIC_PAGINATED=%~dp0fixture-paginated\public
 set FIXTURE_PUBLIC_WIDGETS=%~dp0fixture-widgets\public
@@ -233,6 +242,7 @@ set HUGO_BUILD_LOG_OFF=%LOG_FILE_OFF%
 set HUGO_BUILD_LOG_BADTABLES=%LOG_FILE_BADTABLES%
 set HUGO_BUILD_LOG_NSOFF=%LOG_FILE_NSOFF%
 set HUGO_BUILD_LOG_NOSECTIONPAGES=%LOG_FILE_NOSECTIONPAGES%
+set HUGO_BUILD_LOG_NOLINKMD=%LOG_FILE_NOLINKMD%
 set HUGO_BUILD_LOG_SHADOW=%LOG_FILE_SHADOW%
 set HUGO_BUILD_LOG_PAGINATED=%LOG_FILE_PAGINATED%
 set HUGO_BUILD_LOG_WIDGETS=%LOG_FILE_WIDGETS%

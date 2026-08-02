@@ -1,0 +1,80 @@
+{{/*
+  FIXTURE SEAM -- shadows github-profile/fetch.html from the imported module.
+
+  Hugo resolves a site's own layouts/ ahead of any module's, so this file wins
+  the lookup for the partial path "github-profile/fetch.html" and the module's
+  network-bound original never runs. Nothing else in the chain is shadowed:
+  derive.html, render.html and every section partial come from the module and
+  run for real, which is what makes the suite's assertions about the module's
+  markup meaningful.
+
+  Why the seam sits HERE. fetch.html is the module's only boundary to the
+  outside world: it is the one partial that calls resources.GetRemote and the
+  one that reads HUGO_GITHUB_TOKEN. Replacing it makes the whole build offline,
+  hermetic and byte-for-byte deterministic (the module's own retry, backoff,
+  cache-key and circuit-breaker machinery is bypassed along with the network),
+  without touching a single line of rendering logic.
+
+  The canned snapshot lives in data/github-profile-fetch.json and is read with
+  hugo.Data (never the deprecated .Site.Data). Its "user" object mirrors the
+  snapshot query in the module's github-profile/build-query.html, with the
+  byRepo aliased block already grafted into contributionsCollection exactly as
+  the real fetch.html grafts it before returning.
+
+  Context expectations (identical to the module partial):
+  - .user (string)       GitHub login to fetch.
+  - .history (string)    "year" or "all".
+  - .mergedPrs (bool)    Whether to fetch the lifetime merged-PR count.
+  - .position (text.Position) Shortcode call position (used in warnings).
+
+  Returns (identical to the module partial):
+  - .apiOk (bool)
+  - .degradedReason (string)
+  - .user (map, or a falsy placeholder when apiOk is false)
+  - .yearTotals (map; empty when history is "year")
+  - .mergedPrCount (int; -1 when not requested)
+
+  Go templates have no nil literal, so the two "or nil" fields of the real
+  contract are represented by falsy values of the right shape: derive.html
+  reads yearTotals through `with` and reads user only under apiOk, so a false
+  and an empty dict behave exactly as the real partial's nils do.
+
+  A shortcode call asking for any login other than the canned one degrades with
+  degradedReason "not-found", which is how a spec exercises the module's
+  degraded identity chip without a network round trip.
+*/}}
+
+{{- $requestedLogin := .user -}}
+{{- $history := .history -}}
+{{- $wantMergedPrs := .mergedPrs -}}
+{{- $position := .position -}}
+
+{{- $result := dict
+  "apiOk" false
+  "degradedReason" "not-found"
+  "user" false
+  "yearTotals" (dict)
+  "mergedPrCount" -1
+-}}
+
+{{- $fixture := index hugo.Data "github-profile-fetch" -}}
+{{- if not $fixture -}}
+  {{/* The fixture is worthless if the seam silently degrades: every assertion
+       about the rendered widget would pass vacuously against the identity
+       chip. Fail the build loudly instead. */}}
+  {{- errorf "[github-profile fixture] data/github-profile-fetch.json did not load, so the offline seam has no canned snapshot to serve. See %s" $position -}}
+{{- else -}}
+  {{- $cannedUser := index $fixture "user" -}}
+  {{- $cannedLogin := printf "%v" (index $cannedUser "login") -}}
+  {{- if eq $requestedLogin $cannedLogin -}}
+    {{- $result = merge $result (dict "apiOk" true "degradedReason" "" "user" $cannedUser) -}}
+    {{- if eq $history "all" -}}
+      {{- $result = merge $result (dict "yearTotals" (index $fixture "yearTotals")) -}}
+    {{- end -}}
+    {{- if $wantMergedPrs -}}
+      {{- $result = merge $result (dict "mergedPrCount" (int (index $fixture "mergedPrCount"))) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $result -}}

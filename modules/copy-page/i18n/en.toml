@@ -16,7 +16,18 @@ copy_page_llms_desc = "Open llms.txt for this site"
 
 # AI-provider rows; {{ .Name }} is the brand label.
 copy_page_open_in = "Open in {{ .Name }}"
+
+# Row descriptions, selected by the row's prompt target so the menu says which
+# surface each row hands the assistant. The bare key is the fallback for a row
+# that carries no target.
 copy_page_open_desc = "Ask questions about this page"
+copy_page_open_desc_markdown = "Ask questions about the Markdown version"
+copy_page_open_desc_html = "Ask questions about the live page"
+
+# The ChatGPT row is the one provider row pointed at the live page rather than
+# the Markdown twin, because its endpoint opens search mode; the description
+# says so where a reader compares it against the rows above and below it.
+copy_page_chatgpt_desc = "Search mode, which reads the live page"
 
 # Accessible name of the dropdown toggle (real text in __toggle-label).
 copy_page_toggle = "More ways to use this page"

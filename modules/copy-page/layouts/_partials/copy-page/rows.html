@@ -15,6 +15,32 @@
   is documented in the Claude Help Center for the desktop deep link that
   mirrors the same web path.
 
+  WHY CHATGPT IS THE ONE ROW WITH target "html", settled 2026-08-02 and not
+  to be re-opened without new evidence. Its endpoint carries hints=search,
+  which forces ChatGPT's search mode -- the mode resolves an address through
+  a search index rather than fetching it directly, and a Markdown twin is a
+  secondary representation that sites routinely keep out of that index. The
+  canonical HTML page is therefore the address that mode can actually
+  resolve, which is why the pairing exists.
+
+  The alternative -- align the row on the Markdown twin like the other four,
+  with or without hints=search -- was REJECTED because its precondition is an
+  observed test that ChatGPT's search mode reliably retrieves a .md URL, and
+  no vendor documents the parameter at all: neither ?q= nor hints=search
+  appears in any OpenAI specification, so the behavior is only knowable by
+  running it. Trading a shape verified to work for one that cannot be
+  verified here is not an improvement. A maintainer who runs that test and
+  finds search mode retrieves the twin can flip this entry's target to
+  "markdown" and delete this paragraph.
+
+  What made the asymmetry a recurring report was not the target choice but
+  its INVISIBILITY: every provider row carried the same description, so a
+  reader comparing two rows saw different hrefs and no reason. The default
+  description is now derived from the row's own target below, which states
+  the difference where the difference is and generalizes to any rows_extra
+  row a consumer adds; the chatgpt entry additionally names the search mode,
+  because that is the reason it is the odd one out.
+
   Expected context (dict) - the resolved config from config.html; read here:
   - .rows       (slice)  - Lowercased row slugs in render order.
   - .url        (string) - The page's Markdown URL (non-empty; menu.html
@@ -32,9 +58,11 @@
   - label_default (string, optional) - English fallback when the i18n key
     has no translation. Default "Open in <label>".
   - desc_key      (string, optional) - i18n key for the row description.
-    Default "copy_page_open_desc".
+    Defaults to the key matching the row's own target:
+    "copy_page_open_desc_markdown", "copy_page_open_desc_html", or
+    "copy_page_open_desc" when the row carries no prompt target.
   - desc_default  (string, optional) - English fallback for the description.
-    Default "Ask questions about this page".
+    Defaults to the sentence matching that same target.
   - icon          (string, optional) - icon.html glyph name. Default: slug.
   - endpoint      (string) - Absolute URL that ALREADY contains the query
     parameter name and ends at its "=" (e.g. "https://you.com/search?q=");
@@ -42,7 +70,8 @@
     be https (enforced below). Unused by the built-in copy/view/llms rows.
   - target        (string, optional) - Prompt target: "html" (the page's
     own permalink), "markdown" (the Markdown URL), or "none" (plain link,
-    no prompt appended). Default "none".
+    no prompt appended). Default "none". Case-folded and trimmed before it
+    is matched; an unrecognized value warns once.
   - kind          (string, internal) - "link" (default) or "action" (the
     JavaScript-revealed copy button). rows_extra entries are always links.
   - source        (string, internal) - Same-origin href source for the
@@ -88,6 +117,8 @@
     "icon" "openai"
     "endpoint" "https://chatgpt.com/?hints=search&q="
     "target" "html"
+    "desc_key" "copy_page_chatgpt_desc"
+    "desc_default" "Search mode, which reads the live page"
   )
   "claude" (dict
     "label" "Claude"
@@ -143,14 +174,49 @@
         "message" (printf "[copy-page] Unknown row %q was skipped. Use a built-in slug from the module README Rows table, or define [params.copy_page.rows_extra.%s]. See %s" $slug $slug $cfg.where)) -}}
   {{- else -}}
     {{- $label := printf "%v" ($entry.label | default $slug) -}}
+    {{/* The default description follows the row's own prompt target, so the
+         menu states which surface each row hands the assistant instead of
+         giving every provider the same sentence and leaving the differing
+         hrefs unexplained. A row that sets its own desc_key still wins, which
+         is how the chatgpt entry adds its search-mode reason on top. The
+         non-prompt rows (copy, view, llms) all carry dedicated keys already,
+         so the "none" default below is reached only by a rows_extra row that
+         declares no target. */}}
+    {{/* The prompt target is case-folded and trimmed ONCE, here, and the
+         normalized value is what both the derivation below and url.html read
+         -- url.html receives it merged back into the entry. An unnormalized
+         `Markdown` fails invisibly twice over: url.html's own equality test
+         misses, so the prompt carries the URL the consumer did not ask for,
+         AND the derivation below misses, so the row describes a surface its
+         own link does not match, which is the exact mismatch this derivation
+         exists to remove. A value that is not one of the three is named once
+         rather than dropped silently, the same way an unknown slug and a
+         non-https endpoint are; its behavior is left untouched, because
+         guessing which target a consumer meant would be a worse answer than
+         telling them the value was not understood. */}}
+    {{- $rowTarget := lower (trim (printf "%v" ($entry.target | default "none")) " \t\n\r") -}}
+    {{- if not (in (slice "none" "html" "markdown") $rowTarget) -}}
+      {{- partial "copy-page/lib/warn.html" (dict
+          "key" (printf "copy-page:warn:unknown-target:%s:%s" $slug $rowTarget)
+          "message" (printf "[copy-page] Row %q declares the unrecognized prompt target %q, so its description falls back to the neutral wording and its prompt keeps the default target. Use \"markdown\", \"html\", or \"none\". See %s" $slug $rowTarget $cfg.where)) -}}
+    {{- end -}}
+    {{- $descKey := "copy_page_open_desc" -}}
+    {{- $descDefault := "Ask questions about this page" -}}
+    {{- if eq $rowTarget "markdown" -}}
+      {{- $descKey = "copy_page_open_desc_markdown" -}}
+      {{- $descDefault = "Ask questions about the Markdown version" -}}
+    {{- else if eq $rowTarget "html" -}}
+      {{- $descKey = "copy_page_open_desc_html" -}}
+      {{- $descDefault = "Ask questions about the live page" -}}
+    {{- end -}}
     {{- $item := dict
       "slug" $slug
       "icon" (printf "%v" ($entry.icon | default $slug))
       "label" $label
       "label_key" (printf "%v" ($entry.label_key | default "copy_page_open_in"))
       "label_default" (printf "%v" ($entry.label_default | default (printf "Open in %s" $label)))
-      "desc_key" (printf "%v" ($entry.desc_key | default "copy_page_open_desc"))
-      "desc_default" (printf "%v" ($entry.desc_default | default "Ask questions about this page"))
+      "desc_key" (printf "%v" ($entry.desc_key | default $descKey))
+      "desc_default" (printf "%v" ($entry.desc_default | default $descDefault))
     -}}
     {{- if eq ($entry.kind | default "link") "action" -}}
       {{- $items = $items | append (merge $item (dict "kind" "action" "external" false)) -}}
@@ -169,7 +235,7 @@
             "key" (printf "copy-page:warn:scheme:%s" $slug)
             "message" (printf "[copy-page] Skipped %q: endpoint %q does not use the required https scheme. See %s" $slug $endpoint $cfg.where)) -}}
       {{- else -}}
-        {{- $href := partial "copy-page/url.html" (dict "entry" $entry "cfg" $cfg) -}}
+        {{- $href := partial "copy-page/url.html" (dict "entry" (merge $entry (dict "target" $rowTarget)) "cfg" $cfg) -}}
         {{- $items = $items | append (merge $item (dict "kind" "link" "external" true "href" $href)) -}}
       {{- end -}}
     {{- end -}}

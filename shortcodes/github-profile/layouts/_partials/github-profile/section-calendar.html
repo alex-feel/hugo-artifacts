@@ -25,6 +25,15 @@
   so the window string is constant. A site that wants neither element hides
   it with CSS.
 
+  The summary's total and window are separated by one explicit literal space
+  between two inline elements, and each wrapper closes on the SAME line as
+  its last child so that space is the FIRST whitespace in its run: Hugo's
+  --minify collapses a run to one character and then deletes whatever
+  whitespace follows it, so a newline-plus-indent sitting inside the total
+  wrapper would win and the deliberate separating space would vanish, gluing
+  the number to the window. The same holds between the two streak elements.
+  See github-profile/section-headline.html for the full statement of the rule.
+
   Context: the render.html context dict (.d carries the normalized data).
 */}}
 
@@ -36,8 +45,7 @@
 <section class="github-profile__section github-profile__section--calendar">
   <p class="github-profile__calendar-summary">
     <span class="github-profile__calendar-total" data-raw="{{ $d.calendarTotal }}">
-      <span class="github-profile__calendar-total-value">{{ $calendarFormatted }}</span> <span class="github-profile__calendar-total-unit">{{ T "github_profile_calendar_unit" $d.calendarTotal | default (cond (eq $d.calendarTotal 1) "contribution" "contributions") }}</span>
-    </span> <span class="github-profile__calendar-period">{{ T "github_profile_calendar_period" | default "last 12 months" }}</span>
+      <span class="github-profile__calendar-total-value">{{ $calendarFormatted }}</span> <span class="github-profile__calendar-total-unit">{{ T "github_profile_calendar_unit" $d.calendarTotal | default (cond (eq $d.calendarTotal 1) "contribution" "contributions") }}</span></span> <span class="github-profile__calendar-period">{{ T "github_profile_calendar_period" | default "last 12 months" }}</span>
   </p>
   <div class="github-profile__calendar"
        role="img"
@@ -70,11 +78,9 @@
   </div>
   {{- if ge $d.streakCurrent 0 }}
   <span class="github-profile__streak" data-streak="current" data-raw="{{ $d.streakCurrent }}">
-    <span class="github-profile__metric-label">{{ T "github_profile_streak_current" | default "current streak" }}</span> <span class="github-profile__metric-value">{{ T "github_profile_streak_days" (dict "count" $d.streakCurrent "formatted" (lang.FormatNumber 0 $d.streakCurrent)) | default (printf "%d days" $d.streakCurrent) }}</span>
-  </span>
+    <span class="github-profile__metric-label">{{ T "github_profile_streak_current" | default "current streak" }}</span> <span class="github-profile__metric-value">{{ T "github_profile_streak_days" (dict "count" $d.streakCurrent "formatted" (lang.FormatNumber 0 $d.streakCurrent)) | default (printf "%d days" $d.streakCurrent) }}</span></span>
   <span class="github-profile__streak" data-streak="longest" data-raw="{{ $d.streakLongest }}">
-    <span class="github-profile__metric-label">{{ T "github_profile_streak_longest" | default "longest streak" }}</span> <span class="github-profile__metric-value">{{ T "github_profile_streak_days" (dict "count" $d.streakLongest "formatted" (lang.FormatNumber 0 $d.streakLongest)) | default (printf "%d days" $d.streakLongest) }}</span>
-  </span>
+    <span class="github-profile__metric-label">{{ T "github_profile_streak_longest" | default "longest streak" }}</span> <span class="github-profile__metric-value">{{ T "github_profile_streak_days" (dict "count" $d.streakLongest "formatted" (lang.FormatNumber 0 $d.streakLongest)) | default (printf "%d days" $d.streakLongest) }}</span></span>
   {{- end }}
 </section>
 {{- end }}

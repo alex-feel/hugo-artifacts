@@ -119,6 +119,28 @@ test.describe('encoding matrix (provider rows)', () => {
     expect(href).not.toContain('+');
   });
 
+  test('each provider row names the surface it hands the assistant', async ({page}) => {
+    // The reason this exists: the five provider rows do not agree about what
+    // they send -- chatgpt carries the page's permalink, the other four carry
+    // the Markdown twin -- and while that pairing is deliberate, it used to be
+    // invisible, because every row repeated the same description over a
+    // different href. A reader comparing two rows had to leave the widget to
+    // find out why. These assertions pin the fix at the place the difference
+    // is visible.
+    await page.goto('/docs/enc-[matrix]-42/');
+    const root = page.locator('.copy-page');
+    const descOf = (slug) => root.locator(`a.copy-page__row--${slug} .copy-page__desc`);
+
+    // The one html-target row also names WHY it is the odd one out.
+    await expect(descOf('chatgpt')).toHaveText('Search mode, which reads the live page');
+    for (const slug of ['claude', 'perplexity', 'grok', 'aistudio']) {
+      await expect(descOf(slug)).toHaveText('Ask questions about the Markdown version');
+    }
+    // The asymmetry in the hrefs is matched by an asymmetry in the copy: if
+    // these two ever read the same again, the report this fix closed is back.
+    expect(await descOf('chatgpt').textContent()).not.toBe(await descOf('claude').textContent());
+  });
+
   test('external rows carry the full rel/target policy', async ({page}) => {
     await page.goto('/docs/enc-[matrix]-42/');
     const providers = ['chatgpt', 'claude', 'perplexity', 'grok', 'aistudio'];
@@ -188,7 +210,16 @@ test.describe('rows_extra (consumer extension rows)', () => {
     );
     await expect(youcom).toHaveAttribute('rel', 'noopener noreferrer nofollow');
     await expect(youcom.locator('.copy-page__title')).toHaveText('Open in You.com');
-    await expect(youcom.locator('.copy-page__desc')).toHaveText('Ask questions about this page');
+    // The default description follows the row's own prompt target, and that
+    // derivation reaches rows_extra rows too: youcom declares a target of
+    // "Markdown", so it describes the Markdown surface without the consumer
+    // writing any copy of their own. The mis-cased value is the point -- the
+    // target is case-folded once and the normalized form feeds both the href
+    // asserted above and this description, so the two can never disagree over
+    // a capital letter.
+    await expect(youcom.locator('.copy-page__desc')).toHaveText(
+      'Ask questions about the Markdown version',
+    );
 
     // new_tab = false via front matter: no target, no external glyph, no
     // new-tab hint on ANY link row.

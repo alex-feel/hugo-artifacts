@@ -1,0 +1,13 @@
+{{/*
+  Home template for the fixture site.
+
+  The wrapper carries a stable id so a spec can locate the widget without
+  depending on the surrounding chrome: everything the page's Markdown renders
+  -- and therefore every github-profile invocation on it -- sits inside
+  #fixture-profile.
+*/}}
+{{ define "main" }}
+  <div id="fixture-profile" data-fixture-page="{{ .Kind }}">
+    {{ .Content }}
+  </div>
+{{ end }}

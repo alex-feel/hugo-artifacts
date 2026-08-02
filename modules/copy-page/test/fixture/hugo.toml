@@ -33,15 +33,27 @@ description = "Hugo copy-page module Playwright validation fixture site."
 # carries a query parameter and ends at its "="; the module appends only the
 # percent-encoded prompt value. insecure must be skipped with a warning:
 # rows_extra endpoints are https-only.
+#
+# youcom's target is deliberately MIS-CASED. The value is case-folded once in
+# rows.html and the normalized form feeds both the href derivation and the
+# description, so this one row proves both halves at once: its href must still
+# resolve to the Markdown URL, and its description must still read as a
+# Markdown row. Before normalization a mis-cased value missed both tests, which
+# sent the wrong URL and described a surface the link did not match.
 [params.copy_page.rows_extra.youcom]
 label = "You.com"
 endpoint = "https://you.com/search?q="
-target = "markdown"
+target = "Markdown"
 
+# insecure carries an unrecognized target as well as its http endpoint. The
+# unknown-target warning fires before the https guard drops the row, so this
+# entry keeps that branch executing on every build -- a template error inside
+# it would fail the build rather than lying dormant until a consumer typos a
+# target. It adds no rendered row, so nothing else observes it.
 [params.copy_page.rows_extra.insecure]
 label = "Insecure"
 endpoint = "http://insecure.example/search?q="
-target = "markdown"
+target = "sideways"
 
 [module]
 

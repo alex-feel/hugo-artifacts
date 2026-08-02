@@ -1,0 +1,1185 @@
+{
+  "_fixture": {
+    "purpose": "Canned GitHub GraphQL snapshot served by layouts/_partials/github-profile/fetch.html in this fixture site, which shadows the module partial of the same path so the suite builds fully offline, with no HUGO_GITHUB_TOKEN and no network access.",
+    "notes": [
+      "Field names and nesting mirror the snapshot query in the module partial github-profile/build-query.html, with the byRepo aliased block already grafted into contributionsCollection exactly as the real fetch.html grafts it before returning.",
+      "Values are chosen so every branch of section-headline.html renders at once: a non-negative mergedPrCount, externalRepos and externalOrgs above zero, a non-zero 90-day recency, a rank level, and a non-zero restrictedContributionsCount so the floor note and its github-profile__sep--note separator (the minifier defect site) render.",
+      "The calendar spans 14 weeks (98 days), deliberately more than the 90-day recency window, so derive.html truncates it: 63 of the 98 days are active but only 55 fall inside the window. The trailing 12 days are active (current streak 12) and the longest run is 21 days.",
+      "repositoriesContributedTo.totalCount (18) deliberately exceeds its node count (6): the external-repositories metric must read totalCount, not the length of the node list, and GitHub genuinely returns fewer nodes than totalCount when a policy nulls individual entries.",
+      "Nine distinct languages resolve across the owned and contributed repositories, so derive.html truncates the list to its top eight and Ruby, the smallest, drops.",
+      "Every value here is static. The only build-varying field the module derives from it is tenureYears, which grows with the wall clock because it is measured from createdAt to now."
+    ]
+  },
+  "mergedPrCount": 1289,
+  "yearTotals": {
+    "y2024": {
+      "totalCommitContributions": 1204,
+      "totalIssueContributions": 61,
+      "totalPullRequestContributions": 173,
+      "totalPullRequestReviewContributions": 122,
+      "totalRepositoryContributions": 14,
+      "restrictedContributionsCount": 4180
+    },
+    "y2025": {
+      "totalCommitContributions": 1842,
+      "totalIssueContributions": 96,
+      "totalPullRequestContributions": 274,
+      "totalPullRequestReviewContributions": 188,
+      "totalRepositoryContributions": 21,
+      "restrictedContributionsCount": 7934
+    }
+  },
+  "user": {
+    "login": "fixture-dev",
+    "databaseId": 4242,
+    "name": "Fixture Dev",
+    "bio": "Builds test fixtures so other people can trust their builds.",
+    "company": "@fixture-labs",
+    "location": "Testville, Nowhere",
+    "pronouns": "they/them",
+    "websiteUrl": "https://fixture.example/",
+    "avatarUrl": "https://avatars.fixture.example/u/4242?v=4",
+    "url": "https://github.com/fixture-dev",
+    "createdAt": "2015-03-14T09:26:53Z",
+    "isHireable": true,
+    "status": {
+      "message": "Shipping deterministic fixtures",
+      "emoji": ":hammer:"
+    },
+    "followers": {
+      "totalCount": 312
+    },
+    "following": {
+      "totalCount": 47
+    },
+    "socialAccounts": {
+      "nodes": [
+        {
+          "provider": "MASTODON",
+          "displayName": "@fixture-dev@fixture.example",
+          "url": "https://fixture.example/@fixture-dev"
+        },
+        {
+          "provider": "LINKEDIN",
+          "displayName": "fixture-dev",
+          "url": "https://www.linkedin.com/in/fixture-dev/"
+        },
+        {
+          "provider": "TWITTER",
+          "displayName": "fixturedev",
+          "url": "https://twitter.com/fixturedev"
+        }
+      ]
+    },
+    "organizations": {
+      "totalCount": 3,
+      "nodes": [
+        {
+          "login": "fixture-labs",
+          "name": "Fixture Labs",
+          "url": "https://github.com/fixture-labs",
+          "avatarUrl": "https://avatars.fixture.example/o/11?s=64"
+        },
+        {
+          "login": "open-fixture",
+          "name": "Open Fixture",
+          "url": "https://github.com/open-fixture",
+          "avatarUrl": "https://avatars.fixture.example/o/12?s=64"
+        },
+        {
+          "login": "another-org",
+          "name": "",
+          "url": "https://github.com/another-org",
+          "avatarUrl": "https://avatars.fixture.example/o/13?s=64"
+        }
+      ]
+    },
+    "pinnedItems": {
+      "nodes": [
+        {
+          "__typename": "Repository",
+          "nameWithOwner": "fixture-dev/toolbelt",
+          "description": "A small kit of build-time helpers.",
+          "url": "https://github.com/fixture-dev/toolbelt",
+          "stargazerCount": 128,
+          "forkCount": 17,
+          "primaryLanguage": {
+            "name": "Go"
+          }
+        },
+        {
+          "__typename": "Repository",
+          "nameWithOwner": "fixture-labs/toolkit",
+          "description": "The shared toolkit the fixture person contributes to most.",
+          "url": "https://github.com/fixture-labs/toolkit",
+          "stargazerCount": 2140,
+          "forkCount": 233,
+          "primaryLanguage": {
+            "name": "Go"
+          }
+        },
+        {
+          "__typename": "Gist"
+        }
+      ]
+    },
+    "repositories": {
+      "totalCount": 4,
+      "nodes": [
+        {
+          "nameWithOwner": "fixture-dev/toolbelt",
+          "stargazerCount": 128,
+          "languages": {
+            "edges": [
+              {
+                "size": 420000,
+                "node": {
+                  "name": "Go"
+                }
+              },
+              {
+                "size": 15000,
+                "node": {
+                  "name": "Shell"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "nameWithOwner": "fixture-dev/site",
+          "stargazerCount": 64,
+          "languages": {
+            "edges": [
+              {
+                "size": 310000,
+                "node": {
+                  "name": "TypeScript"
+                }
+              },
+              {
+                "size": 42000,
+                "node": {
+                  "name": "CSS"
+                }
+              },
+              {
+                "size": 28000,
+                "node": {
+                  "name": "HTML"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "nameWithOwner": "fixture-dev/analyzer",
+          "stargazerCount": 32,
+          "languages": {
+            "edges": [
+              {
+                "size": 190000,
+                "node": {
+                  "name": "Python"
+                }
+              },
+              {
+                "size": 9000,
+                "node": {
+                  "name": "Lua"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "nameWithOwner": "fixture-dev/dotfiles",
+          "stargazerCount": 9,
+          "languages": {
+            "edges": [
+              {
+                "size": 21000,
+                "node": {
+                  "name": "Shell"
+                }
+              },
+              {
+                "size": 4000,
+                "node": {
+                  "name": "Ruby"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "contributionsCollection": {
+      "totalCommitContributions": 1842,
+      "totalIssueContributions": 96,
+      "totalPullRequestContributions": 274,
+      "totalPullRequestReviewContributions": 188,
+      "totalRepositoryContributions": 21,
+      "restrictedContributionsCount": 7934,
+      "contributionYears": [2025, 2024],
+      "startedAt": "2024-04-14T00:00:00Z",
+      "endedAt": "2025-04-13T00:00:00Z",
+      "contributionCalendar": {
+        "totalContributions": 408,
+        "weeks": [
+          {
+            "firstDay": "2025-01-05",
+            "contributionDays": [
+              {
+                "date": "2025-01-05",
+                "contributionCount": 1,
+                "contributionLevel": "FIRST_QUARTILE",
+                "weekday": 0
+              },
+              {
+                "date": "2025-01-06",
+                "contributionCount": 8,
+                "contributionLevel": "THIRD_QUARTILE",
+                "weekday": 1
+              },
+              {
+                "date": "2025-01-07",
+                "contributionCount": 3,
+                "contributionLevel": "SECOND_QUARTILE",
+                "weekday": 2
+              },
+              {
+                "date": "2025-01-08",
+                "contributionCount": 10,
+                "contributionLevel": "FOURTH_QUARTILE",
+                "weekday": 3
+              },
+              {
+                "date": "2025-01-09",
+                "contributionCount": 5,
+                "contributionLevel": "SECOND_QUARTILE",
+                "weekday": 4
+              },
+              {
+                "date": "2025-01-10",
+                "contributionCount": 12,
+                "contributionLevel": "FOURTH_QUARTILE",
+                "weekday": 5
+              },
+              {
+                "date": "2025-01-11",
+                "contributionCount": 7,
+                "contributionLevel": "THIRD_QUARTILE",
+                "weekday": 6
+              }
+            ]
+          },
+          {
+            "firstDay": "2025-01-12",
+            "contributionDays": [
+              {
+                "date": "2025-01-12",
+                "contributionCount": 2,
+                "contributionLevel": "FIRST_QUARTILE",
+                "weekday": 0
+              },
+              {
+                "date": "2025-01-13",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 1
+              },
+              {
+                "date": "2025-01-14",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 2
+              },
+              {
+                "date": "2025-01-15",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 3
+              },
+              {
+                "date": "2025-01-16",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 4
+              },
+              {
+                "date": "2025-01-17",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 5
+              },
+              {
+                "date": "2025-01-18",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 6
+              }
+            ]
+          },
+          {
+            "firstDay": "2025-01-19",
+            "contributionDays": [
+              {
+                "date": "2025-01-19",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 0
+              },
+              {
+                "date": "2025-01-20",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 1
+              },
+              {
+                "date": "2025-01-21",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 2
+              },
+              {
+                "date": "2025-01-22",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 3
+              },
+              {
+                "date": "2025-01-23",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 4
+              },
+              {
+                "date": "2025-01-24",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 5
+              },
+              {
+                "date": "2025-01-25",
+                "contributionCount": 9,
+                "contributionLevel": "THIRD_QUARTILE",
+                "weekday": 6
+              }
+            ]
+          },
+          {
+            "firstDay": "2025-01-26",
+            "contributionDays": [
+              {
+                "date": "2025-01-26",
+                "contributionCount": 4,
+                "contributionLevel": "SECOND_QUARTILE",
+                "weekday": 0
+              },
+              {
+                "date": "2025-01-27",
+                "contributionCount": 11,
+                "contributionLevel": "FOURTH_QUARTILE",
+                "weekday": 1
+              },
+              {
+                "date": "2025-01-28",
+                "contributionCount": 6,
+                "contributionLevel": "THIRD_QUARTILE",
+                "weekday": 2
+              },
+              {
+                "date": "2025-01-29",
+                "contributionCount": 1,
+                "contributionLevel": "FIRST_QUARTILE",
+                "weekday": 3
+              },
+              {
+                "date": "2025-01-30",
+                "contributionCount": 8,
+                "contributionLevel": "THIRD_QUARTILE",
+                "weekday": 4
+              },
+              {
+                "date": "2025-01-31",
+                "contributionCount": 3,
+                "contributionLevel": "SECOND_QUARTILE",
+                "weekday": 5
+              },
+              {
+                "date": "2025-02-01",
+                "contributionCount": 10,
+                "contributionLevel": "FOURTH_QUARTILE",
+                "weekday": 6
+              }
+            ]
+          },
+          {
+            "firstDay": "2025-02-02",
+            "contributionDays": [
+              {
+                "date": "2025-02-02",
+                "contributionCount": 5,
+                "contributionLevel": "SECOND_QUARTILE",
+                "weekday": 0
+              },
+              {
+                "date": "2025-02-03",
+                "contributionCount": 12,
+                "contributionLevel": "FOURTH_QUARTILE",
+                "weekday": 1
+              },
+              {
+                "date": "2025-02-04",
+                "contributionCount": 7,
+                "contributionLevel": "THIRD_QUARTILE",
+                "weekday": 2
+              },
+              {
+                "date": "2025-02-05",
+                "contributionCount": 2,
+                "contributionLevel": "FIRST_QUARTILE",
+                "weekday": 3
+              },
+              {
+                "date": "2025-02-06",
+                "contributionCount": 9,
+                "contributionLevel": "THIRD_QUARTILE",
+                "weekday": 4
+              },
+              {
+                "date": "2025-02-07",
+                "contributionCount": 4,
+                "contributionLevel": "SECOND_QUARTILE",
+                "weekday": 5
+              },
+              {
+                "date": "2025-02-08",
+                "contributionCount": 11,
+                "contributionLevel": "FOURTH_QUARTILE",
+                "weekday": 6
+              }
+            ]
+          },
+          {
+            "firstDay": "2025-02-09",
+            "contributionDays": [
+              {
+                "date": "2025-02-09",
+                "contributionCount": 6,
+                "contributionLevel": "THIRD_QUARTILE",
+                "weekday": 0
+              },
+              {
+                "date": "2025-02-10",
+                "contributionCount": 1,
+                "contributionLevel": "FIRST_QUARTILE",
+                "weekday": 1
+              },
+              {
+                "date": "2025-02-11",
+                "contributionCount": 8,
+                "contributionLevel": "THIRD_QUARTILE",
+                "weekday": 2
+              },
+              {
+                "date": "2025-02-12",
+                "contributionCount": 3,
+                "contributionLevel": "SECOND_QUARTILE",
+                "weekday": 3
+              },
+              {
+                "date": "2025-02-13",
+                "contributionCount": 10,
+                "contributionLevel": "FOURTH_QUARTILE",
+                "weekday": 4
+              },
+              {
+                "date": "2025-02-14",
+                "contributionCount": 5,
+                "contributionLevel": "SECOND_QUARTILE",
+                "weekday": 5
+              },
+              {
+                "date": "2025-02-15",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 6
+              }
+            ]
+          },
+          {
+            "firstDay": "2025-02-16",
+            "contributionDays": [
+              {
+                "date": "2025-02-16",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 0
+              },
+              {
+                "date": "2025-02-17",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 1
+              },
+              {
+                "date": "2025-02-18",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 2
+              },
+              {
+                "date": "2025-02-19",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 3
+              },
+              {
+                "date": "2025-02-20",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 4
+              },
+              {
+                "date": "2025-02-21",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 5
+              },
+              {
+                "date": "2025-02-22",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 6
+              }
+            ]
+          },
+          {
+            "firstDay": "2025-02-23",
+            "contributionDays": [
+              {
+                "date": "2025-02-23",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 0
+              },
+              {
+                "date": "2025-02-24",
+                "contributionCount": 3,
+                "contributionLevel": "SECOND_QUARTILE",
+                "weekday": 1
+              },
+              {
+                "date": "2025-02-25",
+                "contributionCount": 10,
+                "contributionLevel": "FOURTH_QUARTILE",
+                "weekday": 2
+              },
+              {
+                "date": "2025-02-26",
+                "contributionCount": 5,
+                "contributionLevel": "SECOND_QUARTILE",
+                "weekday": 3
+              },
+              {
+                "date": "2025-02-27",
+                "contributionCount": 12,
+                "contributionLevel": "FOURTH_QUARTILE",
+                "weekday": 4
+              },
+              {
+                "date": "2025-02-28",
+                "contributionCount": 7,
+                "contributionLevel": "THIRD_QUARTILE",
+                "weekday": 5
+              },
+              {
+                "date": "2025-03-01",
+                "contributionCount": 2,
+                "contributionLevel": "FIRST_QUARTILE",
+                "weekday": 6
+              }
+            ]
+          },
+          {
+            "firstDay": "2025-03-02",
+            "contributionDays": [
+              {
+                "date": "2025-03-02",
+                "contributionCount": 9,
+                "contributionLevel": "THIRD_QUARTILE",
+                "weekday": 0
+              },
+              {
+                "date": "2025-03-03",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 1
+              },
+              {
+                "date": "2025-03-04",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 2
+              },
+              {
+                "date": "2025-03-05",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 3
+              },
+              {
+                "date": "2025-03-06",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 4
+              },
+              {
+                "date": "2025-03-07",
+                "contributionCount": 8,
+                "contributionLevel": "THIRD_QUARTILE",
+                "weekday": 5
+              },
+              {
+                "date": "2025-03-08",
+                "contributionCount": 3,
+                "contributionLevel": "SECOND_QUARTILE",
+                "weekday": 6
+              }
+            ]
+          },
+          {
+            "firstDay": "2025-03-09",
+            "contributionDays": [
+              {
+                "date": "2025-03-09",
+                "contributionCount": 10,
+                "contributionLevel": "FOURTH_QUARTILE",
+                "weekday": 0
+              },
+              {
+                "date": "2025-03-10",
+                "contributionCount": 5,
+                "contributionLevel": "SECOND_QUARTILE",
+                "weekday": 1
+              },
+              {
+                "date": "2025-03-11",
+                "contributionCount": 12,
+                "contributionLevel": "FOURTH_QUARTILE",
+                "weekday": 2
+              },
+              {
+                "date": "2025-03-12",
+                "contributionCount": 7,
+                "contributionLevel": "THIRD_QUARTILE",
+                "weekday": 3
+              },
+              {
+                "date": "2025-03-13",
+                "contributionCount": 2,
+                "contributionLevel": "FIRST_QUARTILE",
+                "weekday": 4
+              },
+              {
+                "date": "2025-03-14",
+                "contributionCount": 9,
+                "contributionLevel": "THIRD_QUARTILE",
+                "weekday": 5
+              },
+              {
+                "date": "2025-03-15",
+                "contributionCount": 4,
+                "contributionLevel": "SECOND_QUARTILE",
+                "weekday": 6
+              }
+            ]
+          },
+          {
+            "firstDay": "2025-03-16",
+            "contributionDays": [
+              {
+                "date": "2025-03-16",
+                "contributionCount": 11,
+                "contributionLevel": "FOURTH_QUARTILE",
+                "weekday": 0
+              },
+              {
+                "date": "2025-03-17",
+                "contributionCount": 6,
+                "contributionLevel": "THIRD_QUARTILE",
+                "weekday": 1
+              },
+              {
+                "date": "2025-03-18",
+                "contributionCount": 1,
+                "contributionLevel": "FIRST_QUARTILE",
+                "weekday": 2
+              },
+              {
+                "date": "2025-03-19",
+                "contributionCount": 8,
+                "contributionLevel": "THIRD_QUARTILE",
+                "weekday": 3
+              },
+              {
+                "date": "2025-03-20",
+                "contributionCount": 3,
+                "contributionLevel": "SECOND_QUARTILE",
+                "weekday": 4
+              },
+              {
+                "date": "2025-03-21",
+                "contributionCount": 10,
+                "contributionLevel": "FOURTH_QUARTILE",
+                "weekday": 5
+              },
+              {
+                "date": "2025-03-22",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 6
+              }
+            ]
+          },
+          {
+            "firstDay": "2025-03-23",
+            "contributionDays": [
+              {
+                "date": "2025-03-23",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 0
+              },
+              {
+                "date": "2025-03-24",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 1
+              },
+              {
+                "date": "2025-03-25",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 2
+              },
+              {
+                "date": "2025-03-26",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 3
+              },
+              {
+                "date": "2025-03-27",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 4
+              },
+              {
+                "date": "2025-03-28",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 5
+              },
+              {
+                "date": "2025-03-29",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 6
+              }
+            ]
+          },
+          {
+            "firstDay": "2025-03-30",
+            "contributionDays": [
+              {
+                "date": "2025-03-30",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 0
+              },
+              {
+                "date": "2025-03-31",
+                "contributionCount": 0,
+                "contributionLevel": "NONE",
+                "weekday": 1
+              },
+              {
+                "date": "2025-04-01",
+                "contributionCount": 3,
+                "contributionLevel": "SECOND_QUARTILE",
+                "weekday": 2
+              },
+              {
+                "date": "2025-04-02",
+                "contributionCount": 10,
+                "contributionLevel": "FOURTH_QUARTILE",
+                "weekday": 3
+              },
+              {
+                "date": "2025-04-03",
+                "contributionCount": 5,
+                "contributionLevel": "SECOND_QUARTILE",
+                "weekday": 4
+              },
+              {
+                "date": "2025-04-04",
+                "contributionCount": 12,
+                "contributionLevel": "FOURTH_QUARTILE",
+                "weekday": 5
+              },
+              {
+                "date": "2025-04-05",
+                "contributionCount": 7,
+                "contributionLevel": "THIRD_QUARTILE",
+                "weekday": 6
+              }
+            ]
+          },
+          {
+            "firstDay": "2025-04-06",
+            "contributionDays": [
+              {
+                "date": "2025-04-06",
+                "contributionCount": 2,
+                "contributionLevel": "FIRST_QUARTILE",
+                "weekday": 0
+              },
+              {
+                "date": "2025-04-07",
+                "contributionCount": 9,
+                "contributionLevel": "THIRD_QUARTILE",
+                "weekday": 1
+              },
+              {
+                "date": "2025-04-08",
+                "contributionCount": 4,
+                "contributionLevel": "SECOND_QUARTILE",
+                "weekday": 2
+              },
+              {
+                "date": "2025-04-09",
+                "contributionCount": 11,
+                "contributionLevel": "FOURTH_QUARTILE",
+                "weekday": 3
+              },
+              {
+                "date": "2025-04-10",
+                "contributionCount": 6,
+                "contributionLevel": "THIRD_QUARTILE",
+                "weekday": 4
+              },
+              {
+                "date": "2025-04-11",
+                "contributionCount": 1,
+                "contributionLevel": "FIRST_QUARTILE",
+                "weekday": 5
+              },
+              {
+                "date": "2025-04-12",
+                "contributionCount": 8,
+                "contributionLevel": "THIRD_QUARTILE",
+                "weekday": 6
+              }
+            ]
+          }
+        ]
+      },
+      "commitContributionsByRepository": [
+        {
+          "repository": {
+            "nameWithOwner": "fixture-labs/toolkit",
+            "owner": {
+              "login": "fixture-labs",
+              "__typename": "Organization"
+            }
+          },
+          "contributions": {
+            "totalCount": 214
+          }
+        },
+        {
+          "repository": {
+            "nameWithOwner": "fixture-dev/toolbelt",
+            "owner": {
+              "login": "fixture-dev",
+              "__typename": "User"
+            }
+          },
+          "contributions": {
+            "totalCount": 190
+          }
+        },
+        {
+          "repository": {
+            "nameWithOwner": "open-fixture/parser",
+            "owner": {
+              "login": "open-fixture",
+              "__typename": "Organization"
+            }
+          },
+          "contributions": {
+            "totalCount": 63
+          }
+        }
+      ],
+      "issueContributionsByRepository": [
+        {
+          "repository": {
+            "nameWithOwner": "fixture-labs/toolkit",
+            "owner": {
+              "login": "fixture-labs",
+              "__typename": "Organization"
+            }
+          },
+          "contributions": {
+            "totalCount": 18
+          }
+        },
+        {
+          "repository": {
+            "nameWithOwner": "open-fixture/parser",
+            "owner": {
+              "login": "open-fixture",
+              "__typename": "Organization"
+            }
+          },
+          "contributions": {
+            "totalCount": 4
+          }
+        }
+      ],
+      "pullRequestContributionsByRepository": [
+        {
+          "repository": {
+            "nameWithOwner": "fixture-labs/toolkit",
+            "owner": {
+              "login": "fixture-labs",
+              "__typename": "Organization"
+            }
+          },
+          "contributions": {
+            "totalCount": 57
+          }
+        },
+        {
+          "repository": {
+            "nameWithOwner": "open-fixture/parser",
+            "owner": {
+              "login": "open-fixture",
+              "__typename": "Organization"
+            }
+          },
+          "contributions": {
+            "totalCount": 11
+          }
+        },
+        {
+          "repository": {
+            "nameWithOwner": "solo-maintainer/gadget",
+            "owner": {
+              "login": "solo-maintainer",
+              "__typename": "User"
+            }
+          },
+          "contributions": {
+            "totalCount": 6
+          }
+        }
+      ],
+      "pullRequestReviewContributionsByRepository": [
+        {
+          "repository": {
+            "nameWithOwner": "fixture-labs/toolkit",
+            "owner": {
+              "login": "fixture-labs",
+              "__typename": "Organization"
+            }
+          },
+          "contributions": {
+            "totalCount": 96
+          }
+        },
+        {
+          "repository": {
+            "nameWithOwner": "open-fixture/parser",
+            "owner": {
+              "login": "open-fixture",
+              "__typename": "Organization"
+            }
+          },
+          "contributions": {
+            "totalCount": 22
+          }
+        }
+      ]
+    },
+    "repositoriesContributedTo": {
+      "totalCount": 18,
+      "nodes": [
+        {
+          "nameWithOwner": "fixture-labs/toolkit",
+          "description": "The shared toolkit the fixture person contributes to most.",
+          "url": "https://github.com/fixture-labs/toolkit",
+          "stargazerCount": 2140,
+          "forkCount": 233,
+          "primaryLanguage": {
+            "name": "Go"
+          },
+          "owner": {
+            "login": "fixture-labs",
+            "__typename": "Organization"
+          },
+          "languages": {
+            "edges": [
+              {
+                "size": 260000,
+                "node": {
+                  "name": "Go"
+                }
+              },
+              {
+                "size": 87000,
+                "node": {
+                  "name": "Rust"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "nameWithOwner": "open-fixture/parser",
+          "description": "A parser the fixture person reviews for.",
+          "url": "https://github.com/open-fixture/parser",
+          "stargazerCount": 940,
+          "forkCount": 74,
+          "primaryLanguage": {
+            "name": "Rust"
+          },
+          "owner": {
+            "login": "open-fixture",
+            "__typename": "Organization"
+          },
+          "languages": {
+            "edges": [
+              {
+                "size": 51000,
+                "node": {
+                  "name": "Rust"
+                }
+              },
+              {
+                "size": 12000,
+                "node": {
+                  "name": "Python"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "nameWithOwner": "solo-maintainer/gadget",
+          "description": "A single-maintainer project, owned by a User rather than an Organization.",
+          "url": "https://github.com/solo-maintainer/gadget",
+          "stargazerCount": 320,
+          "forkCount": 21,
+          "primaryLanguage": {
+            "name": "TypeScript"
+          },
+          "owner": {
+            "login": "solo-maintainer",
+            "__typename": "User"
+          },
+          "languages": {
+            "edges": [
+              {
+                "size": 64000,
+                "node": {
+                  "name": "TypeScript"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "nameWithOwner": "fixture-labs/docs-site",
+          "description": "Documentation for the shared toolkit.",
+          "url": "https://github.com/fixture-labs/docs-site",
+          "stargazerCount": 88,
+          "forkCount": 9,
+          "primaryLanguage": {
+            "name": "HTML"
+          },
+          "owner": {
+            "login": "fixture-labs",
+            "__typename": "Organization"
+          },
+          "languages": {
+            "edges": [
+              {
+                "size": 33000,
+                "node": {
+                  "name": "HTML"
+                }
+              },
+              {
+                "size": 6000,
+                "node": {
+                  "name": "CSS"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "nameWithOwner": "another-org/pipeline",
+          "description": "A build pipeline with one drive-by fix.",
+          "url": "https://github.com/another-org/pipeline",
+          "stargazerCount": 45,
+          "forkCount": 6,
+          "primaryLanguage": {
+            "name": "Python"
+          },
+          "owner": {
+            "login": "another-org",
+            "__typename": "Organization"
+          },
+          "languages": {
+            "edges": [
+              {
+                "size": 15000,
+                "node": {
+                  "name": "Python"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "nameWithOwner": "quiet-user/snippets",
+          "description": "",
+          "url": "https://github.com/quiet-user/snippets",
+          "stargazerCount": 3,
+          "forkCount": 0,
+          "primaryLanguage": null,
+          "owner": {
+            "login": "quiet-user",
+            "__typename": "User"
+          },
+          "languages": {
+            "edges": [
+              {
+                "size": 2000,
+                "node": {
+                  "name": "Lua"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

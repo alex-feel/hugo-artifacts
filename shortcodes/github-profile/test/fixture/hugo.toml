@@ -1,0 +1,38 @@
+# Fixture site for the github-profile shortcode module.
+#
+# The module fetches live GitHub GraphQL data and needs HUGO_GITHUB_TOKEN. This
+# site is fully offline instead: layouts/_partials/github-profile/fetch.html
+# shadows the module partial of the same path and serves the canned snapshot in
+# data/github-profile-fetch.json. Every other partial in the chain -- derive,
+# render, and all the section templates -- runs for real, which is the whole
+# point: the suite asserts the markup those templates emit.
+#
+# The suite builds this one site TWICE, plain and with --minify, because the
+# defect it pins (a whitespace text node eating the note separator's leading
+# space) is invisible without the minifier.
+baseURL = 'https://fixture.example/'
+title = 'GitHub Profile Fixture'
+defaultContentLanguage = 'en'
+
+# The site has no taxonomies. Left enabled, Hugo would still build the default
+# tags and categories list pages, and each would log a "found no layout file"
+# warning that the suite's clean-build assertion has to either whitelist or be
+# blinded by.
+disableKinds = ['taxonomy', 'term']
+
+# The locale is pinned because the module formats counts through
+# lang.FormatNumber, and the floor note's grouped number ("7,934") is one of the
+# strings the suite asserts byte for byte.
+[languages]
+
+  [languages.en]
+    locale = 'en-US'
+    weight = 1
+
+[module]
+
+  [module.hugoVersion]
+    min = "0.160.0"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/shortcodes/github-profile"

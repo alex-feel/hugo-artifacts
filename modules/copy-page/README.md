@@ -78,12 +78,14 @@ Only the entry contract above is public API. Internal partials can change betwee
 
 Built-in row slugs, what each renders, and the caveats you accept by enabling it. "Prompt target" is the URL the AI-provider prompt carries: `markdown` sends the page's Markdown URL, `html` sends the page's own permalink. Every provider endpoint already contains its query parameter and receives ONLY the percent-encoded prompt value.
 
+Each row's default description follows its own prompt target, so a reader comparing two rows in the open menu sees which surface each one hands the assistant instead of two identical sentences over two different links: a `markdown` row reads "Ask questions about the Markdown version", an `html` row reads "Ask questions about the live page", and a row with no prompt target keeps the plain "Ask questions about this page". That derivation applies to `rows_extra` rows too. A row that declares its own `desc_key` overrides it, which is how `chatgpt` states its search-mode reason -- see [Why ChatGPT alone targets the live page](#why-chatgpt-alone-targets-the-live-page).
+
 | Slug | Kind | Destination | Prompt target | Caveats |
 | --- | --- | --- | --- | --- |
 | `copy` | action (button) | Fetches the Markdown URL and writes its text to the clipboard | -- | JavaScript-revealed: rendered dual-hidden, shown only when the Clipboard API exists on a secure context. Its presence in `rows` also enables the primary split-button half. |
 | `view` | link (same-origin) | The Markdown URL itself | -- | -- |
 | `llms` | link (same-origin) | `llms_url`, else the home page's `llmstxt` output format permalink | -- | Drops silently when neither resolves. The probe answers "wired", not "published" -- see [Configuration](#configuration). |
-| `chatgpt` | link (external) | `https://chatgpt.com/?hints=search&q=` | `html` | The `q` parameter is de facto (undocumented by OpenAI); its auto-submit behavior shifted twice in 2025. Failure mode is benign: the prompt lands in the composer, or the home page opens -- never a 404. `hints=search` pairs with the `html` target so ChatGPT fetches the live page. Verified as of 2026-08-01. |
+| `chatgpt` | link (external) | `https://chatgpt.com/?hints=search&q=` | `html` | The `q` parameter is de facto (undocumented by OpenAI); its auto-submit behavior shifted twice in 2025. Failure mode is benign: the prompt lands in the composer, or the home page opens -- never a 404. `hints=search` pairs with the `html` target so ChatGPT fetches the live page, and this row's own description says so at the widget. Verified as of 2026-08-01. |
 | `claude` | link (external) | `https://claude.ai/new?q=` | `markdown` | The Claude Help Center documents `q` for the desktop `claude://claude.ai/new?q=` deep link that mirrors this web path (URL encoding required, roughly 14,000-character cap); the bare web shape is the convention Mintlify ships at scale. Verified as of 2026-08-01. |
 | `perplexity` | link (external) | `https://www.perplexity.ai/search?q=` | `markdown` | Redirects to `/search/new` with the query preserved, then Perplexity's bot filter returns 403 to CLI probes -- real browsers pass. Verified as of 2026-08-01. |
 | `grok` | link (external) | `https://grok.com/?q=` | `markdown` | Returns 200. Verified as of 2026-08-01. |
@@ -162,6 +164,23 @@ The provider rows ride on prefill conventions, not contracted APIs. What you acc
 - **Mobile app interception.** Provider mobile apps may claim their domains as universal/app links; an intercepting app decides for itself what to do with the query string, and may drop the prompt. The module cannot influence this.
 
 All endpoint facts were last verified as of 2026-08-01 (live probes plus extraction of Mintlify's deployed convention). If a provider changes its URL shape, patch the row from site config via [`rows_extra`](#custom-rows-rows_extra) -- no module update needed.
+
+### Why ChatGPT alone targets the live page
+
+`chatgpt` is the only provider row whose prompt carries the page's own permalink; `claude`, `perplexity`, `grok` and `aistudio` all carry the Markdown twin. That is deliberate. The ChatGPT endpoint includes `hints=search`, which opens ChatGPT in search mode, and search mode resolves an address through a search index rather than fetching it directly. A Markdown twin is a secondary representation of a page that sites commonly keep out of that index, so the canonical HTML page is the address that mode can actually resolve.
+
+The alternative -- point the row at the twin like the other four, with or without `hints=search` -- was considered and rejected on 2026-08-02. Its precondition is an observed test showing that ChatGPT's search mode reliably retrieves a `.md` URL, and no such evidence exists to cite: OpenAI documents neither `?q=` nor `hints=search`, so the behavior is knowable only by running it. Swapping a shape that is verified to work for one that cannot be verified is not an improvement. If you run that test and find that search mode does retrieve the twin, flip the row in your own config and patch its description in the same block, because the shipped one names the surface the row would no longer send:
+
+```toml
+[params.copy_page.rows_extra.chatgpt]
+target = 'markdown'
+desc_key = 'copy_page_open_desc_markdown'
+desc_default = 'Ask questions about the Markdown version'
+```
+
+`rows_extra` merges per field, so the endpoint, label and icon stay intact. Clearing `desc_key` alone is not enough -- `desc_default` survives as the fallback -- which is why both are restated. Open an issue if you confirm it, so the module default can follow.
+
+What kept making this a question was not the target but its invisibility: every provider row used to carry the same description, so the differing links had no explanation anywhere near them. Each row now states its own surface, and the `chatgpt` row additionally names the search mode, so the answer lives where the difference is.
 
 ## Clipboard behavior
 
