@@ -54,7 +54,7 @@ test('a section twin carries its roster between the body and the pointer block',
   for (const rel of ['blog/index.md', 'projects/index.md']) {
     const text = read(rel);
     const roster = text.indexOf(`## ${HEADING}`);
-    const pointer = text.indexOf('## Sitemap');
+    const pointer = text.indexOf('## Site index');
     assert.ok(roster !== -1, `${rel} must carry a roster heading`);
     assert.ok(pointer !== -1, `${rel} must still carry the pointer block`);
     assert.ok(roster < pointer, `${rel} must place the roster before the pointer block`);

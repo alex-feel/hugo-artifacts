@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="{{ site.Language.Locale }}">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ .Title }} | {{ site.Title }}</title>
+    <style>
+      /* Consumer CSS for the mode=slide contract: the module's JS applies
+         inert + aria-hidden to non-current slides only after confirming the
+         consumer's CSS actually conceals them (a getClientRects() check).
+         This rule is scoped to body.slide-mode-styled only, so the sibling
+         unstyled mode=slide fixture page never receives it -- the guard
+         must skip inert there because nothing hides the other slides. */
+      body.slide-mode-styled .carousel__slide:not(.carousel__slide--current) {
+        display: none;
+      }
+    </style>
+  </head>
+  <body class="{{ .Params.fixture_body_class | default "" }}">
+    {{ block "main" . }}{{ end }}
+  </body>
+</html>

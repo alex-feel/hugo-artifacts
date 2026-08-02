@@ -12,6 +12,7 @@ body:
         - [modules/social-share README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/social-share/README.md) -- Full social-share module reference
         - [modules/search README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/search/README.md) -- Full search module reference
         - [modules/images README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/images/README.md) -- Full images module reference
+        - [modules/carousel README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/carousel/README.md) -- Full carousel module reference
         - [modules/agent-readiness README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/agent-readiness/README.md) -- Full agent-readiness module reference
         - [modules/copy-page README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/copy-page/README.md) -- Full copy-page module reference
         - [modules/pwa README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/pwa/README.md) -- Full PWA module reference
@@ -41,6 +42,7 @@ body:
         - Social-share module configuration (params.social_share.*)
         - Search module configuration (params.search.* / search front matter)
         - Images module configuration (params.img.* / img front matter)
+        - Carousel module configuration (params.carousel.*)
         - Agent-readiness module configuration (params.agent.* / agent front matter)
         - Copy-page module configuration (params.copy_page.* / copy_page front matter)
         - PWA module configuration (params.pwa.*)

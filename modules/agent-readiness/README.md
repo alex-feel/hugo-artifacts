@@ -251,7 +251,7 @@ last_updated          = true    # Emit `last_updated:` when .Lastmod differs fro
 license               = false   # Emit `license:` -- requires [params.agent.license] url.
 section_pages         = true    # Emit the member roster in a SECTION twin. See "The member roster" below.
 sitemap_section       = true    # Append the trailing pointer section.
-sitemap_section_target = 'llms' # 'llms' | 'sitemap' | 'none'. Case-folded; an unrecognized value warns.
+sitemap_section_target = 'llms' # 'llms' | 'sitemap' | 'none'. Case-folded; an unrecognized value warns. The default heading follows the resolved target ('Site index' for llms, 'Sitemap' for sitemap); the agent_sitemap_heading i18n key overrides both.
 ```
 
 Twins never enter `sitemap.xml`: Hugo's sitemap enumerates pages and emits one `<loc>` per page from `.Permalink`, so no secondary output format can appear in it.
@@ -265,6 +265,42 @@ Reconstructing Markdown from `.Content` is possible -- `transform.HTMLToMarkdown
 **The documented consequence:** a twin of a shortcode-heavy page contains raw HTML blocks inline. That is valid CommonMark -- raw HTML is a first-class block type that every conformant parser passes through -- and for a page whose entire value is a rendered widget, the widget markup _is_ the content. Smoke-test one such page rather than discovering it later.
 
 Relative links inside the body need no rewriting: `index.md` sits in the same published directory as `index.html`, so every relative reference resolves identically from either.
+
+### The twin-extra hook
+
+Some pages carry their substance outside the page body: a contact page whose channels live in front matter and are rendered by a layout, a home page whose hero prose is assembled from site data. Their twins publish a front-matter block over an empty body, because `.RenderShortcodes` faithfully returns the nothing the content file holds. The twin-extra hook is the supported way to put that substance into the twin: author `layouts/_partials/agent-readiness/twin-extra.html` in your site, and the twin renderer calls it immediately after the page body -- before the member roster and the trailing pointer section -- behind a `templates.Exists` guard. The module intentionally ships no such file, so the hook is zero-cost until you create it, mirroring the [`seo`](../seo/README.md) module's `head-extra`/`jsonld-extra` hooks.
+
+The hook receives the same `{page, cfg}` dict as every internal renderer: `page` is the page whose twin is rendering, and `cfg` is the resolved configuration from the four-tier cascade. Membership gating is inherited from the renderer, so an excluded page's twin stays entirely unpublished, hook or no hook -- but within the published set the hook runs on EVERY twin, so the hook itself decides which pages it adds content to. Its output is trimmed with `strings.TrimSpace` and prefixed with one blank line: a hook that emits nothing (or only whitespace) for a page adds zero bytes to that page's twin, and a non-empty emission is separated from the body above and from any section below by exactly one blank line, whatever newline discipline the hook's own template uses. Emit Markdown, not HTML -- the twin is a plain-Markdown document. A failure inside the hook is your own template error and fails the build like any other site template; the module adds no guard around it.
+
+A worked example for a contact page whose channels live in front matter. The content file:
+
+```yaml
+---
+title: Contact
+channels:
+  - label: Email
+    value: team@example.org
+    href: mailto:team@example.org
+  - label: GitHub
+    value: example
+    href: https://github.com/example
+---
+```
+
+And the hook, `layouts/_partials/agent-readiness/twin-extra.html`:
+
+```go-html-template
+{{- $page := .page -}}
+{{- if eq $page.Path "/contact" -}}
+  {{- $lines := slice "## Channels" "" -}}
+  {{- range $page.Params.channels -}}
+    {{- $lines = $lines | append (printf "- [%s](%s): %s" .label .href .value) -}}
+  {{- end -}}
+  {{- delimit $lines "\n" | safeHTML -}}
+{{- end -}}
+```
+
+The `safeHTML` matters for the same reason it does inside the module's own renderers: the partial lives in the `.html` template namespace while the twin is a plain-text document, so without it an ampersand in a value would be HTML-escaped into an entity.
 
 ### The member roster
 
@@ -468,20 +504,23 @@ license = true    # emit the license blockquote line in llms.txt
 
 ## i18n
 
-The module authors exactly ten user-facing strings: five headings in generated documents, three display labels for the surface entries returned by the [`surfaces.html`](#surfaceshtml) public partial, and the name and note of the derived Agent Skills index entry in `llms.txt`. English and Russian ship with the module; every lookup carries an English fallback, so a site whose language ships no translation still renders a real string rather than an empty one.
+The module authors exactly eleven user-facing strings: six headings in generated documents, three display labels for the surface entries returned by the [`surfaces.html`](#surfaceshtml) public partial, and the name and note of the derived Agent Skills index entry in `llms.txt`. English and Russian ship with the module; every lookup carries an English fallback, so a site whose language ships no translation still renders a real string rather than an empty one.
 
-| Key                            | English                                                        |
-| ------------------------------ | -------------------------------------------------------------- |
-| `agent_sitemap_heading`        | `Sitemap`                                                      |
-| `agent_section_pages_heading`  | `Pages`                                                        |
-| `agent_facts_title`            | `About`                                                        |
-| `agent_facts_identity_heading` | `Identity`                                                     |
-| `agent_facts_contact_heading`  | `Contact`                                                      |
-| `agent_surface_llms`           | `llms.txt`                                                     |
-| `agent_surface_facts`          | `Site facts`                                                   |
-| `agent_surface_skills`         | `Agent Skills index`                                           |
-| `agent_skills_entry_name`      | `Agent Skills index`                                           |
-| `agent_skills_entry_note`      | `Machine-readable index of this site's published agent skills` |
+| Key                             | English                                                        |
+| ------------------------------- | -------------------------------------------------------------- |
+| `agent_sitemap_heading_sitemap` | `Sitemap`                                                      |
+| `agent_sitemap_heading_llms`    | `Site index`                                                   |
+| `agent_section_pages_heading`   | `Pages`                                                        |
+| `agent_facts_title`             | `About`                                                        |
+| `agent_facts_identity_heading`  | `Identity`                                                     |
+| `agent_facts_contact_heading`   | `Contact`                                                      |
+| `agent_surface_llms`            | `llms.txt`                                                     |
+| `agent_surface_facts`           | `Site facts`                                                   |
+| `agent_surface_skills`          | `Agent Skills index`                                           |
+| `agent_skills_entry_name`       | `Agent Skills index`                                           |
+| `agent_skills_entry_note`       | `Machine-readable index of this site's published agent skills` |
+
+The twin's trailing pointer heading follows the resolved `sitemap_section_target`: `agent_sitemap_heading_llms` heads the section when it points at `llms.txt`, and `agent_sitemap_heading_sitemap` when it points at `sitemap.xml` -- the latter also heads `/about.md`'s dual-pointer block, which always includes `sitemap.xml`. The `agent_sitemap_heading` key is deliberately NOT shipped: it is the consumer-side override key. Hugo merges i18n files per key with the site's own value winning over a module's, so a site that defines `agent_sitemap_heading` forces that one heading over both target-derived defaults, while an undefined key resolves to the empty string and each lookup falls through to its shipped per-target default.
 
 `## Optional` in `llms.txt` is deliberately not a translation key: it is fixed by the llmstxt.org convention and is a protocol token, not prose. Inside the translated values, `llms.txt` and `Agent Skills` stay untranslated in every language for the same reason: the former is the llmstxt.org protocol token and the latter is the agentskills.io convention's proper name.
 
@@ -538,5 +577,7 @@ modules/agent-readiness/
 ├── hugo.toml
 └── README.md
 ```
+
+One consumer-authored hook file (`layouts/_partials/agent-readiness/twin-extra.html`) is intentionally NOT shipped: the twin renderer calls it only behind a `templates.Exists` guard, so the hook is zero-cost until a consuming site creates the file. See [The twin-extra hook](#the-twin-extra-hook).
 
 `test/` ships inside the module, as it does for every other module in this repository. Run it with `bash modules/agent-readiness/test/run-tests.sh` (or `run-tests.cmd` on Windows).

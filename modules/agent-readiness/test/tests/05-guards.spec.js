@@ -122,7 +122,7 @@ test('a twin ends with the pointer section, byte-exactly', () => {
   // Rewritten to assemble its own terminating newline, because the closing
   // trim marker of the previous inline form ate it. Nothing asserted the
   // tail, so the missing newline shipped unnoticed.
-  const tail = '\n\n## Sitemap\n\n- [llms.txt](https://fixture.example/llms.txt)\n';
+  const tail = '\n\n## Site index\n\n- [llms.txt](https://fixture.example/llms.txt)\n';
   for (const rel of ['index.md', 'blog/post-one/index.md']) {
     assert.ok(read(rel).endsWith(tail), `${rel} must end with the pointer block and one newline`);
   }
@@ -229,7 +229,9 @@ test('a license with a url but no name is refused, with one warning', () => {
 test('an unrecognized sitemap_section_target warns and drops the pointer block', () => {
   assert.equal(warnCount(/unrecognized markdown.sitemap_section_target/, 'edge'), 1);
   for (const rel of ['index.md', 'blog/post-one/index.md']) {
-    assert.ok(!read(rel, edgeDir).includes('## Sitemap'), `${rel} must carry no pointer block`);
+    const text = read(rel, edgeDir);
+    assert.ok(!text.includes('## Sitemap'), `${rel} must carry no sitemap-target pointer block`);
+    assert.ok(!text.includes('## Site index'), `${rel} must carry no llms-target pointer block`);
   }
 });
 

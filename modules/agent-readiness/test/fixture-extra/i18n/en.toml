@@ -1,0 +1,7 @@
+# Overrides the module's target-derived trailing-pointer heading. The
+# consumer-side agent_sitemap_heading key wins over BOTH
+# agent_sitemap_heading_sitemap and agent_sitemap_heading_llms in
+# agent-readiness/config.html, so every twin in this fixture -- built with the
+# module's default markdown.sitemap_section_target = "llms" -- must carry
+# "## Custom heading" rather than the shipped "## Site index" default.
+agent_sitemap_heading = "Custom heading"

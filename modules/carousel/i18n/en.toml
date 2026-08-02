@@ -1,0 +1,33 @@
+# English UI strings for the carousel module. Templates look up keys via
+# {{ T "carousel_..." }}; every lookup carries an inline English default, so
+# this file is an enhancement layer, not a hard dependency -- a site whose
+# language ships no translation still renders accessible names.
+
+# Accessible name of the carousel region. Deliberately avoids the word
+# "carousel" -- the APG requires the accessible name not repeat the role's
+# roledescription, which already announces "carousel" on its own.
+carousel_label = "Image gallery"
+
+# aria-roledescription on the carousel region. Announced verbatim by
+# assistive technology, so it must translate.
+carousel_roledescription = "carousel"
+
+# aria-roledescription on each slide. Announced verbatim, so it must
+# translate.
+carousel_slide_roledescription = "slide"
+
+# Accessible name of each slide: "{{ .Index }} of {{ .Count }}", produced
+# server-side and never rewritten by JS because the slide set is static.
+carousel_slide_label = "{{ .Index }} of {{ .Count }}"
+
+# Accessible name of the Previous control.
+carousel_previous = "Previous slide"
+
+# Accessible name of the Next control.
+carousel_next = "Next slide"
+
+# Accessible name of the picker button group.
+carousel_picker_label = "Choose a slide"
+
+# Accessible name of each picker button: "{{ .Index }}".
+carousel_picker_item = "Slide {{ .Index }}"

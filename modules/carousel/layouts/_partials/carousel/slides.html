@@ -1,0 +1,496 @@
+{{/*
+  carousel/slides.html -- PUBLIC ENTRY (renderer tier).
+
+  Purpose: the module's single public renderer. A consumer calls it from a
+  layout, or the carousel shortcode dispatches here after gathering the
+  shortcode-only args (match/items/id/class/label/labelledby/start/loop/
+  mode/controls/picker/captions/eager/lightbox/index_pad/enable plus the
+  images pass-through vocabulary):
+
+      {{ partial "carousel/slides.html" (dict
+        "page" .
+        "position" .Position
+        "match" "gallery/*"
+      ) }}
+
+  and receives one style-agnostic APG grouped (buttons-only) carousel: a
+  build-time labeled region of visible, stacked, labeled slides that works
+  fully without JavaScript, progressively enhanced by assets/js/carousel.js.
+
+  Expected context (dict):
+  - .page      (Page)   REQUIRED. The current page (already validated by
+    the caller).
+  - .position  (string, optional) Diagnostics origin, typically the calling
+    shortcode's .Position. Falls back to the page path when absent (see
+    carousel/config.html).
+  - .Ordinal   (int, optional) The calling shortcode's zero-based .Ordinal,
+    used only to build the default root id (printf "carousel-%d" .Ordinal).
+    Absent when this partial is called directly from a layout rather than
+    dispatched from the shortcode; defaults to 0.
+  - .match     (string) XOR .items -- see "Input resolution" below.
+  - .items     (string) XOR .match.
+  - plus every carousel/config.html call-site key (id, class, label,
+    labelledby, start, loop, mode, controls, picker, captions, eager,
+    lightbox, index_pad, enable) and the images pass-through vocabulary
+    (widths, sizes, sizes_auto, formats, placeholder, quality, layout,
+    responsive, anchor, resample, bg, hint, compression, max_density, dark,
+    theme_strategy), forwarded verbatim to images/image.html per slide when
+    composed with modules/images.
+
+  Kill switch: $cfg.enable false (data/carousel/defaults.toml ->
+  [params.carousel] -> page carousel: front matter -> call args) renders
+  nothing at all -- no markup, no script tag.
+
+  Input resolution (exactly one of match/items is required; both or
+  neither is an authoring mistake and build-fails with errorf naming this
+  partial plus $where (the caller's .position, typically the dispatching
+  shortcode's .Position, falling back to the page path) -- the same
+  build-failing-on-misuse posture as images/image.html and
+  images/gallery.html, adapted for a partial surface where .Name/.Position
+  are not directly available since this is not a Shortcode object):
+  - match: $page.Resources.Match in filename order (the images/gallery.html
+    convention). An empty match warns once (carousel/lib/warn.html) and
+    renders nothing -- a glob batch has no single call site to errorf
+    against, so it always degrades.
+  - items: a comma-separated ORDERED source list. Each entry resolves,
+    first match wins: (1) bundle resource via $page.Resources.GetMatch;
+    (2) assets/ resource via resources.Get; (3) a leading-slash path,
+    passed through verbatim as a static URL (relURL); (4) an absolute URL
+    (scheme://host), passed through verbatim. An entry that resolves to
+    none of the above warns once (per entry, deduplicated) and is SKIPPED
+    from the slide list -- one bad entry never breaks the whole carousel.
+
+  Per-slide metadata (bundle resources only -- entries 2-4 above have no
+  [[resources]] front-matter home and render with alt="" plus the same
+  single warning, unless composed with images and given a future per-item
+  alt syntax; deliberately not invented in v1, matching the design's
+  input_model): alt = trimmed resource .Params.alt (default ""); caption =
+  resource .Title only when it differs from .Name (default titles never
+  leak); credit = trimmed .Params.credit. An alt-less bundle resource warns
+  ONCE via a hugo.Store sentinel keyed
+  printf "carousel-alt-%s-%s" $page.Path <resource .Name>
+  -- this EXACT key scheme (page path + resource name, no other
+  qualifiers) is shared verbatim with the carousel.markdown.md twin output
+  variant, so the same resource never double-warns across output formats;
+  any future twin implementation MUST reuse this key literally. The
+  alt-less slide still renders (alt="", per the images/gallery.html
+  precedent), but its lightbox anchor is suppressed: an anchor whose
+  accessible name is the empty alt fails WCAG 2.4.4/4.1.2.
+
+  Composition with modules/images (NO go.mod require; runtime-only, per
+  the design's composition_model): this partial probes
+  `templates.Exists "_partials/images/image.html"` once per render.
+  templates.Exists resolves PATHS RELATIVE TO layouts/, so an underscore
+  `_partials/` prefix is REQUIRED here -- NOT `partials/` -- because Hugo
+  0.146+'s current layout convention names the directory itself
+  `layouts/_partials/`; the live, verified precedent for this exact prefix
+  is modules/seo/layouts/_partials/seo/head.html and
+  modules/agent-readiness/layouts/_partials/agent-readiness/markdown-page.html,
+  both of which probe their own optional consumer hooks the same way. When
+  true, each slide calls `partial "images/image.html"` with page, src (the
+  resolved bundle resource or the raw entry string for non-bundle items),
+  alt, and ONLY the images pass-through keys the CALLER explicitly passed
+  through this partial's own args (never a blanket forward of the whole
+  args dict, so an unrelated carousel-only key never leaks into images'
+  own validation) -- and NEVER caption or credit: images/image.html's own
+  render tier emits an inner <figure> ONLY when caption or credit is
+  present (root-element precedence, verified in images/render.html), so
+  withholding both here guarantees images emits a bare <picture>/<img>
+  that carousel wraps in ITS OWN <figure>/<figcaption>, with no doubled
+  wrapper. lightbox is forwarded as lightbox=true when $cfg.lightbox is on
+  (images owns the anchor plus data-full-src/-width/-height in that case),
+  EXCEPT for an alt-less slide, which forwards lightbox=false plus
+  decorative=true: images/lib/validate.html build-fails an empty alt
+  without decorative=true and build-fails decorative+lightbox, and the
+  carousel's own contract already suppresses the anchor of an alt-less
+  slide (WCAG 2.4.4/4.1.2), so the two contracts agree.
+  When templates.Exists is false, every slide renders the plain standalone
+  fallback described below, and any images-only param the caller passed
+  warns ONCE (deduplicated) and is ignored -- functional degradation, not
+  a build failure.
+
+  Standalone fallback (no modules/images present): each slide renders
+  `<img class="carousel__img" src width height alt loading decoding>`.
+  loading: slides among the first $cfg.eager are "eager" (the very first
+  eager slide ALSO gets fetchpriority="high"); the rest are "lazy" with
+  decoding="async". Width/height are emitted only when the resolved
+  resource reports them (bundle/assets resources only; passthrough URLs
+  have no known dimensions, so width/height are omitted for those -- the
+  honest cost of an unprocessed source, documented in the module README).
+  lightbox=true standalone wraps the img in
+  `<a class="carousel__link" href="{original .Permalink}" data-full-width
+  data-full-height>` when dimensions are known; the anchor is emitted
+  without the two data-full-* attributes when they are not (passthrough
+  URLs), and omitted entirely (img unwrapped) when alt is empty, per the
+  same WCAG 2.4.4/4.1.2 rule as the composed path.
+
+  Markup contract (build-time no-JS baseline; every role/label is baked at
+  build time because it describes structure that stays true without JS --
+  a labeled region of grouped, labeled, visible slides, the WAI-ARIA APG
+  carousel tutorial's own baseline; interaction STATE is JS-only, applied
+  by assets/js/carousel.js after it locates `[data-carousel]` roots):
+
+      <section id class="carousel[ carousel--lightbox][ user class]"
+        role="region" aria-roledescription="{i18n roledescription}"
+        aria-label="{label}" | aria-labelledby="{labelledby}"
+        data-carousel data-count="N" data-start="k" data-mode="scroll|slide"
+        [data-loop]>
+
+  id defaults to `printf "carousel-%d" .Ordinal` (0 when the caller passes
+  no Ordinal -- direct layout calls have no shortcode ordinal to draw on).
+  aria-labelledby wins over aria-label when the caller supplies a
+  labelledby id (an existing visible heading), per APG guidance and
+  matching carousel/config.html's cascade. data-loop is emitted ONLY when
+  $cfg.loop is true (a bare boolean attribute; its absence, not
+  data-loop="false", is how the JS reads "off", per the design's
+  markup_contract).
+
+  Children, in APG tab order:
+  1. `<div class="carousel__controls" hidden>` (emitted only when
+     $cfg.controls) with two `<button type="button">` elements:
+     carousel__control carousel__control--prev
+     (data-carousel-prev, aria-label="{i18n previous}", chevron-left icon)
+     and the --next twin (data-carousel-next, aria-label="{i18n next}",
+     chevron-right icon). [hidden] keeps the no-JS baseline free of dead
+     controls; the JS removes it once wired.
+  2. `<div class="carousel__picker" role="group"
+     aria-label="{i18n picker_label}" hidden>` (emitted only when
+     $cfg.picker) of one `<button type="button"
+     class="carousel__picker-button" data-carousel-goto="{1-based i}"
+     aria-label="{T carousel_picker_item (dict Index i) | default (printf
+     "Slide %d" i)}">{i}</button>` per slide.
+  3. `<ul class="carousel__track" data-carousel-track>` of
+     `<li id="{id}-slide-{padded}" class="carousel__slide" role="group"
+     aria-roledescription="{i18n slide_roledescription}"
+     aria-label="{T carousel_slide_label (dict Index i Count N) | default
+     (printf "%d of %d" i N)}" data-index="{padded}">`. The "i of N" label
+     is produced SERVER-SIDE and never rewritten by JS, because the slide
+     set is static. Pad width = max(digits(N), $cfg.index_pad) -- the
+     images/gallery.html rule, so the two modules' item indexes are
+     drop-in consistent; digits(N) is computed as
+     `len (printf "%d" N)`, the same idiom images/gallery.html uses.
+
+  Slide interior: `<figure class="carousel__figure">` wrapping the
+  composed-or-standalone image (see above), then, only when $cfg.captions
+  is true AND a caption is present,
+  `<figcaption class="carousel__caption">{caption}[
+  <span class="carousel__credit">{credit}</span>]</figcaption>`. Caption
+  and credit are NOT run through the module's own Markdown-line-safety
+  helper (carousel/lib/md-text.html is reserved for the twin's line-
+  oriented Markdown output) -- inside HTML they interpolate through
+  ordinary auto-escaped `{{ }}` contexts, matching the images module's own
+  caption/credit rendering.
+
+  Script emission (once per render PLACEMENT, the copy-page/menu.html
+  paginator policy restated here: a Page.Store sentinel would only reach
+  the FIRST-rendered paginator output of a page, e.g. /blog/ but never
+  /blog/page/2/, so no such dedup guard is used; emitting per placement is
+  safe because browsers fetch a duplicate same-src deferred script once,
+  and a second execution is a no-op behind the script's own
+  window-level __carouselInit run guard plus its per-root
+  [data-carousel]:not([data-enhanced]) wiring guard): after the section,
+  resources.Get "js/carousel.js" | js.Build (minify) | fingerprint emits
+  `<script defer src integrity crossorigin="anonymous">`. A missing asset
+  (module mounted incorrectly) degrades with one deduplicated warnf and no
+  script tag -- markup still renders and stays fully usable without JS.
+
+  Dated findings (for future maintainers touching this file):
+  - No autoplay, ever: every carousel accessibility guideline (WAI-ARIA
+    APG, WCAG 2.2.2) treats auto-rotating content as a pass/fail
+    accessibility defect unless the user can pause it; this module ships
+    no timer at all rather than a pause button workaround.
+  - `scrollend` reached Baseline "Newly available" across Chrome, Edge,
+    Firefox, and Safari in December 2025; assets/js/carousel.js still
+    carries an IntersectionObserver fallback ('onscrollend' in window
+    feature-detected) for engines that predate that baseline.
+  - CSS Overflow Level 5 scroll-marker/scroll-button() at-rules (a
+    CSS-only carousel primitive) remain Chrome/Edge-only (Chromium
+    ships them; Firefox and Safari do not) as of this writing, which is
+    why this module ships a JS-enhanced APG pattern instead of relying on
+    the CSS-only primitive.
+
+  Whitespace discipline: every logic-only action tag (variable assignment,
+  partial dispatch with no inline output, block open/close) uses {{- -}}
+  trim markers, so the emitted markup carries no stray whitespace between
+  the build-time no-JS baseline elements -- consumers styling with CSS
+  :first-child / :last-child / adjacent-sibling selectors see the exact
+  element adjacency this docstring describes. Untrimmed {{ }} interpolation
+  inside an HTML attribute value (e.g. class="{{ $rootClass }}") is
+  deliberate: trimming there would consume the surrounding literal
+  characters, not whitespace.
+
+  Return value: none. This partial renders.
+*/}}
+
+{{- $args := . -}}
+{{- $page := "" -}}
+{{- if reflect.IsMap $args -}}
+  {{- $page = $args.page -}}
+{{- end -}}
+
+{{- if not (reflect.IsPage $page) -}}
+  {{- errorf "[carousel] carousel/slides.html must be called with an options dict carrying at least the current Page: {{ partial \"carousel/slides.html\" (dict \"page\" . \"match\" \"gallery/*\") }}." -}}
+{{- else -}}
+
+{{- $where := "" -}}
+{{- with $args.position -}}{{- $where = printf "%s" . -}}{{- end -}}
+{{- if not $where -}}{{- $where = printf "%v" $page.Path -}}{{- end -}}
+
+{{- $hasMatch := ne (trim (printf "%v" ($args.match | default "")) " \t\n\r") "" -}}
+{{- $hasItems := ne (trim (printf "%v" ($args.items | default "")) " \t\n\r") "" -}}
+
+{{- if and $hasMatch $hasItems -}}
+  {{- errorf "[carousel] carousel/slides.html requires exactly one of \"match\" or \"items\", not both. See %s" $where -}}
+{{- else if and (not $hasMatch) (not $hasItems) -}}
+  {{- errorf "[carousel] carousel/slides.html requires exactly one of \"match\" or \"items\" (a bundle-resource glob or a comma-separated source list). See %s" $where -}}
+{{- else -}}
+
+{{- $cfg := partial "carousel/config.html" (dict "page" $page "args" $args) -}}
+{{- if $cfg.enable -}}
+
+{{/* ---- Input resolution: builds $entries, a slice of dicts each shaped
+     dict "resource" (Resource or nil) "url" (string, non-bundle only)
+     "kind" ("bundle" | "static"). ---- */}}
+{{- $entries := slice -}}
+
+{{- if $hasMatch -}}
+  {{- $matched := $page.Resources.Match (printf "%v" $args.match) -}}
+  {{- if not $matched -}}
+    {{- partial "carousel/lib/warn.html" (dict
+        "key" (printf "carousel:warn:match-empty:%s:%v" $where $args.match)
+        "message" (printf "[carousel] The match glob %q matched no page resources; rendering nothing. See %s" $args.match $where)) -}}
+  {{- else -}}
+    {{- range $matched -}}
+      {{- $entries = $entries | append (dict "resource" . "url" "" "kind" "bundle") -}}
+    {{- end -}}
+  {{- end -}}
+{{- else -}}
+  {{- range $raw := split $args.items "," -}}
+    {{- $entry := trim $raw " \t\n\r" -}}
+    {{- if ne $entry "" -}}
+      {{- $resolved := false -}}
+      {{- with $page.Resources.GetMatch $entry -}}
+        {{- $entries = $entries | append (dict "resource" . "url" "" "kind" "bundle") -}}
+        {{- $resolved = true -}}
+      {{- end -}}
+      {{- if not $resolved -}}
+        {{- with resources.Get $entry -}}
+          {{- $entries = $entries | append (dict "resource" . "url" "" "kind" "bundle") -}}
+          {{- $resolved = true -}}
+        {{- end -}}
+      {{- end -}}
+      {{- if not $resolved -}}
+        {{- if hasPrefix $entry "/" -}}
+          {{- $entries = $entries | append (dict "resource" false "url" (relURL $entry) "kind" "static") -}}
+          {{- $resolved = true -}}
+        {{- else if findRE `(?i)^[a-z][a-z0-9+.-]*://` $entry -}}
+          {{- $entries = $entries | append (dict "resource" false "url" $entry "kind" "static") -}}
+          {{- $resolved = true -}}
+        {{- end -}}
+      {{- end -}}
+      {{- if not $resolved -}}
+        {{- partial "carousel/lib/warn.html" (dict
+            "key" (printf "carousel:warn:item-unresolvable:%s:%s" $where $entry)
+            "message" (printf "[carousel] Skipping items entry %q: it did not resolve as a bundle resource, an assets/ resource, a leading-slash static path, or an absolute URL. See %s" $entry $where)) -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if $entries -}}
+
+{{/* ---- Per-slide metadata + the images-composition probe (once). ---- */}}
+{{- $hasImages := templates.Exists "_partials/images/image.html" -}}
+
+{{/* The forwardable images-vocabulary key set: the exact list the design's
+     shortcode_api enumerates for pass-through. Forwarded only when the
+     caller's own args explicitly set the key (isset, not truthiness), and
+     only when composed; standalone, presence of any of these warns once
+     and the whole set is ignored (see below). */}}
+{{- $imagesKeys := slice "widths" "sizes" "sizes_auto" "formats" "placeholder" "quality" "layout" "responsive" "anchor" "resample" "bg" "hint" "compression" "max_density" "dark" "theme_strategy" -}}
+{{- $forwarded := dict -}}
+{{- $suppliedImagesOnly := false -}}
+{{- range $k := $imagesKeys -}}
+  {{- if isset $args $k -}}
+    {{- $forwarded = merge $forwarded (dict $k (index $args $k)) -}}
+    {{- $suppliedImagesOnly = true -}}
+  {{- end -}}
+{{- end -}}
+{{- if and $suppliedImagesOnly (not $hasImages) -}}
+  {{- partial "carousel/lib/warn.html" (dict
+      "key" (printf "carousel:warn:images-params-standalone:%s" $where)
+      "message" (printf "[carousel] Ignoring image-pipeline parameters (widths, sizes, formats, ...): modules/images is not imported, so this carousel renders plain <img> markup. See %s" $where)) -}}
+{{- end -}}
+
+{{- $count := len $entries -}}
+{{- $digits := len (printf "%d" $count) -}}
+{{- $pad := $digits -}}
+{{- if gt $cfg.index_pad $digits -}}{{- $pad = $cfg.index_pad -}}{{- end -}}
+
+{{- $id := $cfg.id -}}
+{{- if not $id -}}
+  {{- $ordinal := 0 -}}
+  {{- if isset $args "Ordinal" -}}{{- $ordinal = $args.Ordinal -}}{{- end -}}
+  {{- $id = printf "carousel-%d" $ordinal -}}
+{{- end -}}
+
+{{- $slides := slice -}}
+{{- range $i, $entry := $entries -}}
+  {{- $index := add $i 1 -}}
+  {{- $r := $entry.resource -}}
+  {{- $isBundle := eq $entry.kind "bundle" -}}
+  {{/* $src is the value every downstream consumer (images/image.html and
+       the standalone <img> branch) treats as the source: the bundle
+       resource's own .Name when $isBundle, else the already-resolved
+       entry URL. Resolving it HERE, once, avoids ever calling a
+       Resource-only method (.Name, .Params, .Title) on $entry.resource
+       when it holds the literal bool false (the non-bundle sentinel set
+       above) -- Go template functions evaluate every argument eagerly, so
+       a ternary like `cond $isBundle $r.Name $entry.url` would still
+       evaluate $r.Name and fail the build on a non-bundle entry. */}}
+  {{- $src := $entry.url -}}
+  {{- $alt := "" -}}
+  {{- $caption := "" -}}
+  {{- $credit := "" -}}
+  {{- $suppressAnchor := false -}}
+  {{- if $isBundle -}}
+    {{- $src = $r.Name -}}
+    {{- $alt = trim (printf "%v" ($r.Params.alt | default "")) " \t\n\r" -}}
+    {{- if ne $r.Title $r.Name -}}{{- $caption = $r.Title -}}{{- end -}}
+    {{- $credit = trim (printf "%v" ($r.Params.credit | default "")) " \t\n\r" -}}
+    {{- if not $alt -}}
+      {{- $suppressAnchor = true -}}
+      {{- $altKey := printf "carousel-alt-%s-%s" $page.Path $r.Name -}}
+      {{- partial "carousel/lib/warn.html" (dict
+          "key" $altKey
+          "message" (printf "[carousel] Slide resource %q has no alt text (set params.alt in the page's resources: metadata); rendering it with an empty alt label, and the HTML render also suppresses its lightbox anchor because a link named by empty alt fails WCAG 2.4.4/4.1.2. See %s" $r.Name $where)) -}}
+    {{- end -}}
+  {{- else -}}
+    {{- $suppressAnchor = true -}}
+    {{- partial "carousel/lib/warn.html" (dict
+        "key" (printf "carousel:warn:no-alt-static:%s:%s" $where $entry.url)
+        "message" (printf "[carousel] The items entry %q resolves outside the page bundle, so it carries no resources: metadata; rendering it with an empty alt label, and the HTML render also suppresses its lightbox anchor. See %s" $entry.url $where)) -}}
+  {{- end -}}
+
+  {{- $slides = $slides | append (dict
+      "index" $index
+      "resource" $r
+      "isBundle" $isBundle
+      "url" $entry.url
+      "src" $src
+      "alt" $alt
+      "caption" $caption
+      "credit" $credit
+      "suppressAnchor" $suppressAnchor) -}}
+{{- end -}}
+
+{{/* ---- Root section attributes ---- */}}
+{{- $rootClass := "carousel" -}}
+{{- if $cfg.lightbox -}}{{- $rootClass = printf "%s carousel--lightbox" $rootClass -}}{{- end -}}
+{{- with $cfg.class -}}{{- $rootClass = printf "%s %s" $rootClass . -}}{{- end -}}
+
+{{- $labelledby := "" -}}
+{{- with $args.labelledby -}}{{- $labelledby = trim (printf "%v" .) " \t\n\r" -}}{{- end -}}
+{{- $label := $cfg.i18n.label -}}
+{{- with $args.label -}}{{- $label = trim (printf "%v" .) " \t\n\r" -}}{{- end -}}
+
+{{- $start := $cfg.start -}}
+{{- if or (lt $start 1) (gt $start $count) -}}
+  {{- partial "carousel/lib/warn.html" (dict
+      "key" (printf "carousel:warn:start-out-of-range:%s:%d" $where $start)
+      "message" (printf "[carousel] start=%d is out of range for %d slide(s); clamping to 1. See %s" $start $count $where)) -}}
+  {{- $start = 1 -}}
+{{- end -}}
+
+<section id="{{ $id }}" class="{{ $rootClass }}" role="region" aria-roledescription="{{ $cfg.i18n.roledescription }}"{{ if $labelledby }} aria-labelledby="{{ $labelledby }}"{{ else }} aria-label="{{ $label }}"{{ end }} data-carousel data-count="{{ $count }}" data-start="{{ $start }}" data-mode="{{ $cfg.mode }}"{{ if $cfg.loop }} data-loop{{ end }}>
+  {{- if $cfg.controls }}
+  <div class="carousel__controls" hidden>
+    <button type="button" class="carousel__control carousel__control--prev" data-carousel-prev aria-label="{{ $cfg.i18n.previous }}">{{- partial "carousel/icon.html" (dict "name" "chevron-left") -}}</button>
+    <button type="button" class="carousel__control carousel__control--next" data-carousel-next aria-label="{{ $cfg.i18n.next }}">{{- partial "carousel/icon.html" (dict "name" "chevron-right") -}}</button>
+  </div>
+  {{- end }}
+  {{- if $cfg.picker }}
+  <div class="carousel__picker" role="group" aria-label="{{ $cfg.i18n.picker_label }}" hidden>
+    {{- range $slide := $slides }}
+    <button type="button" class="carousel__picker-button" data-carousel-goto="{{ $slide.index }}" aria-label="{{ T "carousel_picker_item" (dict "Index" $slide.index) | default (printf "Slide %d" $slide.index) }}">{{ $slide.index }}</button>
+    {{- end }}
+  </div>
+  {{- end }}
+  <ul class="carousel__track" data-carousel-track>
+    {{- range $slide := $slides }}
+    {{- $padded := printf "%0*d" $pad $slide.index }}
+    <li id="{{ $id }}-slide-{{ $padded }}" class="carousel__slide" role="group" aria-roledescription="{{ $cfg.i18n.slide_roledescription }}" aria-label="{{ T "carousel_slide_label" (dict "Index" $slide.index "Count" $count) | default (printf "%d of %d" $slide.index $count) }}" data-index="{{ $padded }}">
+      <figure class="carousel__figure">
+        {{- $eager := and (le $slide.index $cfg.eager) (gt $cfg.eager 0) }}
+        {{- $firstEager := and $eager (eq $slide.index 1) }}
+        {{- if $hasImages }}
+        {{- $imgArgs := merge $forwarded (dict "page" $page "src" $slide.src "alt" $slide.alt "lightbox" (and $cfg.lightbox (not $slide.suppressAnchor)) "position" $where) }}
+        {{- if $slide.suppressAnchor }}
+          {{/* An alt-less slide has already warned above and degrades to the
+               explicit empty alt. images/lib/validate.html build-fails an
+               empty alt unless decorative=true, and decorative+lightbox is
+               its own build failure there, so the anchor suppression on the
+               lightbox key above is load-bearing, not just the WCAG
+               2.4.4/4.1.2 contract. */}}
+          {{- $imgArgs = merge $imgArgs (dict "decorative" true) }}
+        {{- end }}
+        {{/* The eager/lazy split is the carousel's contract in BOTH render
+             branches, so composed slides forward it through images' own
+             loading-policy keys: the first eager slide maps to priority=true
+             (loading=eager plus fetchpriority=high, images/render.html's
+             LCP-hero mode), every other eager slide maps to loading=eager,
+             and the rest keep images' lazy default. */}}
+        {{- if $firstEager }}
+          {{- $imgArgs = merge $imgArgs (dict "priority" true) }}
+        {{- else if $eager }}
+          {{- $imgArgs = merge $imgArgs (dict "loading" "eager") }}
+        {{- end }}
+        {{- partial "images/image.html" $imgArgs }}
+        {{- else }}
+        {{- $srcURL := "" }}
+        {{- $width := 0 }}
+        {{- $height := 0 }}
+        {{- $fullURL := "" }}
+        {{- if $slide.isBundle }}
+          {{- $srcURL = $slide.resource.RelPermalink }}
+          {{- $fullURL = $slide.resource.Permalink }}
+          {{- if reflect.IsImageResourceWithMeta $slide.resource }}
+            {{- $width = $slide.resource.Width }}
+            {{- $height = $slide.resource.Height }}
+          {{- end }}
+        {{- else }}
+          {{- $srcURL = $slide.url }}
+          {{- $fullURL = $slide.url }}
+        {{- end }}
+        {{- if and $cfg.lightbox (not $slide.suppressAnchor) }}
+        <a class="carousel__link" href="{{ $fullURL }}"{{ if and (gt $width 0) (gt $height 0) }} data-full-width="{{ $width }}" data-full-height="{{ $height }}"{{ end }}><img class="carousel__img" src="{{ $srcURL }}"{{ if gt $width 0 }} width="{{ $width }}"{{ end }}{{ if gt $height 0 }} height="{{ $height }}"{{ end }} alt="{{ $slide.alt }}"{{ if $eager }} loading="eager"{{ if $firstEager }} fetchpriority="high"{{ end }}{{ else }} loading="lazy" decoding="async"{{ end }}></a>
+        {{- else }}
+        <img class="carousel__img" src="{{ $srcURL }}"{{ if gt $width 0 }} width="{{ $width }}"{{ end }}{{ if gt $height 0 }} height="{{ $height }}"{{ end }} alt="{{ $slide.alt }}"{{ if $eager }} loading="eager"{{ if $firstEager }} fetchpriority="high"{{ end }}{{ else }} loading="lazy" decoding="async"{{ end }}>
+        {{- end }}
+        {{- end }}
+        {{- if and $cfg.captions $slide.caption }}
+        <figcaption class="carousel__caption">{{ $slide.caption }}{{ with $slide.credit }} <span class="carousel__credit">{{ . }}</span>{{ end }}</figcaption>
+        {{- end }}
+      </figure>
+    </li>
+    {{- end }}
+  </ul>
+</section>
+{{/* ---- Progressive-enhancement script, once per PLACEMENT (see the
+     docstring's "Script emission" section for the paginator rationale
+     this restates from copy-page/menu.html). ---- */}}
+{{- with resources.Get "js/carousel.js" -}}
+  {{- $built := . | js.Build (dict "minify" true) -}}
+  {{- with $built | fingerprint -}}
+<script defer src="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" crossorigin="anonymous"></script>
+  {{- end -}}
+{{- else -}}
+  {{- partial "carousel/lib/warn.html" (dict
+      "key" "carousel:warn:missing-script"
+      "message" "[carousel] assets/js/carousel.js was not found; the module is not mounted correctly. Markup still renders and stays fully usable without JavaScript enhancement.") -}}
+{{- end -}}
+
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}

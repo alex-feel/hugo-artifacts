@@ -1,0 +1,22 @@
+{{/*
+  fixture-extra's twin-extra hook -- the consumer-authored file the module
+  itself ships none of. Pins the hook contract documented in the
+  agent-readiness README: called with the same {page, cfg} dict as every
+  internal renderer, its TrimSpace'd output is inserted between the twin body
+  and the roster/pointer sections with exactly one blank line on each side
+  when non-empty.
+
+  Deliberately interpolates BOTH context keys, so the fixture proves the hook
+  really does receive a live page and a live resolved config rather than an
+  empty placeholder dict: .page.Title (the page whose twin is rendering) and
+  one stable scalar off .cfg, search_page_path -- present at every tier since
+  data/agent-readiness/defaults.toml declares it, and untouched by this
+  fixture's configuration, so its value is the shipped default "/search" on
+  every twin.
+*/}}
+{{- $page := .page -}}
+{{- $cfg := .cfg -}}
+## Extra facts
+
+- Page: {{ $page.Title }}
+- Search page: {{ $cfg.search_page_path }}

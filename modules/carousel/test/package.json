@@ -1,0 +1,13 @@
+{
+  "name": "carousel-module-tests",
+  "private": true,
+  "type": "module",
+  "description": "Playwright validation suite for the carousel Hugo module, run against the fixture sites in ./fixture, ./fixture-bare, and ./fixture-invalid.",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}
