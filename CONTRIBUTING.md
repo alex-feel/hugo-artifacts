@@ -120,6 +120,8 @@ For worked examples, mirror these existing modules: [`shortcodes/github-repo/`](
 - Reference the related issue (for example, `Fixes #123`) in the PR description when applicable.
 - Test changes against a real consumer site using `hugo.work` or `[module.replacements]` (see Development Setup above) before submitting.
 - Run `hugo build --logLevel info` against your test site and ensure ZERO deprecation warnings appear in the output.
+- Run `npm run check` (ESLint, Prettier, markdownlint, and the module-pin check) and fix anything it reports before submitting; CI runs the same gates.
+- If your change touched a module that a sibling module requires, commit it first, then run `npm run check:pins -- --fix` and commit the rewritten `require` -- a pin cannot name the commit that creates it, so the bump is always a follow-up commit. See [Consuming modules that wrap non-Go upstreams](CLAUDE.md#consuming-modules-that-wrap-non-go-upstreams).
 - Ensure your changes pass the project formatting rules enforced by [`.editorconfig`](.editorconfig): LF line endings, UTF-8 encoding, final newline, trim trailing whitespace (exception: `*.md` preserves trailing whitespace for intentional `<br>` breaks; `go.mod` uses tabs at width 4).
 - For Markdown files specifically, follow the **one paragraph = one line** rule documented above. Any in-paragraph hard wrap will be rejected in review.
 

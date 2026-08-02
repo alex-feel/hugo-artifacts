@@ -22,7 +22,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          fetch-depth: 1
+          # Full history: the module-pin check resolves each intra-repository
+          # require against the sibling directory's latest commit.
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -57,11 +59,9 @@ jobs:
         run: |
           set -euo pipefail
           # Every leaf go.mod file MUST parse via `go mod edit -fmt -print`.
-          # This is a read-only operation that does NOT require network access
-          # and works for modules whose dependencies include non-Go-aware
-          # upstreams (workbox, idb) that cannot be resolved by the Go module
-          # proxy. Each leaf go.mod is verified independently from its own
-          # directory. Keep this list in sync with the leaf */go.mod set.
+          # This is a read-only operation that does NOT require network access.
+          # Each leaf go.mod is verified independently from its own directory.
+          # Keep this list in sync with the leaf */go.mod set.
           leaves=(
             modules/pwa
             modules/workbox
@@ -102,20 +102,22 @@ jobs:
             echo "::endgroup::"
           done
 
+      - name: Module pins are real and current
+        shell: bash
+        run: npm run check:pins
+
       - name: Hugo mod graph (standalone modules)
         shell: bash
         run: |
           set -euo pipefail
-          # These leaf modules graph standalone: any module imports they
-          # declare resolve over the Go module proxy at real tags (no
-          # placeholder pseudo-versions), so no [module.replacements]
-          # configuration is needed. Keep this list in sync
-          # with the leaf module set. The pwa/workbox/idb chain is excluded:
-          # it transitively depends on github.com/GoogleChrome/workbox or
-          # github.com/jakearchibald/idb (both non-Go-aware), which cannot be
-          # resolved by Hugo's module fetcher without consumer-side
-          # replacements documented in modules/pwa/README.md Installation.
-          for m in modules/seo modules/social-share modules/search modules/images modules/carousel modules/agent-readiness modules/copy-page shortcodes/github-repo shortcodes/github-profile shortcodes/hf-space shortcodes/callout shortcodes/youtube-embed shortcodes/arxiv-paper; do
+          # EVERY leaf module graphs standalone, with no [module.replacements]
+          # and no consumer-side compensation: intra-repository requires name
+          # real commit pseudo-versions and the non-Go-aware upstreams
+          # (github.com/GoogleChrome/workbox, github.com/jakearchibald/idb)
+          # fetch over the module proxy as +incompatible versions. This step is
+          # what proves a consumer can import any one of these modules alone,
+          # so keep the list in sync with the leaf module set.
+          for m in modules/pwa modules/workbox modules/idb modules/seo modules/social-share modules/search modules/images modules/carousel modules/agent-readiness modules/copy-page shortcodes/github-repo shortcodes/github-profile shortcodes/hf-space shortcodes/callout shortcodes/youtube-embed shortcodes/arxiv-paper; do
             echo "::group::hugo mod graph -- ${m}"
             ( cd "${m}" && hugo mod graph )
             echo "::endgroup::"
