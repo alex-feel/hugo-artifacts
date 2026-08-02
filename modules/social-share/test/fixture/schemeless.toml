@@ -1,0 +1,17 @@
+# Overlay config for the static schemeless-baseURL build. Merged AFTER
+# hugo.toml via --config hugo.toml,schemeless.toml, so exactly one thing
+# differs from the served fixture: the baseURL carries a PATH but no scheme
+# and no host. Nothing is ever served from this build, which is written to
+# fixture/public/schemeless and read off disk by tests/04-subpath.spec.js.
+#
+# This is the shape that catches an over-eager URL normalizer. Under
+# subpath.toml every .Permalink already carries "http://", so the module's
+# "a value with its own scheme passes through untouched" branch hides any
+# mishandling of a Hugo-resolved URL. Here .Permalink is "/docs/blog/x/" --
+# path-carrying and schemeless -- so a permalink pushed through the
+# site-root-relative normalizer comes back as "/docs/docs/blog/x/", and the
+# doubled prefix is visible in every emitted share URL.
+#
+# "hugo --baseURL /docs/" produces the same shape; it is what a consumer runs
+# to preview a subpath deployment whose host is not yet known.
+baseURL = "/docs/"

@@ -25,13 +25,20 @@
   - url, title, description (strings) - Share data; title and description
     are collapsed to single-line (runs of whitespace become one space, an
     RFC 6068 header-injection guard that also satisfies intent composers
-    that reject control characters).
+    that reject control characters). url is absolute: a consumer-authored
+    value is normalized through lib/absolute-url.html, so a site-root-
+    relative "/path/" keeps the baseURL's path on a subpath deployment and a
+    value carrying its own scheme is passed through untouched. The
+    .Permalink fallback is taken as Hugo resolved it and is never fed to the
+    normalizer, which would double the baseURL's path under a schemeless
+    baseURL.
   - image (string) - Absolute share-image URL or "" (resolution chain:
     explicit value; then the first entry of the page's images front matter
     when it is a plain path or URL string; then a page-bundle image resource
     matching *feature* / *cover* / *thumbnail*; then the site-tier value.
     Raw values resolve via lib/resolve-image.html: page resource where
-    page-scoped, then global resource, then literal URL).
+    page-scoped, then global resource, then literal URL normalized through
+    lib/absolute-url.html on the same site-root-relative terms as url).
   - site_host (string) - The consuming site's hostname (Nextdoor "source").
   - networks_extra (map) - Consumer extension entries (site params only).
   - class, id (strings) - Root element extras (call-site only).
@@ -114,7 +121,20 @@
 {{- if isset $args "url" -}}{{- $url = printf "%v" (index $args "url") -}}
 {{- else if isset $pagep "url" -}}{{- $url = printf "%v" (index $pagep "url") -}}
 {{- end -}}
-{{- $url = or $url $page.Permalink | absURL -}}
+{{/* ONLY the consumer-authored url is normalized through
+     lib/absolute-url.html: a leading-slash value means site-root-relative and
+     must keep the baseURL's path, which a bare absURL would discard.
+     .Permalink is NOT normalized -- Hugo already resolved it against the
+     baseURL, and under a baseURL that carries a path but no scheme (baseURL =
+     "/docs/") it arrives as "/docs/page/", which the normalizer would read as
+     site-root-relative and re-prefix to "/docs/docs/page/". Normalizing
+     BEFORE the fallback also means a whitespace-only override collapses to ""
+     and yields the permalink, instead of winning `or` as a truthy value and
+     emitting an empty share URL. */}}
+{{- with $url -}}
+  {{- $url = partial "social-share/lib/absolute-url.html" . -}}
+{{- end -}}
+{{- $url = or $url $page.Permalink -}}
 
 {{- $title := "" -}}
 {{- if isset $args "title" -}}{{- $title = printf "%v" (index $args "title") -}}
