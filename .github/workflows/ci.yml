@@ -187,32 +187,45 @@ jobs:
       # useful thing to know when a shared convention changes.
       fail-fast: false
       matrix:
+        # `deps` marks a suite that has a package-lock.json to install from.
+        # modules/test-composition deliberately has none: its package.json
+        # states it carries no dependencies because node --test and
+        # node:assert are enough, so it gets Node but no install step. Adding
+        # a lockfile there to make this matrix uniform would be inventing a
+        # file to satisfy the workflow instead of describing what is true.
         include:
           - name: images
             dir: modules/images/test
             run: bash run-tests.sh
+            deps: true
           - name: seo
             dir: modules/seo/test
             run: bash run-tests.sh
+            deps: true
           - name: carousel
             dir: modules/carousel/test
             run: bash run-tests.sh
+            deps: true
             browser: true
           - name: copy-page
             dir: modules/copy-page/test
             run: bash run-tests.sh
+            deps: true
             browser: true
           - name: search
             dir: modules/search/test
             run: bash run-tests.sh
+            deps: true
             browser: true
           - name: social-share
             dir: modules/social-share/test
             run: bash run-tests.sh
+            deps: true
             browser: true
           - name: github-profile
             dir: shortcodes/github-profile/test
             run: bash run-tests.sh
+            deps: true
           - name: composition
             dir: modules/test-composition
             run: bash run-tests.sh
@@ -222,6 +235,7 @@ jobs:
               npm run --silent test:subpath
               npm run --silent test:offline-gating
               bash run-matrix.sh
+            deps: true
             browser: true
     steps:
       - name: Checkout
@@ -246,9 +260,13 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: ${{ matrix.dir }}/package-lock.json
+          # Repo-wide rather than per-suite: one suite has no lockfile at all,
+          # and a path that resolves in eight jobs and not the ninth fails
+          # that job in setup, before a single assertion has run.
+          cache-dependency-path: '**/package-lock.json'
 
       - name: Install suite dependencies
+        if: matrix.deps
         working-directory: ${{ matrix.dir }}
         run: npm ci --no-audit --no-fund
 
