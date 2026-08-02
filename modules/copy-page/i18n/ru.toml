@@ -14,6 +14,10 @@ copy_page_llms_desc = "Открыть llms.txt этого сайта"
 
 copy_page_open_in = "Открыть в {{ .Name }}"
 copy_page_open_desc = "Задать вопросы об этой странице"
+copy_page_open_desc_markdown = "Задать вопросы о Markdown-версии"
+copy_page_open_desc_html = "Задать вопросы об опубликованной странице"
+
+copy_page_chatgpt_desc = "Режим поиска: читает опубликованную страницу"
 
 copy_page_toggle = "Другие способы использовать эту страницу"
 
