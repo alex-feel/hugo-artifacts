@@ -58,15 +58,15 @@
   three were observed reaching the HTML page successfully, so this is a fix
   for each of them rather than a guess.
 
-  A caveat the module cannot control, and the aistudio row shows it best: one
-  of these endpoints opens whatever model the visitor has selected, with
-  whatever tools are enabled there. Selecting a model with no retrieval, or
-  leaving URL context off, produces an answer composed without fetching
-  anything -- confidently, and with no sign that a fetch was skipped. That is
-  why the default prompt now asks an assistant to state a failed fetch rather
-  than answer regardless; see copy_page_prompt in i18n/en.toml. Perplexity is
-  the case that shows the value: it reported the twin failure honestly, then
-  answered from other material whose details did not match the live page.
+  A caveat the module cannot control: an endpoint opens whatever model and
+  tools the visitor has configured on the other side, and retrieval is not
+  always among them -- the aistudio row reaches a page only when URL context
+  is enabled there. So the same row can answer with a fetch or without one,
+  depending on settings no template can see. That is why the default prompt
+  now asks an assistant to state a failed fetch rather than answer regardless;
+  see copy_page_prompt in i18n/en.toml. Perplexity is the case that shows the
+  value: it reported the twin failure honestly, then answered from other
+  material whose details did not match the live page.
 
   ChatGPT's endpoint additionally carries hints=search, which opens search
   mode; that reinforces its html pairing but is not the reason for it.
