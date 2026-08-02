@@ -125,8 +125,13 @@ cd "$HERE"
 npm run --silent test:data
 
 # ---- Pre-launch process check ----
+# `pgrep -x` matches the process NAME, the semantic twin of the tasklist
+# IMAGENAME filter below. `-f` would match the whole command line, and this
+# checkout is named hugo-artifacts, so a runner invoked by absolute path
+# matches ITSELF and aborts -- which is exactly what a CI workspace path
+# such as /home/runner/work/hugo-artifacts/hugo-artifacts produces.
 if command -v pgrep >/dev/null 2>&1; then
-  if pgrep -af hugo >/dev/null 2>&1; then
+  if pgrep -x hugo >/dev/null 2>&1; then
     echo "A hugo process is already running; stop it first (pkill hugo)." >&2
     exit 1
   fi
