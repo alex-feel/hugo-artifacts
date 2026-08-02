@@ -27,23 +27,28 @@
   mode; Claude's is documented in the Claude Help Center for the desktop deep
   link mirroring this web path.
 
-  WHY CHATGPT IS THE ONE ROW WITH target "html", settled 2026-08-02 and not
-  to be re-opened without new evidence. Its endpoint carries hints=search,
-  which forces ChatGPT's search mode -- the mode resolves an address through
-  a search index rather than fetching it directly, and a Markdown twin is a
-  secondary representation that sites routinely keep out of that index. The
-  canonical HTML page is therefore the address that mode can actually
-  resolve, which is why the pairing exists.
+  WHY CHATGPT IS THE ONE ROW WITH target "html", settled 2026-08-02 on an
+  OBSERVED retrieval test. Handed a Markdown twin URL and asked only to fetch
+  it and report the outcome, ChatGPT answered that the URL does serve a
+  resource of type text/markdown but that its retrieval tool REJECTED that as
+  an unsupported format. The twin is therefore an address this row's
+  assistant cannot open, whatever the prompt says about it. The hints=search
+  parameter reinforces the pairing -- search mode resolves an address through
+  an index rather than fetching it, and a twin is a secondary representation
+  sites keep out of that index -- but the media-type rejection is the
+  load-bearing reason, because it holds whether or not the twin is indexed.
 
-  The alternative -- align the row on the Markdown twin like the other four,
-  with or without hints=search -- was REJECTED because its precondition is an
-  observed test that ChatGPT's search mode reliably retrieves a .md URL, and
-  no vendor documents the parameter at all: neither ?q= nor hints=search
-  appears in any OpenAI specification, so the behavior is only knowable by
-  running it. Trading a shape verified to work for one that cannot be
-  verified here is not an improvement. A maintainer who runs that test and
-  finds search mode retrieves the twin can flip this entry's target to
-  "markdown" and delete this paragraph.
+  The alternative, aligning this row on the twin like the other four, is
+  rejected on that evidence rather than on the absence of it. If a future
+  release accepts text/markdown, flip the target and delete this paragraph.
+
+  UNANSWERED, and worth stating where the registry lives: only ChatGPT has
+  been tested for RETRIEVAL. The other four rows hand over the same
+  text/markdown URL, and an assistant that rejects the media type the same
+  way would receive a prompt pointing at something it cannot open -- a silent
+  failure that looks like a working link. See the README for the one-minute
+  test and for the text/plain discriminator that separates a media-type
+  problem from an address problem.
 
   What made the asymmetry a recurring report was not the target choice but
   its INVISIBILITY: every provider row carried the same description, so a
