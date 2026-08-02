@@ -1,7 +1,7 @@
 /* global process */
 // Shared helpers for the build-output assertion specs.
 //
-// The runner exports FIFTEEN published trees, and every one of them is
+// The runner exports SIXTEEN published trees, and every one of them is
 // load-bearing:
 // FIXTURE_PUBLIC (every content-license key unset), FIXTURE_PUBLIC_CONFIGURED
 // (the license table filled and both switches on, plus the bots_allow with
@@ -22,7 +22,10 @@
 // as a bare value), FIXTURE_PUBLIC_NOSECTIONPAGES (the single key
 // section_pages = false on top of the default configuration, the only build
 // in which stripping the roster block from a baseline section twin must
-// reproduce the published twin byte for byte), FIXTURE_PUBLIC_SHADOW (a
+// reproduce the published twin byte for byte), FIXTURE_PUBLIC_NOLINKMD (the
+// single key link_markdown = false with the twins left on, the only build in
+// which that conjunct alone decides whether llms.txt names a twin),
+// FIXTURE_PUBLIC_SHADOW (a
 // fixture that ships its own layouts/robots.txt), FIXTURE_PUBLIC_PAGINATED
 // (a fixture whose single section spills past pagerSize, the only shape in
 // which a surface can be caught enumerating pager shells alongside the pages
@@ -60,6 +63,9 @@ export const offDir = resolve(process.env.FIXTURE_PUBLIC_OFF ?? 'fixture/public/
 export const nsoffDir = resolve(process.env.FIXTURE_PUBLIC_NSOFF ?? 'fixture/public/nsoff');
 export const badtablesDir = resolve(
   process.env.FIXTURE_PUBLIC_BADTABLES ?? 'fixture/public/badtables',
+);
+export const nolinkmdDir = resolve(
+  process.env.FIXTURE_PUBLIC_NOLINKMD ?? 'fixture/public/nolinkmd',
 );
 export const nosectionpagesDir = resolve(
   process.env.FIXTURE_PUBLIC_NOSECTIONPAGES ?? 'fixture/public/nosectionpages',

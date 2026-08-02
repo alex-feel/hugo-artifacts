@@ -383,7 +383,17 @@ url = '/sitemap.xml'
 note = 'Every published URL.'
 ```
 
-The document is: exactly one H1 line, a blockquote summary, an optional blockquote license line, optional prose, one H2 per configured section listing `- [name](url): note` items, and a final `## Optional` section collecting the `[[params.agent.llms.optional]]` entries plus the module's own derived Agent Skills entry described below. The heading is emitted only when at least one entry of either kind survived, because an empty H2 claims a section that is not there. `Optional` is a protocol token fixed by the convention and is deliberately not translated.
+The document is: exactly one H1 line, a blockquote summary, an optional blockquote license line, optional prose, a `## Start here` section carrying the home page's own Markdown twin, one H2 per configured section listing `- [name](url): note` items, and a final `## Optional` section collecting the `[[params.agent.llms.optional]]` entries plus the module's own derived Agent Skills entry described below. `Optional`'s heading is emitted only when at least one entry of either kind survived, because an empty H2 claims a section that is not there. `Optional` is a protocol token fixed by the convention and is deliberately not translated; `Start here` is ordinary prose and is translated, through the `agent_llms_start_heading` key.
+
+### The `## Start here` section
+
+**`llms.txt` names the home page's own Markdown twin, derived, with no consumer action.** Pages otherwise reach this file only through `[[params.agent.llms.sections]]`, and section membership is a content-path prefix test that the home page's path of `/` can never satisfy: `section = '/'` normalizes to the empty string, which the empty-section guard refuses, and any real section value fails the prefix test. So the front door -- the twin an agent is most likely to fetch first, carrying whatever the home page says about the site -- was the one twin this index could never list, on every site that enables twins, with no configuration able to fix it short of hand-writing an `[[llms.optional]]` entry whose URL the module already knows how to compute.
+
+The entry resolves through [`twin-url.html`](#twin-urlhtml), so it carries every publish gate the twin renderer applies: the master switch, `markdown.enable`, a home page opted out in front matter, and the `markdown` format not being wired for the home kind. When any of them withholds the file, this section emits nothing at all -- no heading, no URL, no warning. `link_markdown = false` suppresses it too, so a site that told `llms.txt` not to link twins gets no twin link here either, keeping the slot consistent with the section bullets rather than making the home page the one exception. The link text is the home page's own `title` and the note its own `description`, so the entry restates nothing you would have to maintain in two places.
+
+**Why it is not in `## Optional`,** where the derived Agent Skills entry lives and where the derivation machinery already existed. The convention defines that heading as links whose "URLs provided there can be skipped if a shorter context is needed... secondary information which can often be skipped" -- and a site's front door is the last thing an agent should drop. The convention reserves no name for an entry point and constrains no H2 name other than `Optional`, and among the generated `llms.txt` files surveyed for this decision the only one that links its own overview at all places it first, ahead of the ordinary sections. So it gets its own heading in first position. Preamble prose was rejected for the reason the rest of the document is a link list: an agent parses `- [name](url)`, not a sentence. The contrast with the Agent Skills entry is the point -- that index genuinely is secondary and an agent can drop it without losing the site.
+
+A consumer who already lists the same URL in `[[params.agent.llms.optional]]` keeps their own name and note: URLs are compared after absolutization, and a match suppresses the derived entry -- and with it the `## Start here` heading -- rather than doubling the link under two headings.
 
 **Every URL is absolute**, including the ones you write in `[[params.agent.llms.optional]]`: a site-relative value there is resolved against the full `baseURL` **including its path**, whether or not you write the leading slash, while anything carrying a scheme (`https:`, `mailto:`, `tel:`) or a protocol-relative `//` prefix passes through untouched. This file is routinely ingested detached from the URL it was fetched from, where a bare `/sitemap.xml` has no origin to resolve against. `/about.md` follows the same rule, and so does the `href` on each `[params.agent.facts.contact]` channel.
 
@@ -504,7 +514,7 @@ license = true    # emit the license blockquote line in llms.txt
 
 ## i18n
 
-The module authors exactly eleven user-facing strings: six headings in generated documents, three display labels for the surface entries returned by the [`surfaces.html`](#surfaceshtml) public partial, and the name and note of the derived Agent Skills index entry in `llms.txt`. English and Russian ship with the module; every lookup carries an English fallback, so a site whose language ships no translation still renders a real string rather than an empty one.
+The module authors exactly twelve user-facing strings: seven headings in generated documents, three display labels for the surface entries returned by the [`surfaces.html`](#surfaceshtml) public partial, and the name and note of the derived Agent Skills index entry in `llms.txt`. English and Russian ship with the module; every lookup carries an English fallback, so a site whose language ships no translation still renders a real string rather than an empty one.
 
 | Key                             | English                                                        |
 | ------------------------------- | -------------------------------------------------------------- |
@@ -514,6 +524,7 @@ The module authors exactly eleven user-facing strings: six headings in generated
 | `agent_facts_title`             | `About`                                                        |
 | `agent_facts_identity_heading`  | `Identity`                                                     |
 | `agent_facts_contact_heading`   | `Contact`                                                      |
+| `agent_llms_start_heading`      | `Start here`                                                   |
 | `agent_surface_llms`            | `llms.txt`                                                     |
 | `agent_surface_facts`           | `Site facts`                                                   |
 | `agent_surface_skills`          | `Agent Skills index`                                           |
@@ -572,7 +583,7 @@ modules/agent-readiness/
 │               ├── section.html
 │               ├── skills-index-url.html
 │               └── warn.html
-├── test/                       # Validation suite: fourteen Hugo fixture builds plus Node build-output assertions. See test/README.md.
+├── test/                       # Validation suite: sixteen Hugo fixture builds plus Node build-output assertions. See test/README.md.
 ├── go.mod
 ├── hugo.toml
 └── README.md

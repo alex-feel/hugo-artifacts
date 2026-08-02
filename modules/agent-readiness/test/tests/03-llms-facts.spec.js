@@ -8,6 +8,10 @@ import {
   publicDir,
   configuredDir,
   minimalDir,
+  notwinsDir,
+  nolinkmdDir,
+  edgeDir,
+  multilingualDir,
   publishedTwins,
   markdownLinks,
   sectionsWithTopLevelBullets,
@@ -89,6 +93,102 @@ test('llms.txt carries the Optional section', () => {
   // `Optional` is a protocol token fixed by the convention, deliberately
   // untranslated.
   assert.match(read('llms.txt'), /^## Optional$/m);
+});
+
+test('llms.txt names the home page own twin with no consumer configuration', () => {
+  // The gap this closes: llms.txt lists pages only through
+  // [[llms.sections]], and section membership is a content-path prefix test
+  // the home page's Path of "/" can never satisfy -- so the front door, the
+  // twin an agent is most likely to fetch first, appeared nowhere in the
+  // index of the machine layer, on every site that enables twins. The
+  // `minimal` build is the proof that no configuration is involved: it
+  // declares no llms sections at all, and the entry is still there.
+  for (const [label, dir] of [
+    ['baseline', publicDir],
+    ['configured', configuredDir],
+    ['minimal', minimalDir],
+  ]) {
+    const text = read('llms.txt', dir);
+    assert.match(text, /^## Start here$/m, `${label} must carry the Start here heading`);
+    assert.match(
+      text,
+      /^## Start here\n\n- \[Agent Readiness Fixture\]\(https:\/\/[^)]+\/index\.md\)/m,
+      `${label} must link the home twin as the section's first bullet`,
+    );
+  }
+});
+
+test('the home twin entry leads the document, ahead of every configured section', () => {
+  // Placement is the decision this section records, not an accident. The
+  // convention defines `## Optional` as links that may be dropped when
+  // context is short, and the site's front door is the last thing an agent
+  // should drop -- so it gets its own H2 in first position instead, after
+  // the preamble and before the sections.
+  const headings = read('llms.txt')
+    .split('\n')
+    .filter((l) => l.startsWith('## '));
+  assert.equal(headings[0], '## Start here');
+  assert.equal(headings[headings.length - 1], '## Optional');
+  assert.ok(headings.length > 2, 'the fixture must configure sections between the two');
+});
+
+test('the home twin entry is withheld when the twin does not publish', () => {
+  // twins off: `markdown` stays wired in [outputs] but markdown.enable is
+  // false, so markdown-page.html writes no bytes and Hugo publishes no
+  // index.md. A heading here would advertise a 404 -- the exact failure the
+  // section entries already guard against.
+  const text = read('llms.txt', notwinsDir);
+  assert.ok(!/^## Start here$/m.test(text), 'no heading when no twin publishes');
+  assert.ok(!/\/index\.md\)/.test(text), 'and no twin URL anywhere in the document');
+});
+
+test('link_markdown false withholds the home twin entry while the twins still publish', () => {
+  // The `notwins` build above proves the twins-off half through the OTHER
+  // conjunct, markdown.enable. This one isolates link_markdown: the twins
+  // publish normally here, so /index.md exists, and the only reason llms.txt
+  // must not name it is that the consumer said not to link twins from this
+  // document. Dropping that conjunct from either emitter would leave every
+  // other build in the suite green.
+  const text = read('llms.txt', nolinkmdDir);
+  assert.ok(!/^## Start here$/m.test(text), 'no heading when the document does not link twins');
+  assert.ok(!/\/index\.md\)/.test(text), 'and no twin URL in any section bullet either');
+  // The section bullets fall back to HTML permalinks rather than disappearing,
+  // which is what distinguishes this from a build with no sections at all.
+  assert.match(text, /^- \[Post One\]\(https:\/\/fixture\.example\/blog\/post-one\/\)/m);
+  // The twins themselves are untouched: the key scopes to llms.txt's link
+  // shape, so the file it declines to link is still published.
+  assert.ok(exists('index.md', nolinkmdDir), 'the home twin still publishes');
+});
+
+test('a consumer who declares the home twin keeps their own wording', () => {
+  // The `edge` build lists the home twin by hand as '/index.md', which the
+  // shared absolutizer resolves against a SUBPATH baseURL. Matching after
+  // absolutization is what makes the dedup real: a raw string compare would
+  // miss it and publish the entry twice under two headings.
+  const text = read('llms.txt', edgeDir);
+  assert.ok(!/^## Start here$/m.test(text), 'the derived entry steps aside entirely');
+  assert.match(
+    text,
+    /^- \[Front door\]\(https:\/\/example\.org\/docs\/index\.md\): Consumer-authored entry for the home twin\.$/m,
+  );
+  const occurrences = text.split('https://example.org/docs/index.md').length - 1;
+  assert.equal(occurrences, 1, 'the home twin URL appears exactly once');
+});
+
+test('each language names its own home twin under its own heading', () => {
+  // llms.txt is not a root-only format: it renders once per language, so the
+  // entry has to resolve against the RENDERING language's home page rather
+  // than the default site's, and its heading is ordinary prose that gets
+  // translated -- unlike `## Optional`, which is a protocol token.
+  const en = read('llms.txt', multilingualDir);
+  const ru = read('ru/llms.txt', multilingualDir);
+  assert.match(en, /^## Start here\n\n- \[[^\]]+\]\(https:\/\/fixture\.example\/index\.md\)/m);
+  assert.match(ru, /^## Начните отсюда$/m);
+  assert.match(ru, /\(https:\/\/fixture\.example\/ru\/index\.md\)/);
+  assert.ok(
+    !/^## Start here$/m.test(ru),
+    'the English heading must not leak into the Russian file',
+  );
 });
 
 test('the llms.txt license line is inert unset and exact when configured', () => {

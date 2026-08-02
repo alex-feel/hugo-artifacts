@@ -21,13 +21,17 @@
     3. An optional `> ` license line, placed after the summary and before the
        first `## `.
     4. Optional free prose.
-    5. One `## ` H2 per configured section, each listing `- [name](url): note`.
-    6. A final `## Optional` H2: the consumer's declared entries, plus ONE
+    5. A `## ` H2 carrying ONE derived entry, the home page's own Markdown
+       twin, when that twin publishes.
+    6. One `## ` H2 per configured section, each listing `- [name](url): note`.
+    7. A final `## Optional` H2: the consumer's declared entries, plus ONE
        derived entry for the module's own Agent Skills index when that
        surface actually publishes.
 
   `Optional` is a protocol token fixed by the convention and is deliberately
-  NOT translated.
+  NOT translated. The heading in slot 5 is not a protocol token -- the
+  convention reserves no name for a site's entry point and leaves every other
+  H2 name free -- so that one IS translated, through $cfg.i18n.
 
   The document is assembled as a slice of lines and emitted once, rather than
   written inline with whitespace-trimming markers: this file's output is
@@ -55,6 +59,38 @@
 
 {{- if and $cfg.enable $llms.enable -}}
   {{- $lines := slice -}}
+
+  {{/* The consumer's `## Optional` entries are COLLECTED here but EMITTED
+       last. Both of this file's derived entries -- the home twin in slot 5
+       and the Agent Skills index in slot 7 -- suppress themselves when the
+       consumer already declared the same URL, and the home twin's slot comes
+       before the sections, so the dedup list has to exist before the document
+       body is assembled. Collecting once, up front, keeps ONE list for both
+       and keeps the two derived entries from ever disagreeing about what
+       counts as already-declared.
+
+       Absolutized through the shared routine, which handles the
+       leading-slash form correctly -- passing it to absURL directly would
+       discard the baseURL's path on a subpath deployment. */}}
+  {{- $optional := slice -}}
+  {{- $optionalUrls := slice -}}
+  {{- range $llms.optional | default slice -}}
+    {{- if reflect.IsMap . -}}
+      {{- $u := partial "agent-readiness/lib/absolute-url.html" (.url | default "") -}}
+      {{- if $u -}}
+        {{- $item := printf "- %s" (partial "agent-readiness/lib/markdown-link.html" (dict "name" (.name | default $u) "url" $u)) -}}
+        {{- with .note -}}{{- $item = printf "%s: %s" $item (partial "agent-readiness/lib/inline.html" .) -}}{{- end -}}
+        {{- $optional = $optional | append $item -}}
+        {{- $optionalUrls = $optionalUrls | append $u -}}
+      {{- end -}}
+    {{- else -}}
+      {{/* A bare value inside a real slice. Dropped silently it removes the
+           whole `## Optional` heading, which reads as a deliberate omission. */}}
+      {{- partial "agent-readiness/lib/warn.html" (dict
+          "key" (printf "agent-readiness:warn:optional-not-a-table:%v" .)
+          "message" (printf "[agent-readiness] Skipping the [[params.agent.llms.optional]] entry %q: an entry must be a table with `name` and `url`, not a bare value." (printf "%v" .))) -}}
+    {{- end -}}
+  {{- end -}}
 
   {{/* 1. Exactly one H1. */}}
   {{- $lines = $lines | append (printf "# %s" (partial "agent-readiness/lib/inline.html" ($llms.title | default site.Title))) -}}
@@ -85,7 +121,66 @@
     {{- $lines = $lines | append "" | append . -}}
   {{- end -}}
 
-  {{/* 5. One H2 per configured section. Membership comes from the shared
+  {{/* 5. The home page's own Markdown twin.
+
+         WHY IT IS DERIVED RATHER THAN CONFIGURED. This file lists pages only
+         through [[params.agent.llms.sections]], and section membership is a
+         content-path prefix test. The home page's Path is "/", which belongs
+         to no section and which no section value can reach: '/' normalizes
+         to the empty string, which slot 6's empty-section guard refuses,
+         and any real section value fails the prefix test against "/". So on
+         every site that enables twins, the one twin an agent is most likely
+         to fetch first -- the front door, carrying the identity block and
+         whatever the home page says about the site -- was the one twin this
+         index could never name, and no consumer could fix it except by
+         hand-writing an [[llms.optional]] entry whose URL the module already
+         knows how to compute, which drifts the day that URL or its publish
+         state changes.
+
+         The gates are the module's own public answer, not a second copy of
+         them: agent-readiness/twin-url.html applies the master switch, the
+         twin surface switch, the per-page opt-out in home front matter, and
+         the `markdown` format being wired for the home kind, returning "" if
+         any of them withholds the file. So this section publishes a link
+         only when the file it points at exists, and emits nothing at all --
+         no heading, no warning -- otherwise. link_markdown gates it too: a
+         site that told llms.txt not to link twins gets no twin link here
+         either, which keeps this slot consistent with the section bullets
+         below rather than making the home page the one exception.
+
+         PLACEMENT, and why not `## Optional`. The Agent Skills entry in slot
+         7 is derived the same way, so `## Optional` is where the machinery
+         already lives -- but the convention defines that heading as links
+         that "can be skipped if a shorter context is needed... secondary
+         information which can often be skipped", and a site's front door is
+         the last thing an agent should drop. The convention reserves no name
+         for an entry point and constrains no other H2 name, and of the
+         generated llms.txt files surveyed for this decision the only one
+         that links its own overview at all puts it first, ahead of the
+         ordinary sections. So this gets its own translated H2 in first
+         position. Preamble prose was rejected for the same reason the rest
+         of this document is a link list: an agent parses `- [name](url)`,
+         not a sentence.
+
+         A consumer who already listed this URL in [[llms.optional]] keeps
+         their own name and note. The derived entry is suppressed rather than
+         doubled, comparing absolutized URLs exactly as the skills entry
+         does. The link text is the home page's own Title and the note its
+         own Description, so the entry restates nothing a consumer would have
+         to maintain twice. */}}
+  {{- if $llms.link_markdown -}}
+    {{- with partial "agent-readiness/twin-url.html" $page -}}
+      {{- if not (in $optionalUrls .) -}}
+        {{- $homeItem := printf "- %s" (partial "agent-readiness/lib/markdown-link.html" (dict "name" ($page.Title | default site.Title) "url" .)) -}}
+        {{- with $page.Description -}}
+          {{- $homeItem = printf "%s: %s" $homeItem (partial "agent-readiness/lib/inline.html" .) -}}
+        {{- end -}}
+        {{- $lines = $lines | append "" | append (printf "## %s" (partial "agent-readiness/lib/inline.html" $cfg.i18n.llms_start_heading)) | append "" | append $homeItem -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* 6. One H2 per configured section. Membership comes from the shared
          filter, so llms.txt can never list a page the twins and robots.txt
          disagree about. Each entry's `section` value arrived here already
          normalized by config.html, so a bare name and a slashed form resolve
@@ -182,43 +277,25 @@
     {{- end -}}
   {{- end -}}
 
-  {{/* 6. The Optional section: links an agent may drop when shortening
-         context. It collects the consumer's declared entries plus the
-         module's own derived entry below, and the H2 is emitted only when
-         at least one entry of either kind survived, because an empty H2
-         claims a section that is not there. */}}
-  {{- $optional := slice -}}
-  {{- $optionalUrls := slice -}}
-  {{- range $llms.optional | default slice -}}
-    {{- if reflect.IsMap . -}}
-      {{/* Absolutized through the shared routine, which handles the
-           leading-slash form correctly -- passing it to absURL directly
-           would discard the baseURL's path on a subpath deployment. */}}
-      {{- $u := partial "agent-readiness/lib/absolute-url.html" (.url | default "") -}}
-      {{- if $u -}}
-        {{- $item := printf "- %s" (partial "agent-readiness/lib/markdown-link.html" (dict "name" (.name | default $u) "url" $u)) -}}
-        {{- with .note -}}{{- $item = printf "%s: %s" $item (partial "agent-readiness/lib/inline.html" .) -}}{{- end -}}
-        {{- $optional = $optional | append $item -}}
-        {{- $optionalUrls = $optionalUrls | append $u -}}
-      {{- end -}}
-    {{- else -}}
-      {{/* A bare value inside a real slice. Dropped silently it removes the
-           whole `## Optional` heading, which reads as a deliberate omission. */}}
-      {{- partial "agent-readiness/lib/warn.html" (dict
-          "key" (printf "agent-readiness:warn:optional-not-a-table:%v" .)
-          "message" (printf "[agent-readiness] Skipping the [[params.agent.llms.optional]] entry %q: an entry must be a table with `name` and `url`, not a bare value." (printf "%v" .))) -}}
-    {{- end -}}
-  {{- end -}}
-  {{/* The module's own Agent Skills index. The index file is otherwise
-       reachable only by well-known-path convention, so llms.txt is where
-       an agent actually discovers it; the entry is DERIVED from module
-       state, and no consumer action is needed. lib/skills-index-url.html
-       carries the four publish gates shared with surfaces.html, so a
-       zero-skills or unwired build appends nothing here -- no entry, no
-       warning. A consumer who already lists the index in
-       [[params.agent.llms.optional]] keeps their own wording: the URLs are
-       compared after absolutization, and a match suppresses the derived
-       entry rather than doubling it. */}}
+  {{/* 7. The Optional section: links an agent may drop when shortening
+         context. It holds the consumer's declared entries, collected at the
+         top of this file, plus the module's own derived entry below, and the
+         H2 is emitted only when at least one entry of either kind survived,
+         because an empty H2 claims a section that is not there.
+
+         The module's own Agent Skills index belongs HERE rather than in slot
+         5, and the contrast is the reason slot 5 exists: the skills index is
+         genuinely secondary -- a machine-readable listing an agent can drop
+         without losing the site -- while the home twin is the front door.
+         The index file is otherwise reachable only by well-known-path
+         convention, so llms.txt is where an agent actually discovers it; the
+         entry is DERIVED from module state, and no consumer action is
+         needed. lib/skills-index-url.html carries the four publish gates
+         shared with surfaces.html, so a zero-skills or unwired build appends
+         nothing here -- no entry, no warning. A consumer who already lists
+         the index in [[params.agent.llms.optional]] keeps their own wording:
+         the URLs are compared after absolutization, and a match suppresses
+         the derived entry rather than doubling it. */}}
   {{- with partial "agent-readiness/lib/skills-index-url.html" dict -}}
     {{- if not (in $optionalUrls .) -}}
       {{- $item := printf "- %s" (partial "agent-readiness/lib/markdown-link.html" (dict "name" $cfg.i18n.skills_entry_name "url" .)) -}}

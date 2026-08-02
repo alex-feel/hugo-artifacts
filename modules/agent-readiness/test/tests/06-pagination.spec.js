@@ -63,11 +63,18 @@ test('the fixture really does publish pager shells, and they resolve to the sect
   }
 });
 
-test('llms.txt lists the five regular pages and no pager URL', () => {
+test('llms.txt lists the five regular pages, the home twin, and no pager URL', () => {
   // The page sweep excludes the `## Optional` section, which carries the
   // derived agent-skills index entry in this fixture, and stays EXACT over
   // every page-listing section (an extraneous advertised page URL still
   // fails); the pager sweep below runs over every advertised URL.
+  //
+  // The expected set carries the home page's own twin as well, contributed by
+  // the derived `## Start here` section. Adding it here rather than deleting
+  // that section from the sweep keeps the enumeration exact: a pager URL
+  // leaking into the leading section would still fail this assertion, and the
+  // home entry is pinned in a second fixture besides the ones in
+  // 03-llms-facts.spec.js.
   const sections = sectionsWithTopLevelBullets(read('llms.txt', paginatedDir));
   sections.delete('Optional');
   const pagePaths = [...sections.values()]
@@ -75,8 +82,8 @@ test('llms.txt lists the five regular pages and no pager URL', () => {
     .flatMap((line) => markdownLinks(line).map((link) => siteRelative(link.url)));
   assert.deepEqual(
     pagePaths.sort(),
-    POSTS.map((slug) => `/posts/${slug}/index.md`).sort(),
-    'llms.txt must enumerate exactly the section-s regular pages',
+    ['/index.md', ...POSTS.map((slug) => `/posts/${slug}/index.md`)].sort(),
+    'llms.txt must enumerate exactly the section-s regular pages plus the home twin',
   );
   for (const path of advertisedPaths('llms.txt')) {
     assert.ok(!path.includes('/page/'), `llms.txt advertised the pager URL ${path}`);

@@ -31,6 +31,15 @@
 #      lists the index manually -- here at the URL the subpath deployment
 #      actually publishes -- can prove the derived entry is suppressed rather
 #      than doubled.
+#
+#   6. A second consumer-authored [[llms.optional]] entry, this one restating
+#      the HOME PAGE'S OWN Markdown twin, which llms.html otherwise derives
+#      into its leading `## Start here` heading. The same absolutized-URL
+#      dedup covers both derived entries, and only a build that declares the
+#      twin by hand can prove the derived one steps aside -- leaving the
+#      consumer's wording, under their chosen heading, and no `## Start here`
+#      at all. Every other build proves the opposite half, that the heading
+#      appears with no consumer configuration whatsoever.
 baseURL = 'https://example.org/docs/'
 
 [params]
@@ -125,3 +134,15 @@ baseURL = 'https://example.org/docs/'
         name = 'Skills'
         url = 'https://example.org/docs/.well-known/agent-skills/index.json'
         note = 'Consumer-authored entry for the Agent Skills index.'
+
+      # The home page's own Markdown twin, restated by hand at the URL this
+      # subpath deployment actually publishes. llms.html would otherwise
+      # derive it into a leading `## Start here` heading; because this entry
+      # claims the same URL, the derived one must step aside entirely -- no
+      # `## Start here` in this build, and this wording kept instead. The
+      # name and note deliberately differ from what the derivation would
+      # produce so the output shows WHICH entry won.
+      [[params.agent.llms.optional]]
+        name = 'Front door'
+        url = '/index.md'
+        note = 'Consumer-authored entry for the home twin.'

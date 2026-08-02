@@ -1,6 +1,6 @@
 # agent-readiness module test suite
 
-Node build-output assertions for `modules/agent-readiness`, run against the files that fifteen Hugo builds publish. The module ships zero JavaScript, so there is no browser behavior to test and the suite carries no Playwright dependency.
+Node build-output assertions for `modules/agent-readiness`, run against the files that sixteen Hugo builds publish. The module ships zero JavaScript, so there is no browser behavior to test and the suite carries no Playwright dependency.
 
 ## Running
 
@@ -14,7 +14,7 @@ or, on Windows:
 modules\agent-readiness\test\run-tests.cmd
 ```
 
-Both runners validate the shipped data files, perform the repository's pre-launch Hugo process check, build all fifteen fixtures, fail hard on any `deprecat`, `ERROR`, or `found no layout file` line in any build log, and then run the assertions.
+Both runners validate the shipped data files, perform the repository's pre-launch Hugo process check, build all sixteen fixtures, fail hard on any `deprecat`, `ERROR`, or `found no layout file` line in any build log, and then run the assertions.
 
 > **These specs need network access.** The Agent Skills specs exercise a real build-time `resources.GetRemote`, because the digest guarantee -- that the advertised hash matches the bytes actually served -- cannot be proven without one. On a run with no network, the module correctly omits every skill and emits no index file at all, and the first skills spec reports that as the cause rather than as a mysterious missing file. The widgets build additionally fetches the widget modules' remote APIs (GitHub, the Hugging Face Hub, arXiv, YouTube posters); those fetches degrade with `WARN` lines when tokenless or rate-limited, which the log gates deliberately tolerate, and the widget-twin spec asserts only the baseline lines each markdown shortcode variant derives from the shortcode parameters alone, never fetched-only enrichment.
 
@@ -22,7 +22,7 @@ Both runners validate the shipped data files, perform the repository's pre-launc
 
 `tests/00-data.spec.js` runs on its own, **before either fixture is built**. A malformed `data/agent-readiness/*.toml` otherwise surfaces as an opaque Hugo build failure at some unrelated template, leaving the reader to work backwards to the registry. Run first, it is reported as itself.
 
-## Fifteen builds
+## Sixteen builds
 
 | Build | Fixture | Environment | What it proves |
 | --- | --- | --- | --- |
@@ -37,6 +37,7 @@ Both runners validate the shipped data files, perform the repository's pre-launc
 | badtables | `fixture/` | `badtables` | The section arrays written as bare strings instead of arrays of tables, which TOML cannot express alongside the real tables, so they need a build of their own. |
 | nsoff | `fixture/` | `nsoff` | The whole `[params]` `agent` namespace written as a bare value, the shorthand a consumer reaches for as a kill switch. Every other environment declares `[agent]` as a table, which TOML cannot reconcile with a bare value. |
 | nosectionpages | `fixture/` | `nosectionpages` | The single key `section_pages = false` on top of the default configuration, so every published byte outside the roster blocks is identical to baseline. The only build in which stripping the roster block from a baseline section twin must reproduce the published twin byte for byte, proving the switch restores the pre-roster output and touches nothing else. |
+| nolinkmd | `fixture/` | `nolinkmd` | The single key `link_markdown = false` with the twins left ON. `notwins` reaches the twins-off half through the other conjunct, `markdown.enable`; here the twins publish normally and `link_markdown` is the sole reason `llms.txt` carries HTML permalinks and withholds its derived `## Start here` entry. The only build in which deleting that conjunct from either emitter changes a published byte. |
 | shadow | `fixture-shadow/` | default | The fixture ships its own `layouts/robots.txt`, proving the documented silent-override hazard. |
 | paginated | `fixture-paginated/` | default | A single section of five pages at `pagerSize = 2`, so Hugo publishes `/posts/page/2/` and `/posts/page/3/`. The only shape in which a surface can be caught enumerating a pager shell alongside the pages it lists, or emitting a Markdown twin for one. |
 | widgets | `fixture-widgets/` | default | A fixture importing every widget shortcode module (`github-repo`, `github-profile`, `hf-space`, `arxiv-paper`, `callout`, `youtube-embed`, and `images` for `image` and `image-gallery`) next to `agent-readiness`, whose single regular page calls all eight widget shortcodes. The only shape in which a page twin can be caught embedding widget BEM HTML or inline SVG instead of the compact Markdown citations the modules' markdown output-format variants emit. |

@@ -4,7 +4,7 @@
 # ({{ T "key" | default "English" }}), so a site whose language ships no
 # translation still renders a real heading rather than an empty string.
 #
-# The module authors exactly eleven strings: six headings in generated
+# The module authors exactly twelve strings: seven headings in generated
 # documents, three display labels for the surface entries returned by the
 # agent-readiness/surfaces.html public partial, and the name and note of
 # the derived Agent Skills index entry in llms.txt's `## Optional` section.
@@ -46,6 +46,11 @@ agent_facts_identity_heading = "Идентификация"
 
 # H2 of the contact block in about.md.
 agent_facts_contact_heading = "Контакты"
+
+# H2 of the llms.txt section holding the derived link to the home page's own
+# Markdown twin. Unlike "## Optional", which the llmstxt.org convention fixes
+# as a protocol token, this heading is ordinary prose and is translated.
+agent_llms_start_heading = "Начните отсюда"
 
 # Display label for the llms.txt entry returned by surfaces.html.
 # "llms.txt" is the llmstxt.org protocol token and stays untranslated in

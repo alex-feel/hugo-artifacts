@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Validates the shipped data files, then builds FIFTEEN fixture sites with
+# Validates the shipped data files, then builds SIXTEEN fixture sites with
 # hugo (builds, not servers: no port binding, and a finite build exits by
-# itself) and runs the Node build-output assertion suite against all fifteen.
+# itself) and runs the Node build-output assertion suite against all sixteen.
 #
 # The data-file check runs FIRST, before any build. That ordering is the
 # point: a malformed registry otherwise surfaces as an opaque Hugo failure at
 # some unrelated template, and the reader has to work backwards to it.
 #
-# The fifteen builds:
+# The sixteen builds:
 #   baseline   -- every content-license key unset, proving the license
 #                 surfaces are inert until a consumer opts in;
 #   configured -- the license table filled and both switches on, plus
@@ -40,6 +40,10 @@
 #                 default configuration, the only build in which stripping
 #                 the roster block from a baseline section twin must
 #                 reproduce the published twin byte for byte;
+#   nolinkmd   -- the single key link_markdown = false with the twins left ON,
+#                 the only build in which that conjunct alone decides whether
+#                 llms.txt names a twin, so deleting it from either emitter
+#                 changes a published byte;
 #   shadow     -- a fixture shipping its own layouts/robots.txt, proving the
 #                 documented silent-override hazard;
 #   paginated  -- a fixture whose single section spills past pagerSize, so
@@ -87,6 +91,7 @@ LOG_FILE_OFF="$HERE/hugo-build-off.log"
 LOG_FILE_BADTABLES="$HERE/hugo-build-badtables.log"
 LOG_FILE_NSOFF="$HERE/hugo-build-nsoff.log"
 LOG_FILE_NOSECTIONPAGES="$HERE/hugo-build-nosectionpages.log"
+LOG_FILE_NOLINKMD="$HERE/hugo-build-nolinkmd.log"
 LOG_FILE_SHADOW="$HERE/hugo-build-shadow.log"
 LOG_FILE_PAGINATED="$HERE/hugo-build-paginated.log"
 LOG_FILE_WIDGETS="$HERE/hugo-build-widgets.log"
@@ -109,7 +114,7 @@ kill_stray_hugo() {
 }
 cleanup_interrupted() {
   kill_stray_hugo
-  rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_NOTWINS"     "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_LLMSOFF" "$LOG_FILE_EDGE" "$LOG_FILE_OFF"     "$LOG_FILE_BADTABLES" "$LOG_FILE_NSOFF" "$LOG_FILE_NOSECTIONPAGES"     "$LOG_FILE_SHADOW" "$LOG_FILE_PAGINATED" "$LOG_FILE_WIDGETS" "$LOG_FILE_EXTRA"
+  rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_NOTWINS"     "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_LLMSOFF" "$LOG_FILE_EDGE" "$LOG_FILE_OFF"     "$LOG_FILE_BADTABLES" "$LOG_FILE_NSOFF" "$LOG_FILE_NOSECTIONPAGES" "$LOG_FILE_NOLINKMD"     "$LOG_FILE_SHADOW" "$LOG_FILE_PAGINATED" "$LOG_FILE_WIDGETS" "$LOG_FILE_EXTRA"
 }
 trap cleanup_interrupted INT TERM
 trap kill_stray_hugo EXIT
@@ -179,6 +184,7 @@ build "$FIXTURE_DIR" off public/off "$LOG_FILE_OFF"
 build "$FIXTURE_DIR" badtables public/badtables "$LOG_FILE_BADTABLES"
 build "$FIXTURE_DIR" nsoff public/nsoff "$LOG_FILE_NSOFF"
 build "$FIXTURE_DIR" nosectionpages public/nosectionpages "$LOG_FILE_NOSECTIONPAGES"
+build "$FIXTURE_DIR" nolinkmd public/nolinkmd "$LOG_FILE_NOLINKMD"
 build "$SHADOW_DIR" "" public "$LOG_FILE_SHADOW"
 build "$PAGINATED_DIR" "" public "$LOG_FILE_PAGINATED"
 build "$WIDGETS_DIR" "" public "$LOG_FILE_WIDGETS"
@@ -195,6 +201,7 @@ export FIXTURE_PUBLIC_OFF="$FIXTURE_DIR/public/off"
 export FIXTURE_PUBLIC_BADTABLES="$FIXTURE_DIR/public/badtables"
 export FIXTURE_PUBLIC_NSOFF="$FIXTURE_DIR/public/nsoff"
 export FIXTURE_PUBLIC_NOSECTIONPAGES="$FIXTURE_DIR/public/nosectionpages"
+export FIXTURE_PUBLIC_NOLINKMD="$FIXTURE_DIR/public/nolinkmd"
 export FIXTURE_PUBLIC_SHADOW="$SHADOW_DIR/public"
 export FIXTURE_PUBLIC_PAGINATED="$PAGINATED_DIR/public"
 export FIXTURE_PUBLIC_WIDGETS="$WIDGETS_DIR/public"
@@ -210,6 +217,7 @@ export HUGO_BUILD_LOG_OFF="$LOG_FILE_OFF"
 export HUGO_BUILD_LOG_BADTABLES="$LOG_FILE_BADTABLES"
 export HUGO_BUILD_LOG_NSOFF="$LOG_FILE_NSOFF"
 export HUGO_BUILD_LOG_NOSECTIONPAGES="$LOG_FILE_NOSECTIONPAGES"
+export HUGO_BUILD_LOG_NOLINKMD="$LOG_FILE_NOLINKMD"
 export HUGO_BUILD_LOG_SHADOW="$LOG_FILE_SHADOW"
 export HUGO_BUILD_LOG_PAGINATED="$LOG_FILE_PAGINATED"
 export HUGO_BUILD_LOG_WIDGETS="$LOG_FILE_WIDGETS"
