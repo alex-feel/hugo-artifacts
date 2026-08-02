@@ -45,7 +45,11 @@ The upstream `src/` layout (the single `index.ts` plus its sibling helpers) has 
 
 ## External consumers
 
-External consumers reach `modules/idb` transitively through `modules/pwa` -> `modules/workbox` and never import it directly. The `+incompatible` upstream `github.com/jakearchibald/idb` fetches normally over the standard Go module proxy (a plain `go mod download github.com/jakearchibald/idb@v8.0.3+incompatible` succeeds with no local checkout, replacement, or vendoring). To resolve the chain's placeholder pseudo-versions, add `modules/idb` -- alongside `modules/pwa` and `modules/workbox` -- as a direct `require` in the consumer `go.mod` pinned to a real commit pseudo-version; Go's minimal-version selection outranks the placeholder, so no `replace`, `_vendor/`, or workspace is required. See [`modules/pwa` README -> Installation](../pwa/README.md#installation) and the [Consuming modules that wrap non-Go upstreams](../../CLAUDE.md#consuming-modules-that-wrap-non-go-upstreams) convention in root `CLAUDE.md`.
+External consumers reach `modules/idb` transitively through `modules/pwa` -> `modules/workbox` and never import or require it directly. `modules/workbox/go.mod` records this module at a real commit pseudo-version, so a single `hugo mod get github.com/alex-feel/hugo-artifacts/modules/pwa` resolves the entire chain. The `+incompatible` upstream `github.com/jakearchibald/idb` fetches normally over the standard Go module proxy (a plain `go mod download github.com/jakearchibald/idb@v8.0.3+incompatible` succeeds with no local checkout, replacement, or vendoring), so no direct `require`, `replace`, `_vendor/`, or workspace is needed anywhere in the chain. See [`modules/pwa` README -> Installation](../pwa/README.md#installation) and the [Consuming modules that wrap non-Go upstreams](../../CLAUDE.md#consuming-modules-that-wrap-non-go-upstreams) convention in root `CLAUDE.md`.
+
+## Maintainer note: changing this module bumps a sibling pin
+
+Because `modules/workbox/go.mod` pins this module by commit, any commit that touches `modules/idb/` leaves that pin behind: consumers keep resolving the previous commit's content until the pin is moved forward. A commit cannot name its own hash, so the bump is always a FOLLOW-UP commit -- change `modules/idb/`, commit it, then run `npm run check:pins -- --fix` to rewrite the sibling `require` and commit that. `npm run check:pins` fails when a pin is stale, so CI catches a forgotten bump on the pull request rather than a consumer discovering it later.
 
 ## Status
 
