@@ -93,6 +93,7 @@ test.describe('killed overlay build (fixture/public/killed)', () => {
       'slide-mode-page/index.html',
       'slide-mode-unstyled/index.html',
       'two-carousels/index.html',
+      'site-path-items/index.html',
     ]) {
       const html = readKilledHtml(rel);
       expect(html, `${rel} must carry no carousel root`).not.toContain('class="carousel');

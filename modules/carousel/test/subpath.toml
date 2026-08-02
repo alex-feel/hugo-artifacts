@@ -1,0 +1,24 @@
+# Overlay config for the subpath build pass. Merged AFTER hugo.toml via
+# --config hugo.toml,../subpath.toml (run from within fixture/ or
+# fixture-bare/), mirroring the killed.toml and multilingual.toml
+# sibling-overlay convention this fixture already uses, and changing exactly
+# one thing: a baseURL that carries a PATH.
+#
+# This is the ONLY shape in which the module's leading-slash resolution can be
+# proven correct. Hugo resolves a value that ALREADY starts with "/" against
+# the protocol and host only, DISCARDING the baseURL's path -- for relURL and
+# relLangURL exactly as for absURL -- so at the domain root every other build
+# here uses, `relURL "/site-slide-01.png"` and
+# `relURL (strings.TrimPrefix "/" "/site-slide-01.png")` emit identical bytes.
+# Under a path-carrying baseURL they diverge: the first drops /docs/ and 404s,
+# the second resolves, because a file in static/ publishes UNDER the baseURL
+# path.
+#
+# content/site-path-items/ (present in BOTH fixtures) is the page that
+# exercises it, and the overlay is built against both because the module has
+# two emission branches: composed with modules/images (fixture/), where the
+# raw authored entry is forwarded and images resolves it, and standalone
+# (fixture-bare/), where carousel/slides.html emits the resolved URL itself.
+# Each fixture also publishes the Markdown twin, whose absolute URLs must
+# carry the same path exactly once.
+baseURL = 'https://example.org/docs/'

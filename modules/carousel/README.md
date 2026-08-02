@@ -35,7 +35,7 @@ path = "github.com/alex-feel/hugo-artifacts/modules/images"
 path = "github.com/alex-feel/hugo-artifacts/modules/carousel"
 ```
 
-With both imported, each slide's `<figure>` wraps the unmodified output of `images/image.html` -- srcset that never upscales, WebP/AVIF, placeholders, dark-mode variant pairs, and (with `lightbox="true"`) the full-resolution lightbox anchor with `data-full-src`/`data-full-width`/`data-full-height` -- instead of a single unprocessed `<img>`. Carousel forwards the images pass-through vocabulary (`widths`, `sizes`, `sizes_auto`, `formats`, `placeholder`, `quality`, `layout`, `responsive`, `anchor`, `resample`, `bg`, `hint`, `compression`, `max_density`, `dark`, `theme_strategy`) verbatim per slide, and never forwards `caption` or `credit` to `images/image.html` -- the images render tier emits its own inner `<figure>` only when caption/credit/license is present, so withholding both guarantees a bare `<picture>`/`<img>` that carousel wraps in its own `<figure>`/`<figcaption>`, avoiding a doubled wrapper. Import order does not matter; Hugo's template lookup resolves both modules' layout namespaces regardless of `[[module.imports]]` order.
+With both imported, each slide's `<figure>` wraps the unmodified output of `images/image.html` -- srcset that never upscales, WebP/AVIF, placeholders, dark-mode variant pairs, and (with `lightbox="true"`) the full-resolution lightbox anchor with `data-full-src`/`data-full-width`/`data-full-height` -- instead of a single unprocessed `<img>`. Carousel forwards the images pass-through vocabulary (`widths`, `sizes`, `sizes_auto`, `formats`, `placeholder`, `quality`, `layout`, `responsive`, `anchor`, `resample`, `bg`, `hint`, `compression`, `max_density`, `dark`, `theme_strategy`) verbatim per slide, and never forwards `caption` or `credit` to `images/image.html` -- the images render tier emits its own inner `<figure>` only when caption/credit/license is present, so withholding both guarantees a bare `<picture>`/`<img>` that carousel wraps in its own `<figure>`/`<figcaption>`, avoiding a doubled wrapper. A curated-list entry that is not a bundle resource is forwarded to `images/image.html` as the value you AUTHORED, not as the URL carousel resolved from it, so `modules/images` resolves and normalizes it exactly once -- a leading-slash entry normalized by both modules would carry the baseURL path twice. Import order does not matter; Hugo's template lookup resolves both modules' layout namespaces regardless of `[[module.imports]]` order.
 
 **Composition decision (recorded so a future maintainer does not "fix" this):** this composition is **runtime layout-namespace composition**, detected with `templates.Exists "_partials/images/image.html"` (checked once per render; the underscore-prefixed `_partials/` prefix is required because `templates.Exists` resolves paths relative to `layouts/`, and this repository uses the Hugo 0.146+ `layouts/_partials/` convention -- not the pre-0.146 `layouts/partials/` form some documentation examples still show). The module's `go.mod` carries **no `require` on `modules/images`**, and this is deliberate, not an oversight:
 
@@ -59,11 +59,13 @@ Bundle-glob mode selects every matching page resource in filename order:
 {{</* carousel match="gallery/*" */>}}
 ```
 
-Curated-list mode takes an explicit, ordered, comma-separated source list -- each entry may be a bundle resource, an `assets/` resource, a leading-slash static path, or an absolute URL:
+Curated-list mode takes an explicit, ordered, comma-separated source list -- each entry may be a bundle resource, an `assets/` resource, an absolute or protocol-relative URL, or a leading-slash site path:
 
 ```go-html-template
-{{</* carousel items="gallery/one.jpg, gallery/two.jpg, /static/img/three.jpg" label="Trip photos" */>}}
+{{</* carousel items="gallery/one.jpg, gallery/two.jpg, /img/three.jpg" label="Trip photos" */>}}
 ```
+
+A leading slash means SITE-ROOT-RELATIVE, so such an entry is normalized onto the site rather than emitted verbatim: `/img/three.jpg` renders as `/docs/img/three.jpg` under `baseURL = "https://example.org/docs/"`, because a file in `static/` publishes under the baseURL path. (The module derives that path from `site.BaseURL` itself, because no Hugo URL function can supply it: `relURL`/`relLangURL`/`absURL` all discard the baseURL path for a value that already begins with `/`, and `relURL` on the slash-stripped remainder stops emitting the path entirely once `canonifyURLs` is on -- which the HTML output post-processor compensates for and other output formats, such as the Markdown twin, never do.) Absolute (`https://host/path`) and protocol-relative (`//host/path`) entries pass through untouched -- absolutizing either would corrupt it.
 
 Exactly one of `match`/`items` is required; supplying both, or neither, fails the build with `errorf`. A few common variations:
 
@@ -91,7 +93,7 @@ All parameters are named. Exactly one of `match`/`items` is required.
 | Parameter | Type | Default | Purpose |
 | --- | --- | --- | --- |
 | `match` | string | `""` | A page-resource glob (e.g. `"gallery/*"`), matched in filename order via `.Resources.Match`. Mutually exclusive with `items`. |
-| `items` | string | `""` | A comma-separated ORDERED source list; each entry resolves as a bundle resource, an `assets/` resource, a leading-slash static path, or an absolute URL, first match wins. Mutually exclusive with `match`. |
+| `items` | string | `""` | A comma-separated ORDERED source list; each entry resolves as a bundle resource, an `assets/` resource, an absolute or protocol-relative URL (passed through untouched), or a leading-slash site path (normalized onto the baseURL), first match wins. Mutually exclusive with `match`. |
 | `id` | string | `carousel-<Ordinal>` | Root `<section>` id; also the id prefix for per-slide ids (`<id>-slide-01`). |
 | `class` | string | `""` | Extra class(es) appended to the root `<section>`. |
 | `label` | string | i18n `carousel_label` ("Image gallery") | Accessible name (`aria-label`) for the root region. Ignored when `labelledby` is also set. |
@@ -121,7 +123,7 @@ resources:
       credit: Photographer name
 ```
 
-`alt` is the trimmed `params.alt` value (default `""`); `caption` is the resource's `.Title` only when it differs from `.Name` (so an untitled resource's file-name-derived default title never leaks into a caption); `credit` is the trimmed `params.credit` value. Curated-list entries outside the page bundle (an `assets/` resource, a static path, an absolute URL) have no `[[resources]]` front-matter home, so they render with `alt=""` and a single one-time warning -- author sets needing per-item alt text should live as bundle resources with `[[resources]]` metadata.
+`alt` is the trimmed `params.alt` value (default `""`); `caption` is the resource's `.Title` only when it differs from `.Name` (so an untitled resource's file-name-derived default title never leaks into a caption); `credit` is the trimmed `params.credit` value. Curated-list entries outside the page bundle (an `assets/` resource, a site path, an absolute or protocol-relative URL) have no `[[resources]]` front-matter home, so they render with `alt=""` and a single one-time warning naming the entry exactly as you authored it -- author sets needing per-item alt text should live as bundle resources with `[[resources]]` metadata.
 
 ### Validation
 
@@ -283,7 +285,7 @@ Step 1: the original login flow
 Step 2: the redesigned dashboard
 ```
 
-Each block is the image line, `![alt](URL)`, plus the caption as a plain-text line directly below it when a caption is present and `captions` (the one HTML parameter that DOES still apply here) is not `false`; blocks are separated by exactly one blank line. `credit` is an HTML rendering feature (rendered inside `<figcaption>` as a `<span class="carousel__credit">`) with no Markdown representation, mirroring `modules/images`' own documented scope for its twin variants. The URL is always the ORIGINAL resource's absolute `.Permalink` -- never a processed derivative -- angle-bracket-wrapped when it contains whitespace or parentheses, exactly like `image-gallery.markdown.md`'s existing escaping rule.
+Each block is the image line, `![alt](URL)`, plus the caption as a plain-text line directly below it when a caption is present and `captions` (the one HTML parameter that DOES still apply here) is not `false`; blocks are separated by exactly one blank line. `credit` is an HTML rendering feature (rendered inside `<figcaption>` as a `<span class="carousel__credit">`) with no Markdown representation, mirroring `modules/images`' own documented scope for its twin variants. The URL is always absolute and never a processed derivative: the ORIGINAL resource's `.Permalink` for bundle and `assets/` resources, and `absURL` of the resolved URL for a curated-list passthrough entry -- which means a leading-slash entry keeps the baseURL path it was normalized onto, and an absolute or protocol-relative entry is emitted untouched. It is angle-bracket-wrapped when it contains whitespace or parentheses, exactly like `image-gallery.markdown.md`'s existing escaping rule.
 
 **Parameter parity:** the twin accepts the IDENTICAL parameter vocabulary as `carousel.html`, including the `match`/`items` XOR requirement (`errorf` with the same message shape on misuse) and the images pass-through set -- so a shared content call never warns on this variant about a parameter the HTML variant consumes. Presentation-only parameters (`id`, `class`, `label`, `labelledby`, `start`, `loop`, `mode`, `controls`, `picker`, `eager`, `lightbox`, `index_pad`, and the images pass-through set) are accepted for call-surface parity but have nothing to influence in a plain image-plus-caption list, since presentation and interaction state are meaningless outside a rendered, interactive DOM.
 
@@ -371,6 +373,10 @@ Both navigation icons (`chevron-left`, `chevron-right`) are inline SVGs with `wi
 
 This module cannot build standalone -- Hugo builds require a consuming site. [`test/`](test/) ships a Playwright suite following this repository's established runner contract (a pre-launch Hugo-process check, a background `hugo server --logLevel info`, a grep-fail on any logged deprecation, and belt-and-suspenders process cleanup on exit) against fixture sites covering the no-JS markup baseline, composition with `modules/images` (proving byte-identical reuse of its render output), JavaScript-enabled navigation and event dispatch, `mode="slide"` concealment guarding both a styled and an unstyled page, accessibility and warning behavior, the Markdown twin's parity and shared-warn-key contract, per-placement script emission across a paginated output, and a standalone (no `modules/images`) fixture asserting the plain `<img>` fallback markup. Run it with Node.js 22+ from `test/`:
 
+Among the runner's static builds is a **subpath pass** (`test/subpath.toml`, `baseURL = "https://example.org/docs/"`), built against BOTH fixtures and asserted by `tests/10-subpath.spec.js`. It exists because Hugo discards the baseURL path for a value that already begins with `/`, so at the domain-root baseURL every other build uses, a correct leading-slash resolution and a broken one emit identical bytes. It proves that `items="/site-slide-01.png"` renders `src="/docs/site-slide-01.png"` in the composed build (where the raw entry is forwarded to `modules/images`, so the path must be applied exactly once), in the standalone build (where `carousel/slides.html` emits the URL itself), and as `https://example.org/docs/site-slide-01.png` in both Markdown twins.
+
+A **canonifyURLs pass** (`test/canonify.toml`, the same subpath baseURL plus `canonifyURLs = true`) follows it against both fixtures, asserted by the same spec. `canonifyURLs` makes Hugo rewrite every root-relative URL in HTML output into an absolute one after the templates have run, and to keep that rewrite from doubling the baseURL path, `relURL` stops emitting the path while it is on. The rewrite touches HTML output formats only, so this pass is what proves the Markdown twin still carries the baseURL path -- and that deriving the path in the template never doubles it in HTML.
+
 ```bash
 cd modules/carousel/test
 npm install
@@ -408,6 +414,7 @@ modules/carousel/
 │           └── lib/
 │               ├── int.html               Guarded decimal-integer parser (never octal, never overflow)
 │               ├── md-text.html           PURE Markdown line-safety builder (the twin's label/caption escaping)
+│               ├── site-url.html          PURE site-root-relative path normalizer (prepends the baseURL path)
 │               └── warn.html              Single deduplicated-warning helper
 └── test/                                  Fixture sites + Playwright validation suite
 ```

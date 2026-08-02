@@ -32,6 +32,16 @@
     the Markdown variant never processes anything).
   - static-kind paths emit absURL of the resolved site-relative URL, so the
     twin's URL targets exactly the file the HTML path's relative URL does.
+    images/resolve/source.html has ALREADY normalized that value onto the
+    site (the baseURL's own path prepended, read off site.BaseURL), so
+    absURL then adds only the protocol and host, which is exactly what
+    absURL does with a value that starts with "/". Feeding it the raw
+    authored path instead would drop the baseURL path, and trimming the
+    slash off the already-normalized value would double the path. This
+    output format is also precisely where a relURL-derived normalization
+    would fail: Hugo's absolutizing post-processor for canonifyURLs touches
+    HTML output only, so the baseURL path relURL stops emitting under
+    canonifyURLs never comes back here (see resolve/source.html's step 5).
   A destination carrying whitespace or parentheses is wrapped in angle
   brackets (valid CommonMark) so it cannot terminate the destination early.
 

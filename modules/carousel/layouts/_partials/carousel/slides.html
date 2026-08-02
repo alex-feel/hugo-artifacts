@@ -54,11 +54,27 @@
     against, so it always degrades.
   - items: a comma-separated ORDERED source list. Each entry resolves,
     first match wins: (1) bundle resource via $page.Resources.GetMatch;
-    (2) assets/ resource via resources.Get; (3) a leading-slash path,
-    passed through verbatim as a static URL (relURL); (4) an absolute URL
-    (scheme://host), passed through verbatim. An entry that resolves to
-    none of the above warns once (per entry, deduplicated) and is SKIPPED
-    from the slide list -- one bad entry never breaks the whole carousel.
+    (2) assets/ resource via resources.Get; (3) an absolute URL
+    (scheme://host) or a protocol-relative URL (//host/path), passed
+    through verbatim -- absolutizing either would corrupt it; (4) a
+    leading-slash path, which means SITE-ROOT-RELATIVE and is normalized
+    onto the site through carousel/lib/site-url.html. An entry that
+    resolves to none of the above warns once (per entry, deduplicated) and
+    is SKIPPED from the slide list -- one bad entry never breaks the whole
+    carousel.
+
+    THE TRAP THE NORMALIZATION AVOIDS: relURL (like absURL and relLangURL)
+    resolves a value that ALREADY starts with "/" against the protocol and
+    host only, DISCARDING the baseURL's path -- so with
+    baseURL = "https://example.org/docs/", relURL "/img/three.jpg" yields
+    "/img/three.jpg", a 404. A file in static/ publishes UNDER the baseURL
+    path, so the normalized form is the one that resolves; site-url.html
+    prepends that path explicitly rather than through any url function,
+    because relURL drops it again as soon as canonifyURLs is on (that
+    partial's docstring carries the full account). The
+    absolute/protocol-relative test runs BEFORE the leading-slash
+    test: "//host/path" also starts with "/", and stripping one slash off
+    it would turn a host into a path segment.
 
   Per-slide metadata (bundle resources only -- entries 2-4 above have no
   [[resources]] front-matter home and render with alt="" plus the same
@@ -88,8 +104,12 @@
   modules/agent-readiness/layouts/_partials/agent-readiness/markdown-page.html,
   both of which probe their own optional consumer hooks the same way. When
   true, each slide calls `partial "images/image.html"` with page, src (the
-  resolved bundle resource or the raw entry string for non-bundle items),
-  alt, and ONLY the images pass-through keys the CALLER explicitly passed
+  resolved bundle resource or, for non-bundle items, the RAW authored entry
+  string -- never this partial's own normalized URL, because images resolves
+  the same authored value through its own images/resolve/source.html and
+  normalizes a leading-slash path itself; handing it the already-normalized
+  URL would prepend the baseURL path a second time), alt, and ONLY the
+  images pass-through keys the CALLER explicitly passed
   through this partial's own args (never a blanket forward of the whole
   args dict, so an unrelated carousel-only key never leaks into images'
   own validation) -- and NEVER caption or credit: images/image.html's own
@@ -249,8 +269,10 @@
 {{- if $cfg.enable -}}
 
 {{/* ---- Input resolution: builds $entries, a slice of dicts each shaped
-     dict "resource" (Resource or nil) "url" (string, non-bundle only)
-     "kind" ("bundle" | "static"). ---- */}}
+     dict "resource" (Resource or false) "raw" (string, the authored items
+     entry; "" in match mode) "url" (string, non-bundle only: the emitted
+     URL, site-normalized for a leading-slash path) "kind"
+     ("bundle" | "static"). ---- */}}
 {{- $entries := slice -}}
 
 {{- if $hasMatch -}}
@@ -261,7 +283,7 @@
         "message" (printf "[carousel] The match glob %q matched no page resources; rendering nothing. See %s" $args.match $where)) -}}
   {{- else -}}
     {{- range $matched -}}
-      {{- $entries = $entries | append (dict "resource" . "url" "" "kind" "bundle") -}}
+      {{- $entries = $entries | append (dict "resource" . "raw" "" "url" "" "kind" "bundle") -}}
     {{- end -}}
   {{- end -}}
 {{- else -}}
@@ -270,28 +292,33 @@
     {{- if ne $entry "" -}}
       {{- $resolved := false -}}
       {{- with $page.Resources.GetMatch $entry -}}
-        {{- $entries = $entries | append (dict "resource" . "url" "" "kind" "bundle") -}}
+        {{- $entries = $entries | append (dict "resource" . "raw" $entry "url" "" "kind" "bundle") -}}
         {{- $resolved = true -}}
       {{- end -}}
       {{- if not $resolved -}}
         {{- with resources.Get $entry -}}
-          {{- $entries = $entries | append (dict "resource" . "url" "" "kind" "bundle") -}}
+          {{- $entries = $entries | append (dict "resource" . "raw" $entry "url" "" "kind" "bundle") -}}
           {{- $resolved = true -}}
         {{- end -}}
       {{- end -}}
       {{- if not $resolved -}}
-        {{- if hasPrefix $entry "/" -}}
-          {{- $entries = $entries | append (dict "resource" false "url" (relURL $entry) "kind" "static") -}}
+        {{/* Absolute and protocol-relative first: "//host/path" also starts
+             with "/", and the leading-slash branch below strips one slash. */}}
+        {{- if or (hasPrefix $entry "//") (findRE `(?i)^[a-z][a-z0-9+.-]*://` $entry) -}}
+          {{- $entries = $entries | append (dict "resource" false "raw" $entry "url" $entry "kind" "static") -}}
           {{- $resolved = true -}}
-        {{- else if findRE `(?i)^[a-z][a-z0-9+.-]*://` $entry -}}
-          {{- $entries = $entries | append (dict "resource" false "url" $entry "kind" "static") -}}
+        {{- else if hasPrefix $entry "/" -}}
+          {{/* Site-root-relative: carousel/lib/site-url.html prepends the
+               baseURL's own path, which no url function does (see the
+               docstring). */}}
+          {{- $entries = $entries | append (dict "resource" false "raw" $entry "url" (partial "carousel/lib/site-url.html" $entry) "kind" "static") -}}
           {{- $resolved = true -}}
         {{- end -}}
       {{- end -}}
       {{- if not $resolved -}}
         {{- partial "carousel/lib/warn.html" (dict
             "key" (printf "carousel:warn:item-unresolvable:%s:%s" $where $entry)
-            "message" (printf "[carousel] Skipping items entry %q: it did not resolve as a bundle resource, an assets/ resource, a leading-slash static path, or an absolute URL. See %s" $entry $where)) -}}
+            "message" (printf "[carousel] Skipping items entry %q: it did not resolve as a bundle resource, an assets/ resource, an absolute or protocol-relative URL, or a leading-slash site path. See %s" $entry $where)) -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}
@@ -339,16 +366,20 @@
   {{- $index := add $i 1 -}}
   {{- $r := $entry.resource -}}
   {{- $isBundle := eq $entry.kind "bundle" -}}
-  {{/* $src is the value every downstream consumer (images/image.html and
-       the standalone <img> branch) treats as the source: the bundle
-       resource's own .Name when $isBundle, else the already-resolved
-       entry URL. Resolving it HERE, once, avoids ever calling a
+  {{/* $src is the value images/image.html treats as the source when the
+       modules are composed: the bundle resource's own .Name when
+       $isBundle, else the RAW authored entry -- images normalizes a
+       leading-slash path itself, so forwarding this partial's own
+       normalized URL would prepend the baseURL path twice. The standalone
+       <img> branch below uses $slide.url instead, which IS the normalized
+       URL, because nothing downstream normalizes it there. Resolving it
+       HERE, once, avoids ever calling a
        Resource-only method (.Name, .Params, .Title) on $entry.resource
        when it holds the literal bool false (the non-bundle sentinel set
        above) -- Go template functions evaluate every argument eagerly, so
        a ternary like `cond $isBundle $r.Name $entry.url` would still
        evaluate $r.Name and fail the build on a non-bundle entry. */}}
-  {{- $src := $entry.url -}}
+  {{- $src := $entry.raw -}}
   {{- $alt := "" -}}
   {{- $caption := "" -}}
   {{- $credit := "" -}}
@@ -367,9 +398,13 @@
     {{- end -}}
   {{- else -}}
     {{- $suppressAnchor = true -}}
+    {{/* Keyed and worded on the RAW authored entry, not the normalized URL:
+         it is the value the author can find in their items list, and the
+         carousel.markdown.md twin keys the same warning identically so the
+         same entry never double-warns across output formats. */}}
     {{- partial "carousel/lib/warn.html" (dict
-        "key" (printf "carousel:warn:no-alt-static:%s:%s" $where $entry.url)
-        "message" (printf "[carousel] The items entry %q resolves outside the page bundle, so it carries no resources: metadata; rendering it with an empty alt label, and the HTML render also suppresses its lightbox anchor. See %s" $entry.url $where)) -}}
+        "key" (printf "carousel:warn:no-alt-static:%s:%s" $where $entry.raw)
+        "message" (printf "[carousel] The items entry %q resolves outside the page bundle, so it carries no resources: metadata; rendering it with an empty alt label, and the HTML render also suppresses its lightbox anchor. See %s" $entry.raw $where)) -}}
   {{- end -}}
 
   {{- $slides = $slides | append (dict

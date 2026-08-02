@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Serves the composed fixture site with hugo and runs the Playwright suite
-# against it, after three static builds (standalone fixture-bare, killed
-# overlay, multilingual overlay) and one intentionally failing build
-# (fixture-invalid). Follows the repository's hugo process lifecycle rule:
-# pre-launch process check, a deprecation gate on every build/server log, and
-# belt-and-suspenders cleanup (the trap kills the tracked pid AND
-# pkills/taskkills stray hugo children).
+# against it, after seven static builds (standalone fixture-bare, killed
+# overlay, multilingual overlay, and the subpath and canonifyURLs overlays
+# against BOTH the composed and the standalone fixture) and one intentionally
+# failing build (fixture-invalid). Follows the repository's hugo process
+# lifecycle rule: pre-launch process check, a deprecation gate on every
+# build/server log, and belt-and-suspenders cleanup (the trap kills the
+# tracked pid AND pkills/taskkills stray hugo children).
 set -euo pipefail
 
 PORT="${PORT:-1717}"
@@ -98,6 +99,83 @@ export CAROUSEL_MULTILINGUAL_PUBLIC="$FIXTURE_DIR/public/multilingual"
 if grep -qi "deprecat" "$CAROUSEL_MULTILINGUAL_LOG"; then
   echo "Hugo reported deprecations (multilingual overlay):" >&2
   grep -i "deprecat" "$CAROUSEL_MULTILINGUAL_LOG" >&2
+  exit 1
+fi
+
+# ---- Static build 4: the composed fixture under a subpath baseURL ----
+# The only shape in which a leading-slash items entry can be proven correct:
+# Hugo resolves a value that already starts with "/" against the protocol and
+# host only, DISCARDING the baseURL path, so at the domain root every other
+# build here uses, a correct resolution and a broken one emit identical bytes.
+# Composed with modules/images, the raw authored entry is what carousel
+# forwards and images resolves, so this build also proves the path is applied
+# exactly ONCE (no /docs/docs/).
+export CAROUSEL_SUBPATH_LOG="$HERE/hugo-build-subpath.log"
+export CAROUSEL_SUBPATH_PUBLIC="$FIXTURE_DIR/public/subpath"
+(cd "$FIXTURE_DIR" && hugo --gc --logLevel info --cleanDestinationDir --config hugo.toml,../subpath.toml --destination public/subpath) >"$CAROUSEL_SUBPATH_LOG" 2>&1 || {
+  echo "hugo build failed (subpath overlay):" >&2
+  cat "$CAROUSEL_SUBPATH_LOG" >&2
+  exit 1
+}
+if grep -qi "deprecat" "$CAROUSEL_SUBPATH_LOG"; then
+  echo "Hugo reported deprecations (subpath overlay):" >&2
+  grep -i "deprecat" "$CAROUSEL_SUBPATH_LOG" >&2
+  exit 1
+fi
+
+# ---- Static build 5: the standalone fixture under a subpath baseURL ----
+# The composed build above exercises images' own resolution; this one is where
+# carousel/slides.html emits the URL itself, in its plain <img> fallback. Both
+# fixtures also publish the Markdown twin, whose absolute URLs must carry the
+# baseURL path exactly once. Runs AFTER static build 1, whose
+# --cleanDestinationDir over fixture-bare/public would otherwise wipe this
+# tree.
+export CAROUSEL_SUBPATH_BARE_LOG="$HERE/hugo-build-subpath-bare.log"
+export CAROUSEL_SUBPATH_BARE_PUBLIC="$FIXTURE_BARE_DIR/public/subpath"
+(cd "$FIXTURE_BARE_DIR" && hugo --gc --logLevel info --cleanDestinationDir --config hugo.toml,../subpath.toml --destination public/subpath) >"$CAROUSEL_SUBPATH_BARE_LOG" 2>&1 || {
+  echo "hugo build failed (subpath overlay, standalone):" >&2
+  cat "$CAROUSEL_SUBPATH_BARE_LOG" >&2
+  exit 1
+}
+if grep -qi "deprecat" "$CAROUSEL_SUBPATH_BARE_LOG"; then
+  echo "Hugo reported deprecations (subpath overlay, standalone):" >&2
+  grep -i "deprecat" "$CAROUSEL_SUBPATH_BARE_LOG" >&2
+  exit 1
+fi
+
+# ---- Static build 6: the composed fixture with canonifyURLs ----
+# The subpath builds above prove the baseURL path is carried; these two prove
+# it survives canonifyURLs, which makes relURL stop emitting that path (Hugo
+# re-adds the whole baseURL to every root-relative URL in HTML afterwards and
+# would otherwise double it). That post-processor runs on HTML only, so the
+# Markdown twin is where a relURL-derived value silently loses the path.
+export CAROUSEL_CANONIFY_LOG="$HERE/hugo-build-canonify.log"
+export CAROUSEL_CANONIFY_PUBLIC="$FIXTURE_DIR/public/canonify"
+(cd "$FIXTURE_DIR" && hugo --gc --logLevel info --cleanDestinationDir --config hugo.toml,../subpath.toml,../canonify.toml --destination public/canonify) >"$CAROUSEL_CANONIFY_LOG" 2>&1 || {
+  echo "hugo build failed (canonifyURLs overlay):" >&2
+  cat "$CAROUSEL_CANONIFY_LOG" >&2
+  exit 1
+}
+if grep -qi "deprecat" "$CAROUSEL_CANONIFY_LOG"; then
+  echo "Hugo reported deprecations (canonifyURLs overlay):" >&2
+  grep -i "deprecat" "$CAROUSEL_CANONIFY_LOG" >&2
+  exit 1
+fi
+
+# ---- Static build 7: the standalone fixture with canonifyURLs ----
+# Same pairing rationale as the two subpath builds: this is the branch where
+# carousel/slides.html emits the URL itself. Runs AFTER static build 1, whose
+# --cleanDestinationDir over fixture-bare/public would otherwise wipe it.
+export CAROUSEL_CANONIFY_BARE_LOG="$HERE/hugo-build-canonify-bare.log"
+export CAROUSEL_CANONIFY_BARE_PUBLIC="$FIXTURE_BARE_DIR/public/canonify"
+(cd "$FIXTURE_BARE_DIR" && hugo --gc --logLevel info --cleanDestinationDir --config hugo.toml,../subpath.toml,../canonify.toml --destination public/canonify) >"$CAROUSEL_CANONIFY_BARE_LOG" 2>&1 || {
+  echo "hugo build failed (canonifyURLs overlay, standalone):" >&2
+  cat "$CAROUSEL_CANONIFY_BARE_LOG" >&2
+  exit 1
+}
+if grep -qi "deprecat" "$CAROUSEL_CANONIFY_BARE_LOG"; then
+  echo "Hugo reported deprecations (canonifyURLs overlay, standalone):" >&2
+  grep -i "deprecat" "$CAROUSEL_CANONIFY_BARE_LOG" >&2
   exit 1
 fi
 

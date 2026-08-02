@@ -1,0 +1,47 @@
+{{/*
+  carousel/lib/site-url.html -- PURE.
+
+  Normalizes a SITE-ROOT-RELATIVE path (an items entry that starts with "/",
+  meaning "relative to the site root") onto the site, by prepending the
+  baseURL's OWN PATH read straight off site.BaseURL. A file in static/
+  publishes UNDER that path, so the normalized form is the one that resolves:
+  under baseURL = "https://example.org/docs/", "/slide.png" becomes
+  "/docs/slide.png"; at a domain root it comes back unchanged.
+
+  NO URL FUNCTION CAN DO THIS NORMALIZATION, which is the whole reason this
+  partial exists. relURL, relLangURL, and absURL all resolve a value that
+  ALREADY starts with "/" against the protocol and host only, DISCARDING the
+  baseURL's path -- relURL "/slide.png" yields "/slide.png", a 404. Stripping
+  the slash first and running the remainder through relURL fixes that, but
+  ONLY while canonifyURLs is off: with canonifyURLs = true, relURL omits the
+  baseURL path DELIBERATELY, because Hugo then post-processes every
+  root-relative URL in HTML output into a fully absolute one and would
+  otherwise double the path. That post-processor runs on HTML output formats
+  ONLY, so a relURL-derived value silently loses the baseURL path in every
+  other output format -- carousel.markdown.md's absURL turns "/slide.png"
+  into "https://example.org/slide.png", pointing outside the site. Reading
+  site.BaseURL is independent of canonifyURLs, and the value it yields stays
+  correct in HTML under canonifyURLs too, because that post-processor
+  CONSUMES a leading baseURL path rather than doubling it ("/docs/slide.png"
+  and "/slide.png" both become "https://example.org/docs/slide.png").
+
+  site.BaseURL always ends in a slash and never carries a language prefix,
+  exactly like the path relURL prepends, so trimming that one trailing slash
+  leaves the context root ("/docs", or "" at a domain root) ready to
+  concatenate with a value that already starts with "/".
+
+  Both slide resolvers call this -- carousel/slides.html for the HTML render
+  and carousel.markdown.md for the Markdown twin -- so the two formats cannot
+  drift apart on the one value that is invisible at a domain-root baseURL.
+
+  Context (string): the path. MUST start with a single "/"; the callers test
+  for the absolute and protocol-relative shapes first, so "//host/path" never
+  reaches here.
+
+  Return value: string -- the site-normalized path.
+
+  One terminal return.
+*/}}
+
+{{- $root := strings.TrimSuffix "/" (urls.Parse site.BaseURL).Path -}}
+{{- return printf "%s%v" $root . -}}
