@@ -1,0 +1,106 @@
+{{/*
+  pwa/lib/absolute-url.html -- internal utility (LIB tier).
+
+  Purpose: turn a consumer-authored or module-default path into the
+  SITE-RELATIVE form -- a root-relative URL that carries the baseURL's path --
+  so every URL this module emits lands inside the site on a subpath
+  deployment.
+
+  THE TRAP THIS EXISTS TO AVOID: `relURL` (like `absURL`) does NOT prepend the
+  whole baseURL to a value that already starts with "/". Hugo documents that
+  form as relative to the protocol and host only, DISCARDING the baseURL's
+  path. So with baseURL = "https://example.org/docs/", `relURL "/sw.js"`
+  yields "/sw.js" -- where this build publishes nothing, so the service worker
+  never installs and every icon 404s -- while `relURL "sw.js"` correctly
+  yields "/docs/sw.js". The leading-slash form is the form this module's
+  defaults and README document, so it is the form every consumer writes, and
+  it is exactly the one that breaks. Normalizing here rather than at each call
+  site keeps every emitted URL honest on subpath deployments.
+
+  WHY THE PREFIX IS DERIVED HERE INSTEAD OF DELEGATED TO relURL: `relURL`
+  prepends the baseURL's path only while `canonifyURLs` is false. Turn that
+  documented site option on and `relURL "sw.js"` collapses to "/sw.js" and
+  `relURL ""` to "/" under the very same path-carrying baseURL -- silently
+  undoing this normalization at EVERY call site at once (verified: the test
+  fixture with canonifyURLs = true and baseURL "https://example.org/docs/"
+  emits "/sw.js" for the worker and "/" for the manifest scope, start_url,
+  and id). Reading the path off `site.BaseURL` and prepending it is
+  unconditional, so this partial's guarantee holds under every configuration.
+  `site.BaseURL` is the baseURL Hugo actually resolved -- including a `-b` /
+  `--baseURL` override on the command line -- and Hugo normalizes it to end
+  in "/", so `(urls.Parse site.BaseURL).Path` is "/" at the domain root and
+  "/docs/" under a subpath, for a schemeless baseURL = "/docs/" as much as
+  for a fully qualified one.
+
+  WHY THE SITE-RELATIVE FORM AND NOT THE ABSOLUTE ONE: every URL this module
+  emits is consumed same-origin. A service-worker script and its scope must be
+  same-origin to register at all; the manifest's scope, start_url, id, and
+  icon srcs resolve against the manifest's own URL; the favicons, precache
+  entries, and notification assets are files this build publishes. A
+  root-relative path satisfies all of them, and it keeps working when the site
+  is served from a host the baseURL does not name (a preview deployment, a
+  tunnel, a local Playwright run), which an absolute URL frozen at build time
+  would not. This module therefore ships only this form; nothing in it needs
+  `absURL`.
+
+  WHY NOT relLangURL: the service worker, its scope, and the static icon set
+  are published ONCE per site, not once per language. `relLangURL "sw.js"`
+  would emit "/en/sw.js" on a site with defaultContentLanguageInSubdir while
+  the worker is published at "/sw.js". A multilingual site that wants a
+  per-language manifest scope or start_url sets those keys explicitly.
+
+  Values carrying their own scheme (https:, http:, mailto:, tel:) and
+  protocol-relative values (//host/path) are returned untouched: rewriting
+  them would corrupt them. They are also the documented escape hatch for a
+  consumer whose endpoint lives off-site.
+
+  A non-scalar value (a table, a list, or a boolean) yields "" and warns once
+  per build: stringifying one would publish Go's debug form (map[...]) as a
+  URL, and dropping it in silence would leave a consumer staring at a missing
+  asset with nothing to explain it. Note that `with` treats a non-empty table
+  as PRESENT, so a key written as a table really does arrive here rather than
+  being skipped upstream.
+
+  An EMPTY value stays "" rather than becoming the site root: the keys that
+  default to "" (notification_badge, fallback_image) mean "no such asset", and
+  emitting the site root for them would precache and serve the wrong file. A
+  value of "/" DOES mean the site root and becomes the baseURL path.
+
+  Expected context (dict):
+  - .value (any)    - the consumer-authored or module-default path.
+  - .key   (string) - the config key, named in the warning.
+
+  Return value: the site-relative URL, or "" for an empty or non-scalar input.
+  ONE terminal return.
+*/}}
+
+{{- $v := .value -}}
+{{- $key := .key -}}
+{{- $u := "" -}}
+{{- if and (ne $v nil) (not (reflect.IsMap $v)) (not (reflect.IsSlice $v)) (ne (printf "%T" $v) "bool") -}}
+  {{- $u = trim (printf "%v" $v) " \t\n\r" -}}
+{{- else if ne $v nil -}}
+  {{- $warnKey := printf "pwa:warn:non-scalar-url:%s" $key -}}
+  {{- if not (hugo.Store.Get $warnKey) -}}
+    {{- hugo.Store.Set $warnKey true -}}
+    {{- warnf "modules/pwa: ignoring %s -- it expects a URL written as a single value, but a table, list, or boolean arrived, so no URL is emitted for it." $key -}}
+  {{- end -}}
+{{- end -}}
+{{- $out := "" -}}
+
+{{- with $u -}}
+  {{- if or (hasPrefix . "//") (findRE `^[a-zA-Z][a-zA-Z0-9+.\-]*:` .) -}}
+    {{/* Already carries a scheme, or is protocol-relative. */}}
+    {{- $out = . -}}
+  {{- else -}}
+    {{/* Site-relative, with or without the leading slash. Both forms are
+         reduced to the no-leading-slash form FIRST, then the baseURL's own
+         path is prepended: "/" reduces to "" and resolves to the baseURL
+         path itself, and at the domain root the context root is "" so the
+         value comes back unchanged. */}}
+    {{- $ctxRoot := strings.TrimSuffix "/" (urls.Parse site.BaseURL).Path -}}
+    {{- $out = printf "%s/%s" $ctxRoot (strings.TrimPrefix "/" .) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $out -}}

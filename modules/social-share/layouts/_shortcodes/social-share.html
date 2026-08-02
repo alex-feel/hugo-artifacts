@@ -27,6 +27,13 @@
   - class: extra class(es) appended to the root element.
   - id: id attribute on the root element.
 
+  Both url and image are emitted absolute. A value carrying its own scheme is
+  passed through untouched; a literal path is site-relative, and a LEADING
+  SLASH means site-root-relative and keeps the baseURL's path, so
+  "/img/share.png" resolves under a subpath deployment rather than at the bare
+  host. An omitted url falls back to the page's own permalink, taken exactly
+  as Hugo resolved it.
+
   Never errorf: parameter problems degrade exactly as the partial documents
   (deduplicated warnf or silent omission of the affected item).
 */}}

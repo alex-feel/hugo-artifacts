@@ -1,0 +1,19 @@
+# Overlay config for the canonifyURLs build. Merged AFTER hugo.toml AND
+# subpath.toml via --config hugo.toml,../subpath.toml,../canonify.toml (run
+# from within fixture/), so it inherits the path-carrying baseURL and changes
+# exactly one further thing: canonifyURLs.
+#
+# canonifyURLs makes Hugo rewrite every root-relative URL in HTML output into
+# a fully absolute one AFTER the templates have run. To keep that rewrite from
+# doubling the baseURL path, relURL and .RelPermalink stop emitting the path
+# while it is on -- which means a static path resolved through relURL silently
+# loses the baseURL path, and NOTHING puts it back in the output formats that
+# post-processor never touches. The fixture's `markdown` output format is
+# exactly such a format, so this build is what proves the module derives the
+# baseURL path itself (from site.BaseURL) instead of delegating to relURL.
+#
+# It is a build against the SAME fixture pages as the subpath overlay, so the
+# HTML side is covered too: under canonifyURLs both spellings of a static path
+# converge on the same absolute URL, and asserting that keeps the derivation
+# from ever doubling the path in HTML.
+canonifyURLs = true

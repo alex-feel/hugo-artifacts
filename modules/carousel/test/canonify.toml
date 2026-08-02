@@ -1,0 +1,22 @@
+# Overlay config for the canonifyURLs build pass. Merged AFTER hugo.toml AND
+# subpath.toml via --config hugo.toml,../subpath.toml,../canonify.toml (run
+# from within fixture/ or fixture-bare/), so it inherits the path-carrying
+# baseURL and changes exactly one further thing: canonifyURLs.
+#
+# canonifyURLs makes Hugo rewrite every root-relative URL in HTML output into
+# a fully absolute one AFTER the templates have run. To keep that rewrite from
+# doubling the baseURL path, relURL and .RelPermalink stop emitting the path
+# while it is on -- which means a leading-slash items entry resolved through
+# relURL silently loses the baseURL path, and NOTHING puts it back in the
+# output formats that post-processor never touches. The Markdown twin both
+# fixtures publish is exactly such a format, so this pass is what proves
+# carousel/lib/site-url.html derives the baseURL path itself (from
+# site.BaseURL) instead of delegating to relURL.
+#
+# Built against BOTH fixtures for the same reason the subpath overlay is:
+# composed with modules/images (fixture/) the raw authored entry is forwarded
+# and images resolves it, standalone (fixture-bare/) carousel/slides.html
+# emits the resolved URL itself. Under canonifyURLs the HTML side of both
+# converges on the same absolute URL, and asserting that keeps the derivation
+# from ever doubling the path in HTML.
+canonifyURLs = true

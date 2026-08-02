@@ -3,9 +3,19 @@
 
   Purpose: resolves one raw share-image value to an absolute URL, one way
   for every cascade tier in config.html. URL-shaped values go straight to
-  absURL; anything else is tried as a page-bundle resource by exact path
-  (when a page is given), then as a global assets/ resource, then falls
-  back to absURL of the raw value.
+  lib/absolute-url.html; anything else is tried as a page-bundle resource by
+  exact path (when a page is given), then as a global assets/ resource, then
+  falls back to lib/absolute-url.html of the raw value.
+
+  Both absolutization steps go through lib/absolute-url.html rather than a
+  bare absURL, because a bare absURL DISCARDS the baseURL's path for a value
+  that starts with "/" -- so a site on a subpath would publish
+  "https://example.org/img/share.png" for a configured "/img/share.png" and
+  every card quoting it would show a broken preview. A resource .Permalink is
+  whatever Hugo resolved for the deployment and is returned as-is, never
+  routed through the normalizer: the normalizer reads a leading slash as
+  site-root-relative, so under a baseURL that carries a path but no scheme it
+  would re-prefix an already-resolved permalink.
 
   Expected context (dict):
   - .value (string) - The raw image value (non-empty).
@@ -22,7 +32,7 @@
      resources.Get treats them as filesystem paths and errors out instead
      of returning nil. */}}
 {{- if or (in $value "://") (hasPrefix $value "//") -}}
-  {{- $image = $value | absURL -}}
+  {{- $image = partial "social-share/lib/absolute-url.html" $value -}}
 {{- else -}}
   {{- with .page -}}
     {{/* Exact-path lookup, deliberately not GetMatch: GetMatch compiles its
@@ -39,7 +49,7 @@
     {{- end -}}
   {{- end -}}
   {{- if not $image -}}
-    {{- $image = $value | absURL -}}
+    {{- $image = partial "social-share/lib/absolute-url.html" $value -}}
   {{- end -}}
 {{- end -}}
 

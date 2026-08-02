@@ -1,0 +1,58 @@
+{{/*
+  social-share/lib/absolute-url.html -- INTERNAL (lib tier).
+
+  Purpose: turn a consumer-authored URL into an absolute one. Every value this
+  module emits is consumed OFF the site -- the share URL and the share image
+  travel to x.com, to Pinterest's pin builder, to VK, to a messaging app --
+  so a value that resolves only against the page it came from is worthless
+  there.
+
+  THE TRAP THIS EXISTS TO AVOID: `absURL` does NOT prepend the whole baseURL
+  to a value that already starts with "/". Hugo documents that form as
+  relative to the protocol and host only, DISCARDING the baseURL's path. So
+  with baseURL = "https://example.org/docs/", `absURL "/img/share.png"`
+  yields "https://example.org/img/share.png" -- outside the site, a broken
+  preview on every card that quotes it -- while `absURL "img/share.png"`
+  correctly yields "https://example.org/docs/img/share.png". The leading-slash
+  form is what a consumer naturally writes for a site-root-relative path, and
+  it is exactly the input that breaks, so this partial reads a leading slash
+  as SITE-ROOT-RELATIVE and normalizes it to carry the baseURL path.
+
+  Values carrying their own scheme (https:, http:, mailto:, tel:) and
+  protocol-relative values (//host/path) are returned untouched: absolutizing
+  them would corrupt them.
+
+  CALL THIS ONLY ON A VALUE THE CONSUMER WROTE. It cannot tell an
+  already-resolved URL from a site-root-relative one once the resolved URL
+  carries no scheme, and a baseURL may legitimately carry a path without one:
+  under baseURL = "/docs/" (what `hugo --baseURL /docs/` produces) a page's
+  .Permalink arrives as "/docs/page/" and would come back as
+  "/docs/docs/page/". Anything Hugo already resolved -- the .Permalink of a
+  page or of a resource -- is by construction correct for the deployment and
+  goes straight into the result instead of through here.
+
+  Expected context: the URL, as a string (the dot, not a dict). Every caller
+  in this module stringifies its cascade tier value before calling, so a
+  table- or list-shaped config value arrives here already flattened rather
+  than live.
+
+  Return value: the absolute URL, or "" for an empty input. ONE terminal
+  return.
+*/}}
+
+{{- $u := trim (printf "%v" .) " \t\n\r" -}}
+{{- $out := "" -}}
+
+{{- with $u -}}
+  {{- if or (hasPrefix . "//") (findRE `^[a-zA-Z][a-zA-Z0-9+.\-]*:` .) -}}
+    {{/* Already carries a scheme, or is protocol-relative. */}}
+    {{- $out = . -}}
+  {{- else -}}
+    {{/* Site-relative, with or without the leading slash. Both forms are
+         reduced to the no-leading-slash form FIRST, so absURL keeps the
+         baseURL's path component. */}}
+    {{- $out = strings.TrimPrefix "/" . | absURL -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $out -}}

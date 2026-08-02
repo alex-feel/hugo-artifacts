@@ -12,6 +12,11 @@
   Set params.pwa.favicon.use_legacy_filenames = true to switch to /android-chrome-* filenames
   (covers consumers who still ship older RFG packages in static/). The icon-list helper honors
   the same toggle when emitting the manifest icons[] array.
+
+  Each href is composed as prefix + configured path and then normalized through
+  pwa/lib/absolute-url.html, so it carries the baseURL's path. The shipped defaults start with
+  "/", which a browser resolves against the ORIGIN, so on a site at https://example.org/docs/
+  an unnormalized href points outside the site and 404s.
 */}}
 
 {{- $defaults := hugo.Data.pwa.defaults.favicon -}}
@@ -19,9 +24,15 @@
 {{- $cfg := merge $defaults $params -}}
 
 {{- $prefix := strings.TrimSuffix "/" ($cfg.prefix | default "") -}}
-{{- $faviconIco := printf "%s%s" $prefix $cfg.favicon_ico_path -}}
-{{- $faviconSvg := printf "%s%s" $prefix $cfg.favicon_svg_path -}}
-{{- $appleTouchIcon := printf "%s%s" $prefix $cfg.apple_touch_icon_path -}}
+{{- $faviconIco := partial "pwa/lib/absolute-url.html" (dict
+    "value" (printf "%s%s" $prefix $cfg.favicon_ico_path)
+    "key" "params.pwa.favicon.favicon_ico_path") -}}
+{{- $faviconSvg := partial "pwa/lib/absolute-url.html" (dict
+    "value" (printf "%s%s" $prefix $cfg.favicon_svg_path)
+    "key" "params.pwa.favicon.favicon_svg_path") -}}
+{{- $appleTouchIcon := partial "pwa/lib/absolute-url.html" (dict
+    "value" (printf "%s%s" $prefix $cfg.apple_touch_icon_path)
+    "key" "params.pwa.favicon.apple_touch_icon_path") -}}
 {{- $includeSvg := $cfg.include_svg -}}
 
 <link rel="icon" type="image/x-icon" href="{{ $faviconIco }}" sizes="32x32">

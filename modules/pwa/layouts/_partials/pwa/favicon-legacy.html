@@ -15,6 +15,12 @@
   Filename defaults come from data/pwa/defaults.toml; the consumer's RFG legacy package output
   goes to static/. Setting params.pwa.favicon.use_legacy_filenames = true ALSO switches the
   manifest icons[] to /android-chrome-{192,512}x*.png (handled by icon-list.html).
+
+  Each href -- including the browserconfig.xml path in the Microsoft tile meta -- is composed as
+  prefix + configured path and then normalized through pwa/lib/absolute-url.html, so it carries
+  the baseURL's path. The shipped defaults start with "/", which a browser resolves against the
+  ORIGIN, so on a site at https://example.org/docs/ an unnormalized href points outside the site
+  and 404s.
 */}}
 
 {{- $defaults := hugo.Data.pwa.defaults.favicon -}}
@@ -22,14 +28,28 @@
 {{- $cfg := merge $defaults $params -}}
 
 {{- $prefix := strings.TrimSuffix "/" ($cfg.prefix | default "") -}}
-{{- $faviconIco := printf "%s%s" $prefix $cfg.favicon_ico_path -}}
-{{- $faviconSvg := printf "%s%s" $prefix $cfg.favicon_svg_path -}}
-{{- $appleTouchIcon := printf "%s%s" $prefix $cfg.apple_touch_icon_path -}}
-{{- $favicon16 := printf "%s%s" $prefix "/favicon-16x16.png" -}}
-{{- $favicon32 := printf "%s%s" $prefix "/favicon-32x32.png" -}}
-{{- $maskIcon := printf "%s%s" $prefix $cfg.mask_icon_path -}}
+{{- $faviconIco := partial "pwa/lib/absolute-url.html" (dict
+    "value" (printf "%s%s" $prefix $cfg.favicon_ico_path)
+    "key" "params.pwa.favicon.favicon_ico_path") -}}
+{{- $faviconSvg := partial "pwa/lib/absolute-url.html" (dict
+    "value" (printf "%s%s" $prefix $cfg.favicon_svg_path)
+    "key" "params.pwa.favicon.favicon_svg_path") -}}
+{{- $appleTouchIcon := partial "pwa/lib/absolute-url.html" (dict
+    "value" (printf "%s%s" $prefix $cfg.apple_touch_icon_path)
+    "key" "params.pwa.favicon.apple_touch_icon_path") -}}
+{{- $favicon16 := partial "pwa/lib/absolute-url.html" (dict
+    "value" (printf "%s%s" $prefix "/favicon-16x16.png")
+    "key" "params.pwa.favicon.prefix") -}}
+{{- $favicon32 := partial "pwa/lib/absolute-url.html" (dict
+    "value" (printf "%s%s" $prefix "/favicon-32x32.png")
+    "key" "params.pwa.favicon.prefix") -}}
+{{- $maskIcon := partial "pwa/lib/absolute-url.html" (dict
+    "value" (printf "%s%s" $prefix $cfg.mask_icon_path)
+    "key" "params.pwa.favicon.mask_icon_path") -}}
 {{- $maskIconColor := $cfg.mask_icon_color -}}
-{{- $msconfig := printf "%s%s" $prefix $cfg.msapplication_config_path -}}
+{{- $msconfig := partial "pwa/lib/absolute-url.html" (dict
+    "value" (printf "%s%s" $prefix $cfg.msapplication_config_path)
+    "key" "params.pwa.favicon.msapplication_config_path") -}}
 {{- $mstilecolor := $cfg.msapplication_tilecolor -}}
 {{- $includeSvg := $cfg.include_svg -}}
 

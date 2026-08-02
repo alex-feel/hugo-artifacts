@@ -147,11 +147,19 @@ lemmy_instance = ""
 | `aria_label` | string | `""` (localized "Share this page") | Accessible name of the `<nav>` landmark. |
 | `via` | string | `""` | X attribution username; a leading `@` is stripped. |
 | `hashtags` | list or comma-separated string | `[]` | Tags for x/tumblr; leading `#` stripped. Never auto-derived from page tags. |
-| `image` | string | `""` | Site-wide fallback share image for pinterest/vk/odnoklassniki/weibo (asset path or URL). |
+| `image` | string | `""` | Site-wide fallback share image for pinterest/vk/odnoklassniki/weibo (asset path or URL). A leading slash means site-root-relative and keeps the `baseURL` path (see below). |
 | `mastodon_instance` | string | `""` | Bare hostname (for example `mastodon.social`); switches Mastodon from the official fragment sharer to that instance's `/share`. |
 | `lemmy_instance` | string | `""` | Bare hostname; required for the `lemmy` target. |
 
 Share data (`url`, `title`, `description`) defaults to the page's `.Permalink`, `.Title`, and `.Description` and can be overridden per page (`social_share.url` and so on) or per call. The share image resolves in this order: explicit `image` value > first entry of the page's `images` front matter, used only when it is a plain path/URL string (a map-shaped entry such as `images: [{src: cover.png}]` falls through) > a page-bundle image resource matching `*feature*` / `*cover*` / `*thumbnail*` > site-tier `image`. Every raw value resolves the same way: page resource, then global `assets/` resource, then literal URL (the site-tier value skips the page-resource step).
+
+### How paths become absolute URLs
+
+Every share intent is consumed off your site, so `url` and `image` are always emitted absolute. Values that carry their own scheme (`https:`, `http:`, `mailto:`, `tel:`) and protocol-relative values (`//cdn.example/x.png`) are passed through untouched, and a value that resolves to a page resource or an `assets/` resource uses that resource's own permalink.
+
+A literal path is read relative to your site: **a leading slash means site-root-relative and keeps the `baseURL` path.** On a site published at `https://example.org/docs/`, `image = "/img/share.png"` and `image = "img/share.png"` both emit `https://example.org/docs/img/share.png`. This differs from Hugo's bare `absURL`, which resolves a leading-slash value against the protocol and host only and would emit `https://example.org/img/share.png` -- a link outside the site, and a broken preview on every card that quotes it. If your site is published at a domain root, the two forms are identical and nothing changes for you. If you are on a subpath and have been compensating by hand -- writing `image = "/docs/img/share.png"` to work around the old behavior -- drop the prefix: the module now adds it.
+
+Only values **you** write are normalized this way. Anything Hugo already resolved -- the page permalink `url` defaults to, and the permalink of a matched page or `assets/` resource -- is emitted exactly as Hugo produced it, so the `baseURL` path is never added twice. That distinction is invisible under a `baseURL` that carries a scheme, and decisive under one that does not: with `baseURL = "/docs/"` (what `hugo --baseURL /docs/` gives you) a permalink arrives as `/docs/blog/post/`, and re-reading it as site-root-relative would publish `/docs/docs/blog/post/` as the default share URL of every page.
 
 ### Custom networks (`networks_extra`)
 
@@ -181,7 +189,7 @@ Accepted by both the partial (dict keys) and the shortcode (named parameters); t
 | `page` | Page | partial dict only | -- | The current Page (the bare-Page call form passes it implicitly). |
 | `networks` | list (partial) / comma-separated string | no | cascade | Targets, in order. |
 | `heading`, `aria_label`, `via`, `hashtags`, `image`, `mastodon_instance`, `lemmy_instance`, `new_tab` | as above | no | cascade | Call-site overrides of the same-named config keys. |
-| `url`, `title`, `description` | string | no | page values | Share-data overrides. |
+| `url`, `title`, `description` | string | no | page values | Share-data overrides. `url` is absolutized like `image`: a leading slash means site-root-relative and keeps the `baseURL` path; a value with its own scheme passes through untouched. |
 | `class` | string | no | `""` | Extra class(es) appended to the root element. |
 | `id` | string | no | `""` | `id` attribute on the root element. |
 
@@ -283,7 +291,7 @@ Every icon is an inline SVG with `width="1em" height="1em"`, `fill`/`stroke="cur
 
 ## Validation
 
-The module cannot build standalone; [`test/`](test/) contains a minimal consuming fixture site plus a Playwright suite that asserts exact intent hrefs (including a hostile-character encoding matrix), scheme handling, progressive-enhancement behavior, the copy flow, and the CustomEvent surface. See [`test/README.md`](test/README.md). CI additionally verifies `go.mod` parses and `hugo mod graph` resolves.
+The module cannot build standalone; [`test/`](test/) contains a minimal consuming fixture site plus a Playwright suite that asserts exact intent hrefs (including a hostile-character encoding matrix), scheme handling, progressive-enhancement behavior, the copy flow, and the CustomEvent surface. The fixture is also built statically under two `baseURL` values that carry a path -- one with a scheme, one without -- because a domain root cannot tell a correct URL absolutization from a broken one, and a scheme-carrying one cannot tell a missing normalization from a doubled one. See [`test/README.md`](test/README.md). CI additionally verifies `go.mod` parses and `hugo mod graph` resolves.
 
 ## Module Structure
 
@@ -313,6 +321,7 @@ modules/social-share/
 │           ├── item.html                  One list item (link or action button)
 │           ├── icon.html                  Inline SVG glyphs (brand marks + action line art)
 │           └── lib/
+│               ├── absolute-url.html      Site-root-relative URL normalizer (keeps the baseURL path)
 │               ├── resolve-image.html     Shared share-image value resolver (resource lookup, then URL)
 │               └── warn.html              Build-deduplicated warnf funnel
 └── test/                                  Fixture site + Playwright validation suite (see test/README.md)

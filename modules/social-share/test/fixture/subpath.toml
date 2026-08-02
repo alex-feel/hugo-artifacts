@@ -1,0 +1,15 @@
+# Overlay config for the static subpath build. Merged AFTER hugo.toml via
+# --config hugo.toml,subpath.toml, so exactly one thing differs from the
+# served fixture: the baseURL carries a PATH. The host and port deliberately
+# match hugo.toml so the path segment is the only variable; nothing is ever
+# served from this build, which is written to fixture/public/subpath and read
+# off disk by tests/04-subpath.spec.js.
+#
+# This build shape is the only one that can tell a correct URL absolutization
+# from a broken one. Hugo's absURL resolves a value that already starts with
+# "/" against the protocol and host ONLY, discarding the baseURL's path, so at
+# a domain root a normalized "/img/share.png" and an unnormalized one emit
+# byte-identical output. Under "/docs/" they diverge, and every share intent
+# carrying a site-root-relative image or url is asserted against that
+# divergence.
+baseURL = "http://localhost:1414/docs/"

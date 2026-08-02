@@ -8,10 +8,25 @@
   build-time params map is exposed to the SW source via the @params virtual
   module (see service-worker/params.d.ts).
 
-  Output: /sw.js at root scope. Intentionally NOT fingerprinted so the URL
-  is stable across deploys and the browser update check can find it.
-  Cache-busting is handled by precache revisions (per-asset) and versioned
-  cache names (cluster-wide via params.pwa.version).
+  Output: sw.js at the root of the published site -- "/sw.js" on a site whose
+  baseURL has no path, "/docs/sw.js" on a site published under
+  https://example.org/docs/. That is why register.html normalizes
+  params.pwa.sw_path and params.pwa.sw_scope through
+  pwa/lib/absolute-url.html: the registration must point at the path this
+  partial actually publishes, and the default scope "/" must narrow to the
+  site's own path (a worker at /docs/sw.js cannot claim a wider scope anyway).
+  Intentionally NOT fingerprinted so the URL is stable across deploys and the
+  browser update check can find it. Cache-busting is handled by precache
+  revisions (per-asset) and versioned cache names (cluster-wide via
+  params.pwa.version).
+
+  Every path handed to the SW bundle is subpath-correct: the offline URL
+  resolves through the rendered page, and the bypass URLs, offline fallback
+  image, and push notification icon / badge / click URL are normalized through
+  pwa/lib/absolute-url.html. The SW compares bypass entries against the request
+  pathname and resolves notification assets and openWindow targets from its own
+  origin, so a raw "/foo" from config would address the domain root rather than
+  the site on a subpath deployment.
 
   Invoked from: pwa/head.html, gated on params.pwa.sw.enabled.
 */}}
@@ -30,13 +45,48 @@
 {{- end -}}
 
 {{- $offlineEnabled := $swCfg.offline.enabled -}}
-{{- $offlineUrl := $swCfg.offline.fallback_url | default "/offline/" -}}
+{{- $offlineRef := $swCfg.offline.fallback_url | default "/offline/" -}}
 {{- /* Resolve to the actually-rendered page URL so the SW catch handler,
-       the precache entry, and subpath (baseURL path) deploys all agree. */ -}}
-{{- with site.GetPage (printf "/%s" (strings.Trim $offlineUrl "/")) -}}
-  {{- $offlineUrl = .RelPermalink -}}
+       the precache entry, and subpath (baseURL path) deploys all agree --
+       through pwa/lib/resource-url.html rather than .RelPermalink, which
+       drops that path under canonifyURLs. The configured value is normalized
+       FIRST so the two branches agree too: a consumer who shadows the
+       module's content adapter has no rendered page to resolve against, and
+       the raw config value would otherwise reach the SW with the baseURL's
+       path missing. */ -}}
+{{- $offlineUrl := partial "pwa/lib/absolute-url.html" (dict
+    "value" $offlineRef
+    "key" "params.pwa.sw.offline.fallback_url") -}}
+{{- with site.GetPage (printf "/%s" (strings.Trim $offlineRef "/")) -}}
+  {{- $offlineUrl = partial "pwa/lib/resource-url.html" . -}}
 {{- end -}}
 {{- $debug := $params.debug | default $defaults.debug -}}
+
+{{- /* Consumer-authored paths that the SW matches or fetches at runtime. */ -}}
+{{- $fallbackImage := partial "pwa/lib/absolute-url.html" (dict
+    "value" $swCfg.offline.fallback_image
+    "key" "params.pwa.sw.offline.fallback_image") -}}
+{{- $notificationIcon := partial "pwa/lib/absolute-url.html" (dict
+    "value" $pushCfg.notification_icon
+    "key" "params.pwa.push.notification_icon") -}}
+{{- $notificationBadge := partial "pwa/lib/absolute-url.html" (dict
+    "value" $pushCfg.notification_badge
+    "key" "params.pwa.push.notification_badge") -}}
+{{- $defaultClickUrl := partial "pwa/lib/absolute-url.html" (dict
+    "value" $pushCfg.default_click_url
+    "key" "params.pwa.push.default_click_url") -}}
+
+{{- $bypassCfg := $swCfg.bypass | default dict -}}
+{{- $bypassUrls := slice -}}
+{{- range ($bypassCfg.urls | default slice) -}}
+  {{- $bypassUrl := partial "pwa/lib/absolute-url.html" (dict
+      "value" .
+      "key" "params.pwa.sw.bypass.urls[]") -}}
+  {{- with $bypassUrl -}}
+    {{- $bypassUrls = $bypassUrls | append . -}}
+  {{- end -}}
+{{- end -}}
+{{- $bypassCfg = merge $bypassCfg (dict "urls" $bypassUrls) -}}
 
 {{- $precacheList := partial "pwa/functions/precache-list.html" . -}}
 
@@ -45,15 +95,15 @@
     "cacheVersion"            $version
     "offlineUrl"              $offlineUrl
     "offlineEnabled"          $offlineEnabled
-    "fallbackImage"           $swCfg.offline.fallback_image
+    "fallbackImage"           $fallbackImage
     "debug"                   $debug
     "clientsClaim"            $swCfg.clients_claim
     "skipWaiting"             $swCfg.skip_waiting
-    "bypass"                  $swCfg.bypass
+    "bypass"                  $bypassCfg
     "purgeOnQuotaError"       $swCfg.storage.purge_on_quota_error
-    "notificationIcon"        $pushCfg.notification_icon
-    "notificationBadge"       $pushCfg.notification_badge
-    "defaultClickUrl"         $pushCfg.default_click_url
+    "notificationIcon"        $notificationIcon
+    "notificationBadge"       $notificationBadge
+    "defaultClickUrl"         $defaultClickUrl
     "focusExistingTabOnClick" $pushCfg.focus_existing_tab_on_click
     "caches"                  $swCfg.caches
 -}}

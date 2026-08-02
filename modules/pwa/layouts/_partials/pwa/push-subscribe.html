@@ -18,6 +18,16 @@
 
   HARD FAILS at build time if push.enabled = true but vapid_public_key
   or subscribe_url is empty (via pwa/functions/vapid-key.html).
+
+  subscribe_url and unsubscribe_url go through pwa/lib/absolute-url.html on the
+  same rule every other path in this module follows: a leading slash means
+  site-root-relative, so "/api/push/subscribe" becomes "/docs/api/push/subscribe"
+  on a site published under https://example.org/docs/. A backend that lives off
+  the site path -- at the domain root, or on another origin entirely -- is
+  addressed by writing the full URL ("https://api.example.com/push/subscribe")
+  or a protocol-relative one, both of which pass through untouched. Note that
+  push.ts fetches with credentials: 'same-origin', so a cross-origin endpoint
+  receives no cookies.
 */}}
 
 {{- $defaults := hugo.Data.pwa.defaults -}}
@@ -27,10 +37,17 @@
 
 {{- $vapidKey := partial "pwa/functions/vapid-key.html" . -}}
 
+{{- $subscribeUrl := partial "pwa/lib/absolute-url.html" (dict
+    "value" $pushCfg.subscribe_url
+    "key" "params.pwa.push.subscribe_url") -}}
+{{- $unsubscribeUrl := partial "pwa/lib/absolute-url.html" (dict
+    "value" $pushCfg.unsubscribe_url
+    "key" "params.pwa.push.unsubscribe_url") -}}
+
 {{- $jsParams := dict
     "vapidPublicKey"      $vapidKey
-    "subscribeUrl"        $pushCfg.subscribe_url
-    "unsubscribeUrl"      $pushCfg.unsubscribe_url
+    "subscribeUrl"        $subscribeUrl
+    "unsubscribeUrl"      $unsubscribeUrl
     "subscribeSelector"   $pushCfg.subscribe_button_selector
     "unsubscribeSelector" "[data-pwa-unsubscribe]"
 -}}

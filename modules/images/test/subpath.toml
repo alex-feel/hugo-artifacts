@@ -1,0 +1,20 @@
+# Overlay config for the subpath build. Merged AFTER hugo.toml via
+# --config hugo.toml,../subpath.toml (run from within fixture/), mirroring
+# the repository's existing overlay convention, and changing exactly one
+# thing: a baseURL that carries a PATH.
+#
+# This is the ONLY build in this suite that can tell a correct static-path
+# resolution from a broken one. Hugo resolves a value that ALREADY starts
+# with "/" against the protocol and host only, DISCARDING the baseURL's path
+# -- for relURL and relLangURL exactly as for absURL -- so at the domain root
+# every other build here uses, `relURL "/static-icon.png"` and
+# `relURL (strings.TrimPrefix "/" "/static-icon.png")` emit identical bytes.
+# Under a path-carrying baseURL they diverge: the first drops /docs/ and 404s,
+# the second resolves, because a file in static/ publishes UNDER the baseURL
+# path.
+#
+# The fixture's own static/static-icon.png is exercised by both surfaces that
+# can emit a static-kind URL -- the Markdown render hook (content/bundle) and
+# the image shortcode plus its Markdown twin (content/markdown-variants) --
+# so this one overlay covers the HTML and the .md output formats at once.
+baseURL = 'https://example.org/docs/'

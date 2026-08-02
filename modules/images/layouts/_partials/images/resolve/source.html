@@ -24,7 +24,35 @@
   4. Global resource: resources.Get / resources.GetMatch with a leading "/"
      stripped (assets/ paths never start with "/") -> kind "global".
   5. Leading-slash path resolved nowhere -> kind "static": a deliberate
-     static/ (or otherwise site-served) URL, emitted via relURL, warning-free.
+     static/ (or otherwise site-served) URL, warning-free. The leading slash
+     means SITE-ROOT-RELATIVE, so the path is normalized onto the site by
+     prepending the baseURL's OWN PATH, read straight off site.BaseURL. A
+     file in static/ publishes UNDER that path, so the normalized form is
+     the one that resolves.
+
+     NO URL FUNCTION CAN DO THIS NORMALIZATION, which is why the path is
+     derived explicitly. relURL, relLangURL, and absURL all resolve a value
+     that ALREADY starts with "/" against the protocol and host only,
+     DISCARDING the baseURL's path -- with baseURL = "https://example.org/docs/",
+     relURL "/icon.png" yields "/icon.png", a 404. Stripping the slash first
+     and running the remainder through relURL fixes that, but ONLY while
+     canonifyURLs is off: with canonifyURLs = true, relURL omits the baseURL
+     path DELIBERATELY, because Hugo then post-processes every root-relative
+     URL in HTML output into a fully absolute one and would otherwise double
+     the path. That post-processor runs on HTML output formats ONLY, so a
+     relURL-derived value silently loses the baseURL path in every other
+     output format -- the Markdown twin's absURL turns "/icon.png" into
+     "https://example.org/icon.png", pointing outside the site. Reading
+     site.BaseURL is independent of canonifyURLs, and the value it yields
+     stays correct in HTML under canonifyURLs too, because that
+     post-processor CONSUMES a leading baseURL path rather than doubling it
+     ("/docs/icon.png" and "/icon.png" both become
+     "https://example.org/docs/icon.png").
+
+     Values carrying their own scheme and protocol-relative values never
+     reach here: step 2 has already claimed them for kind "remote" and emits
+     them untouched, which is what they need (absolutizing them would
+     corrupt them).
   6. Anything else -> kind "static" with missing=true: the CALLER warns once
      (this partial is pure) and emits the raw-src fallback.
 
@@ -44,7 +72,8 @@
   - resource    (Resource or absent) The resolved resource (page/global only).
   - url         (string) Passthrough URL: RelPermalink plus preserved suffix
                 for local kinds, the verbatim value for remote/data kinds,
-                relURL for static kinds, the raw src when missing.
+                the site-relative URL (baseURL path included) for static
+                kinds, the raw src when missing.
   - processable (bool)   true when the resolved resource may enter the image
                 pipeline. GIF resources report false by design: animation
                 survives only when the target stays GIF, and resized animated
@@ -135,7 +164,14 @@
         "subtype" $subtype
         "raw" $raw) -}}
   {{- else if hasPrefix $path "/" -}}
-    {{- $result = merge $result (dict "kind" "static" "url" (printf "%s%s" (relURL $path) $suffix) "raw" $raw) -}}
+    {{/* Site-root-relative: prepend the baseURL's own path explicitly. No
+         url function can do it -- see the docstring's step 5. site.BaseURL
+         always ends in a slash and never carries a language prefix, exactly
+         like the path relURL prepends, so trimming that one trailing slash
+         leaves the context root ("/docs", or "" at a domain root) ready to
+         concatenate with a value that already starts with "/". */}}
+    {{- $root := strings.TrimSuffix "/" (urls.Parse site.BaseURL).Path -}}
+    {{- $result = merge $result (dict "kind" "static" "url" (printf "%s%s%s" $root $path $suffix) "raw" $raw) -}}
   {{- else -}}
     {{- $result = merge $result (dict "kind" "static" "url" $s "missing" true "raw" $raw) -}}
   {{- end -}}

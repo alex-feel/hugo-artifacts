@@ -33,9 +33,13 @@ test('GIF renders as passthrough WITH intrinsic dimensions and no srcset', () =>
   assert.equal(img.getAttribute('data-layout'), 'constrained');
 });
 
-test('a /static path renders as a warning-free passthrough', () => {
+test('a /static path renders warning-free as a site-normalized URL', () => {
   const img = page.querySelectorAll('img').find((i) => i.getAttribute('alt') === 'Static icon');
   assert.ok(img, 'expected the static-icon hook image');
+  // The fixture's baseURL is a domain ROOT, where the site-normalized URL and
+  // the raw authored path are the same bytes -- this asserts the domain-root
+  // case only. 11-subpath.spec.js is the build that can tell the module's
+  // normalization from a resolution that discards the baseURL path.
   assert.equal(img.getAttribute('src'), '/static-icon.png');
   assert.equal(img.getAttribute('data-kind'), 'static');
   assert.equal(img.getAttribute('data-layout'), 'constrained');

@@ -7,6 +7,7 @@
     "test": "playwright test",
     "test:headed": "playwright test --headed",
     "test:offline-gating": "node scripts/offline-gating-check.js",
+    "test:subpath": "node scripts/subpath-check.js",
     "rfg-check": "node scripts/rfg-checker.js"
   },
   "devDependencies": {

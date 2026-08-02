@@ -1,7 +1,8 @@
 @echo off
-rem Serves the fixture site with hugo and runs the Playwright suite against
-rem it. Windows mirror of run-tests.sh: pre-launch process check, deprecation
-rem gate on the server log, and forced hugo cleanup afterward.
+rem Builds the fixture site as two static subpath overlays, then serves it and
+rem runs the Playwright suite against all three trees. Windows mirror of
+rem run-tests.sh: pre-launch process check, deprecation gate on every hugo
+rem log, and forced hugo cleanup afterward.
 setlocal enabledelayedexpansion
 if "%PORT%"=="" set PORT=1414
 
@@ -10,6 +11,27 @@ if not errorlevel 1 (
   echo A hugo process is already running; stop it first: taskkill /F /IM hugo.exe
   exit /b 1
 )
+
+rem ---- Static overlays: the two subpath deployment shapes ----
+rem Built before the server starts, because the served fixture sits at a
+rem domain root and a domain root CANNOT tell a correct URL absolutization
+rem from a broken one: absURL discards the baseURL's path for a value that
+rem starts with "/", so both forms emit identical bytes there. Each overlay
+rem differs from hugo.toml in exactly one respect, its baseURL, and
+rem tests\04-subpath.spec.js reads both trees off disk:
+rem   subpath     baseURL = "http://localhost:1414/docs/" -- catches a value
+rem               that LOST the baseURL path.
+rem   schemeless  baseURL = "/docs/" -- catches a Hugo-resolved value that
+rem               GAINED it twice; under subpath every .Permalink carries a
+rem               scheme and is waved through untouched, hiding that mistake.
+rem Each build is finite and binds no port. The logs are retained and
+rem gitignored (hugo-build*.log). Convention: overlay NAME reads
+rem fixture\NAME.toml, writes fixture\public\NAME, and logs to
+rem hugo-build-NAME.log. See the :build_overlay subroutine at the end.
+call :build_overlay subpath
+if errorlevel 1 exit /b 1
+call :build_overlay schemeless
+if errorlevel 1 exit /b 1
 
 pushd "%~dp0fixture"
 start "social-share-fixture" /b hugo server --port %PORT% --bind 127.0.0.1 --logLevel info > "%~dp0.hugo-server.log" 2>&1
@@ -38,6 +60,8 @@ if not errorlevel 1 (
 
 pushd "%~dp0"
 set FIXTURE_URL=http://localhost:%PORT%
+set FIXTURE_PUBLIC_SUBPATH=%~dp0fixture\public\subpath
+set FIXTURE_PUBLIC_SCHEMELESS=%~dp0fixture\public\schemeless
 rem npm rather than npx: npx resolves the binary through its own global
 rem cache first, and when that cache holds a Playwright of its own the run
 rem loads two copies and dies with "No tests found". npm runs this package's
@@ -49,3 +73,39 @@ popd
 taskkill /F /IM hugo.exe >nul 2>&1
 del "%~dp0.hugo-server.log" >nul 2>&1
 exit /b %EXITCODE%
+
+rem ---- Subroutine: build one static overlay and gate its log ----
+rem Reached only via CALL, never fallen into: the run above ends at the
+rem unconditional "exit /b" immediately preceding this line.
+:build_overlay
+set OVERLAY=%~1
+rem hugo drops a nonexistent entry from a --config list and still exits 0, so
+rem without this a mistyped overlay name would quietly build the domain-root
+rem config and surface as a baffling assertion mismatch instead of a missing
+rem file.
+if not exist "%~dp0fixture\%OVERLAY%.toml" (
+  echo Missing overlay config: %~dp0fixture\%OVERLAY%.toml
+  exit /b 1
+)
+pushd "%~dp0fixture"
+hugo --gc --logLevel info --cleanDestinationDir --config hugo.toml,%OVERLAY%.toml --destination public\%OVERLAY% > "%~dp0hugo-build-%OVERLAY%.log" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(%OVERLAY% overlay^):
+  type "%~dp0hugo-build-%OVERLAY%.log"
+  popd
+  exit /b 1
+)
+popd
+findstr /I "deprecat" "%~dp0hugo-build-%OVERLAY%.log" >nul 2>&1
+if not errorlevel 1 (
+  echo Hugo reported deprecations ^(%OVERLAY% overlay^):
+  findstr /I "deprecat" "%~dp0hugo-build-%OVERLAY%.log"
+  exit /b 1
+)
+findstr /C:"ERROR" "%~dp0hugo-build-%OVERLAY%.log" >nul 2>&1
+if not errorlevel 1 (
+  echo Hugo reported errors ^(%OVERLAY% overlay^):
+  findstr /C:"ERROR" "%~dp0hugo-build-%OVERLAY%.log"
+  exit /b 1
+)
+exit /b 0

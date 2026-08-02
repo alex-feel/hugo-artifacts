@@ -3,13 +3,26 @@
 
   Builds the icons[] array for the Web App Manifest, in two modes (auto-detected
   from whether an explicit list is provided):
-    1. EXPLICIT -- if params.pwa.manifest.icons.list is non-empty, it is returned
-       verbatim (the consumer fully controls src/sizes/type/purpose; the favicon
-       prefix is NOT applied, because src values are already complete).
+    1. EXPLICIT -- if params.pwa.manifest.icons.list is non-empty, each entry is
+       carried through with every key the consumer wrote (src/sizes/type/purpose
+       and anything else); the favicon prefix is NOT applied, because src values
+       are already complete. Only src is rewritten, by the normalization below,
+       and only when the entry HAS one: normalizing an absent src would add an
+       empty src key the consumer never wrote, turning "no image named" into
+       "an image named at the site root", so an entry without src is carried
+       through verbatim and warned about once instead.
     2. DERIVED  -- otherwise, built from params.pwa.favicon.icon_*_path fields,
        switching between modern and legacy filenames based on
        params.pwa.favicon.use_legacy_filenames, and prefixed with
        params.pwa.favicon.prefix.
+
+  Every src -- explicit or derived -- goes through pwa/lib/absolute-url.html, so
+  it carries the baseURL's path. A manifest icon src is resolved against the
+  manifest's URL, and the shipped defaults start with "/", which a browser
+  resolves against the ORIGIN instead: on a site at https://example.org/docs/
+  an unnormalized src points at https://example.org/web-app-manifest-192x192.png
+  and 404s, which is disqualifying for installability. An explicit entry whose
+  src carries its own scheme (a CDN URL) passes through untouched.
 
   Legacy RFG packages ship no dedicated maskable icon, so DERIVED legacy mode
   emits only the "any" icons (emitting a maskable entry that points at a
@@ -36,7 +49,31 @@
 {{- $explicitList := $iconsCfg.list | default slice -}}
 
 {{- if gt (len $explicitList) 0 -}}
-  {{- $icons = $explicitList -}}
+  {{- range $explicitList -}}
+    {{- if and (reflect.IsMap .) (isset . "src") -}}
+      {{- $src := partial "pwa/lib/absolute-url.html" (dict
+          "value" (index . "src")
+          "key" "params.pwa.manifest.icons.list[].src") -}}
+      {{- $icons = $icons | append (merge . (dict "src" $src)) -}}
+    {{- else if reflect.IsMap . -}}
+      {{/* A table with no src names no image, and a nil value reaches the
+           normalizer as an empty string rather than as a non-scalar, so it
+           would slip past that guard silently. Carried through untouched --
+           the same treatment a malformed non-table entry gets -- plus one
+           warning per distinct entry so the consumer learns why the icon
+           never appears. */}}
+      {{- $warnKey := printf "pwa:warn:icon-without-src:%v" . -}}
+      {{- if not (hugo.Store.Get $warnKey) -}}
+        {{- hugo.Store.Set $warnKey true -}}
+        {{- warnf "modules/pwa: params.pwa.manifest.icons.list contains an entry with no src key (%v), so it names no image and is emitted as the consumer wrote it. Add a src, or drop the entry." . -}}
+      {{- end -}}
+      {{- $icons = $icons | append . -}}
+    {{- else -}}
+      {{/* Not a table -- carried through untouched so a malformed entry stays a
+           manifest-validation problem rather than becoming a build failure. */}}
+      {{- $icons = $icons | append . -}}
+    {{- end -}}
+  {{- end -}}
 {{- else -}}
   {{- $useLegacy := $faviconCfg.use_legacy_filenames -}}
 
@@ -47,15 +84,28 @@
   {{- if $useLegacy -}}
     {{- $path192 = "/android-chrome-192x192.png" -}}
     {{- $path512 = "/android-chrome-512x512.png" -}}
+  {{- end -}}
+
+  {{- $src192 := partial "pwa/lib/absolute-url.html" (dict
+      "value" (printf "%s%s" $prefix $path192)
+      "key" "params.pwa.favicon.icon_192_path") -}}
+  {{- $src512 := partial "pwa/lib/absolute-url.html" (dict
+      "value" (printf "%s%s" $prefix $path512)
+      "key" "params.pwa.favicon.icon_512_path") -}}
+
+  {{- if $useLegacy -}}
     {{- $icons = slice
-        (dict "src" (printf "%s%s" $prefix $path192) "sizes" "192x192" "type" "image/png" "purpose" "any")
-        (dict "src" (printf "%s%s" $prefix $path512) "sizes" "512x512" "type" "image/png" "purpose" "any")
+        (dict "src" $src192 "sizes" "192x192" "type" "image/png" "purpose" "any")
+        (dict "src" $src512 "sizes" "512x512" "type" "image/png" "purpose" "any")
     -}}
   {{- else -}}
+    {{- $srcMaskable := partial "pwa/lib/absolute-url.html" (dict
+        "value" (printf "%s%s" $prefix $pathMaskable)
+        "key" "params.pwa.favicon.icon_maskable_path") -}}
     {{- $icons = slice
-        (dict "src" (printf "%s%s" $prefix $path192) "sizes" "192x192" "type" "image/png" "purpose" "any")
-        (dict "src" (printf "%s%s" $prefix $path512) "sizes" "512x512" "type" "image/png" "purpose" "any")
-        (dict "src" (printf "%s%s" $prefix $pathMaskable) "sizes" "512x512" "type" "image/png" "purpose" "maskable")
+        (dict "src" $src192 "sizes" "192x192" "type" "image/png" "purpose" "any")
+        (dict "src" $src512 "sizes" "512x512" "type" "image/png" "purpose" "any")
+        (dict "src" $srcMaskable "sizes" "512x512" "type" "image/png" "purpose" "maskable")
     -}}
   {{- end -}}
 {{- end -}}

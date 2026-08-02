@@ -28,8 +28,9 @@
   Fidelity to the HTML path (carousel/slides.html): the parameter surface,
   the match/items XOR rule, the resolved slide LIST, and its ORDER are
   IDENTICAL -- same $page.Resources.Match / $page.Resources.GetMatch /
-  resources.Get / leading-slash / absolute-URL resolution chain, same
-  per-item skip-and-warn behavior for an unresolvable items entry. Per-slide
+  resources.Get / absolute-or-protocol-relative / leading-slash resolution
+  chain, same per-item skip-and-warn behavior for an unresolvable items
+  entry. Per-slide
   alt/caption derive exactly as in carousel/slides.html: alt from the
   bundle resource's trimmed params.alt (default ""), caption from the
   resource's .Title only when it differs from .Name (so default titles
@@ -45,13 +46,24 @@
   is the one accepted key that DOES still apply here (see below): it
   suppresses the caption line exactly as it suppresses figcaption in HTML.
 
-  URL policy: every slide emits the ORIGINAL resource's absolute
-  .Permalink (bundle/assets resources) or the already-resolved absolute/
-  static URL (passthrough entries), never a processed derivative --
-  deliberate, matching image.markdown.md and image-gallery.markdown.md: a
-  Markdown reader gets one stable, full-fidelity URL. A destination
-  carrying whitespace or parentheses is wrapped in angle brackets (valid
-  CommonMark) so it cannot terminate the destination early.
+  URL policy: every slide emits an ABSOLUTE URL, never a processed
+  derivative -- deliberate, matching image.markdown.md and
+  image-gallery.markdown.md: a Markdown reader gets one stable,
+  full-fidelity URL. Bundle and assets resources emit the ORIGINAL
+  resource's .Permalink. A passthrough entry emits absURL of its resolved
+  URL: a leading-slash entry has already been normalized onto the site by
+  carousel/lib/site-url.html, so it carries the baseURL's path, and absURL
+  adds only the protocol and host -- exactly what absURL does with a value
+  that starts with "/" -- while an absolute or protocol-relative entry comes
+  back from absURL untouched. Feeding absURL the raw authored path instead
+  would drop the baseURL path, and trimming the slash off the
+  already-normalized value would double it. This output format is also
+  precisely where a relURL-derived normalization would fail: Hugo's
+  absolutizing post-processor for canonifyURLs touches HTML output only, so
+  the Markdown twin never gets the baseURL path back -- see
+  carousel/lib/site-url.html. A destination carrying whitespace or
+  parentheses is wrapped in angle brackets (valid CommonMark) so it cannot
+  terminate the destination early.
 
   Validation and degradation, mirroring the HTML path exactly: this variant
   resolves slides directly rather than dispatching to carousel/slides.html
@@ -110,9 +122,11 @@
 {{- if $cfg.enable -}}
 
 {{/* ---- Input resolution: builds $entries, a slice of dicts each shaped
-     dict "resource" (Resource or false) "url" (string, non-bundle only)
-     "kind" ("bundle" | "static") -- IDENTICAL logic to carousel/slides.html
-     so the same slide set, in the same order, resolves in both formats. ---- */}}
+     dict "resource" (Resource or false) "raw" (string, the authored items
+     entry; "" in match mode) "url" (string, non-bundle only: site-normalized
+     for a leading-slash path) "kind" ("bundle" | "static") -- IDENTICAL
+     logic to carousel/slides.html so the same slide set, in the same order,
+     resolves in both formats. ---- */}}
 {{- $entries := slice -}}
 
 {{- if $hasMatch -}}
@@ -123,7 +137,7 @@
         "message" (printf "[carousel] The match glob %q matched no page resources; rendering nothing. See %s" $args.match $where)) -}}
   {{- else -}}
     {{- range $matched -}}
-      {{- $entries = $entries | append (dict "resource" . "url" "" "kind" "bundle") -}}
+      {{- $entries = $entries | append (dict "resource" . "raw" "" "url" "" "kind" "bundle") -}}
     {{- end -}}
   {{- end -}}
 {{- else -}}
@@ -132,28 +146,33 @@
     {{- if ne $entry "" -}}
       {{- $resolved := false -}}
       {{- with $page.Resources.GetMatch $entry -}}
-        {{- $entries = $entries | append (dict "resource" . "url" "" "kind" "bundle") -}}
+        {{- $entries = $entries | append (dict "resource" . "raw" $entry "url" "" "kind" "bundle") -}}
         {{- $resolved = true -}}
       {{- end -}}
       {{- if not $resolved -}}
         {{- with resources.Get $entry -}}
-          {{- $entries = $entries | append (dict "resource" . "url" "" "kind" "bundle") -}}
+          {{- $entries = $entries | append (dict "resource" . "raw" $entry "url" "" "kind" "bundle") -}}
           {{- $resolved = true -}}
         {{- end -}}
       {{- end -}}
       {{- if not $resolved -}}
-        {{- if hasPrefix $entry "/" -}}
-          {{- $entries = $entries | append (dict "resource" false "url" (relURL $entry) "kind" "static") -}}
+        {{/* Absolute and protocol-relative first: "//host/path" also starts
+             with "/", and the leading-slash branch below strips one slash. */}}
+        {{- if or (hasPrefix $entry "//") (findRE `(?i)^[a-z][a-z0-9+.-]*://` $entry) -}}
+          {{- $entries = $entries | append (dict "resource" false "raw" $entry "url" $entry "kind" "static") -}}
           {{- $resolved = true -}}
-        {{- else if findRE `(?i)^[a-z][a-z0-9+.-]*://` $entry -}}
-          {{- $entries = $entries | append (dict "resource" false "url" $entry "kind" "static") -}}
+        {{- else if hasPrefix $entry "/" -}}
+          {{/* Site-root-relative: carousel/lib/site-url.html prepends the
+               baseURL's own path, which no url function does (see the
+               docstring). */}}
+          {{- $entries = $entries | append (dict "resource" false "raw" $entry "url" (partial "carousel/lib/site-url.html" $entry) "kind" "static") -}}
           {{- $resolved = true -}}
         {{- end -}}
       {{- end -}}
       {{- if not $resolved -}}
         {{- partial "carousel/lib/warn.html" (dict
             "key" (printf "carousel:warn:item-unresolvable:%s:%s" $where $entry)
-            "message" (printf "[carousel] Skipping items entry %q: it did not resolve as a bundle resource, an assets/ resource, a leading-slash static path, or an absolute URL. See %s" $entry $where)) -}}
+            "message" (printf "[carousel] Skipping items entry %q: it did not resolve as a bundle resource, an assets/ resource, an absolute or protocol-relative URL, or a leading-slash site path. See %s" $entry $where)) -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}
@@ -178,9 +197,18 @@
           "message" (printf "[carousel] Slide resource %q has no alt text (set params.alt in the page's resources: metadata); rendering it with an empty alt label, and the HTML render also suppresses its lightbox anchor because a link named by empty alt fails WCAG 2.4.4/4.1.2. See %s" $r.Name $where)) -}}
     {{- end -}}
   {{- else -}}
+    {{/* absURL over the already-resolved URL: a site-normalized leading-slash
+         path (which carries the baseURL path) gains only the protocol and
+         host, and an absolute or protocol-relative URL comes back untouched,
+         so every emitted destination is absolute -- the twin's contract, and
+         the same rule image.markdown.md applies to a static-kind source.
+         Warning keyed and worded on the RAW authored entry, exactly as
+         carousel/slides.html keys it, so the same entry never double-warns
+         across output formats. */}}
+    {{- $url = absURL .url -}}
     {{- partial "carousel/lib/warn.html" (dict
-        "key" (printf "carousel:warn:no-alt-static:%s:%s" $where .url)
-        "message" (printf "[carousel] The items entry %q resolves outside the page bundle, so it carries no resources: metadata; rendering it with an empty alt label, and the HTML render also suppresses its lightbox anchor. See %s" .url $where)) -}}
+        "key" (printf "carousel:warn:no-alt-static:%s:%s" $where .raw)
+        "message" (printf "[carousel] The items entry %q resolves outside the page bundle, so it carries no resources: metadata; rendering it with an empty alt label, and the HTML render also suppresses its lightbox anchor. See %s" .raw $where)) -}}
   {{- end -}}
   {{- if findRE `[\s()]` $url -}}{{- $url = printf "<%s>" $url -}}{{- end -}}
   {{- $block := printf "![%s](%s)" (partial "carousel/lib/md-text.html" (dict "text" $alt "label" true)) $url -}}

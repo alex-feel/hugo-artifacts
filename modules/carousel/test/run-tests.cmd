@@ -1,10 +1,11 @@
 @echo off
 rem Serves the composed fixture site with hugo and runs the Playwright suite
-rem against it, after three static builds (standalone fixture-bare, killed
-rem overlay, multilingual overlay) and one intentionally failing build
-rem (fixture-invalid). Windows mirror of run-tests.sh: pre-launch process
-rem check, deprecation gates on every build/server log, and forced hugo
-rem cleanup afterward.
+rem against it, after seven static builds (standalone fixture-bare, killed
+rem overlay, multilingual overlay, and the subpath and canonifyURLs overlays
+rem against BOTH the composed and the standalone fixture) and one
+rem intentionally failing build (fixture-invalid). Windows mirror of
+rem run-tests.sh: pre-launch process check, deprecation gates on every
+rem build/server log, and forced hugo cleanup afterward.
 setlocal enabledelayedexpansion
 if "%PORT%"=="" set PORT=1717
 
@@ -80,6 +81,104 @@ findstr /I "deprecat" "%CAROUSEL_MULTILINGUAL_LOG%" >nul 2>&1
 if not errorlevel 1 (
   echo Hugo reported deprecations ^(multilingual overlay^):
   findstr /I "deprecat" "%CAROUSEL_MULTILINGUAL_LOG%"
+  exit /b 1
+)
+
+rem ---- Static build 4: the composed fixture under a subpath baseURL ----
+rem The only shape in which a leading-slash items entry can be proven
+rem correct: Hugo resolves a value that already starts with "/" against the
+rem protocol and host only, DISCARDING the baseURL path, so at the domain
+rem root every other build here uses, a correct resolution and a broken one
+rem emit identical bytes. Composed with modules/images, this build also
+rem proves the path is applied exactly ONCE (no /docs/docs/).
+set "CAROUSEL_SUBPATH_LOG=%~dp0hugo-build-subpath.log"
+set "CAROUSEL_SUBPATH_PUBLIC=%~dp0fixture\public\subpath"
+pushd "%~dp0fixture"
+hugo --gc --logLevel info --cleanDestinationDir --config hugo.toml,../subpath.toml --destination public\subpath > "%CAROUSEL_SUBPATH_LOG%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(subpath overlay^):
+  type "%CAROUSEL_SUBPATH_LOG%"
+  popd
+  exit /b 1
+)
+popd
+findstr /I "deprecat" "%CAROUSEL_SUBPATH_LOG%" >nul 2>&1
+if not errorlevel 1 (
+  echo Hugo reported deprecations ^(subpath overlay^):
+  findstr /I "deprecat" "%CAROUSEL_SUBPATH_LOG%"
+  exit /b 1
+)
+
+rem ---- Static build 5: the standalone fixture under a subpath baseURL ----
+rem The composed build above exercises images' own resolution; this one is
+rem where carousel\slides.html emits the URL itself, in its plain img
+rem fallback. Both fixtures also publish the Markdown twin, whose absolute
+rem URLs must carry the baseURL path exactly once. Runs AFTER static build 1,
+rem whose --cleanDestinationDir over fixture-bare\public would otherwise wipe
+rem this tree.
+set "CAROUSEL_SUBPATH_BARE_LOG=%~dp0hugo-build-subpath-bare.log"
+set "CAROUSEL_SUBPATH_BARE_PUBLIC=%~dp0fixture-bare\public\subpath"
+pushd "%~dp0fixture-bare"
+hugo --gc --logLevel info --cleanDestinationDir --config hugo.toml,../subpath.toml --destination public\subpath > "%CAROUSEL_SUBPATH_BARE_LOG%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(subpath overlay, standalone^):
+  type "%CAROUSEL_SUBPATH_BARE_LOG%"
+  popd
+  exit /b 1
+)
+popd
+findstr /I "deprecat" "%CAROUSEL_SUBPATH_BARE_LOG%" >nul 2>&1
+if not errorlevel 1 (
+  echo Hugo reported deprecations ^(subpath overlay, standalone^):
+  findstr /I "deprecat" "%CAROUSEL_SUBPATH_BARE_LOG%"
+  exit /b 1
+)
+
+rem ---- Static build 6: the composed fixture with canonifyURLs ----
+rem The subpath builds above prove the baseURL path is carried; these two
+rem prove it survives canonifyURLs, which makes relURL stop emitting that
+rem path (Hugo re-adds the whole baseURL to every root-relative URL in HTML
+rem afterwards and would otherwise double it). That post-processor runs on
+rem HTML only, so the Markdown twin is where a relURL-derived value silently
+rem loses the path.
+set "CAROUSEL_CANONIFY_LOG=%~dp0hugo-build-canonify.log"
+set "CAROUSEL_CANONIFY_PUBLIC=%~dp0fixture\public\canonify"
+pushd "%~dp0fixture"
+hugo --gc --logLevel info --cleanDestinationDir --config hugo.toml,../subpath.toml,../canonify.toml --destination public\canonify > "%CAROUSEL_CANONIFY_LOG%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(canonifyURLs overlay^):
+  type "%CAROUSEL_CANONIFY_LOG%"
+  popd
+  exit /b 1
+)
+popd
+findstr /I "deprecat" "%CAROUSEL_CANONIFY_LOG%" >nul 2>&1
+if not errorlevel 1 (
+  echo Hugo reported deprecations ^(canonifyURLs overlay^):
+  findstr /I "deprecat" "%CAROUSEL_CANONIFY_LOG%"
+  exit /b 1
+)
+
+rem ---- Static build 7: the standalone fixture with canonifyURLs ----
+rem Same pairing rationale as the two subpath builds: this is the branch
+rem where carousel\slides.html emits the URL itself. Runs AFTER static build
+rem 1, whose --cleanDestinationDir over fixture-bare\public would otherwise
+rem wipe this tree.
+set "CAROUSEL_CANONIFY_BARE_LOG=%~dp0hugo-build-canonify-bare.log"
+set "CAROUSEL_CANONIFY_BARE_PUBLIC=%~dp0fixture-bare\public\canonify"
+pushd "%~dp0fixture-bare"
+hugo --gc --logLevel info --cleanDestinationDir --config hugo.toml,../subpath.toml,../canonify.toml --destination public\canonify > "%CAROUSEL_CANONIFY_BARE_LOG%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(canonifyURLs overlay, standalone^):
+  type "%CAROUSEL_CANONIFY_BARE_LOG%"
+  popd
+  exit /b 1
+)
+popd
+findstr /I "deprecat" "%CAROUSEL_CANONIFY_BARE_LOG%" >nul 2>&1
+if not errorlevel 1 (
+  echo Hugo reported deprecations ^(canonifyURLs overlay, standalone^):
+  findstr /I "deprecat" "%CAROUSEL_CANONIFY_BARE_LOG%"
   exit /b 1
 )
 
