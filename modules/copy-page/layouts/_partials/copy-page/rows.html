@@ -9,11 +9,17 @@
   which lets a site add a new AI provider or patch an existing one
   (endpoint, label) without forking the module.
 
-  Endpoint status: verified against live probes and Mintlify's deployed
-  convention as of 2026-08-01. ChatGPT's q parameter is de facto
-  (undocumented by OpenAI) with a benign failure mode; Claude's q parameter
-  is documented in the Claude Help Center for the desktop deep link that
-  mirrors the same web path.
+  Endpoint status, and the two kinds of evidence behind it. Every endpoint
+  was probed live against Mintlify's deployed convention as of 2026-08-01,
+  which establishes the URL shape and that the endpoint answers -- NOT that
+  the prompt reaches the composer, because an application ignores a query
+  parameter it does not recognize and still returns 200. Only the claude row
+  has an OBSERVED prefill test: opened in a signed-in browser on 2026-08-02,
+  prompt present in the composer, which also disproves a public report that
+  the web chat dropped q in October 2025. ChatGPT's q is de facto and
+  undocumented by OpenAI, with a benign failure mode; Claude's is documented
+  in the Claude Help Center for the desktop deep link mirroring this web
+  path. Treat the other four as convention-backed rather than confirmed.
 
   WHY CHATGPT IS THE ONE ROW WITH target "html", settled 2026-08-02 and not
   to be re-opened without new evidence. Its endpoint carries hints=search,
