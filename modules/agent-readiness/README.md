@@ -251,7 +251,7 @@ last_updated          = true    # Emit `last_updated:` when .Lastmod differs fro
 license               = false   # Emit `license:` -- requires [params.agent.license] url.
 section_pages         = true    # Emit the member roster in a SECTION twin. See "The member roster" below.
 sitemap_section       = true    # Append the trailing pointer section.
-sitemap_section_target = 'llms' # 'llms' | 'sitemap' | 'none'. Case-folded; an unrecognized value warns.
+sitemap_section_target = 'llms' # 'llms' | 'sitemap' | 'none'. Case-folded; an unrecognized value warns. The default heading follows the resolved target ('Site index' for llms, 'Sitemap' for sitemap); the agent_sitemap_heading i18n key overrides both.
 ```
 
 Twins never enter `sitemap.xml`: Hugo's sitemap enumerates pages and emits one `<loc>` per page from `.Permalink`, so no secondary output format can appear in it.
@@ -468,20 +468,23 @@ license = true    # emit the license blockquote line in llms.txt
 
 ## i18n
 
-The module authors exactly ten user-facing strings: five headings in generated documents, three display labels for the surface entries returned by the [`surfaces.html`](#surfaceshtml) public partial, and the name and note of the derived Agent Skills index entry in `llms.txt`. English and Russian ship with the module; every lookup carries an English fallback, so a site whose language ships no translation still renders a real string rather than an empty one.
+The module authors exactly eleven user-facing strings: six headings in generated documents, three display labels for the surface entries returned by the [`surfaces.html`](#surfaceshtml) public partial, and the name and note of the derived Agent Skills index entry in `llms.txt`. English and Russian ship with the module; every lookup carries an English fallback, so a site whose language ships no translation still renders a real string rather than an empty one.
 
-| Key                            | English                                                        |
-| ------------------------------ | -------------------------------------------------------------- |
-| `agent_sitemap_heading`        | `Sitemap`                                                      |
-| `agent_section_pages_heading`  | `Pages`                                                        |
-| `agent_facts_title`            | `About`                                                        |
-| `agent_facts_identity_heading` | `Identity`                                                     |
-| `agent_facts_contact_heading`  | `Contact`                                                      |
-| `agent_surface_llms`           | `llms.txt`                                                     |
-| `agent_surface_facts`          | `Site facts`                                                   |
-| `agent_surface_skills`         | `Agent Skills index`                                           |
-| `agent_skills_entry_name`      | `Agent Skills index`                                           |
-| `agent_skills_entry_note`      | `Machine-readable index of this site's published agent skills` |
+| Key                             | English                                                        |
+| ------------------------------- | -------------------------------------------------------------- |
+| `agent_sitemap_heading_sitemap` | `Sitemap`                                                      |
+| `agent_sitemap_heading_llms`    | `Site index`                                                   |
+| `agent_section_pages_heading`   | `Pages`                                                        |
+| `agent_facts_title`             | `About`                                                        |
+| `agent_facts_identity_heading`  | `Identity`                                                     |
+| `agent_facts_contact_heading`   | `Contact`                                                      |
+| `agent_surface_llms`            | `llms.txt`                                                     |
+| `agent_surface_facts`           | `Site facts`                                                   |
+| `agent_surface_skills`          | `Agent Skills index`                                           |
+| `agent_skills_entry_name`       | `Agent Skills index`                                           |
+| `agent_skills_entry_note`       | `Machine-readable index of this site's published agent skills` |
+
+The twin's trailing pointer heading follows the resolved `sitemap_section_target`: `agent_sitemap_heading_llms` heads the section when it points at `llms.txt`, and `agent_sitemap_heading_sitemap` when it points at `sitemap.xml` -- the latter also heads `/about.md`'s dual-pointer block, which always includes `sitemap.xml`. The `agent_sitemap_heading` key is deliberately NOT shipped: it is the consumer-side override key. Hugo merges i18n files per key with the site's own value winning over a module's, so a site that defines `agent_sitemap_heading` forces that one heading over both target-derived defaults, while an undefined key resolves to the empty string and each lookup falls through to its shipped per-target default.
 
 `## Optional` in `llms.txt` is deliberately not a translation key: it is fixed by the llmstxt.org convention and is a protocol token, not prose. Inside the translated values, `llms.txt` and `Agent Skills` stay untranslated in every language for the same reason: the former is the llmstxt.org protocol token and the latter is the agentskills.io convention's proper name.
 

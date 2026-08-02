@@ -108,6 +108,13 @@
        is routinely read detached from the site it came from, where a
        relative path has no base to resolve against.
 
+       The heading follows the resolved target: llms.txt is a curated link
+       index, not a URL enumeration, so its section is headed by
+       $cfg.i18n.sitemap_heading_llms while the sitemap target keeps
+       $cfg.i18n.sitemap_heading. Both resolve in config.html, where the
+       consumer-side agent_sitemap_heading i18n key overrides either
+       default.
+
        llms.txt IS a home output format and resolves through it. `sitemap`
        is NOT -- it is a page KIND -- so that lookup never matches and the
        absURL fallback always wins.
@@ -122,6 +129,7 @@
   {{- if and $md.sitemap_section (ne $wanted "none") -}}
     {{- $target := "" -}}
     {{- $label := "" -}}
+    {{- $heading := "" -}}
     {{- if eq $wanted "llms" -}}
       {{/* Gated on llms.enable as well as on the format being wired, for
            the same reason the twin links are gated on markdown.enable: the
@@ -137,6 +145,7 @@
         {{- with site.Home.OutputFormats.Get "llmstxt" -}}
           {{- $target = .Permalink -}}
           {{- $label = "llms.txt" -}}
+          {{- $heading = $cfg.i18n.sitemap_heading_llms -}}
         {{- else -}}
           {{- partial "agent-readiness/lib/warn.html" (dict
               "key" "agent-readiness:warn:sitemap-section-no-llmstxt"
@@ -150,6 +159,7 @@
         {{- $target = "sitemap.xml" | absURL -}}
       {{- end -}}
       {{- $label = "sitemap.xml" -}}
+      {{- $heading = $cfg.i18n.sitemap_heading -}}
     {{- else -}}
       {{- partial "agent-readiness/lib/warn.html" (dict
           "key" (printf "agent-readiness:warn:unknown-sitemap-target:%s" $wanted)
@@ -165,7 +175,7 @@
          partial is in the .html namespace while the twin is plain text,
          so an ampersand in the URL would otherwise become an entity. */}}
     {{- with $target -}}
-      {{- printf "\n\n## %s\n\n- %s\n" (partial "agent-readiness/lib/inline.html" $cfg.i18n.sitemap_heading) (partial "agent-readiness/lib/markdown-link.html" (dict "name" $label "url" .)) | safeHTML -}}
+      {{- printf "\n\n## %s\n\n- %s\n" (partial "agent-readiness/lib/inline.html" $heading) (partial "agent-readiness/lib/markdown-link.html" (dict "name" $label "url" .)) | safeHTML -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}

@@ -4,20 +4,36 @@
 # ({{ T "key" | default "English" }}), so a site whose language ships no
 # translation still renders a real heading rather than an empty string.
 #
-# The module authors exactly ten strings: five headings in generated
+# The module authors exactly eleven strings: six headings in generated
 # documents, three display labels for the surface entries returned by the
 # agent-readiness/surfaces.html public partial, and the name and note of
 # the derived Agent Skills index entry in llms.txt's `## Optional` section.
 # "## Optional" in llms.txt is deliberately NOT a key here: it is fixed by
 # the llmstxt.org convention and is a protocol token, not prose.
+# agent_sitemap_heading is deliberately NOT shipped either, for a different
+# reason: it is the consumer-side override key for the trailing pointer
+# heading, winning over both target-specific defaults. Hugo merges i18n
+# files per key with a project's value beating a module's, and T returns
+# "" for a key no source defines, so config.html looks that key up FIRST
+# and falls through to the shipped target-derived default
+# (agent_sitemap_heading_sitemap or agent_sitemap_heading_llms) only when
+# no site defines it. Shipping it would satisfy every lookup from inside
+# the module and make the two per-target defaults unreachable.
 #
 # This file carries flat keys only. Should a plural table ever be added, it
 # MUST sit LAST: a TOML table header claims every key-value pair that follows
 # it until the next header, so a mid-file table would silently swallow all the
 # flat keys below it.
 
-# Heading of the trailing pointer section in a Markdown twin and in about.md.
-agent_sitemap_heading = "Sitemap"
+# Heading of the trailing pointer section when it points at sitemap.xml: a
+# twin with sitemap_section_target = 'sitemap', and about.md's dual-pointer
+# block, which always includes sitemap.xml.
+agent_sitemap_heading_sitemap = "Sitemap"
+
+# Heading of the trailing pointer section in a Markdown twin when it points
+# at llms.txt, the default target. "Sitemap" would misname a curated link
+# index, so the llms target carries its own default.
+agent_sitemap_heading_llms = "Site index"
 
 # H2 of the member roster in a section's Markdown twin.
 agent_section_pages_heading = "Pages"

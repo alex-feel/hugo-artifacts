@@ -416,9 +416,21 @@
 {{/* ---- i18n ---- Resolved ONCE here through the repository's
      English-default idiom, so a site whose language ships no translation
      still renders a real heading rather than an empty string, and no
-     renderer calls T itself. */}}
+     renderer calls T itself.
+
+     The trailing pointer heading is a PAIR: sitemap_heading for the
+     sitemap.xml target (and about.md's dual-pointer block), and
+     sitemap_heading_llms for the llms.txt target, so the twin's heading
+     follows the resolved sitemap_section_target. Both look up
+     agent_sitemap_heading FIRST -- the consumer-side override key the
+     module deliberately does not ship -- and fall through to their own
+     shipped target-derived default. Hugo merges i18n files per key with
+     the project's value beating a module's, and T returns "" for a key no
+     source defines, which the default pipe catches, so the override key
+     resolves exactly when a site defines it. */}}
 {{- $i18n := dict
-  "sitemap_heading" (T "agent_sitemap_heading" | default "Sitemap")
+  "sitemap_heading" (T "agent_sitemap_heading" | default (T "agent_sitemap_heading_sitemap" | default "Sitemap"))
+  "sitemap_heading_llms" (T "agent_sitemap_heading" | default (T "agent_sitemap_heading_llms" | default "Site index"))
   "section_pages_heading" (T "agent_section_pages_heading" | default "Pages")
   "facts_title" (T "agent_facts_title" | default "About")
   "facts_identity_heading" (T "agent_facts_identity_heading" | default "Identity")
