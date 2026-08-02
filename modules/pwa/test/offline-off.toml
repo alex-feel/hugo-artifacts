@@ -1,0 +1,26 @@
+# Third overlay for scripts/subpath-check.js, merged AFTER hugo.toml via
+# --config hugo.toml,../offline-off.toml, and changing exactly one thing.
+#
+# It exists to reach ONE branch that every other build in this suite steps
+# over. service-worker.html resolves the offline fallback URL twice: first
+# from the configured `fallback_url` through pwa/lib/absolute-url.html, then
+# again -- overwriting it -- from the resolved Page through
+# pwa/lib/resource-url.html, when `site.GetPage` finds that page. The module's
+# own content adapter creates /offline/ whenever the offline fallback is
+# enabled, so in every other pass the second resolution always wins and the
+# first one is unobservable: reverting its normalization changes no published
+# byte, and a mutation test on it passes while the code is broken.
+#
+# Turning the offline fallback off is the smallest configuration that makes
+# the adapter skip the page, so `site.GetPage` misses and the FIRST resolution
+# is what reaches sw.js. The same branch is live in a case this fixture cannot
+# express through configuration at all -- a consumer shipping its own root
+# content/_content.gotmpl, which shadows the module's adapter, exactly as the
+# module README documents -- and that consumer is on a subpath deployment the
+# moment their baseURL carries a path.
+#
+# The offline PAGE is gone in this pass and the catch handler with it, which
+# is what test:offline-gating already asserts; this overlay asserts only the
+# URL that still reaches the worker's params.
+[params.pwa.sw.offline]
+enabled = false

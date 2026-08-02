@@ -1,0 +1,94 @@
+# Feature overlay for scripts/subpath-check.js. Merged AFTER hugo.toml via
+# --config hugo.toml,../subpath.toml (run from within fixture/), mirroring the
+# sibling modules' overlay convention. Hugo deep-merges config files, so every
+# key hugo.toml sets and this file does not is preserved.
+#
+# UNLIKE the sibling modules' subpath.toml, this one sets NO baseURL: the check
+# script supplies it with -b so ONE overlay serves both its passes, the
+# path-carrying baseURL and the domain-root one. That pairing is the point --
+# at the domain root a correct implementation and a broken one emit identical
+# bytes, so only the path-carrying build can tell them apart, and only the
+# domain-root build can prove the normalization is a no-op for the majority of
+# consumers who never deploy on a subpath.
+#
+# WHY THIS FILE EXISTS AT ALL: fixture/hugo.toml leaves about half of the
+# module's normalization call sites on their shipped defaults, and a call site
+# that never runs cannot regress visibly. This overlay turns on exactly those
+# keys -- the legacy favicon set and its prefix, the rfg-static manifest href,
+# an explicit manifest icons[] list, extra precache URLs, SW bypass URLs, the
+# offline fallback image, the push notification badge, and a push click target
+# distinct from every other URL in the bundle -- so each one emits a value the
+# check script can assert on.
+#
+# Every local path below resolves to a file fixture/static/ actually publishes,
+# because the check script asserts that each emitted URL maps to a published
+# file: an unpublished precache entry fails Workbox's atomic install outright,
+# and an unpublished icon or favicon is a 404 in the consumer's <head>.
+
+[params.pwa.favicon]
+# Legacy mode emits seven prefixed hrefs plus the msapplication-config meta,
+# none of which the modern default exercises. prefix is composed with each
+# configured path BEFORE normalization, so it is proven by the same assertions.
+mode = "legacy"
+prefix = "/icons"
+
+[params.pwa.manifest]
+# rfg-static points the <link rel="manifest"> and the precache entry at a
+# consumer-authored static file instead of the rendered WebAppManifest output.
+# The templated manifest.webmanifest still renders (outputs.home names it), so
+# the icons[] assertions below keep working in this pass.
+mode = "rfg-static"
+href = "/site.webmanifest"
+
+# An explicit list replaces the derived icons and bypasses favicon.prefix, so
+# each src here is authored in full. The second and third entries are the
+# documented escape hatch for an off-site asset: a value carrying its own
+# scheme, and a protocol-relative one. Both must survive untouched. The fourth
+# has no src at all: the module must carry it through exactly as written (and
+# warn once), NOT hand it an empty src it never asked for.
+[[params.pwa.manifest.icons.list]]
+src = "/web-app-manifest-192x192.png"
+sizes = "192x192"
+type = "image/png"
+purpose = "any"
+
+[[params.pwa.manifest.icons.list]]
+src = "https://cdn.example.com/icon-512x512.png"
+sizes = "512x512"
+type = "image/png"
+purpose = "any"
+
+[[params.pwa.manifest.icons.list]]
+src = "//cdn.example.com/icon-maskable.png"
+sizes = "512x512"
+type = "image/png"
+purpose = "maskable"
+
+[[params.pwa.manifest.icons.list]]
+sizes = "48x48"
+
+[params.pwa.sw.precache]
+# "/about/" is ALSO a recent page, and it appears twice here besides, so this
+# list is what makes the deduplication assertion bite: without it every URL in
+# the list is unique no matter what the dedupe does. "/blog/" is a section list
+# page, which recent pages (site.RegularPages) never contributes.
+extra_urls = ["/about/", "/blog/", "/about/"]
+
+[params.pwa.sw.bypass]
+# The first entry names no page and nothing else in the build emits it, which
+# is what lets the check script assert on it: a bypass URL that doubled as a
+# precached page would still be found after this normalization regressed. The
+# second is off-site and must pass through with its scheme intact.
+urls = ["/api/status", "https://analytics.example.com/collect"]
+
+[params.pwa.sw.offline]
+# Precached alongside the offline page, so it must resolve to a published file.
+fallback_image = "/offline-fallback.png"
+
+[params.pwa.push]
+notification_badge = "/badge-72x72.png"
+# Deliberately unlike every other URL the SW bundle carries: the default "/"
+# normalizes to the same "/docs/" the homepage precache entry already emits, so
+# an assertion written against the default cannot fail. The query string also
+# exercises a value whose path ends before the "?".
+default_click_url = "/blog/post-2/?source=push"

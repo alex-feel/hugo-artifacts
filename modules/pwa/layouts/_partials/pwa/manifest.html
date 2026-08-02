@@ -12,7 +12,9 @@
       link (which would also brick the SW precache install). .RelPermalink is
       used so subpath deploys are correct.
     - "rfg-static": href = params.pwa.manifest.href (consumer's static file
-      path; falls back to "/site.webmanifest").
+      path; falls back to "/site.webmanifest"). That value is consumer-authored
+      rather than a rendered resource, so it goes through
+      pwa/lib/absolute-url.html to pick up the baseURL's path.
 */}}
 
 {{- $defaults := hugo.Data.pwa.defaults.manifest -}}
@@ -20,7 +22,9 @@
 {{- $mode := $params.mode | default $defaults.mode -}}
 
 {{- if eq $mode "rfg-static" -}}
-  {{- $href := $params.href | default "/site.webmanifest" -}}
+  {{- $href := partial "pwa/lib/absolute-url.html" (dict
+      "value" ($params.href | default "/site.webmanifest")
+      "key" "params.pwa.manifest.href") -}}
   {{ printf "<link rel=\"manifest\" href=\"%s\">" $href | safeHTML }}
 {{- else -}}
   {{- with site.Home.OutputFormats.Get "webappmanifest" -}}

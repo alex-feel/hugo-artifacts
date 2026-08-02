@@ -5,6 +5,11 @@
   (esbuild) with format=esm, target=es2020, minify=true. The build-time
   params bridge supplies the SW URL, scope, and update poll interval.
 
+  params.pwa.sw_path and params.pwa.sw_scope go through
+  pwa/lib/absolute-url.html, so both carry the baseURL's path. Without that,
+  a site at https://example.org/docs/ publishes the worker at /docs/sw.js and
+  registers /sw.js, which never installs and reports nothing.
+
   Emits a fingerprinted <script type="module" defer> with Subresource
   Integrity. The register script IS fingerprinted (unlike the SW itself)
   so the browser fetches a new bundle on each deploy.
@@ -16,8 +21,12 @@
 {{- $params := site.Params.pwa | default dict -}}
 {{- $swCfg := merge $defaults.sw ($params.sw | default dict) -}}
 
-{{- $swPath := $params.sw_path | default $defaults.sw_path -}}
-{{- $swScope := $params.sw_scope | default $defaults.sw_scope -}}
+{{- $swPath := partial "pwa/lib/absolute-url.html" (dict
+    "value" ($params.sw_path | default $defaults.sw_path)
+    "key" "params.pwa.sw_path") -}}
+{{- $swScope := partial "pwa/lib/absolute-url.html" (dict
+    "value" ($params.sw_scope | default $defaults.sw_scope)
+    "key" "params.pwa.sw_scope") -}}
 {{- $updateCheckSeconds := $params.update_check_seconds | default $defaults.update_check_seconds -}}
 
 {{- $jsParams := dict

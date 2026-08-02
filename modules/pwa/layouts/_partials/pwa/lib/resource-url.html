@@ -1,0 +1,32 @@
+{{/*
+  pwa/lib/resource-url.html -- internal utility (LIB tier).
+
+  Purpose: the site-relative URL of a page or resource THIS BUILD publishes,
+  in the one spelling that is correct in a non-HTML artifact under every
+  configuration. Companion to pwa/lib/absolute-url.html, which does the same
+  job for a consumer-authored path rather than for a rendered resource.
+
+  THE TRAP THIS EXISTS TO AVOID: `.RelPermalink` DROPS the baseURL's path when
+  `canonifyURLs` is true. On a site published under https://example.org/docs/
+  with that setting on, `site.Home.RelPermalink` is "/" and a blog post's is
+  "/blog/post-1/" -- the leading-slash form, because Hugo's canonification
+  step rewrites the URLs of rendered HTML to absolute ones afterwards, and
+  that step is what puts the path back. sw.js, the precache list it carries,
+  and the JS bundles are NOT HTML, so nothing ever canonifies them: a precache
+  entry left at "/" 404s on that deploy, and Workbox's precache install is
+  atomic, so one 404 takes the ENTIRE service worker down rather than just
+  that entry.
+
+  `.Permalink` is unaffected by the setting, so its PATH component is the
+  spelling that always holds. `.EscapedPath` rather than `.Path` because a
+  URL is compared and fetched as written: `.Path` decodes percent-escapes and
+  would hand Workbox "/a b/" where the request carries "/a%20b/".
+
+  Expected context: the page, output format, or resource itself -- anything
+  with a `.Permalink` method.
+
+  Return value: the site-relative URL, e.g. "/docs/about/".
+  ONE terminal return.
+*/}}
+
+{{- return (urls.Parse .Permalink).EscapedPath -}}

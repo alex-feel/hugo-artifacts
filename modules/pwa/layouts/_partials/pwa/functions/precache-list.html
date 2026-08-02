@@ -8,11 +8,24 @@
 
   CRITICAL invariant: every entry MUST correspond to a resource Hugo actually
   emits. Workbox's precacheAndRoute install is atomic -- a single 404 fails the
-  whole SW install, so the SW silently never activates. Each entry below is
-  therefore derived from a real rendered resource (site.Home, the offline page
-  via site.GetPage, the WebAppManifest output format) rather than from a raw
-  config path, and uses .RelPermalink so subpath (baseURL with a path) deploys
-  are correct.
+  whole SW install, so the SW silently never activates. Two mechanisms keep the
+  URLs honest on a subpath (baseURL with a path) deploy, and every entry uses
+  exactly one of them:
+
+    - Entries that name a page or output format (site.Home, the offline page
+      via site.GetPage, the WebAppManifest output, the recent-pages list) are
+      derived from the real rendered resource, through
+      pwa/lib/resource-url.html. NOT through .RelPermalink directly: that
+      method drops the baseURL's path when canonifyURLs is true, because
+      Hugo's canonification step puts it back afterwards -- and that step
+      never runs over sw.js, which is not HTML.
+    - Entries that come from a raw config path (the offline fallback image, the
+      rfg-static manifest href, and every extra_urls value) are normalized
+      through pwa/lib/absolute-url.html, which carries the baseURL's path onto
+      a value written with a leading slash. Without it, a consumer's
+      "/about/" would be precached as "/about/" on a site published under
+      "/docs/", the fetch would 404, and the atomic install would fail --
+      taking down the whole service worker, not just that one entry.
 
   Sources of entries (each opt-in via params):
     - Homepage when params.pwa.sw.precache.include_homepage is true
@@ -30,6 +43,14 @@
   Pages whose URL contains an exclude_globs token (after stripping the "*") are
   dropped.
 
+  The assembled list is deduplicated by url, first occurrence winning, before it
+  is returned. Workbox rejects a precache list that names one URL twice with two
+  different revisions (add-to-cache-list-conflicting-entries), which fails the
+  same atomic install a 404 does; a consumer naming a recent page in extra_urls
+  produces exactly that pair, because the page entry carries a Lastmod revision
+  and the extra_urls entry carries the URL itself. First-occurrence-wins keeps
+  the Lastmod revision, which is the one that actually tracks the file.
+
   Returns a slice of dicts which js.Build's params bridge serializes to JSON.
 */}}
 
@@ -42,10 +63,10 @@
 
 {{- if $swCfg.precache.enabled -}}
 
-  {{/* Homepage (.RelPermalink is subpath-aware) */}}
+  {{/* Homepage (resolved through the rendered resource) */}}
   {{- if $swCfg.precache.include_homepage -}}
     {{- with site.Home -}}
-      {{- $list = $list | append (dict "url" .RelPermalink "revision" (printf "%d" .Lastmod.Unix)) -}}
+      {{- $list = $list | append (dict "url" (partial "pwa/lib/resource-url.html" .) "revision" (printf "%d" .Lastmod.Unix)) -}}
     {{- end -}}
   {{- end -}}
 
@@ -53,14 +74,20 @@
   {{- if and $swCfg.precache.include_offline_page $swCfg.offline.enabled -}}
     {{- $offlineRef := printf "/%s" (strings.Trim ($swCfg.offline.fallback_url | default "/offline/") "/") -}}
     {{- with site.GetPage $offlineRef -}}
-      {{- $list = $list | append (dict "url" .RelPermalink "revision" (printf "%d" .Lastmod.Unix)) -}}
+      {{- $list = $list | append (dict "url" (partial "pwa/lib/resource-url.html" .) "revision" (printf "%d" .Lastmod.Unix)) -}}
     {{- end -}}
   {{- end -}}
 
-  {{/* Offline fallback image (precached so the SW catch handler can serve it) */}}
+  {{/* Offline fallback image (precached so the SW catch handler can serve it).
+       Normalized to the same value service-worker.html hands the catch
+       handler, so the precached URL and the matchPrecache lookup agree. */}}
   {{- if and $swCfg.offline.enabled $swCfg.offline.fallback_image -}}
-    {{- $img := $swCfg.offline.fallback_image -}}
-    {{- $list = $list | append (dict "url" $img "revision" $img) -}}
+    {{- $img := partial "pwa/lib/absolute-url.html" (dict
+        "value" $swCfg.offline.fallback_image
+        "key" "params.pwa.sw.offline.fallback_image") -}}
+    {{- with $img -}}
+      {{- $list = $list | append (dict "url" . "revision" .) -}}
+    {{- end -}}
   {{- end -}}
 
   {{/* Manifest -- only when it actually renders, to avoid an atomic-install 404 */}}
@@ -68,11 +95,15 @@
     {{- $manifestParams := $params.manifest | default dict -}}
     {{- $mode := $manifestParams.mode | default $defaults.manifest.mode -}}
     {{- if eq $mode "rfg-static" -}}
-      {{- $href := $manifestParams.href | default "/site.webmanifest" -}}
-      {{- $list = $list | append (dict "url" $href "revision" "manifest") -}}
+      {{- $href := partial "pwa/lib/absolute-url.html" (dict
+          "value" ($manifestParams.href | default "/site.webmanifest")
+          "key" "params.pwa.manifest.href") -}}
+      {{- with $href -}}
+        {{- $list = $list | append (dict "url" . "revision" "manifest") -}}
+      {{- end -}}
     {{- else -}}
       {{- with site.Home.OutputFormats.Get "webappmanifest" -}}
-        {{- $list = $list | append (dict "url" .RelPermalink "revision" (printf "%d" site.Home.Lastmod.Unix)) -}}
+        {{- $list = $list | append (dict "url" (partial "pwa/lib/resource-url.html" .) "revision" (printf "%d" site.Home.Lastmod.Unix)) -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}
@@ -83,7 +114,7 @@
     {{- $excludes := $swCfg.precache.exclude_globs -}}
     {{- $sorted := first $n (sort site.RegularPages "Lastmod" "desc") -}}
     {{- range $sorted -}}
-      {{- $url := .RelPermalink -}}
+      {{- $url := partial "pwa/lib/resource-url.html" . -}}
       {{- $skip := false -}}
       {{- range $excludes -}}
         {{- $token := replaceRE "\\*" "" . -}}
@@ -99,9 +130,23 @@
 
   {{/* Extra URLs (consumer-supplied) */}}
   {{- range $swCfg.precache.extra_urls -}}
-    {{- $list = $list | append (dict "url" . "revision" .) -}}
+    {{- $extra := partial "pwa/lib/absolute-url.html" (dict
+        "value" .
+        "key" "params.pwa.sw.precache.extra_urls[]") -}}
+    {{- with $extra -}}
+      {{- $list = $list | append (dict "url" . "revision" .) -}}
+    {{- end -}}
   {{- end -}}
 
 {{- end -}}
 
-{{- return $list -}}
+{{- $deduped := slice -}}
+{{- $seen := slice -}}
+{{- range $list -}}
+  {{- if not (in $seen .url) -}}
+    {{- $seen = $seen | append .url -}}
+    {{- $deduped = $deduped | append . -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $deduped -}}

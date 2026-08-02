@@ -1,0 +1,20 @@
+# Second overlay for scripts/subpath-check.js, merged AFTER hugo.toml via
+# --config hugo.toml,../canonify.toml, and changing exactly one thing.
+#
+# canonifyURLs is what makes `relURL` stop prepending the baseURL's path: with
+# it on, `relURL "sw.js"` returns "/sw.js" and `relURL ""` returns "/" under
+# baseURL = "https://example.org/docs/", the same output they give at the
+# domain root. Any implementation that normalizes by handing a slash-stripped
+# value to relURL therefore turns into a no-op here, at EVERY call site at
+# once, while every other build in this suite stays green. That is why the
+# module derives the path from site.BaseURL itself, and why this overlay is the
+# only build that can prove it did.
+#
+# Hugo rewrites the URLs in rendered HTML to absolute ones under this setting,
+# which is the setting working as documented, so the pass this overlay drives
+# asserts the artifacts Hugo does NOT rewrite -- manifest.webmanifest, sw.js,
+# and the fingerprinted JS bundles -- where the module's own normalization is
+# the only thing standing between the consumer and a worker that never
+# installs. There is no domain-root counterpart because at the root a correct
+# and a broken implementation emit the same bytes with or without this key.
+canonifyURLs = true

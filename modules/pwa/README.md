@@ -81,6 +81,22 @@ See [`modules/workbox/README.md`](../workbox/README.md) and [`modules/idb/README
 
 Every key below lives in `data/pwa/defaults.toml`. Override any default by declaring the matching key under `[params.pwa]` (or its child tables) in your consumer site's Hugo config. Consumer overrides merge over the shipped defaults; you only need to declare the keys you want to change.
 
+### Paths and subpath deployments (`baseURL` with a path)
+
+Every path key in this module is SITE-ROOT-RELATIVE: a leading slash means "the root of this site", not "the root of the domain". Each one is normalized against your `baseURL` before it is emitted, so a site published at `https://example.org/docs/` registers the service worker at `/docs/sw.js` (where the build actually publishes it), launches the installed app at `/docs/`, and loads every icon from `/docs/`. Hugo's `relURL` and `absURL` do NOT do this on their own -- they resolve a value that already starts with `/` against the protocol and host only, DISCARDING the baseURL's path -- which is why the defaults are written with a leading slash and normalized centrally (`layouts/_partials/pwa/lib/absolute-url.html`) rather than emitted verbatim. That partial reads the path off `site.BaseURL` and prepends it itself rather than delegating to `relURL`, because `relURL` stops prepending the path at all once `canonifyURLs` is on -- which would silently disarm this normalization at every call site at once. Nothing changes for a site whose `baseURL` has no path: `/sw.js` stays `/sw.js`.
+
+URLs that name a page or output format the build actually renders -- the precached homepage, offline page, and recent pages, the precached manifest, and the offline URL the service worker falls back to -- come from the rendered resource instead, through `layouts/_partials/pwa/lib/resource-url.html`. It takes the path component of `.Permalink` rather than using `.RelPermalink`, because `.RelPermalink` ALSO drops the baseURL's path under `canonifyURLs`: Hugo puts that path back when it canonifies rendered HTML, and `sw.js` is not HTML. A precache entry left at `/about/` on a `/docs/` deployment 404s, and Workbox's precache install is atomic, so that one entry takes down the entire service worker.
+
+Normalized keys: `sw_path`, `sw_scope`, `manifest.href`, `manifest.scope`, `manifest.start_url`, `manifest.id`, every `manifest.icons.list[].src`, every `favicon.*_path` (after `favicon.prefix` is applied), `sw.offline.fallback_url`, `sw.offline.fallback_image`, `sw.precache.extra_urls[]`, `sw.bypass.urls[]`, `push.subscribe_url`, `push.unsubscribe_url`, `push.notification_icon`, `push.notification_badge`, and `push.default_click_url`.
+
+Escape hatch: a value that carries its own scheme (`https://...`, `http://...`) or is protocol-relative (`//host/path`) passes through untouched. That is how you point at something that is NOT under your site path -- an icon on a CDN, or a push backend at the domain root or on another origin.
+
+NOT normalized, by design: `sw.caches.api.url_pattern` and `sw.bypass.patterns` are regular expressions rather than paths, so a subpath site writes them to match its own path (`url_pattern = "^/docs/(api|index\\.json|sitemap\\.xml)"`). `sw.precache.exclude_globs` are matched as substrings against rendered page URLs, so `/admin/*` keeps working on any deployment.
+
+`manifest.id` is normalized too, and that needs its own sentence because the W3C spec makes `id` the app's stable identity: change it and the browser treats the manifest as a DIFFERENT app. It is normalized anyway, because an id of `/` resolves against the ORIGIN, so two PWAs installed from two subpaths of one host claim the SAME identity and collide -- carrying the site path is what makes the identity actually identify your app. There is also no working subpath install to orphan: before this normalization every manifest icon 404ed on a subpath site, which disqualifies it for installation. If you must keep a specific historical identity, pin it by writing a full URL (`id = "https://example.org/docs/"`), which passes through untouched.
+
+If you are already on a subpath and were compensating by hand -- writing `sw_path = "/docs/sw.js"`, `start_url = "/docs/"`, `favicon_ico_path = "/docs/favicon.ico"` -- REMOVE the compensation. Those values are normalized now, so a hand-prefixed path becomes `/docs/docs/...`. Write the site-root-relative form (`/sw.js`, `/`, `/favicon.ico`) and let the module apply the baseURL path.
+
 ### Top-level (`params.pwa.*`)
 
 | Key | Type | Default | Purpose |
@@ -88,8 +104,8 @@ Every key below lives in `data/pwa/defaults.toml`. Override any default by decla
 | `version` | string | `"v1"` | Cache version stamp (part of every runtime cache name). Bump to force cache rotation on redeploy. Set to `"auto"` to stamp each build with a millisecond timestamp (rotates caches on every deploy). |
 | `debug` | bool | `false` | Enables verbose `console.log` traces in the page-side bundles. Off in production. |
 | `update_check_seconds` | int | `3600` | Polling interval for `wb.update()` to mitigate Workbox issue #3285. `0` disables polling. |
-| `sw_path` | string | `"/sw.js"` | Service-worker script URL. Must be a same-origin path to win the `scope` argument default. |
-| `sw_scope` | string | `"/"` | Service-worker registration scope. |
+| `sw_path` | string | `"/sw.js"` | Service-worker script URL. Must be a same-origin path to win the `scope` argument default. Site-root-relative: normalized against `baseURL`, so it always points at the worker this build publishes. |
+| `sw_scope` | string | `"/"` | Service-worker registration scope. Site-root-relative: normalized against `baseURL` (a worker published under a subpath cannot claim a wider scope anyway). |
 
 ### Manifest (`params.pwa.manifest.*`)
 
@@ -97,7 +113,7 @@ Every key below lives in `data/pwa/defaults.toml`. Override any default by decla
 | --- | --- | --- | --- |
 | `enabled` | bool | `true` | Set false to suppress the `<link rel="manifest">` tag entirely. |
 | `mode` | string | `"templated"` | `"templated"` (this module emits `/manifest.webmanifest`) or `"rfg-static"` (consumer's static `site.webmanifest` from RealFaviconGenerator). |
-| `href` | string | `"/manifest.webmanifest"` | Path of the manifest file. Override only if you change the output route. |
+| `href` | string | `"/manifest.webmanifest"` | Path of the manifest file, used in `rfg-static` mode. Override only if you change the output route. Site-root-relative: normalized against `baseURL`. |
 | `name` | string | `""` | Falls back to `site.Title` if empty. PWA install prompt uses this. |
 | `short_name` | string | `""` | Home-screen label. Falls back to `name` if empty. |
 | `description` | string | `""` | Falls back to `site.Params.description`. |
@@ -105,9 +121,9 @@ Every key below lives in `data/pwa/defaults.toml`. Override any default by decla
 | `display_override` | array | `["window-controls-overlay", "standalone", "minimal-ui"]` | Modern fallback chain. First-supported wins. |
 | `theme_color` | string | `"#ffffff"` | UI accent color. Use `params.pwa.favicon.theme_color.{light,dark}` for paired values. |
 | `background_color` | string | `"#ffffff"` | Splash screen background. |
-| `scope` | string | `"/"` | URL prefix scope for the PWA install. |
-| `start_url` | string | `"/"` | Launch URL. Set to `"/?source=pwa"` for analytics discrimination. |
-| `id` | string | `"/"` | Stable PWA identity per W3C. **Set once, never change** (changing breaks reinstalls). |
+| `scope` | string | `"/"` | URL prefix scope for the PWA install. Site-root-relative: normalized against `baseURL`, and NOT language-prefixed (a multilingual site that wants a per-language app sets this explicitly). |
+| `start_url` | string | `"/"` | Launch URL. Set to `"/?source=pwa"` for analytics discrimination. Site-root-relative: normalized against `baseURL`. |
+| `id` | string | `"/"` | Stable PWA identity per W3C. **Set once, never change** (changing breaks reinstalls). Site-root-relative: normalized against `baseURL` -- see [Paths and subpath deployments](#paths-and-subpath-deployments-baseurl-with-a-path) for why, and for how to pin a historical value. |
 | `lang` | string | `""` | BCP47 language tag. Falls back to `site.Language.Lang`. |
 | `dir` | string | `""` | Text direction (`ltr`, `rtl`, `auto`). |
 | `categories` | array | `[]` | Optional W3C category tags (see [W3C Manifest spec](https://w3c.github.io/manifest/)). |
@@ -119,6 +135,8 @@ Every key below lives in `data/pwa/defaults.toml`. Override any default by decla
 | `list` | array | `[]` | Explicit `[{src, sizes, type, purpose}]` entries, used verbatim. When empty (the default), icons are derived from the `params.pwa.favicon.icon_*_path` values (prefixed by `params.pwa.favicon.prefix`); legacy filenames omit the maskable icon. |
 
 ### Favicon (`params.pwa.favicon.*`)
+
+Every `*_path` below is composed as `prefix` + path and then normalized against `baseURL` (see [Paths and subpath deployments](#paths-and-subpath-deployments-baseurl-with-a-path)); the same normalization applies to the manifest icons derived from these keys.
 
 | Key | Type | Default | Purpose |
 | --- | --- | --- | --- |
@@ -164,8 +182,10 @@ Every key below lives in `data/pwa/defaults.toml`. Override any default by decla
 | `include_offline_page` | bool | `true` | Include the offline fallback page (`params.pwa.sw.offline.fallback_url`). |
 | `include_manifest` | bool | `true` | Include `/manifest.webmanifest`. |
 | `include_recent_pages` | int | `10` | Top-N most-recently-modified pages by `Lastmod`. `0` disables. |
-| `extra_urls` | array | `[]` | Additional URLs (e.g., `["/about/", "/contact/"]`). |
-| `exclude_globs` | array | `["/admin/*", "/preview/*"]` | Glob patterns to remove from the auto-discovered precache list. |
+| `extra_urls` | array | `[]` | Additional URLs (e.g., `["/about/", "/contact/"]`). Site-root-relative: each is normalized against `baseURL`, because Workbox's precache install is atomic and a single 404 takes down the whole service worker. |
+| `exclude_globs` | array | `["/admin/*", "/preview/*"]` | Glob patterns to remove from the auto-discovered precache list. Matched as substrings against rendered page URLs, so these work unchanged on a subpath deployment. |
+
+The assembled list is deduplicated by URL, first occurrence winning: Workbox rejects a precache list that names one URL twice with two different revisions, so naming a recent page in `extra_urls` would otherwise fail the install. The page's `Lastmod` revision is the one kept.
 
 ### Runtime caches (`params.pwa.sw.caches.*`)
 
@@ -186,22 +206,22 @@ Every cache bucket honors an `origins` array for explicit cross-origin allowlist
 
 | Key | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `urls` | array | `[]` | Exact URLs that bypass the SW entirely (always go to network). |
-| `patterns` | array | `[]` | Regex patterns; useful for `/admin/`, `/account/`, `/api/private/*`. |
+| `urls` | array | `[]` | Exact URLs that bypass the SW entirely (always go to network). Site-root-relative: each is normalized against `baseURL`, then compared against the request's pathname or full href. |
+| `patterns` | array | `[]` | Regex patterns; useful for `/admin/`, `/account/`, `/api/private/*`. NOT normalized (a regex is not a path) -- on a subpath deployment, write the pattern to match your path. |
 
 ### SW offline (`params.pwa.sw.offline.*`)
 
 | Key | Type | Default | Purpose |
 | --- | --- | --- | --- |
 | `enabled` | bool | `true` | Master switch for offline fallback. When false (or when `sw.enabled` is false) the offline page is not generated, not precached, and the catch handler is not wired. |
-| `fallback_url` | string | `"/offline/"` | URL of the offline page; also the rendered page's path. |
-| `fallback_image` | string | `""` | Optional fallback image for failed image requests (empty = no fallback image). When set it is precached and served by the catch handler for failed image requests. |
+| `fallback_url` | string | `"/offline/"` | URL of the offline page; also the rendered page's path. Site-root-relative: the content adapter creates the page there, and the URL handed to the service worker carries the `baseURL` path. |
+| `fallback_image` | string | `""` | Optional fallback image for failed image requests (empty = no fallback image). When set it is precached and served by the catch handler for failed image requests. Site-root-relative: normalized against `baseURL`, so the precached URL and the catch handler's lookup agree. |
 
 ### Offline page
 
 The offline fallback page is generated by a content adapter (`content/_content.gotmpl`) ONLY when both `params.pwa.sw.enabled` and `params.pwa.sw.offline.enabled` are true. A static content file cannot be gated on configuration (Hugo renders content unconditionally), so disabling the service worker or the offline fallback removes the page entirely -- it is never shipped as a dead public page, never precached (which would 404 the SW install), and never appears in `sitemap.xml`. The page is built with `build.list = "never"` and `sitemap.disable = true`, and carries `params.robots = "noindex, nofollow"` for consumer themes that emit a robots meta from `.Params.robots`.
 
-It renders through your `baseof.html` shell (so it matches site styling) using the module layout `layouts/offline/single.html`, whose visible text comes from the `pwa_offline_title` / `pwa_offline_message` / `pwa_offline_retry` i18n keys. Override the look by shadowing `layouts/offline/single.html` in your own site. The page lives at `params.pwa.sw.offline.fallback_url`; the rendered page, the precache entry, and the SW catch handler all resolve to the page's actual `RelPermalink`, so subpath (baseURL with a path) deploys stay consistent.
+It renders through your `baseof.html` shell (so it matches site styling) using the module layout `layouts/offline/single.html`, whose visible text comes from the `pwa_offline_title` / `pwa_offline_message` / `pwa_offline_retry` i18n keys. Override the look by shadowing `layouts/offline/single.html` in your own site. The page lives at `params.pwa.sw.offline.fallback_url`; the rendered page, the precache entry, and the SW catch handler all resolve to the page's actual `RelPermalink`, so subpath (baseURL with a path) deploys stay consistent. If you shadow the content adapter and no such page exists, the catch handler falls back to the configured value normalized against `baseURL` rather than to a raw root-absolute path.
 
 If your site uses its own root `content/_content.gotmpl` content adapter, it shadows the module's (Hugo allows one adapter per directory); in that case add the offline page yourself or call the module's logic from your adapter.
 
@@ -231,12 +251,12 @@ If your site uses its own root `content/_content.gotmpl` content adapter, it sha
 | --- | --- | --- | --- |
 | `enabled` | bool | `false` | Master switch. Off by default; flip to `true` and supply VAPID + URLs to enable. |
 | `vapid_public_key` | string | `""` | Base64url-encoded P-256 public key. **Required** when `enabled = true`. Hugo build hard-fails if empty. |
-| `subscribe_url` | string | `""` | POST URL for `{endpoint, keys: {p256dh, auth}}`. **Required** when `enabled = true`. |
-| `unsubscribe_url` | string | `""` | POST URL for `{endpoint}` deletion. Optional; if empty the unsubscribe button only revokes locally. |
+| `subscribe_url` | string | `""` | POST URL for `{endpoint, keys: {p256dh, auth}}`. **Required** when `enabled = true`. A path is site-root-relative and normalized against `baseURL`; write a full URL for a backend that is not under your site path. |
+| `unsubscribe_url` | string | `""` | POST URL for `{endpoint}` deletion. Optional; if empty the unsubscribe button only revokes locally. Same path handling as `subscribe_url`. |
 | `subscribe_button_selector` | string | `"[data-pwa-subscribe]"` | CSS selector for the subscribe button. |
-| `notification_icon` | string | `"/web-app-manifest-192x192.png"` | Default notification icon. |
-| `notification_badge` | string | `""` | Default notification badge (small monochrome icon for the Android status bar). Empty by default (no badge); set to a 72x72 monochrome PNG you add to `static/`. |
-| `default_click_url` | string | `"/"` | Page to focus when the user clicks a notification with no payload `url`. |
+| `notification_icon` | string | `"/web-app-manifest-192x192.png"` | Default notification icon. Site-root-relative: normalized against `baseURL`. |
+| `notification_badge` | string | `""` | Default notification badge (small monochrome icon for the Android status bar). Empty by default (no badge); set to a 72x72 monochrome PNG you add to `static/`. Site-root-relative: normalized against `baseURL`. |
+| `default_click_url` | string | `"/"` | Page to focus when the user clicks a notification with no payload `url`. Site-root-relative: normalized against `baseURL`. |
 | `focus_existing_tab_on_click` | bool | `true` | If a tab on the same origin is open, focus it instead of opening a new one. |
 
 The unsubscribe button selector is hard-coded to `[data-pwa-unsubscribe]` in v1.0; a configurable `unsubscribe_button_selector` may be added in a future release.
@@ -506,6 +526,7 @@ Push endpoints are user-identifying data per GDPR. Your backend should:
 - Check the browser DevTools Application -> Service Workers panel for the exact error.
 - HTTPS or `localhost` is required; `http://192.168.x.x` will fail.
 - Check the Hugo build log for `js.Build` errors in `register.ts` or `service-worker/index.ts`.
+- On a site whose `baseURL` has a path, confirm the registration URL matches the published worker: view source and compare `<!-- pwa-sw: ... -->` with the URL the registration script requests. Both should carry your path (`/docs/sw.js`). If you hand-prefixed `sw_path` or `sw_scope`, remove the prefix -- see [Paths and subpath deployments](#paths-and-subpath-deployments-baseurl-with-a-path).
 
 ### "Install button never appears"
 
@@ -548,6 +569,11 @@ A 9-row Playwright validation matrix lives in [`test/`](test/). Coverage:
 | 8   | Update flow banner    |
 | 9   | Lighthouse PWA audit  |
 
-Row 7 (offline rendering) asserts that `/offline/` renders the module layout (heading + retry button) and is excluded from `sitemap.xml`. A separate build-level check, `npm run test:offline-gating` (in `test/`), builds the fixture with the offline fallback enabled and disabled and asserts that the offline page, its precache entry, and the SW catch handler appear only when enabled.
+Row 7 (offline rendering) asserts that `/offline/` renders the module layout (heading + retry button) and is excluded from `sitemap.xml`.
+
+Two build-level checks (in `test/`) assert on Hugo's output instead of a browser, so they need no Playwright install and bind no ports:
+
+- `npm run test:offline-gating` builds the fixture with the offline fallback enabled and disabled and asserts that the offline page, its precache entry, and the SW catch handler appear only when enabled.
+- `npm run test:subpath` builds the fixture under `baseURL = https://example.org/docs/` and under a root baseURL, and asserts that the registered service-worker URL and scope, the manifest `scope` / `start_url` / `id`, every icon `src`, every `<link>` href, and every precache URL carry the baseURL path in the first build and stay un-prefixed in the second. See [Paths and subpath deployments](#paths-and-subpath-deployments-baseurl-with-a-path).
 
 See [`test/README.md`](test/README.md) for matrix usage instructions.
