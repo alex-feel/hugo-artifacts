@@ -37,32 +37,26 @@ That is the minimum config. The defaults shipped in `data/pwa/defaults.toml` tur
 
 ## Installation
 
-The repository is a public multi-module monorepo. The `pwa` chain is `modules/pwa` plus the sibling wrapper modules `modules/workbox` and `modules/idb`, which vendor-mount the `+incompatible` upstreams `github.com/GoogleChrome/workbox` v7.4.1 and `github.com/jakearchibald/idb` v8.0.3 for `js.Build`. Those upstreams ARE fetchable over the standard Go module proxy (`+incompatible` is exactly Go's convention for a tagged repository that has no root `go.mod`; a plain `go mod download github.com/GoogleChrome/workbox@v7.4.1+incompatible` succeeds with no local checkout). The only resolution wrinkle is that the wrapper modules reference each other with placeholder pseudo-versions (`v0.0.0-00010101000000-000000000000`) that resolve only if you outrank them -- which the recipe in option A does. Pick the option that matches your workflow.
+The repository is a public multi-module monorepo. The `pwa` chain is `modules/pwa` plus the sibling wrapper modules `modules/workbox` and `modules/idb`, which vendor-mount the `+incompatible` upstreams `github.com/GoogleChrome/workbox` v7.4.1 and `github.com/jakearchibald/idb` v8.0.3 for `js.Build`. Every edge of that chain is a real, fetchable version -- the wrappers reference each other at commit pseudo-versions of this repository, and `+incompatible` is exactly Go's convention for a tagged repository that has no root `go.mod` -- so you import ONE module and the rest resolves transitively. Pick the option that matches your workflow.
 
-### A. Production / CI -- direct `require`s (recommended; no vendoring)
+### A. Production / CI -- one `hugo mod get` (recommended; no vendoring)
 
-Import only `modules/pwa` (by GitHub path) in your site config, then add all three chain modules as direct `require`s in your site `go.mod`, each pinned to a real commit pseudo-version:
+Import only `modules/pwa` (by GitHub path) in your site config, then:
 
 ```bash
 hugo mod get github.com/alex-feel/hugo-artifacts/modules/pwa
-hugo mod get github.com/alex-feel/hugo-artifacts/modules/workbox
-hugo mod get github.com/alex-feel/hugo-artifacts/modules/idb
 hugo mod tidy
 ```
 
-Go's minimal-version selection ranks each real commit pseudo-version ABOVE the wrapper modules' internal placeholders, so the placeholders are never fetched and the `+incompatible` upstreams resolve normally. This needs NO `replace`, NO `_vendor/`, NO workspace, and NO release tags, and resolves identically on a developer machine and a clean Cloudflare Pages CI runner. `hugo mod get -u ./... && hugo mod tidy` keeps the chain at the latest commit. (Once a tag like `modules/pwa/v1.0.0` is published, `hugo mod get github.com/alex-feel/hugo-artifacts/modules/pwa@modules/pwa/v1.0.0` works too.)
-
-Your site `go.mod` then contains (commit pseudo-versions illustrative):
+Your site `go.mod` then contains one direct require (commit pseudo-version illustrative), and `modules/workbox`, `modules/idb`, and both upstreams appear as indirect requirements you never maintain by hand:
 
 ```text
-require (
-  github.com/alex-feel/hugo-artifacts/modules/pwa v0.0.0-20260627165546-eea53954449c
-  github.com/alex-feel/hugo-artifacts/modules/workbox v0.0.0-20260627165546-eea53954449c
-  github.com/alex-feel/hugo-artifacts/modules/idb v0.0.0-20260627165546-eea53954449c
-)
+require github.com/alex-feel/hugo-artifacts/modules/pwa v0.0.0-20260802210223-6fb48a799944
 ```
 
-If a combined `get` of `modules/pwa` alone reports `invalid version: unknown revision 000000000000`, that is the placeholder sibling -- run `hugo mod get` for the unresolved module directly, as shown above.
+This needs NO direct requires for the siblings, NO `replace`, NO `_vendor/`, NO workspace, and NO release tags, and resolves identically on a developer machine and a clean CI runner. `hugo mod get -u ./... && hugo mod tidy` moves the chain to the latest commit.
+
+If you are upgrading from an earlier release of this module, delete the `modules/workbox` and `modules/idb` direct requires your site was carrying and run `hugo mod tidy`; they were a workaround for placeholder versions this chain no longer ships. An `invalid version: unknown revision 000000000000` error means your site is still resolving an older `modules/pwa` that predates this change -- move that pin forward.
 
 ### B. Local development -- `hugo.work` (live-edit the modules)
 
@@ -73,11 +67,9 @@ go 1.22
 
 use .
 use ../hugo-artifacts/modules/pwa
-use ../hugo-artifacts/modules/workbox
-use ../hugo-artifacts/modules/idb
 ```
 
-All three modules appear in the workspace because the chain references them transitively. Add `hugo.work` to your site's `.gitignore`; the `use` paths are machine-specific. A `[module.replacements]` block pointing at the same local paths achieves the same effect; keep replacements out of production config.
+List only the modules you intend to EDIT; anything left out still resolves from its recorded commit pseudo-version, so add `use ../hugo-artifacts/modules/workbox` (and `modules/idb`) only when you are changing the mount tables too. Add `hugo.work` to your site's `.gitignore`; the `use` paths are machine-specific. A `[module.replacements]` block pointing at the same local paths achieves the same effect; keep replacements out of production config.
 
 ### C. Hermetic CI -- `hugo mod vendor` (optional)
 
@@ -533,7 +525,7 @@ Push endpoints are user-identifying data per GDPR. Your backend should:
 
 ### "Workbox `module not found` during Hugo build"
 
-- The `pwa` chain did not fully resolve, so the `modules/workbox` / `modules/idb` mounts are missing. Add `modules/workbox` and `modules/idb` as direct `require`s in your site `go.mod` (Installation -> option A: `hugo mod get` each, then `hugo mod tidy`). A `module.*not found` or `invalid version: unknown revision 000000000000` error names the unresolved chain module.
+- The `pwa` chain did not fully resolve, so the `modules/workbox` / `modules/idb` mounts are missing. Run `hugo mod graph` and read which chain module is unresolved: a `module.*not found` names a missing mount, and an `invalid version: unknown revision 000000000000` means the site is pinned to a `modules/pwa` that predates the resolvable-chain change -- move that pin forward with `hugo mod get -u github.com/alex-feel/hugo-artifacts/modules/pwa && hugo mod tidy` (Installation -> option A).
 
 ### "Cache is not busted on redeploy"
 

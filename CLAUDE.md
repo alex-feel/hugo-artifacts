@@ -95,47 +95,33 @@ For an end-to-end worked example of a module in this repo (shortcode with `data/
 
 ## Consuming modules that wrap non-Go upstreams
 
-Some modules in this repo wrap a non-Go-aware upstream (a JavaScript repo with no `go.mod` at its root, declared in the wrapper's `go.mod` as `vX.Y.Z+incompatible`) and split into sibling wrapper modules that reference EACH OTHER with PLACEHOLDER pseudo-versions (`v0.0.0-00010101000000-000000000000`). The `pwa` chain is the first such case: `modules/pwa` requires `modules/workbox`, which requires `modules/idb`; `modules/workbox` wraps `github.com/GoogleChrome/workbox` v7.4.1+incompatible and `modules/idb` wraps `github.com/jakearchibald/idb` v8.0.3+incompatible (the latter is needed by `workbox-expiration` and `workbox-background-sync`).
+Some modules in this repo wrap a non-Go-aware upstream (a JavaScript repo with no `go.mod` at its root, declared in the wrapper's `go.mod` as `vX.Y.Z+incompatible`) and split into sibling wrapper modules that require EACH OTHER. The `pwa` chain is the first such case: `modules/pwa` requires `modules/workbox`, which requires `modules/idb`; `modules/workbox` wraps `github.com/GoogleChrome/workbox` v7.4.1+incompatible and `modules/idb` wraps `github.com/jakearchibald/idb` v8.0.3+incompatible (the latter is needed by `workbox-expiration` and `workbox-background-sync`).
 
-The `+incompatible` upstreams ARE fetchable by `hugo mod get` over the standard Go module proxy -- `+incompatible` is exactly Go's convention for a tagged repository that lacks a root `go.mod`, and a plain `go mod download github.com/GoogleChrome/workbox@v7.4.1+incompatible` succeeds against proxy.golang.org with no local checkout, replacement, or vendoring (verified). The only real consumption blocker is the PLACEHOLDER inter-module pseudo-version: it is a sentinel that resolves only via `replace`/workspace and can never be fetched, so importing the top module alone fails with `invalid version: unknown revision 000000000000` for the unresolved sibling.
+EVERY edge of such a chain MUST name a real, fetchable version. The `+incompatible` upstreams are fetchable by `hugo mod get` over the standard Go module proxy -- `+incompatible` is exactly Go's convention for a tagged repository that lacks a root `go.mod`, and a plain `go mod download github.com/GoogleChrome/workbox@v7.4.1+incompatible` succeeds against proxy.golang.org with no local checkout, replacement, or vendoring (verified). Each INTRA-REPOSITORY require names a commit pseudo-version of this repository, the same form a consumer pins, which proxy.golang.org serves for a subdirectory module exactly as it serves any third-party dependency (verified). A consumer therefore imports ONLY the top module and Go resolves the rest transitively:
 
-The supported recipe -- no `replace`, no `_vendor/`, no workspace, no tags, verified on Cloudflare Pages CI -- is:
-
-1. Import ONLY the top-level module (here `modules/pwa`) in the consumer config, by GitHub path, in every environment.
-2. Add EVERY module in the chain -- the top module AND each sibling wrapper it pulls -- as a direct `require` in the consumer `go.mod`, pinned to a real commit pseudo-version. Run `hugo mod get <module-path>` per module; if a combined `get` of the top module alone reports the `000000000000` placeholder, add the unresolved sibling directly too.
-3. Build. Go's minimal-version selection ranks each real commit pseudo-version ABOVE the modules' internal placeholders, so the placeholders are never fetched and the `+incompatible` upstreams fetch normally. `hugo mod tidy` preserves the override; `hugo mod get -u ./... && hugo mod tidy` keeps the chain at latest.
-
-Example consumer `go.mod` requires (commit pseudo-versions illustrative):
-
-```text
-require (
-  github.com/alex-feel/hugo-artifacts/modules/pwa v0.0.0-20260627165546-eea53954449c
-  github.com/alex-feel/hugo-artifacts/modules/workbox v0.0.0-20260627165546-eea53954449c
-  github.com/alex-feel/hugo-artifacts/modules/idb v0.0.0-20260627165546-eea53954449c
-)
+```bash
+hugo mod get github.com/alex-feel/hugo-artifacts/modules/pwa
+hugo mod tidy
 ```
 
-`[module.replacements]` and `hugo.work` remain useful for LOCAL development against a local checkout, and `hugo mod vendor` (committed `_vendor/`) is a valid choice when a consumer wants a fully hermetic, network-free CI build -- but none of the three is REQUIRED to consume the chain.
+NEVER ship the PLACEHOLDER pseudo-version `v0.0.0-00010101000000-000000000000` in a module's `go.mod`. It is the sentinel Go writes for a module resolved through a workspace or a `replace`, it can never be fetched, and a published module carrying one cannot be imported on its own: the build dies with `invalid version: unknown revision 000000000000` for the unresolved sibling, and the only remedy available to the consumer is to add that sibling as a direct `require` of its own. That compensating block is load-bearing, is indistinguishable from an ordinary require list, and nothing in Go tooling protects it -- any `go mod` invocation, merge resolution, or cleanup script that rewrites `go.mod` silently destroys the module graph. A test fixture is the ONE place the placeholder is correct, because every fixture pairs it with a `replace` pointing at the local directory, so the version is never fetched.
 
-Maintainer root-cause follow-up (ideal): tagging the chain lets a consumer `hugo mod get <top-module>@<tag>` and resolve the whole chain transitively, dropping the direct-`require` step above. It is deferred for now; until the chain is tagged, the direct-`require` recipe is the supported path. See "Tagging a release" -> "Tagging the wrapped-upstream chains (deferred)" for the plan and automation options.
+Because a commit cannot name its own hash, a sibling pin is always moved by a FOLLOW-UP commit, and a chain is edited in DEPENDENCY ORDER: commit the change to `modules/idb`, then run `npm run check:pins -- --fix` and commit the rewritten `modules/workbox` require, then do the same for `modules/pwa`. `npm run check:pins` -- part of `npm run check`, and a CI step -- fails when an intra-repository require is the placeholder or lags behind its sibling's latest commit, so a forgotten bump becomes a red pull request instead of consumers silently resolving stale content.
+
+A pull request that moves a pin MUST be merged in a way that PRESERVES its individual commits (a merge commit, or a rebase), never SQUASHED. A pin names a commit, and squashing replaces the named commit with a new one; the module proxy can then fail to resolve a version that resolved a moment earlier, for consumers only, with nothing in the repository looking wrong. `npm run check:pins` does catch the aftermath on `main` -- the pin now lags the squash commit -- so if it ever happens, re-point the pin at the squash commit and push.
+
+`[module.replacements]` and `hugo.work` remain useful for LOCAL development against a local checkout, and `hugo mod vendor` (committed `_vendor/`) is a valid choice when a consumer wants a fully hermetic, network-free CI build -- but none of the three is REQUIRED to consume the chain.
 
 When authoring a new module that wraps a non-Go upstream, document this consumption recipe in the module README (Installation section) and surface it in the root `README.md` Modules section AND in this section.
 
 ## Tagging a release
 
+The repository carries NO tags, deliberately. Every module -- including each edge of the `pwa` chain -- is consumed at a commit pseudo-version, which resolves transitively and needs no release process. Should a module ever warrant a released version, the tag is subdirectory-prefixed and the sibling requires of any chain it belongs to are bumped in dependency order alongside it:
+
 ```bash
 git tag <module-path>/vX.Y.Z     # e.g. themes/starter/v1.0.0
 git push origin <module-path>/vX.Y.Z
 ```
-
-### Tagging the wrapped-upstream chains (deferred)
-
-The `pwa` chain (`modules/pwa` -> `modules/workbox` -> `modules/idb`) is intentionally left UNTAGGED for now; consumers resolve it via the direct-`require` recipe in "Consuming modules that wrap non-Go upstreams" above. Tagging it is the ideal end state -- once the chain is tagged with real inter-module `go.mod` requires, a consumer needs only `hugo mod get github.com/alex-feel/hugo-artifacts/modules/pwa@modules/pwa/v1.0.0` and the chain resolves transitively, with no placeholder workaround. Adopt this once the release process can do it transparently and reliably; until then the direct-`require` recipe is the supported path.
-
-When adopting it:
-
-1. Release in DEPENDENCY ORDER, bumping each wrapper's sibling `require` to the sibling's new tag as you go: tag `modules/idb/vX`, then point `modules/workbox/go.mod`'s idb `require` at it and tag `modules/workbox/vX`, then point `modules/pwa/go.mod`'s workbox `require` at it and tag `modules/pwa/vX`.
-2. Automate it rather than tagging by hand. Release Please fits: manifest mode with one component per module, the `go` release type, per-module subdirectory tags via `include-component-in-tag` plus `tag-separator = "/"` (a known sharp edge for Go -- verify against current Release Please docs), and the generic `extra-files` updater (annotate the inter-module `require` lines with `x-release-please-version`) to bump the cross-references, since there is no built-in go-workspace plugin; `linked-versions` keeps the modules in lockstep. A lighter alternative is a tag-on-merge CI step that computes the next per-module version and changelog, bumps the sibling `require`s, and pushes `modules/<module>/vX.Y.Z`. GoReleaser's monorepo mode emits the right tag shape too but is heavier than needed for these build-free template modules.
 
 ## Formatting
 
