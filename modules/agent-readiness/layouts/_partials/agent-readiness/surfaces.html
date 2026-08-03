@@ -11,13 +11,14 @@
       {{ end }}
 
   Return value: an ordered slice of dicts, each {key, url, label} --
-  key "llms" (the llms.txt link index), then "facts" (the /about.md facts
+  key "llms" (the compact llms.txt link index), then "llms_index" (the
+  complete /llms-index.txt link index), then "facts" (the /about.md facts
   document), then "skills" (the Agent Skills index at
   /.well-known/agent-skills/index.json). Every url is ABSOLUTE. Every label
   is the module's i18n-resolved display string (agent_surface_llms,
-  agent_surface_facts, agent_surface_skills), so a consumer renders without
-  authoring labels. An entry is present ONLY when its document publishes;
-  the slice may be empty. ONE terminal return.
+  agent_surface_llms_index, agent_surface_facts, agent_surface_skills), so a
+  consumer renders without authoring labels. An entry is present ONLY when
+  its document publishes; the slice may be empty. ONE terminal return.
 
   PUBLISHED, not merely wired. Each surface's output format answers "is the
   format wired in the consumer's [outputs]", while its renderer decides
@@ -28,6 +29,11 @@
     page's own language home. An enabled llms.html always emits at least
     its H1 line, so enabled-and-wired IS published. Per-language file
     (/llms.txt, /ru/llms.txt), so the answer follows the page's site.
+  - llms_index: the same three gates plus llms_index.enable, on the
+    llmsindex format. The gate set lives in lib/llms-index-url.html --
+    shared with the derived `## Start here` entry in llms.html, so the two
+    callers cannot drift apart -- and that partial also carries the
+    warn-once for the enabled-but-unwired case.
   - facts: cfg.enable AND facts.enable AND the agentfacts format wired on
     the page's own language home; the same enabled-means-bytes reasoning,
     and likewise per-language.
@@ -65,6 +71,10 @@
     {{- with $page.Site.Home.OutputFormats.Get "llmstxt" -}}
       {{- $surfaces = $surfaces | append (dict "key" "llms" "url" .Permalink "label" $cfg.i18n.surface_llms) -}}
     {{- end -}}
+  {{- end -}}
+
+  {{- with partial "agent-readiness/lib/llms-index-url.html" (dict "page" $page "cfg" $cfg) -}}
+    {{- $surfaces = $surfaces | append (dict "key" "llms_index" "url" . "label" $cfg.i18n.surface_llms_index) -}}
   {{- end -}}
 
   {{- if and $cfg.enable $cfg.facts.enable -}}

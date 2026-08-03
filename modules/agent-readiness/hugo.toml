@@ -13,6 +13,25 @@
     isPlainText = true
     notAlternative = true
 
+  # Publishes /llms-index.txt, the COMPLETE link index that /llms.txt names
+  # from its `## Start here` section. Same mediaType reasoning as llmstxt
+  # above: text/plain's suffix is `txt`, so baseName 'llms-index' publishes
+  # llms-index.txt with no header override.
+  #
+  # The NAME is chosen against `llms-full.txt`, whose qualifier slot names
+  # CONTENT VOLUME -- platforms that publish it (and the llms-small/medium/full
+  # family beside it) mean a document carrying the linked pages' bodies, which
+  # this module still does not ship. `index` names the FORM instead: links,
+  # complete. `root` is intentionally NOT set, so a multilingual site gets
+  # /llms-index.txt and /ru/llms-index.txt rather than one path every language
+  # overwrites -- exactly as llmstxt does, because the two documents come from
+  # one page walk and must publish per language together.
+  [outputFormats.llmsindex]
+    mediaType = 'text/plain'
+    baseName = 'llms-index'
+    isPlainText = true
+    notAlternative = true
+
   # Publishes /about.md, the one-fetch facts index. text/markdown's first
   # suffix is `md`, so baseName 'about' publishes about.md. `root` is
   # intentionally NOT set, so a multilingual site gets /about.md and

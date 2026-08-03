@@ -1,0 +1,63 @@
+{{/*
+  agent-readiness/lib/section-pages.html -- utility (LIB tier).
+
+  Purpose: THE section-membership test. Given one already-normalized `section`
+  value, it returns the pages of the shared page walk that belong to it -- and
+  it is the only place that test exists, so the compact /llms.txt, the complete
+  /llms-index.txt and /about.md cannot disagree about what a section holds.
+  Documents built from separate copies of this loop would agree on the day they
+  were written and drift on the day one of them was edited; that drift is
+  precisely the objection the two-document split has to answer, so the
+  membership test is shared rather than duplicated. All three renderers call
+  it -- llms.html for both indexes, facts.html for the facts document.
+
+  Membership is equality with the section path, a segment-boundary prefix
+  match under it, or the page's own .Section matching the entry -- the same
+  three tests the module has always applied, and the reason a bare `blog` and
+  a slashed `/blog/` resolve identically once config.html has normalized them.
+
+  IT FETCHES THE PAGE LIST ITSELF rather than accepting one. The caller
+  already holds the list, so passing it would look natural -- and would be a
+  trap: partialCached keys on the template name and the variadic keys ONLY,
+  never on the context, so a second caller handing over a different list would
+  be served the first caller's result with no warning and no error. Fetching
+  from (page, cfg) inside takes the LIST out of the caller's hands.
+
+  It does NOT close the cache hazard entirely, and a reader must not believe
+  it does: `cfg` still travels in the context rather than the key, here and in
+  the page-list.html call below, so two callers that resolved cfg differently
+  would still share one cache entry silently. The module's fourth cascade tier
+  -- call-site `args` -- can change `sections`, `exclude_noindex` and
+  `search_page_path`, so that divergence is reachable in principle. Today
+  every caller resolves cfg the same way (config.html with an empty `args`, on
+  the home page), which is the invariant that makes this safe. A caller that
+  needs a different cfg must add a cfg discriminator to BOTH keys rather than
+  assuming the context protects it.
+
+  Expected context (dict):
+  - .page    (Page)   - The home page rendering the document.
+  - .cfg     (dict)   - The resolved config from agent-readiness/config.html.
+  - .section (string) - The entry's normalized section path, e.g. "/blog".
+
+  Return value: the ordered slice of Pages the entry admits (possibly empty),
+  in the shared page walk's own order. ONE terminal return.
+
+  Cache it on the section AND the language:
+    partialCached "agent-readiness/lib/section-pages.html"
+      (dict "page" $page "cfg" $cfg "section" $s) $s site.Language.Name
+*/}}
+
+{{- $page := .page -}}
+{{- $cfg := .cfg -}}
+{{- $section := .section -}}
+
+{{- $all := partialCached "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) site.Language.Name -}}
+{{- $items := slice -}}
+{{- range $all -}}
+  {{- $p := .Path -}}
+  {{- if or (eq $p $section) (hasPrefix $p (printf "%s/" $section)) (eq (printf "/%s" .Section) $section) -}}
+    {{- $items = $items | append . -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $items -}}

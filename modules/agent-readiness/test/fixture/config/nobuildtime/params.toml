@@ -1,0 +1,31 @@
+# The `nobuildtime` environment: the three per-surface `build_time` switches
+# set false on top of the default configuration, and nothing else.
+#
+# It is the only build in which those switches decide anything. Everywhere
+# else the stamp is on, so deleting a `build_time` conjunct from the twin
+# builder, from llms.html or from facts.html would change no published byte
+# and leave the whole suite green -- the failure shape that made `off`,
+# `nolinkmd` and `nosectionpages` separate environments too.
+#
+# All three keys, one environment, because they are one concept: "this
+# consumer diffs published output to decide whether to deploy, and a stamp
+# that changes every build defeats that". A consumer who wants the stamp on
+# some surfaces and not others sets the keys independently -- they are three
+# switches for exactly that reason, mirroring the two independent `license`
+# switches over one underlying fact.
+#
+# The value itself is unaffected: the public build-time.html partial keeps
+# returning the build's timestamp here, because these keys govern what the
+# module WRITES, not what it computes. The dump surface asserts that, so a
+# guard accidentally wired into the partial rather than into its callers
+# would be caught.
+[agent]
+
+  [agent.markdown]
+    build_time = false
+
+  [agent.llms]
+    build_time = false
+
+  [agent.facts]
+    build_time = false

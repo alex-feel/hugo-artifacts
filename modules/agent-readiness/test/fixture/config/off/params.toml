@@ -1,5 +1,5 @@
 # The `off` environment: the master switch alone, set false,
-# with all four output formats still wired in [outputs].
+# with all five output formats still wired in [outputs].
 #
 # It exists because `enable` was, until this build, reachable by nothing. The
 # switch gates all six renderers -- page-list.html, robots.html,

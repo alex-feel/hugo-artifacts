@@ -26,6 +26,7 @@ test('defaults.toml declares every table the cascade merges', () => {
     'robots',
     'markdown',
     'llms',
+    'llms_index',
     'facts',
     'skills_index',
     'frontmatter',
@@ -70,6 +71,34 @@ test('facts sections carry no limit key, by design', () => {
   assert.ok(!Object.prototype.hasOwnProperty.call(facts, 'limit'));
 });
 
+test('the complete link index declares nothing but its own enable switch', () => {
+  // The two documents come from ONE page walk, and the whole force of that
+  // claim is that the complete index has no configuration of its own to drift
+  // from the compact file's: its H1, summary, license line, build-time line,
+  // prose, `Optional` entries and section list all come from [llms]. A second
+  // `title` or `sections` key here would be the drift the split disarms.
+  const {llms_index: llmsIndex} = loadToml('defaults.toml');
+  assert.deepEqual(Object.keys(llmsIndex), ['enable']);
+  assert.equal(llmsIndex.enable, true);
+});
+
+test('the selection principle ships one default flag name and no default cap', () => {
+  // `flag` is what `select = 'flagged'` reads when an entry names no key of
+  // its own, and it has to be declared here rather than defaulted in a
+  // template: a key absent from every tier normalizes to false.
+  const {llms} = loadToml('defaults.toml');
+  assert.equal(llms.flag, 'llms_featured');
+  // No shipped `limit`, `select` or `order`: they are per-entry keys inside
+  // [[llms.sections]], and a top-level default would silently cap or reorder
+  // every section of every consuming site on the build after they upgraded.
+  for (const key of ['limit', 'select', 'order']) {
+    assert.ok(
+      !Object.prototype.hasOwnProperty.call(llms, key),
+      `[llms] must not ship a site-wide ${key}`,
+    );
+  }
+});
+
 test('bots.toml parses and holds exactly 21 entries', () => {
   const bots = loadToml('bots.toml');
   assert.equal(Object.keys(bots).length, 21);
@@ -95,13 +124,15 @@ test('every bots.toml entry carries a token and a vendor', () => {
   }
 });
 
-test('i18n ships the same twelve keys in every language', () => {
+test('i18n ships the same fifteen keys in every language', () => {
   const en = parse(readFileSync(join(moduleRoot, 'i18n', 'en.toml'), 'utf8'));
   const ru = parse(readFileSync(join(moduleRoot, 'i18n', 'ru.toml'), 'utf8'));
   const expected = [
     'agent_facts_contact_heading',
     'agent_facts_identity_heading',
     'agent_facts_title',
+    'agent_llms_index_entry_name',
+    'agent_llms_index_entry_note',
     'agent_llms_start_heading',
     'agent_section_pages_heading',
     'agent_sitemap_heading_llms',
@@ -110,6 +141,7 @@ test('i18n ships the same twelve keys in every language', () => {
     'agent_skills_entry_note',
     'agent_surface_facts',
     'agent_surface_llms',
+    'agent_surface_llms_index',
     'agent_surface_skills',
   ];
   assert.deepEqual(Object.keys(en).sort(), expected);

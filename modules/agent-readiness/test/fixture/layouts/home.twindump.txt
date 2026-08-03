@@ -1,18 +1,40 @@
 {{- /*
-  Fixture-only dump of the module's two PUBLIC partials, published as
+  Fixture-only dump of the module's three PUBLIC partials, published as
   /twindump.txt per language by the twindump output format the fixture
-  config defines. Two blocks, tab-separated because a logical page path
+  config defines. Three blocks, tab-separated because a logical page path
   can carry any other character:
 
     <page .Path>\t<twin-url.html result, "" when no twin publishes>
     == surfaces ==
     <surface key>\t<surface url>
+    == build time ==
+    build_time\t<build-time.html result>
+    store\t<the module's own hugo.Store entry for the stamp>
 
   The first block covers EVERY page of this language's site -- home,
   sections, regular pages, and taxonomy/term pages when present -- so the
   specs can assert the non-empty results equal exactly the published twin
   set, in both directions. The second block is the surfaces.html
   enumeration for the same site.
+
+  The third block is the only channel the suite has for the value
+  build-time.html EXPOSES, as opposed to the values the module writes into
+  its own documents. Issue-level requirement: the stamp in every twin must
+  equal the one a consuming site would stamp its own surfaces with, and only
+  a dump of the partial's return value can observe the latter. It is
+  published per language on purpose -- partialCached keeps a separate cache
+  per language, so the two dumps of a multilingual build are exactly where a
+  split value would show.
+
+  The `store` line is a deliberate WHITE-BOX probe of the module's internal
+  hugo.Store key, and it earns its coupling. Comparing the exposed value
+  across documents cannot tell a correct build from a racing one on a fixture
+  that builds in under a second: every per-call `now` lands in the same
+  second, so a mechanism reduced to a bare `now` produces one identical value
+  everywhere and passes every equality assertion in the suite. What that
+  mutation cannot fake is the store entry -- a mechanism that never writes the
+  key leaves this line empty. Renaming the key in the module is a deliberate
+  act and must update this line with it.
 */ -}}
 {{- range site.Pages -}}
   {{- printf "%s\t%s\n" .Path (partial "agent-readiness/twin-url.html" .) -}}
@@ -21,3 +43,6 @@
 {{- range partial "agent-readiness/surfaces.html" . -}}
   {{- printf "%s\t%s\n" .key .url -}}
 {{- end -}}
+{{- printf "== build time ==\n" -}}
+{{- printf "build_time\t%s\n" (partial "agent-readiness/build-time.html" .) -}}
+{{- printf "store\t%s\n" (hugo.Store.Get "agent-readiness:build-time" | default "") -}}

@@ -1,0 +1,49 @@
+{{/*
+  agent-readiness/lib/llms-entry.html -- utility (LIB tier).
+
+  Purpose: render ONE page as a `- [name](url): note` bullet for the llms.txt
+  family. Both documents the module publishes from one page walk -- the
+  compact /llms.txt and the complete /llms-index.txt -- render their bullets
+  through this partial, so the link shape, the twin substitution and the
+  escaping cannot differ between them.
+
+  Absolute URLs: these documents are routinely ingested detached from the URL
+  they were fetched from, where a relative path has no origin to resolve
+  against.
+
+  The twin URL is substituted only when the twin will actually EXIST.
+  `.OutputFormats.Get "markdown"` answers "is the format wired for this page
+  kind", which is a question about the consumer's [outputs] lists, NOT about
+  whether this module rendered anything into it -- markdown-page.html is the
+  sole producer and it emits nothing when the switch is off, which makes Hugo
+  publish no file. Consulting the format alone would therefore list a URL that
+  404s for every page on a site that turned the twins off but left `markdown`
+  wired, which is exactly the configuration the module tells consumers to use.
+
+  Every interpolated value goes through the shared line-safety routines: the
+  documents are line-oriented, so a value-borne line break is a structure
+  change rather than text, and an unescaped bracket in a title or parenthesis
+  in a destination ends the link's own syntax early.
+
+  Expected context (dict):
+  - .item (Page) - The page to render.
+  - .cfg  (dict) - The resolved config from agent-readiness/config.html.
+
+  Return value: the bullet line (string), with no trailing newline. ONE
+  terminal return.
+*/}}
+
+{{- $item := .item -}}
+{{- $cfg := .cfg -}}
+
+{{- $url := $item.Permalink -}}
+{{- if and $cfg.llms.link_markdown $cfg.markdown.enable -}}
+  {{- with $item.OutputFormats.Get "markdown" -}}{{- $url = .Permalink -}}{{- end -}}
+{{- end -}}
+
+{{- $line := printf "- %s" (partial "agent-readiness/lib/markdown-link.html" (dict "name" $item.Title "url" $url)) -}}
+{{- with $item.Description -}}
+  {{- $line = printf "%s: %s" $line (partial "agent-readiness/lib/inline.html" .) -}}
+{{- end -}}
+
+{{- return $line -}}

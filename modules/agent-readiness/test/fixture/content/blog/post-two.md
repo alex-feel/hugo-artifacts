@@ -10,6 +10,13 @@ description: |-
   A second post so section listings have more than one item.
   - a continuation line that begins with a list marker
 date: 2026-03-01T09:00:00Z
+# The ONLY page in the fixture carrying an authored weight, and the whole
+# reason the three `order` values are distinguishable. Hugo's own page order
+# is weight ascending with UNWEIGHTED pages LAST, so this post heads the
+# default listing while `order = 'date'` and `order = 'title'` each put a
+# different post first. Without it, all three orderings would agree and an
+# `order` spec would prove nothing.
+weight: 1
 "probe\nkey": 'probe value'
 categories: ['testing']
 tags: ['gamma']

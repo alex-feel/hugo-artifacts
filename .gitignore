@@ -62,3 +62,11 @@ _vendor/
 # Lint / format caches
 .eslintcache
 .prettiercache
+
+# Mutation-testing backups. A spec is proven non-vacuous by mutating the
+# template it covers and confirming the suite turns red, and the safe way to
+# undo that is a file copy rather than `git checkout --`, which would discard
+# uncommitted work along with the mutant. Those copies land inside the module's
+# own mounted layouts/ tree, so an untracked one is a file that could ship
+# inside the published module.
+*.bak

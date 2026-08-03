@@ -1,0 +1,25 @@
+# The `llmsindexoff` environment: the ONE key `llms_index.enable = false` on
+# top of the default configuration, with the `llmsindex` format still WIRED in
+# [outputs] home.
+#
+# It is the complete index's counterpart of `llmsoff`, and it exists for the
+# same reason that build does: an output format being wired is not the same as
+# this module having rendered anything into it. With the switch off,
+# home.llmsindex.txt emits zero bytes and Hugo publishes no /llms-index.txt at
+# all -- yet `site.Home.OutputFormats.Get "llmsindex"` still resolves, because
+# that method answers a question about the consumer's [outputs] lists.
+#
+# It is also the only build in which the `llms_index.enable` conjunct decides
+# anything. `unwired` fails the format conjunct, `llmsoff` fails the
+# `llms.enable` conjunct and `off` fails the master switch, so deleting
+# `llms_index.enable` from lib/llms-index-url.html would change no published
+# byte in any of them.
+#
+# The contrast with `unwired` is the second half of the contract: a surface
+# switched off DELIBERATELY says nothing, while a surface asked for and left
+# unwired warns. Both builds must publish no complete-index bullet in
+# /llms.txt and no llms_index surface entry; only one of them may warn.
+[agent]
+
+  [agent.llms_index]
+    enable = false

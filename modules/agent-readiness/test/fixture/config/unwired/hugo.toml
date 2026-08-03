@@ -1,0 +1,27 @@
+# The `unwired` environment: the complete link index left ENABLED while its
+# `llmsindex` output format is absent from the [outputs] home list.
+#
+# This is the state every existing consumer lands in on the build after they
+# upgrade. Hugo does not merge a module's [outputs] configuration into the
+# site's, and a site-level [outputs] key REPLACES the default list for that
+# kind rather than extending it, so nobody gets a new format for free. Left
+# undetected, the compact /llms.txt would name a /llms-index.txt that 404s --
+# the exact dead-link failure this module's other gates exist to prevent --
+# and no build error would say so.
+#
+# It needs an environment of its own because [outputs] is site configuration
+# rather than params, and because every other build must keep the format
+# wired: with llmsindex in the shared list, deleting the format conjunct from
+# lib/llms-index-url.html would change no published byte anywhere else.
+#
+# What it must show: no /llms-index.txt in the tree, no complete-index bullet
+# in /llms.txt, no llms_index entry from surfaces.html, and EXACTLY ONE
+# warning naming the missing wiring and the two ways out.
+#
+# The three lists are restated in full rather than trimmed, because an
+# environment overlay that dropped `section` or `page` would silently take the
+# twins with it and this build would then be about something else.
+[outputs]
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'agentfacts', 'agentskills', 'twindump']
+  section = ['html', 'rss', 'markdown']
+  page = ['html', 'markdown']

@@ -33,7 +33,7 @@ enableRobotsTXT = true
 # silently delete every section feed, which is what the index.xml assertion
 # in the suite guards.
 [outputs]
-  home = ['html', 'rss', 'markdown', 'llmstxt', 'agentfacts', 'agentskills', 'twindump']
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills', 'twindump']
   section = ['html', 'rss', 'markdown']
   page = ['html', 'markdown']
 
@@ -46,6 +46,15 @@ enableRobotsTXT = true
     path = "github.com/alex-feel/hugo-artifacts/modules/agent-readiness"
 
 [params]
+
+  # A SITE-level flag of the same name the flagged selector reads, set true so
+  # that the `Featured Blog` listing below discriminates between the two ways
+  # of reading a page key. The selector uses `index .Params`, which sees only
+  # the page's own front matter; `.Param` would fall back to THESE params and
+  # resolve true for every page in the section, sweeping the whole of blog into
+  # a listing that must contain post-one alone. Without this key both spellings
+  # produce the identical listing and the guard is asserted nowhere.
+  llms_featured = true
 
   [params.agent]
     # Both authored section shapes appear here on purpose: the slashed form
@@ -63,11 +72,19 @@ enableRobotsTXT = true
     # itself: the suite asserts exactly one duplicate-key warning naming
     # blog/title and asserts every published twin still parses under a
     # strict YAML loader with duplicate-key detection enabled.
+    #
+    # `projects` repeats `build_time` for the same reason, in the OTHER
+    # section so neither assertion has to know about the other. That key is
+    # reserved UNCONDITIONALLY -- outside its own emission branch -- and this
+    # is what proves it: with the reservation inside the branch, the
+    # `nobuildtime` build would emit it here as an ordinary per-section key
+    # and the baseline build would emit it TWICE, which makes the whole
+    # mapping invalid to a strict parser.
     [params.agent.frontmatter]
       [params.agent.frontmatter.blog]
         keys = ['title', 'categories', 'tags', 'keywords', "probe\nkey"]
       [params.agent.frontmatter.projects]
-        keys = ['project_name', 'status', 'period_from', 'period_to', 'repository']
+        keys = ['project_name', 'status', 'period_from', 'period_to', 'repository', 'build_time']
 
     [params.agent.llms]
       title = 'Agent Readiness Fixture'
@@ -115,6 +132,49 @@ enableRobotsTXT = true
         name = 'Recent Blog'
         section = 'blog'
         limit = 1
+
+      # The three selection principles, all over sections whose page sets the
+      # other entries already pin, so each one's OUTPUT is what distinguishes
+      # it. blog/post-one.md is the only flagged page and blog/post-two.md the
+      # only weighted one, which is what makes these four listings pairwise
+      # different rather than four spellings of the same result:
+      #
+      #   Blog          (select first,  order weight) -> Two, Noindexed, One
+      #   Recent Blog   (first, limit 1)              -> Post Two
+      #   Featured Blog (flagged)                     -> Post One
+      #   Blog By Date  (first, date,  limit 2)       -> Noindexed, Two
+      #   Blog By Title (first, title, limit 2)       -> Noindexed, One
+      #
+      # The complete index ignores all five entries' selection keys and lists
+      # the same three pages under every one of those headings, which is the
+      # property `never truncated` names.
+      [[params.agent.llms.sections]]
+        name = 'Featured Blog'
+        section = 'blog'
+        select = 'flagged'
+
+      [[params.agent.llms.sections]]
+        name = 'Blog By Date'
+        section = 'blog'
+        select = 'first'
+        order = 'date'
+        limit = 2
+
+      [[params.agent.llms.sections]]
+        name = 'Blog By Title'
+        section = 'blog'
+        order = 'title'
+        limit = 2
+
+      # `select = 'all'` with no cap. It publishes the same bytes as an entry
+      # with `limit = 0`, which is the point: the value must be ACCEPTED as
+      # part of the vocabulary and must not trip the unknown-select guard.
+      # The edge build proves the half that changes bytes -- 'all' beating a
+      # positive `limit`.
+      [[params.agent.llms.sections]]
+        name = 'All Projects'
+        section = 'projects'
+        select = 'all'
 
       [[params.agent.llms.optional]]
         name = 'Sitemap'

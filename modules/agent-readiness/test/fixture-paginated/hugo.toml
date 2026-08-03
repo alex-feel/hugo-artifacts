@@ -23,7 +23,7 @@ locale = 'en-us'
   pagerSize = 2
 
 [outputs]
-  home = ['html', 'rss', 'markdown', 'llmstxt', 'agentfacts', 'agentskills']
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills']
   section = ['html', 'rss', 'markdown']
   page = ['html', 'markdown']
 

@@ -64,6 +64,7 @@ test('one build publishes every module document side by side', () => {
   // agent-readiness module owns.
   for (const relPath of [
     'llms.txt',
+    'llms-index.txt',
     'about.md',
     'index.md',
     'searchindex.json',

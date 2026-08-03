@@ -1,9 +1,10 @@
-// The two PUBLIC partials -- twin-url.html and surfaces.html -- asserted
-// through the fixture-only twindump surface. The fixture's home page
+// Two of the three PUBLIC partials -- twin-url.html and surfaces.html --
+// asserted through the fixture-only twindump surface. The fixture's home page
 // publishes /twindump.txt per language: one tab-separated line per page of
 // the site recording what twin-url.html returned, a marker line, then one
-// line per surfaces.html entry. Every claim is checked against the
-// published tree in BOTH directions across all eleven environment builds,
+// line per surfaces.html entry, then the build-time block that
+// tests/11-build-stamp.spec.js reads. Every claim is checked against the
+// published tree in BOTH directions across all sixteen environment builds,
 // so neither partial can list a file the build withheld, nor withhold one
 // the build published.
 import {test} from 'node:test';
@@ -22,31 +23,15 @@ import {
   badtablesDir,
   nsoffDir,
   nosectionpagesDir,
+  nobuildtimeDir,
+  llmsindexoffDir,
+  unwiredDir,
+  nolinkindexesDir,
+  nolinkmdDir,
+  parseDump,
   publishedTwins,
   siteRelative,
 } from './helpers.js';
-
-const MARKER = '== surfaces ==';
-
-// Parses one published dump into {twins, surfaces}, both Maps keyed by the
-// left tab field. The separator is a tab because a logical page path can
-// carry any other character.
-function parseDump(rel, dir) {
-  const lines = read(rel, dir).split('\n');
-  const marker = lines.indexOf(MARKER);
-  assert.notEqual(marker, -1, `${rel} must carry the ${MARKER} line`);
-  const block = (slice) => {
-    const out = new Map();
-    for (const line of slice) {
-      if (line === '') continue;
-      const tab = line.indexOf('\t');
-      assert.notEqual(tab, -1, `${rel}: ${JSON.stringify(line)} must be tab-separated`);
-      out.set(line.slice(0, tab), line.slice(tab + 1));
-    }
-    return out;
-  };
-  return {twins: block(lines.slice(0, marker)), surfaces: block(lines.slice(marker + 1))};
-}
 
 // The edge build deploys under a subpath baseURL, which the published tree
 // does not reflect: Hugo writes /docs/blog/... as blog/... under public/.
@@ -74,6 +59,15 @@ const builds = [
   {name: 'badtables', dir: badtablesDir},
   {name: 'nsoff', dir: nsoffDir},
   {name: 'nosectionpages', dir: nosectionpagesDir},
+  {name: 'nobuildtime', dir: nobuildtimeDir},
+  {name: 'llmsindexoff', dir: llmsindexoffDir},
+  {name: 'unwired', dir: unwiredDir},
+  {name: 'nolinkindexes', dir: nolinkindexesDir},
+  // `nolinkmd` was built by both runners and read by other specs but was never
+  // in this list, so the both-directions invariant went unproven on the one
+  // environment where llms.txt withholds its derived twin entry -- exactly the
+  // shape this file asserts about.
+  {name: 'nolinkmd', dir: nolinkmdDir},
 ];
 
 for (const {name, dir, base = '', dumps = [{rel: 'twindump.txt', prefix: ''}]} of builds) {
@@ -93,13 +87,15 @@ for (const {name, dir, base = '', dumps = [{rel: 'twindump.txt', prefix: ''}]} o
   });
 
   test(`${name}: the surfaces set equals exactly the surfaces present in the tree`, () => {
-    // llms.txt and about.md publish per language, so each language's dump
-    // answers for its own prefix; the skills index is root = true and
-    // single-path, so every language answers with the root file.
+    // llms.txt, llms-index.txt and about.md publish per language, so each
+    // language's dump answers for its own prefix; the skills index is
+    // root = true and single-path, so every language answers with the root
+    // file.
     for (const {rel, prefix} of dumps) {
       const {surfaces} = parseDump(rel, dir);
       const paths = new Map([
         ['llms', `${prefix}llms.txt`],
+        ['llms_index', `${prefix}llms-index.txt`],
         ['facts', `${prefix}about.md`],
         ['skills', '.well-known/agent-skills/index.json'],
       ]);

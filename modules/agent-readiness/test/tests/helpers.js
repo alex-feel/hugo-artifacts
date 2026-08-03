@@ -1,7 +1,7 @@
 /* global process */
 // Shared helpers for the build-output assertion specs.
 //
-// The runner exports SIXTEEN published trees, and every one of them is
+// The runner exports NINETEEN published trees, and every one of them is
 // load-bearing:
 // FIXTURE_PUBLIC (every content-license key unset), FIXTURE_PUBLIC_CONFIGURED
 // (the license table filled and both switches on, plus the bots_allow with
@@ -15,7 +15,7 @@
 // gate does anything), FIXTURE_PUBLIC_LLMSOFF (llms.txt off while its format
 // stays wired, plus the scalar-for-a-sub-table shapes), FIXTURE_PUBLIC_EDGE
 // (a subpath baseURL plus the misconfigurations no other build reaches),
-// FIXTURE_PUBLIC_OFF (the master switch ALONE, false, with all four formats
+// FIXTURE_PUBLIC_OFF (the master switch ALONE, false, with all five formats
 // still wired -- the only shape that exercises the `enable` conjunct in any
 // renderer), FIXTURE_PUBLIC_BADTABLES (the section arrays written as bare
 // strings), FIXTURE_PUBLIC_NSOFF (the whole [params] agent namespace written
@@ -25,6 +25,21 @@
 // reproduce the published twin byte for byte), FIXTURE_PUBLIC_NOLINKMD (the
 // single key link_markdown = false with the twins left on, the only build in
 // which that conjunct alone decides whether llms.txt names a twin),
+// FIXTURE_PUBLIC_NOBUILDTIME (the three per-surface build_time switches set
+// false on top of the default configuration, the only build in which those
+// switches decide a published byte),
+// FIXTURE_PUBLIC_LLMSINDEXOFF (the single key llms_index.enable = false with
+// the llmsindex format still wired, the only build in which that conjunct
+// alone decides whether the complete index exists -- and the half of the
+// contract that must stay SILENT, because the surface was switched off
+// deliberately), FIXTURE_PUBLIC_UNWIRED (the complete index left enabled
+// while llmsindex is absent from the [outputs] home list, which is the state
+// every existing consumer lands in after upgrading, and the only build that
+// must emit the wire-it-up warning),
+// FIXTURE_PUBLIC_NOLINKINDEXES (NEITHER link-index format wired while both
+// surfaces stay enabled -- the minimal-adoption shape, and the complement of
+// `unwired`: it is the build that must stay SILENT, because not wiring a
+// format is itself the opt-out),
 // FIXTURE_PUBLIC_SHADOW (a
 // fixture that ships its own layouts/robots.txt), FIXTURE_PUBLIC_PAGINATED
 // (a fixture whose single section spills past pagerSize, the only shape in
@@ -69,6 +84,16 @@ export const nolinkmdDir = resolve(
 );
 export const nosectionpagesDir = resolve(
   process.env.FIXTURE_PUBLIC_NOSECTIONPAGES ?? 'fixture/public/nosectionpages',
+);
+export const nobuildtimeDir = resolve(
+  process.env.FIXTURE_PUBLIC_NOBUILDTIME ?? 'fixture/public/nobuildtime',
+);
+export const llmsindexoffDir = resolve(
+  process.env.FIXTURE_PUBLIC_LLMSINDEXOFF ?? 'fixture/public/llmsindexoff',
+);
+export const unwiredDir = resolve(process.env.FIXTURE_PUBLIC_UNWIRED ?? 'fixture/public/unwired');
+export const nolinkindexesDir = resolve(
+  process.env.FIXTURE_PUBLIC_NOLINKINDEXES ?? 'fixture/public/nolinkindexes',
 );
 export const shadowDir = resolve(process.env.FIXTURE_PUBLIC_SHADOW ?? 'fixture-shadow/public');
 export const paginatedDir = resolve(
@@ -168,6 +193,47 @@ export function sectionsWithTopLevelBullets(text) {
   return out;
 }
 
+// The fixture-only `twindump` surface, parsed into its three blocks. It lives
+// here rather than in one spec because two specs read it: 09 asserts the
+// twin-url and surfaces enumerations, 11 asserts the exposed build stamp. Two
+// private copies of this parser would be free to drift from the one layout
+// that writes the file.
+//
+// Every block is tab-separated, because a logical page path can carry any
+// other character.
+const SURFACES_MARKER = '== surfaces ==';
+const BUILD_TIME_MARKER = '== build time ==';
+
+export function parseDump(rel, dir) {
+  const lines = read(rel, dir).split('\n');
+  const surfaces = lines.indexOf(SURFACES_MARKER);
+  const buildTime = lines.indexOf(BUILD_TIME_MARKER);
+  if (surfaces === -1) throw new Error(`${rel} must carry the ${SURFACES_MARKER} line`);
+  if (buildTime === -1) throw new Error(`${rel} must carry the ${BUILD_TIME_MARKER} line`);
+  const block = (slice) => {
+    const out = new Map();
+    for (const line of slice) {
+      if (line === '') continue;
+      const tab = line.indexOf('\t');
+      if (tab === -1) throw new Error(`${rel}: ${JSON.stringify(line)} must be tab-separated`);
+      out.set(line.slice(0, tab), line.slice(tab + 1));
+    }
+    return out;
+  };
+  return {
+    twins: block(lines.slice(0, surfaces)),
+    surfaces: block(lines.slice(surfaces + 1, buildTime)),
+    // The value agent-readiness/build-time.html EXPOSES, which is a different
+    // observation from the values the module writes into its own documents:
+    // the acceptance criterion is that the two agree. `store` is the
+    // white-box probe of the module's own hugo.Store entry -- see the dump
+    // layout for why an equality-only check cannot discriminate the
+    // mechanism on a sub-second build.
+    buildTime: block(lines.slice(buildTime + 1)).get('build_time'),
+    buildTimeStore: block(lines.slice(buildTime + 1)).get('store'),
+  };
+}
+
 export function buildLog(which = 'baseline') {
   const keys = {
     baseline: 'HUGO_BUILD_LOG',
@@ -181,6 +247,14 @@ export function buildLog(which = 'baseline') {
     badtables: 'HUGO_BUILD_LOG_BADTABLES',
     nsoff: 'HUGO_BUILD_LOG_NSOFF',
     nosectionpages: 'HUGO_BUILD_LOG_NOSECTIONPAGES',
+    // `nolinkmd` was missing from this map although both runners export its
+    // log and the spec suite exports its published tree, so buildLog('nolinkmd')
+    // threw for a build that has existed since the environment was added.
+    nolinkmd: 'HUGO_BUILD_LOG_NOLINKMD',
+    nobuildtime: 'HUGO_BUILD_LOG_NOBUILDTIME',
+    llmsindexoff: 'HUGO_BUILD_LOG_LLMSINDEXOFF',
+    unwired: 'HUGO_BUILD_LOG_UNWIRED',
+    nolinkindexes: 'HUGO_BUILD_LOG_NOLINKINDEXES',
     shadow: 'HUGO_BUILD_LOG_SHADOW',
     paginated: 'HUGO_BUILD_LOG_PAGINATED',
     widgets: 'HUGO_BUILD_LOG_WIDGETS',

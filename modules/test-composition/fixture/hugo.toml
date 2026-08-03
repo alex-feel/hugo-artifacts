@@ -11,7 +11,7 @@
 # the spec asserts every name in it.
 #
 # [outputFormats] and [mediaTypes] DO merge additively from module
-# configuration, which is why `llmstxt`, `agentfacts`, `agentskills`,
+# configuration, which is why `llmstxt`, `llmsindex`, `agentfacts`, `agentskills`,
 # `searchindex` and `opensearch` are usable here by name although this file
 # defines none of them.
 baseURL = 'https://composition.example/'
@@ -23,7 +23,7 @@ locale = 'en-us'
 enableRobotsTXT = true
 
 [outputs]
-  home = ['html', 'rss', 'markdown', 'llmstxt', 'agentfacts', 'agentskills', 'searchindex', 'opensearch']
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills', 'searchindex', 'opensearch']
   section = ['html', 'rss', 'markdown']
   page = ['html', 'markdown']
 

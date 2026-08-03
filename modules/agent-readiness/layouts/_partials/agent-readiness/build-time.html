@@ -1,0 +1,64 @@
+{{/*
+  agent-readiness/build-time.html -- PUBLIC ENTRY (lib tier).
+
+  Purpose: the ONE build timestamp for the whole build, as an RFC 3339 string
+  with the offset, e.g. "2026-08-03T03:05:13+03:00". Every surface this module
+  stamps reads it, and a consuming site reads the SAME value to stamp its own
+  surfaces:
+
+      <meta name="build-time" content="{{ partial "agent-readiness/build-time.html" . }}">
+
+  The point is comparability. The module's own surfaces answer two DIFFERENT
+  time questions and must never conflate them: `last_updated` in a twin is the
+  page's Lastmod, i.e. when the CONTENT changed, while this value is when the
+  BUILD ran. A daily rebuild refreshes generated figures without touching a
+  content file, so `last_updated` sits still while the document changes -- and
+  only a build stamp lets a reader ask "am I holding a cached copy". A reader
+  comparing two surfaces compares like with like only if each name means one
+  thing everywhere, which is why this is never folded into `last_updated`.
+
+  Value semantics: the string is constant for the whole build and identical in
+  every document the build publishes, in every language. It is NOT persisted
+  between builds -- two consecutive builds produce two different values, which
+  is the entire point.
+
+  WHY THIS SHAPE, in full, because the obvious simplifications are both
+  broken and the next reader will otherwise reach for one of them:
+
+  - `partialCached` ALONE is not enough. Hugo maintains a SEPARATE partial
+    cache PER LANGUAGE, so a cached `now` executes once per language and a
+    two-language build was measured producing two values 21 ms apart. The
+    stamp would then disagree between /llms.txt and /ru/llms.txt of one
+    deploy -- reporting drift that is not there, which is worse than no
+    stamp.
+  - A bare `hugo.Store` check-then-set ALONE is not enough. It is not atomic
+    and Hugo renders pages in parallel, so hundreds of concurrent first
+    callers each pass the check: measured across 12 builds of a four-language,
+    1200-file site, a bare check-then-set produced two different values in 6
+    of them. That is a coin flip, not a rare flake.
+  - `resources.FromString` was measured NOT to deduplicate by target path
+    (904 calls, 391 distinct values) and is a dead end for this purpose.
+
+  What DOES work is exactly the pairing below: `partialCached` WRAPPING the
+  store check-then-set. The cache collapses the racing writers from roughly
+  one per page to one per language, and language sites render in sequence, so
+  the later language reads the value the earlier one stored. Measured, this
+  produced ONE distinct value in 12 of 12 builds at nanosecond precision,
+  across four languages and 1205 files.
+
+  The `partialCached` call lives HERE, inside the public wrapper, rather than
+  at the call sites: `partialCached` keys on (template name, variant keys)
+  globally rather than on the caller, so putting it here makes the guarantee
+  hold however any caller -- inside the module or in a consuming site -- writes
+  the call. A consumer invoking this with plain `partial` still gets the
+  constant. Do not "simplify" this into a direct call to
+  lib/build-time-value.html; that is the racing version.
+
+  Expected context: none is read. Pass the current Page (the conventional
+  `.`) or anything else; the value does not depend on it.
+
+  Return value: the build timestamp as an RFC 3339 string. ONE terminal
+  return.
+*/}}
+
+{{- return partialCached "agent-readiness/lib/build-time-value.html" "" -}}

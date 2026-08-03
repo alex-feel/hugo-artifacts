@@ -30,8 +30,8 @@
   read as prose, and "present" is a true and useful thing to say about an
   open-ended range.
 
-  Structure: H1, summary, identity block, one H2 per configured section,
-  contact block, trailing pointer section.
+  Structure: H1, summary, build-time line, identity block, one H2 per
+  configured section, contact block, trailing pointer section.
 
   The document is line-oriented, so every interpolated value goes through
   lib/inline.html -- or lib/markdown-link.html when it lands inside a link
@@ -61,7 +61,21 @@
     {{- $lines = $lines | append "" | append (printf "> %s" (partial "agent-readiness/lib/inline.html" .)) -}}
   {{- end -}}
 
-  {{/* 3. Identity block, read from a real content page so it cannot drift.
+  {{/* 3. The build-time line: when THIS BUILD ran, byte-identical to the
+         stamp llms.txt carries and to the `build_time` key in every twin of
+         the same build, because all three read one value through the public
+         agent-readiness/build-time.html partial.
+
+         It is here rather than nowhere because the asymmetry is the whole
+         problem the stamp solves: a reader that learns the field on one
+         surface must find it on the next. Untranslated, in the same
+         label-colon form and the same blockquote slot llms.txt uses, so one
+         extraction rule reads both documents. */}}
+  {{- if $facts.build_time -}}
+    {{- $lines = $lines | append "" | append (printf "> Build time: %s" (partial "agent-readiness/lib/inline.html" (partial "agent-readiness/build-time.html" $page))) -}}
+  {{- end -}}
+
+  {{/* 4. Identity block, read from a real content page so it cannot drift.
          A row whose key is absent from that page is omitted SILENTLY: a
          missing optional fact is not an error, and inventing a placeholder
          would be fabrication. */}}
@@ -103,11 +117,15 @@
     {{- end -}}
   {{- end -}}
 
-  {{/* 4. One H2 per configured section, COMPLETE. Membership comes from the
-         shared filter, so this document lists exactly the pages the twins
-         emit and llms.txt links. Each entry's `section` value arrived here
-         already normalized by config.html. */}}
-  {{- $all := partialCached "agent-readiness/page-list.html" (dict "page" $page "cfg" $cfg) site.Language.Name -}}
+  {{/* 5. One H2 per configured section, COMPLETE. Membership resolves through
+         lib/section-pages.html -- the SAME routine both link indexes call, not
+         a second copy of the same three tests -- so this document lists
+         exactly the pages the twins emit and the indexes link. A copy here
+         would agree on the day it was written and drift on the day one of the
+         two was edited, silently, with no warning and exit 0: the surfaces
+         would disagree about what a section holds while every assertion that
+         reads one document at a time stayed green. Each entry's `section`
+         value arrived here already normalized by config.html. */}}
   {{- range $entry := $facts.sections | default slice -}}
     {{- $section := $entry.section | default "" -}}
     {{- $name := $entry.name | default "" -}}
@@ -127,13 +145,7 @@
           "key" (printf "agent-readiness:warn:facts-section-unnamed:%s" $section)
           "message" (printf "[agent-readiness] Skipping the [[params.agent.facts.sections]] entry for %q: it has no `name`, so it has no H2 of its own and its entries would be read as belonging to the section above it. Give the entry a `name`." $section)) -}}
     {{- else -}}
-      {{- $items := slice -}}
-      {{- range $all -}}
-        {{- $p := .Path -}}
-        {{- if or (eq $p $section) (hasPrefix $p (printf "%s/" $section)) (eq (printf "/%s" .Section) $section) -}}
-          {{- $items = $items | append . -}}
-        {{- end -}}
-      {{- end -}}
+      {{- $items := partialCached "agent-readiness/lib/section-pages.html" (dict "page" $page "cfg" $cfg "section" $section) $section site.Language.Name -}}
       {{/* A section matching NOTHING is withheld rather than published as a
            bare heading, for the reason llms.html states at the same point:
            an empty section reads as a fact about the site rather than as a
@@ -184,7 +196,7 @@
     {{- end -}}
   {{- end -}}
 
-  {{/* 5. Contact block, read from a real content page's front-matter array.
+  {{/* 6. Contact block, read from a real content page's front-matter array.
          An entry carrying none of the three configured fields is skipped;
          nothing here is retyped into config, so the block cannot contradict
          the contact page. */}}
@@ -241,7 +253,7 @@
     {{- end -}}
   {{- end -}}
 
-  {{/* 6. Trailing pointer section. Every pointer is absolute, so the document
+  {{/* 7. Trailing pointer section. Every pointer is absolute, so the document
          stays usable when it is read detached from the site.
 
          llms.txt IS a home output format and resolves through it. `sitemap`

@@ -1,0 +1,12 @@
+{{- /*
+  The COMPLETE link index, /llms-index.txt. Its own surface switch is applied
+  HERE rather than inside the renderer, because the renderer is shared with
+  the compact /llms.txt and a switch inside it would take both documents down.
+  lib/llms-index-url.html reproduces exactly this gate set -- master switch,
+  llms.enable through the renderer, llms_index.enable here, and the format
+  being wired -- so nothing can name a file this template declined to write.
+*/ -}}
+{{- $cfg := partial "agent-readiness/config.html" (dict "page" . "args" dict) -}}
+{{- if $cfg.llms_index.enable -}}
+  {{- partial "agent-readiness/llms.html" (dict "page" . "cfg" $cfg "complete" true) -}}
+{{- end -}}

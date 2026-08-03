@@ -34,9 +34,17 @@ test('a page twin opens with front matter and carries the fixed field order', ()
   assert.equal(keys.at(-1), 'canonical', 'canonical is ALWAYS last');
   assert.ok(!keys.includes('license'), 'no license key in the baseline build');
 
+  // The two time fields sit adjacent and answer different questions:
+  // last_updated is the page's Lastmod (content time), build_time is when the
+  // build ran. Asserted by NAME as well as by position, so a future insertion
+  // reports the field that moved rather than the consumer vocabulary that
+  // shifted under it.
+  assert.equal(keys[3], 'last_updated', 'last_updated is the fourth field');
+  assert.equal(keys[4], 'build_time', 'build_time follows it immediately');
+
   // The per-section keys sit between the builder's always-on fields and the
   // trailing canonical, in the order the consumer declared them.
-  assert.deepEqual(keys.slice(4, -1), ['categories', 'tags', 'keywords']);
+  assert.deepEqual(keys.slice(5, -1), ['categories', 'tags', 'keywords']);
 });
 
 test('license sits immediately before the always-last canonical', () => {

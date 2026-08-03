@@ -17,9 +17,17 @@ import {
   sectionsWithTopLevelBullets,
   siteRelative,
   urlResolves,
+  BASE_URL,
 } from './helpers.js';
 
 const countH1 = (text) => text.split('\n').filter((l) => /^# /.test(l)).length;
+
+// The bullets under `## Start here`, or [] when the heading is absent. That
+// section COLLECTS routes -- the home page's own twin, then the complete link
+// index -- and emits its heading only when at least one survived, so a spec
+// that asserted the heading's presence alone could not tell which route was
+// there. Asserting the bullet list names the route that survived.
+const startHereBullets = (text) => sectionsWithTopLevelBullets(text).get('Start here') ?? [];
 
 test('llms.txt publishes as .txt, not .md', () => {
   // text/plain is deliberate: text/markdown's suffixes are md, mdown,
@@ -60,12 +68,17 @@ test('llms.txt items link the Markdown twins by ABSOLUTE URL', () => {
   // absolute-URL and resolution sweeps below; only the twin-shape rule
   // does not apply to them.
   sections.delete('Optional');
+  // `Start here` collects ROUTES rather than pages: the home page's own twin,
+  // which does obey the twin shape, and the complete link index, which is a
+  // generated document rather than a page and so has none. Only the second is
+  // skipped, so the home twin stays covered by this sweep.
   let checked = 0;
   for (const bullets of sections.values()) {
     for (const line of bullets) {
       const [link] = markdownLinks(line);
       if (!link) continue;
       assert.match(link.url, /^https:\/\/fixture\.example\//, `${link.url} must be absolute`);
+      if (link.url.endsWith('/llms-index.txt')) continue;
       assert.match(link.url, /\/index\.md$/, `${link.url} should be the twin URL`);
       checked += 1;
     }
@@ -135,11 +148,18 @@ test('the home twin entry leads the document, ahead of every configured section'
 test('the home twin entry is withheld when the twin does not publish', () => {
   // twins off: `markdown` stays wired in [outputs] but markdown.enable is
   // false, so markdown-page.html writes no bytes and Hugo publishes no
-  // index.md. A heading here would advertise a 404 -- the exact failure the
+  // index.md. An entry here would advertise a 404 -- the exact failure the
   // section entries already guard against.
+  //
+  // The `## Start here` HEADING survives, because it collects routes rather
+  // than belonging to the home twin: the complete-index entry still publishes
+  // here and is still the only route to what a cap dropped. What must vanish
+  // is the twin URL, and that is what is asserted.
   const text = read('llms.txt', notwinsDir);
-  assert.ok(!/^## Start here$/m.test(text), 'no heading when no twin publishes');
-  assert.ok(!/\/index\.md\)/.test(text), 'and no twin URL anywhere in the document');
+  assert.ok(!/\/index\.md\)/.test(text), 'no twin URL anywhere in the document');
+  assert.deepEqual(startHereBullets(text), [
+    `- [Complete index](${BASE_URL}/llms-index.txt): Every page of every section, complete.`,
+  ]);
 });
 
 test('link_markdown false withholds the home twin entry while the twins still publish', () => {
@@ -150,8 +170,12 @@ test('link_markdown false withholds the home twin entry while the twins still pu
   // document. Dropping that conjunct from either emitter would leave every
   // other build in the suite green.
   const text = read('llms.txt', nolinkmdDir);
-  assert.ok(!/^## Start here$/m.test(text), 'no heading when the document does not link twins');
-  assert.ok(!/\/index\.md\)/.test(text), 'and no twin URL in any section bullet either');
+  assert.ok(!/\/index\.md\)/.test(text), 'no twin URL in any section bullet either');
+  assert.deepEqual(
+    startHereBullets(text),
+    [`- [Complete index](${BASE_URL}/llms-index.txt): Every page of every section, complete.`],
+    'the twin route is withheld while the complete-index route survives',
+  );
   // The section bullets fall back to HTML permalinks rather than disappearing,
   // which is what distinguishes this from a build with no sections at all.
   assert.match(text, /^- \[Post One\]\(https:\/\/fixture\.example\/blog\/post-one\/\)/m);
@@ -166,7 +190,13 @@ test('a consumer who declares the home twin keeps their own wording', () => {
   // absolutization is what makes the dedup real: a raw string compare would
   // miss it and publish the entry twice under two headings.
   const text = read('llms.txt', edgeDir);
-  assert.ok(!/^## Start here$/m.test(text), 'the derived entry steps aside entirely');
+  assert.deepEqual(
+    startHereBullets(text),
+    [
+      '- [Complete index](https://example.org/docs/llms-index.txt): Every page of every section, complete.',
+    ],
+    'the derived twin entry steps aside; the complete-index route is not its casualty',
+  );
   assert.match(
     text,
     /^- \[Front door\]\(https:\/\/example\.org\/docs\/index\.md\): Consumer-authored entry for the home twin\.$/m,

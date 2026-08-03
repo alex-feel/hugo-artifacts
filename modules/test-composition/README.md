@@ -6,7 +6,7 @@ Node build-output assertions for the ONE surface that `modules/seo`, `modules/ag
 
 Each module is proven on its own by its own suite, against a fixture that imports that module alone. No single-module fixture can see what happens when a site imports two or three of them at once, and that is exactly where the modules interact:
 
-- `[outputFormats]` and `[mediaTypes]` shipped in a module's `hugo.toml` merge ADDITIVELY into the consumer configuration. A site that imports `agent-readiness` and `search` can name `llmstxt`, `agentfacts`, `agentskills`, `searchindex` and `opensearch` without defining any of them.
+- `[outputFormats]` and `[mediaTypes]` shipped in a module's `hugo.toml` merge ADDITIVELY into the consumer configuration. A site that imports `agent-readiness` and `search` can name `llmstxt`, `llmsindex`, `agentfacts`, `agentskills`, `searchindex` and `opensearch` without defining any of them.
 - `[outputs]` does NOT. Hugo replaces the output list per page kind rather than merging it, and a module's own `[outputs]` table never reaches the consumer configuration at all, so every module README has to show an `[outputs]` block of its own.
 
 A consumer who follows two of those READMEs literally lands in one of two states. Two `[outputs]` tables in one file is a hard configuration-load failure (`unmarshal failed: toml: table outputs already exists`), which is loud and self-correcting. One table replacing the other loads cleanly, exits 0, prints no warning -- and silently stops publishing every document the replaced list asked for. The second shape is what this suite catches.
@@ -15,7 +15,7 @@ A consumer who follows two of those READMEs literally lands in one of two states
 
 | Assertion | What it holds |
 | --- | --- |
-| every module document is published side by side | `/llms.txt`, `/about.md`, `/index.md`, `/searchindex.json`, `/opensearch.xml`, `/robots.txt` and `/index.html` all exist, non-empty, out of ONE build |
+| every module document is published side by side | `/llms.txt`, `/llms-index.txt`, `/about.md`, `/index.md`, `/searchindex.json`, `/opensearch.xml`, `/robots.txt` and `/index.html` all exist, non-empty, out of ONE build |
 | the merged home list carries every format the three modules define | the list is checked against the `[outputFormats.*]` names read out of `modules/agent-readiness/hugo.toml` and `modules/search/hugo.toml`, so a module that adds a format a consumer must wire fails here until the fixture wires it |
 | exactly one `[outputs]` table | the merged single table is the only shape that can hold all three modules |
 | the twins describe the page the index holds | the agent-readiness `llms.txt` / `about.md` entries and the search index record name the same page |

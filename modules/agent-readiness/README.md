@@ -1,8 +1,8 @@
 # agent-readiness
 
-Universal agent-readiness module for Hugo: it publishes the agent-facing representations of a site your HTML already describes -- a generated `robots.txt` carrying an AI-crawler token registry and a `Content-Signal` declaration, per-page Markdown twins, an `llms.txt` link index, an aggregated `/about.md` facts document, and a `/.well-known/agent-skills/` discovery index.
+Universal agent-readiness module for Hugo: it publishes the agent-facing representations of a site your HTML already describes -- a generated `robots.txt` carrying an AI-crawler token registry and a `Content-Signal` declaration, per-page Markdown twins, a compact `llms.txt` link index beside a complete `/llms-index.txt` one, an aggregated `/about.md` facts document, and a `/.well-known/agent-skills/` discovery index.
 
-The module ships **no CSS, no JavaScript, and no visual surface at all**. It publishes representations, not markup: nothing it emits is rendered in a browser, so there is nothing to style and nothing to theme. Every surface is driven by a Hugo output format and a shared page-selection filter, so `robots.txt`, the twins, `llms.txt`, and `/about.md` can never disagree about which pages of the site exist.
+The module ships **no CSS, no JavaScript, and no visual surface at all**. It publishes representations, not markup: nothing it emits is rendered in a browser, so there is nothing to style and nothing to theme. Every surface is driven by a Hugo output format and a shared page-selection filter, so `robots.txt`, the twins, both link indexes, and `/about.md` can never disagree about which pages of the site exist.
 
 Every value the module publishes is read from configuration or from front matter that already exists. The module derives no prose from any other prose, infers no facts, and fabricates nothing.
 
@@ -35,12 +35,12 @@ A site importing this module together with [`search`](../search/README.md) wires
 
 ```toml
 [outputs]
-  home = ['html', 'rss', 'markdown', 'llmstxt', 'agentfacts', 'agentskills', 'searchindex', 'opensearch']
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills', 'searchindex', 'opensearch']
   section = ['html', 'rss', 'markdown']
   page = ['html', 'markdown']
 ```
 
-Only `[outputs]` needs this care. `[outputFormats]` and `[mediaTypes]` DO merge additively from module configuration, which is why `llmstxt`, `agentfacts`, `agentskills`, `searchindex` and `opensearch` are usable by name in the list above although the site defines none of them. Two names in that list stay INERT until their own parameters are set -- `agentskills` publishes nothing without `[[params.agent.skills]]` entries, and `opensearch` nothing without `params.search.opensearch.enable` -- so listing them early is harmless. The [`seo`](../seo/README.md) module defines no output format of its own, but it READS this list: `[seo.alternates] formats` advertises exactly the formats your `[outputs]` lists wire for that page kind. The combination is covered by the cross-module suite in [`modules/test-composition/`](../test-composition/README.md).
+Only `[outputs]` needs this care. `[outputFormats]` and `[mediaTypes]` DO merge additively from module configuration, which is why `llmstxt`, `llmsindex`, `agentfacts`, `agentskills`, `searchindex` and `opensearch` are usable by name in the list above although the site defines none of them. Two names in that list stay INERT until their own parameters are set -- `agentskills` publishes nothing without `[[params.agent.skills]]` entries, and `opensearch` nothing without `params.search.opensearch.enable` -- so listing them early is harmless. The [`seo`](../seo/README.md) module defines no output format of its own, but it READS this list: `[seo.alternates] formats` advertises exactly the formats your `[outputs]` lists wire for that page kind. The combination is covered by the cross-module suite in [`modules/test-composition/`](../test-composition/README.md).
 
 ## Requirements
 
@@ -49,13 +49,13 @@ Only `[outputs]` needs this care. `[outputFormats]` and `[mediaTypes]` DO merge 
 
 ## Usage
 
-Every surface the module publishes is output-format-driven, so the wiring that makes the documents exist is the module import, the `[outputs]` lists, the `[params.agent]` configuration block, and the deletion of the site's own `layouts/robots.txt` -- no surface requires calling a partial. On top of that, the module exposes exactly two partials as public API, [`twin-url.html`](#twin-urlhtml) and [`surfaces.html`](#surfaceshtml), for the site templates that want to LINK what the module publishes: a copy-page widget, a footer block, a human-visible discovery page. Every other partial under the `agent-readiness` namespace is internal.
+Every surface the module publishes is output-format-driven, so the wiring that makes the documents exist is the module import, the `[outputs]` lists, the `[params.agent]` configuration block, and the deletion of the site's own `layouts/robots.txt` -- no surface requires calling a partial. On top of that, the module exposes exactly three partials as public API, [`twin-url.html`](#twin-urlhtml), [`surfaces.html`](#surfaceshtml) and [`build-time.html`](#build-timehtml), for the site templates that want to LINK what the module publishes or to STAMP their own surfaces with the same build time: a copy-page widget, a footer block, a human-visible discovery page, a `build-time` meta tag. Every other partial under the `agent-readiness` namespace is internal.
 
 Hugo does not merge a module's `[outputs]` configuration into the site's, and a site-level `[outputs]` key **replaces** the default list for that page kind rather than extending it. Every format below must therefore be wired by the consuming site, restating every entry that is already there:
 
 ```toml
 [outputs]
-home = ['HTML', 'RSS', 'markdown', 'llmstxt', 'agentfacts', 'agentskills']
+home = ['HTML', 'RSS', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills']
 page = ['HTML', 'markdown']
 section = ['HTML', 'RSS', 'markdown']
 ```
@@ -66,7 +66,9 @@ Hugo's defaults for the kinds above are `home = ['html', 'rss']` and `section = 
 
 ## Public partials
 
-The module exposes exactly two partials as public API: `agent-readiness/twin-url.html` and `agent-readiness/surfaces.html`. Every other partial under `layouts/_partials/agent-readiness/` is an internal implementation detail. Both public partials accept the same two call shapes -- the current Page as the context, or a dict whose `page` key is the current Page plus an optional `args` map of call-site config overrides, the top tier of the [four-tier cascade](#parameters) -- and calling either with anything else fails the build, because a missing Page is a wiring mistake in a template, not a content problem to degrade over. Both contracts are locked by `test/tests/09-public-partials.spec.js`, which dumps every page's results through a fixture-only output format and asserts them in both directions against the files each of the suite's builds actually publishes.
+The module exposes exactly three partials as public API: `agent-readiness/twin-url.html`, `agent-readiness/surfaces.html` and `agent-readiness/build-time.html`. Every other partial under `layouts/_partials/agent-readiness/` is an internal implementation detail.
+
+`twin-url.html` and `surfaces.html` accept the same two call shapes -- the current Page as the context, or a dict whose `page` key is the current Page plus an optional `args` map of call-site config overrides, the top tier of the [four-tier cascade](#parameters) -- and calling either with anything else fails the build, because a missing Page is a wiring mistake in a template, not a content problem to degrade over. `build-time.html` reads no context at all: its value is a property of the build rather than of any page, so pass the conventional `.` or anything else. All three contracts are locked by the suite, which dumps every page's results through a fixture-only output format and asserts them against the files each of its builds actually publishes -- `test/tests/09-public-partials.spec.js` for the two page-shaped partials, in both directions, and `test/tests/11-build-stamp.spec.js` for the build stamp.
 
 ### `twin-url.html`
 
@@ -101,13 +103,25 @@ The widget renders on exactly the pages whose twin publishes and receives the so
 {{ end }}
 ```
 
-Returns an ordered slice of dicts, each `{key, url, label}`, enumerating the site-level agent surfaces the module actually publishes under the resolved config: `llms` (the `llms.txt` link index), then `facts` (the `/about.md` facts document), then `skills` (the Agent Skills index at `/.well-known/agent-skills/index.json`). Every `url` is absolute. Every `label` is the module's i18n-resolved display string (`agent_surface_llms`, `agent_surface_facts`, `agent_surface_skills`), so a consumer renders the list without authoring labels. An entry is present only when its document publishes, and the slice may be empty.
+Returns an ordered slice of dicts, each `{key, url, label}`, enumerating the site-level agent surfaces the module actually publishes under the resolved config: `llms` (the compact `llms.txt` link index), then `llms_index` (the complete `/llms-index.txt` one), then `facts` (the `/about.md` facts document), then `skills` (the Agent Skills index at `/.well-known/agent-skills/index.json`). Every `url` is absolute. Every `label` is the module's i18n-resolved display string (`agent_surface_llms`, `agent_surface_llms_index`, `agent_surface_facts`, `agent_surface_skills`), so a consumer renders the list without authoring labels. An entry is present only when its document publishes, and the slice may be empty.
 
-Each entry reproduces its producer's own publish gates rather than merely checking the wired format. `llms` requires the master switch, `llms.enable`, and the `llmstxt` format wired on the page's own language home -- an enabled `llms.txt` always emits at least its H1 line, so enabled-and-wired is published. `facts` requires the master switch, `facts.enable`, and the `agentfacts` format wired on the page's own language home, by the same reasoning. `skills` reproduces all four gates of the index file itself -- the master switch, `skills_index.enable`, the `agentskills` format wired on the default site's home, and at least one skill surviving validation and fetch -- through the same shared implementation that feeds the [derived `llms.txt` entry](#llmstxt), so the two callers can never disagree about whether the index exists.
+Each entry reproduces its producer's own publish gates rather than merely checking the wired format. `llms` requires the master switch, `llms.enable`, and the `llmstxt` format wired on the page's own language home -- an enabled `llms.txt` always emits at least its H1 line, so enabled-and-wired is published. `llms_index` requires those three plus `llms_index.enable`, on the `llmsindex` format. `facts` requires the master switch, `facts.enable`, and the `agentfacts` format wired on the page's own language home, by the same reasoning. `skills` reproduces all four gates of the index file itself -- the master switch, `skills_index.enable`, the `agentskills` format wired on the default site's home, and at least one skill surviving validation and fetch -- through the same shared implementation that feeds the [derived `llms.txt` entry](#llmstxt), so the two callers can never disagree about whether the index exists. The `llms_index` gate set is shared the same way, with the [derived complete-index route](#the--start-here-section) in `llms.txt`.
 
-On a multilingual site the `llms` and `facts` entries follow the calling page's language, because those documents publish per language (`/llms.txt`, `/ru/llms.txt`). The `skills` entry is evaluated against the default language's site whatever language calls, because the index's format sets `root = true` and publishes once for the whole site, so every language must answer with the one file that actually exists.
+On a multilingual site the `llms`, `llms_index` and `facts` entries follow the calling page's language, because those documents publish per language (`/llms.txt`, `/ru/llms.txt`). The `skills` entry is evaluated against the default language's site whatever language calls, because the index's format sets `root = true` and publishes once for the whole site, so every language must answer with the one file that actually exists.
 
 The intended consumer is a site-side discovery surface -- an `/agents/` page or a footer block presenting the machine-readable entry points to human visitors -- built with zero hand-typed surface lists, so a surface switched off in configuration disappears from that page in the same build instead of lingering as a hand-authored link that 404s.
+
+### `build-time.html`
+
+```go-html-template
+<meta name="build-time" content="{{ partial "agent-readiness/build-time.html" . }}">
+```
+
+Returns the build's timestamp as an RFC 3339 string with the offset (`2026-08-03T03:05:13+03:00`). The value is **constant for the whole build and identical in every document the build publishes, in every language**, and it is the same string the module writes into every twin's `build_time` front-matter key and into the `> Build time:` line of `llms.txt` and `/about.md`. It is not persisted between builds: two consecutive builds return two different values, which is the point.
+
+The partial exists so a consuming site can stamp its own surfaces -- an HTML `<meta>` tag, a generated JSON document, anything -- with the value the module's surfaces already carry. Feeding a separately-computed `now` into those would make two documents of one deploy disagree by seconds and report drift that is not there, which is worse than no stamp at all. It reads no context; pass the conventional `.`.
+
+See [The two time fields](#the-two-time-fields) for what this answers that `last_updated` cannot, and for the per-surface switches that decide which of the module's own documents carry it.
 
 ## Parameters
 
@@ -120,9 +134,9 @@ Values resolve through a four-tier cascade, highest precedence first:
 3. Site config `[params.agent]`
 4. `data/agent-readiness/defaults.toml` (module defaults)
 
-Presence wins at every tier, so an explicit `false` or empty value overrides the tier below it. Nested maps (`robots`, `markdown`, `llms`, `facts`, `skills_index`, `frontmatter`, `license`) merge tier by tier rather than replacing, so overriding one key inside `[params.agent.markdown]` keeps the shipped values for the rest. Slice-valued keys are replaced, never combined.
+Presence wins at every tier, so an explicit `false` or empty value overrides the tier below it. Nested maps (`robots`, `markdown`, `llms`, `llms_index`, `facts`, `skills_index`, `frontmatter`, `license`) merge tier by tier rather than replacing, so overriding one key inside `[params.agent.markdown]` keeps the shipped values for the rest. Slice-valued keys are replaced, never combined.
 
-**SITE-SCOPED keys are honored at the defaults and `[params.agent]` tiers only**, because they shape site-wide artifacts that must select the same page set no matter which page renders them: `enable`, `sections`, `exclude_noindex`, `exclude_search_page`, `search_page_path`, `skills`, every surface's own `enable` (`markdown.enable`, `llms.enable`, `facts.enable`, `skills_index.enable`), and the whole `robots` and `license` tables. Setting one of them lower down is a no-op and warns once; each surface's `enable` is site-scoped for the same reason as the master switch: these keys govern whether an artifact EXISTS, and a lower tier that switched one document off would leave every other surface still linking it with a URL that 404s. To remove a single page from every agent surface at once, use `agent: false` in its front matter.
+**SITE-SCOPED keys are honored at the defaults and `[params.agent]` tiers only**, because they shape site-wide artifacts that must select the same page set no matter which page renders them: `enable`, `sections`, `exclude_noindex`, `exclude_search_page`, `search_page_path`, `skills`, every surface's own `enable` (`markdown.enable`, `llms.enable`, `llms_index.enable`, `facts.enable`, `skills_index.enable`), and the whole `robots` and `license` tables. Setting one of them lower down is a no-op and warns once; each surface's `enable` is site-scoped for the same reason as the master switch: these keys govern whether an artifact EXISTS, and a lower tier that switched one document off would leave every other surface still linking it with a URL that 404s. To remove a single page from every agent surface at once, use `agent: false` in its front matter.
 
 ### Top-level keys
 
@@ -183,6 +197,10 @@ Warnings are emitted for:
 - a duplicate permalink across two pages;
 - a per-section front-matter key that collides with a key the twin builder emits itself;
 - an `[[llms.sections]]` or `[[facts.sections]]` entry with an empty `section`, with no `name`, or matching no page -- each is skipped rather than published, because all three otherwise produce a plausible-looking document with the wrong contents;
+- an `[[llms.sections]]` entry whose `select` or `order` names a value outside its vocabulary, which falls back to `'first'` and to the site's own page order respectively -- the `order` guard is the one that would otherwise be fatal, because the value would reach `sort`'s field argument and abort template execution;
+- an `[[llms.sections]]` entry selecting flagged pages where no page under the section carries the flag, whose heading is omitted with a message naming the flag, distinct from the section-matches-nothing message because the remedies differ;
+- an `[[llms.sections]]` entry setting `select = 'all'` together with a positive `limit`, where `select` wins and the section is listed complete;
+- a complete link index that is enabled while the `llmsindex` output format is not wired to the home page, so `/llms-index.txt` cannot publish and `llms.txt` withholds the route rather than naming a URL that 404s;
 - a bare value where a table belongs, in ANY array-of-tables key (`skills`, `llms.sections`, `llms.optional`, `facts.sections`, `facts.identity.rows`, and a contact page's channels) -- skipped rather than dropped, because a dropped entry publishes a surface indistinguishable from one the consumer never configured;
 - a scalar written for a consumer sub-table (`facts.identity`, `facts.contact`) -- the whole block is ignored, because `[params.agent.facts] contact = '/contact'` is the natural mis-write of `[params.agent.facts.contact] page = '/contact'`;
 - a `markdown.sitemap_section_target` that is not `llms`, `sitemap`, or `none`, and a `sitemap_section_target = 'llms'` whose `llmstxt` format is not wired to the home page;
@@ -248,6 +266,7 @@ enable                = true    # SITE-SCOPED. False emits no twin at all, and b
 front_matter          = true    # Emit the leading YAML front-matter block.
 canonical             = true    # Emit `canonical:` pointing at the page's HTML URL. Always the last key.
 last_updated          = true    # Emit `last_updated:` when .Lastmod differs from .Date. See the precondition below.
+build_time            = true    # Emit `build_time:` -- when the BUILD ran. See "The two time fields" below.
 license               = false   # Emit `license:` -- requires [params.agent.license] url.
 section_pages         = true    # Emit the member roster in a SECTION twin. See "The member roster" below.
 sitemap_section       = true    # Append the trailing pointer section.
@@ -322,9 +341,10 @@ Fields are emitted in a fixed order:
 | 2     | `description`        | non-empty                                                         |
 | 3     | `date`               | set (RFC 3339)                                                    |
 | 4     | `last_updated`       | `markdown.last_updated` and `.Lastmod` differs from `.Date`       |
-| 5     | the per-section keys | declared in `[params.agent.frontmatter.<section>]`, in that order |
-| 6     | `license`            | `markdown.license` and `license.url` is set                       |
-| 7     | `canonical`          | `markdown.canonical` -- **always last**                           |
+| 5     | `build_time`         | `markdown.build_time` (RFC 3339 with offset)                      |
+| 6     | the per-section keys | declared in `[params.agent.frontmatter.<section>]`, in that order |
+| 7     | `license`            | `markdown.license` and `license.url` is set                       |
+| 8     | `canonical`          | `markdown.canonical` -- **always last**                           |
 
 `canonical` carries the page's HTML URL, which is free and correct because the built-in `markdown` format sets `permalinkable = false`, so `.Permalink` inside the twin's own template already returns the HTML URL.
 
@@ -335,9 +355,37 @@ Declare the per-section vocabulary the site actually uses:
 keys = ['project_name', 'status', 'period_from', 'period_to', 'repository']
 ```
 
-**A section map must not repeat `title`, `description`, `date`, `last_updated`, `license`, or `canonical`.** The builder emits those itself, skips any per-section key that repeats one, and warns once per `<section>/<key>` pair. This is not politeness: YAML 1.2 makes two equal keys in one mapping node an error, so strict parsers reject the whole document and lenient ones silently keep one value -- a single duplicated `title` would make every twin in that section unreadable to exactly the tooling twins exist for.
+**A section map must not repeat `title`, `description`, `date`, `last_updated`, `build_time`, `license`, or `canonical`.** The builder emits those itself, skips any per-section key that repeats one, and warns once per `<section>/<key>` pair. All seven are reserved unconditionally, whatever their own switches say: a key reserved only while it is being emitted would let `build_time = false` publish a consumer's front-matter value under the module's own name. This is not politeness: YAML 1.2 makes two equal keys in one mapping node an error, so strict parsers reject the whole document and lenient ones silently keep one value -- a single duplicated `title` would make every twin in that section unreadable to exactly the tooling twins exist for.
 
 A key absent from a page is omitted, never emitted as an empty string or `null`. A key whose value is the string sentinel `present` is also omitted: it is a display convention for an open-ended range, and the literal string is not a date and must never reach a machine surface.
+
+### The two time fields
+
+A twin carries two timestamps, and they answer **different questions**. Conflating them is the failure this design exists to avoid: a reader that has learned a key means content time on one surface and build time on another cannot use either.
+
+| Key            | Answers                      | Source                | Shape                  |
+| -------------- | ---------------------------- | --------------------- | ---------------------- |
+| `last_updated` | When did the CONTENT change? | the page's `.Lastmod` | ISO date, `2026-06-15` |
+| `build_time`   | When did this BUILD run?     | one value per build   | RFC 3339 with offset   |
+
+`last_updated` cannot answer "am I holding a cached copy". A site that rebuilds on a schedule refreshes generated figures without touching a content file, so `last_updated` sits still while the published document changes. `build_time` is the field that moves, and its full RFC 3339 form is deliberate: a date alone cannot distinguish this morning's build from last night's.
+
+**The value is one string per build**, identical in every twin, in the `> Build time:` line of `llms.txt` and `/about.md`, in every language, and identical to what the [`build-time.html`](#build-timehtml) public partial returns -- so a site that stamps its own `<meta name="build-time">` from that partial publishes a value a reader can compare byte for byte against any of the module's documents. It is not persisted between builds, so a rebuild always produces a new one.
+
+Three independent switches decide which of the module's own documents carry it, mirroring the two independent `license` switches over one underlying fact:
+
+```toml
+[params.agent.markdown]
+build_time = true    # the `build_time:` front-matter key in every twin
+
+[params.agent.llms]
+build_time = true    # the `> Build time: <stamp>` line in llms.txt
+
+[params.agent.facts]
+build_time = true    # the same line in /about.md
+```
+
+**Consumer-visible consequence of leaving them on, stated plainly:** every twin, `llms.txt` and `/about.md` changes bytes on **every** build, even when no content changed. That is harmless for an ordinary deploy and it is exactly what a staleness detector requires -- but a consumer that diffs published output to decide whether to deploy, invalidates a CDN from a changed-file list, or commits `public/` to version control will now see the whole set change every build. Those consumers set the switches false. The default is on, because a stamp shipped off by default fixes the problem only for consumers who read this paragraph.
 
 ### `last_updated` accuracy precondition
 
@@ -357,25 +405,33 @@ The module's own surfaces all agree about this, because they share one filter, a
 
 ## llms.txt
 
-Publishes `/llms.txt` through the module's `llmstxt` output format, wired by adding `llmstxt` to `[outputs] home`.
+Publishes TWO link indexes from ONE page walk: the compact `/llms.txt` through the module's `llmstxt` output format, and the complete `/llms-index.txt` through `llmsindex` beside it. Both are wired by adding their format names to `[outputs] home`.
 
 > **What this file is worth, stated plainly.** [llmstxt.org](https://llmstxt.org/) is a **community convention with no registration authority and no confirmed major-crawler consumer**. Independent analyses have found no measurable citation benefit. It must not be presented as an SEO, AEO, or citation lever, and this module does not present it as one.
 
-Its real value here is narrower and real: the file is build-generated from the **same page collection** as `robots.txt`, the twins, and `/about.md`, through the one shared filter, so it cannot drift stale and cannot advertise a URL the twins never emit. It is a link index that points at the machine-readable forms; it carries no facts of its own -- the facts document does that.
+Their real value here is narrower and real: both files are build-generated from the **same page collection** as `robots.txt`, the twins, and `/about.md`, through the one shared filter and the one section-membership test, so they cannot drift stale, cannot advertise a URL the twins never emit, and cannot disagree with each other about what a section holds. They are link indexes pointing at the machine-readable forms; they carry no facts of their own -- the facts document does that.
 
 ```toml
 [params.agent.llms]
-enable = true
+enable = true          # SITE-SCOPED. False switches off BOTH documents.
 title = ''             # falls back to site.Title
 summary = ''           # the one-line blockquote
 notes = ''             # optional free prose
 link_markdown = true   # link the twin rather than the HTML page
 license = false
+build_time = true      # emit the `> Build time: <stamp>` line
+flag = 'llms_featured' # front-matter key that `select = 'flagged'` reads
+
+[params.agent.llms_index]
+enable = true          # SITE-SCOPED. False switches off the COMPLETE index alone.
 
 [[params.agent.llms.sections]]
 name = 'Blog'
 section = 'blog'
+select = 'first'       # 'first' | 'flagged' | 'all'
+order = 'weight'       # 'weight' | 'date' | 'title'
 limit = 0              # 0 = complete
+flag = 'llms_featured' # overrides [params.agent.llms] flag for this entry
 
 [[params.agent.llms.optional]]
 name = 'Sitemap'
@@ -383,17 +439,89 @@ url = '/sitemap.xml'
 note = 'Every published URL.'
 ```
 
-The document is: exactly one H1 line, a blockquote summary, an optional blockquote license line, optional prose, a `## Start here` section carrying the home page's own Markdown twin, one H2 per configured section listing `- [name](url): note` items, and a final `## Optional` section collecting the `[[params.agent.llms.optional]]` entries plus the module's own derived Agent Skills entry described below. `Optional`'s heading is emitted only when at least one entry of either kind survived, because an empty H2 claims a section that is not there. `Optional` is a protocol token fixed by the convention and is deliberately not translated; `Start here` is ordinary prose and is translated, through the `agent_llms_start_heading` key.
+Both documents have the same shape: exactly one H1 line, a blockquote summary, an optional blockquote license line, an optional blockquote `> Build time: <stamp>` line, optional prose, a `## Start here` section carrying the derived routes, one H2 per configured section listing `- [name](url): note` items, and a final `## Optional` section collecting the `[[params.agent.llms.optional]]` entries plus the module's own derived Agent Skills entry described below. `Optional`'s heading is emitted only when at least one entry of either kind survived, and `Start here`'s likewise, because an empty H2 claims a section that is not there. `Optional` is a protocol token fixed by the convention and is deliberately not translated; `Start here` is ordinary prose and is translated, through the `agent_llms_start_heading` key.
+
+They differ in exactly two places: the compact file applies each section's selection principle while the complete one lists every section whole, and the compact file names the complete index while the complete one does not name itself.
+
+### Which file to start with, and why this beats one file with a longer `## Optional`
+
+**Start with `/llms.txt`.** It is the file the convention names, it is the one an agent finds without being told, and its `## Start here` section names the complete index -- so a narrower selection costs REACH, not ACCESS, and nothing is more than one further fetch away. Fetch `/llms-index.txt` when you want the whole catalogue.
+
+The one-file alternative -- keep everything, and let the overflow live under a longer `## Optional` -- loses on the convention's own terms. Verbatim from [llmstxt.org](https://llmstxt.org/): "Note that the 'Optional' section has a special meaning-if it's included, the URLs provided there can be skipped if a shorter context is needed. Use it for secondary information which can often be skipped." An agent conforming to that has been told it may drop those URLs, which is exactly backwards for pages a cap removed: they are the ones a reader who wants MORE goes looking for. Filing the overflow under the heading that means "safe to drop" defeats the point of having it.
+
+Two other things the split buys. The compact file's size stays bounded by configuration rather than growing with the content forever, which is the problem it exists to solve -- the document an agent reads FIRST is otherwise the one that gets most expensive as a site succeeds. And the route to everything is ONE link in the section an agent is told to keep, rather than a tail of links in the section it is told it may discard.
+
+A second file is not a second source. Both come from the same page walk and the same section-membership test, so a page added to the content tree appears in both or in neither, and neither file can name a page the twins do not publish.
+
+### The selection principle, per section
+
+**A cap tells a consumer nothing unless they know what it keeps**, so start with the default order. With no `order` key the module emits no sort at all and lists the section in Hugo's own page order: **weight ascending with unweighted pages LAST, then date descending, then title**. A section whose pages carry authored weights therefore keeps its most important entries, and a section with none degrades to newest-first. Both are usually what a compact index wants, which is why the shipped default leaves the order alone -- and why `order = 'weight'` is spelled for the principle rather than as `'default'`: a value named for its status would silently change meaning if the default ever moved.
+
+Sections differ in kind rather than only in size -- a blog's useful short list is its newest posts, a projects roster's is the ones the author ranked highest, a certifications list may want the ones still valid -- so the principle is configuration, per section, beside the cap:
+
+| Key | Values | Default | What it does |
+| --- | --- | --- | --- |
+| `select` | `'first'`, `'flagged'`, `'all'` | `'first'` | Which pages earn a place: the leading ones, the ones an author flagged, or every one of them. |
+| `order` | `'weight'`, `'date'`, `'title'` | `'weight'` | The axis that decides which pages survive the cap. `'weight'` emits no sort and keeps the site's own order (weight ascending with unweighted pages last, then date descending, then title); `'date'` sorts **newest first**; `'title'` sorts **alphabetically ascending**. |
+| `limit` | non-negative whole number | `0` | The cap. `0` means complete. Ignored under `select = 'all'`. |
+| `flag` | a front-matter key name | `[params.agent.llms] flag` | Which key `select = 'flagged'` reads. Shipped as `llms_featured`. |
+
+The pipeline is uniform for every principle: **filter, then order, then cap.** So `limit` caps a flagged selection too -- an author who flags forty pages would otherwise get a forty-entry "compact" section, reintroducing exactly the unbounded growth the split exists to fix -- and `order` decides which entries survive that cap whichever principle chose them. `select = 'all'` is the one uncapped shape, because naming everything is the whole content of that principle.
+
+`select = 'flagged'` reads the flag from the page's own front matter, never from site params, so a site that happens to carry a same-named `[params]` key does not flag every page. The truthy spellings are `true`, `1`, `yes` and `on`, matching every other boolean the module accepts. Letter case folds, because Hugo lowercases front-matter keys -- but underscores and hyphens do not, so `llms-featured` will not find `llms_featured`.
+
+```toml
+[[params.agent.llms.sections]]
+name = 'Recent posts'
+section = 'blog'
+limit = 5              # the newest five, since these pages carry no weights
+
+[[params.agent.llms.sections]]
+name = 'Featured projects'
+section = 'projects'
+select = 'flagged'     # whatever the author marked, however many
+
+[[params.agent.llms.sections]]
+name = 'Certifications'
+section = 'certifications'
+select = 'all'         # a small section is complete in both files
+```
+
+**These four keys govern the compact file only.** No value of any of them can reach `/llms-index.txt`, which is what "never truncated" means here: it is a property of the renderer rather than a claim about how a consumer configured it.
+
+**Every wrong value degrades and warns once**, per the module's contract. An unrecognized `select` falls back to `'first'` and keeps your `limit`, because a typo in a new key must not delete content. An unrecognized `order` falls back to the site's own page order -- and that guard is the one that matters most: `sort` takes a FIELD NAME, and a name no page carries aborts template execution, so a consumer string is validated against the closed vocabulary and never interpolated into it. A `flag` that no page under the section carries omits the heading with a message naming the flag, distinct from the section-matches-nothing message because the remedies differ. `select = 'all'` beside a positive `limit` is a contradiction, and `select` wins, because it names the principle while `limit` parameterizes a different one.
+
+### The complete index (`/llms-index.txt`)
+
+Every page of every configured section, in the shared page walk's own order, with no cap and no selection. It is the route the compact file names, and it is the reason a narrower compact file is a curation decision rather than a loss.
+
+**It is still subject to the module's shared page filter**, and the distinction is worth stating precisely. A page a cap dropped is OMITTED from the compact file and present here. A page the module EXCLUDES -- `agent: false` or `agent: {exclude: true}` in its front matter, a `robots: noindex` page under the default `exclude_noindex`, the dedicated search page, or a page outside a configured `sections` allow-list -- is absent from every surface this module publishes, and the complete index is one of them. "Complete" means complete with respect to the cap, not with respect to the filter; a page whose twin was never written must not be advertised here any more than anywhere else.
+
+**Why `llms-index.txt` and not `llms-full.txt`.** That name is taken and means something else. The convention's own expansion files are FastHTML's `llms-ctx.txt` and `llms-ctx-full.txt`, and the de-facto `llms-full.txt` published by documentation platforms combines an entire site's page CONTENT into one document; sites that publish `llms-small.txt` / `llms-medium.txt` / `llms-full.txt` beside each other are publishing content documents that differ only in volume. So the `llms-<qualifier>.txt` slot is already owned by size words, and a link index published there would promise an agent that knows the convention the wrong thing. `index` distinguishes by KIND instead -- links, not bodies -- and it is the module's own vocabulary for these files. `llms-sitemap.txt` was rejected for a related reason: sitemaps.org already defines a plain-text sitemap format of one URL per line, so that name would promise a different syntax.
+
+**The module still ships no `llms-full.txt`, and the complete index is not it.** That file is the convention's full-CONTENT document: it duplicates page bodies the twins already publish at stable URLs, and carries real drift cost with no confirmed consumer. `/llms-index.txt` duplicates nothing -- it is a complete LINK index generated from the same page walk as the compact file, so there are no two copies of anything to fall out of step. That is the whole reason the drift objection which rules out the content file does not reach this one.
+
+Both formats set `mediaType = 'text/plain'`, not `text/markdown`, and that is deliberate: `text/markdown`'s suffixes are `md, mdown, markdown`, so `baseName = 'llms'` would publish `llms.md`. `root` is deliberately unset on both, so a multilingual site gets `/llms.txt` and `/ru/llms.txt` beside `/llms-index.txt` and `/ru/llms-index.txt`, rather than one path every language overwrites -- two documents of one page walk publish per language together or not at all.
+
+The complete index carries the same H1, summary, license line, build-time line and free prose as the compact file, from the same `[params.agent.llms]` keys. That is deliberate rather than lazy: a second `title` or `summary` to maintain is exactly the drift a shared page walk exists to prevent, so `[params.agent.llms_index]` holds nothing but `enable`.
+
+`[params.agent.llms_index] enable = false` withholds the complete index alone, in silence; `[params.agent.llms] enable = false` withholds both documents, because they share one renderer. Either way `llms.txt` stops naming the file rather than pointing at a URL that 404s.
+
+**`llmsindex` must be added to your `[outputs] home` list**, and the module cannot do it for you: Hugo does not merge a module's `[outputs]` configuration into the site's, and a site-level `[outputs]` key replaces the default list for that kind rather than extending it. A site that enables the complete index and does not wire the format gets one warning per build naming the edit and the replacement hazard, and `llms.txt` withholds the route rather than publishing a dead link.
 
 ### The `## Start here` section
 
-**`llms.txt` names the home page's own Markdown twin, derived, with no consumer action.** Pages otherwise reach this file only through `[[params.agent.llms.sections]]`, and section membership is a content-path prefix test that the home page's path of `/` can never satisfy: `section = '/'` normalizes to the empty string, which the empty-section guard refuses, and any real section value fails the prefix test. So the front door -- the twin an agent is most likely to fetch first, carrying whatever the home page says about the site -- was the one twin this index could never list, on every site that enables twins, with no configuration able to fix it short of hand-writing an `[[llms.optional]]` entry whose URL the module already knows how to compute.
+This heading collects the derived ROUTES -- the links an agent must not drop -- and emits itself only when at least one of them survived. There are two, in this order.
 
-The entry resolves through [`twin-url.html`](#twin-urlhtml), so it carries every publish gate the twin renderer applies: the master switch, `markdown.enable`, a home page opted out in front matter, and the `markdown` format not being wired for the home kind. When any of them withholds the file, this section emits nothing at all -- no heading, no URL, no warning. `link_markdown = false` suppresses it too, so a site that told `llms.txt` not to link twins gets no twin link here either, keeping the slot consistent with the section bullets rather than making the home page the one exception. The link text is the home page's own `title` and the note its own `description`, so the entry restates nothing you would have to maintain in two places.
+**The home page's own Markdown twin, derived, with no consumer action.** Pages otherwise reach this file only through `[[params.agent.llms.sections]]`, and section membership is a content-path prefix test that the home page's path of `/` can never satisfy: `section = '/'` normalizes to the empty string, which the empty-section guard refuses, and any real section value fails the prefix test. So the front door -- the twin an agent is most likely to fetch first, carrying whatever the home page says about the site -- was the one twin this index could never list, on every site that enables twins, with no configuration able to fix it short of hand-writing an `[[llms.optional]]` entry whose URL the module already knows how to compute.
 
-**Why it is not in `## Optional`,** where the derived Agent Skills entry lives and where the derivation machinery already existed. The convention defines that heading as links whose "URLs provided there can be skipped if a shorter context is needed... secondary information which can often be skipped" -- and a site's front door is the last thing an agent should drop. The convention reserves no name for an entry point and constrains no H2 name other than `Optional`, and among the generated `llms.txt` files surveyed for this decision the only one that links its own overview at all places it first, ahead of the ordinary sections. So it gets its own heading in first position. Preamble prose was rejected for the reason the rest of the document is a link list: an agent parses `- [name](url)`, not a sentence. The contrast with the Agent Skills entry is the point -- that index genuinely is secondary and an agent can drop it without losing the site.
+The entry resolves through [`twin-url.html`](#twin-urlhtml), so it carries every publish gate the twin renderer applies: the master switch, `markdown.enable`, a home page opted out in front matter, and the `markdown` format not being wired for the home kind. When any of them withholds the file, this entry is not emitted -- no URL, no warning. `link_markdown = false` suppresses it too, so a site that told `llms.txt` not to link twins gets no twin link here either, keeping the slot consistent with the section bullets rather than making the home page the one exception. The link text is the home page's own `title` and the note its own `description`, so the entry restates nothing you would have to maintain in two places.
 
-A consumer who already lists the same URL in `[[params.agent.llms.optional]]` keeps their own name and note: URLs are compared after absolutization, and a match suppresses the derived entry -- and with it the `## Start here` heading -- rather than doubling the link under two headings.
+**The complete index, in the compact file only** -- a document does not link itself. This is the entry that makes a narrower selection cost reach rather than access. It is gated on the complete index actually publishing, through the same shared implementation [`surfaces.html`](#surfaceshtml) reads, so the two callers can never disagree; it is named and annotated through the `agent_llms_index_entry_name` and `agent_llms_index_entry_note` i18n keys.
+
+**Why neither is in `## Optional`,** where the derived Agent Skills entry lives and where the derivation machinery already existed. The convention defines that heading as links whose "URLs provided there can be skipped if a shorter context is needed... secondary information which can often be skipped" -- and neither a site's front door nor the only route to what a cap dropped is something an agent should drop. The convention reserves no name for an entry point and constrains no H2 name other than `Optional`, and among the generated `llms.txt` files surveyed for this decision the only one that links its own overview at all places it first, ahead of the ordinary sections. So these get their own heading in first position. Preamble prose was rejected for the reason the rest of the document is a link list: an agent parses `- [name](url)`, not a sentence. The contrast with the Agent Skills entry is the point -- that index genuinely is secondary and an agent can drop it without losing the site.
+
+A consumer who already lists either URL in `[[params.agent.llms.optional]]` keeps their own name and note: URLs are compared after absolutization, and a match suppresses the derived entry rather than doubling the link under two headings. Suppressing one leaves the other in place; suppressing both removes the heading with them.
 
 **Every URL is absolute**, including the ones you write in `[[params.agent.llms.optional]]`: a site-relative value there is resolved against the full `baseURL` **including its path**, whether or not you write the leading slash, while anything carrying a scheme (`https:`, `mailto:`, `tel:`) or a protocol-relative `//` prefix passes through untouched. This file is routinely ingested detached from the URL it was fetched from, where a bare `/sitemap.xml` has no origin to resolve against. `/about.md` follows the same rule, and so does the `href` on each `[params.agent.facts.contact]` channel.
 
@@ -403,9 +531,11 @@ The "including its path" is load-bearing and is why the module normalizes rather
 
 **A section entry needs both `section` and `name`, and is skipped with a warning without them.** Both omissions fail invisibly otherwise. An empty `section` matches _every_ page, because the prefix test degenerates to "starts with `/`" -- so a single `sections =` for `section =` typo would publish the whole site under one heading and look deliberate. An entry with no `name` has no H2 to open, so its bullets land under the previous entry's heading, where every Markdown parser reads them as that section's links.
 
-The `mediaType` is `text/plain`, not `text/markdown`, and that is deliberate: `text/markdown`'s suffixes are `md, mdown, markdown`, so it would publish `llms.md`. `root` is deliberately unset, so a multilingual site gets `/llms.txt` and `/ru/llms.txt` rather than one path every language overwrites.
+### The build-time line
 
-The module ships **no `llms-full.txt`**: it duplicates page bodies the twins already publish at stable URLs, and carries real drift cost with no confirmed consumer.
+With `[params.agent.llms] build_time = true` (the default) both documents carry one `> Build time: 2026-08-03T03:05:13+03:00` line, immediately after the license line and before the first section heading. The convention allows it: after the H1 and the blockquote summary come "zero or more markdown sections... of any type except headings" before the H2 file lists, which is the same slot the license line already occupies. A `#`-prefixed comment was rejected -- the convention defines no comment syntax and a leading `#` is an H1, which would break the exactly-one-H1 rule.
+
+These documents get the stamp because `llms.txt` is the first one an agent reads and the complete index is the one most likely to be cached, and both are routinely ingested detached from their origin, where no HTTP `Date` header survives. The value is byte-identical between them, to every twin's `build_time` key, to `/about.md`'s own line, and to what [`build-time.html`](#build-timehtml) returns. The label is untranslated and carries no trailing period, both for the same reason: the value exists to be extracted and compared, and a translated label or a swallowed period breaks that. See [The two time fields](#the-two-time-fields) for what it answers and for the byte-churn consequence of leaving it on.
 
 ## The facts document (`/about.md`)
 
@@ -423,6 +553,7 @@ enable = true
 title = ''
 summary = ''
 link_markdown = true
+build_time = true             # the `> Build time: <stamp>` line, under the H1 and summary
 sitemap_section = true
 
 [[params.agent.facts.sections]]
@@ -443,6 +574,8 @@ label_field = 'label'
 value_field = 'value'
 url_field = 'href'
 ```
+
+It carries the same `> Build time: <stamp>` line `llms.txt` does, in the same slot under the H1 and summary and in the same label-colon form, so one extraction rule reads both documents and a reader comparing them compares like with like. Switch it off with `[params.agent.facts] build_time = false`; see [The two time fields](#the-two-time-fields).
 
 Each section entry emits one **top-level** bullet per page carrying its title, HTML URL, and twin URL, then one indented bullet per key in the same `[params.agent.frontmatter.<section>]` map the twins use -- so both surfaces describe a page with one vocabulary. The `present` sentinel is rendered here as the prose it is, deliberately unlike the twin front matter, which omits it: this document is read as prose, and "present" is a true and useful thing to say about an open-ended range.
 
@@ -514,7 +647,7 @@ license = true    # emit the license blockquote line in llms.txt
 
 ## i18n
 
-The module authors exactly twelve user-facing strings: seven headings in generated documents, three display labels for the surface entries returned by the [`surfaces.html`](#surfaceshtml) public partial, and the name and note of the derived Agent Skills index entry in `llms.txt`. English and Russian ship with the module; every lookup carries an English fallback, so a site whose language ships no translation still renders a real string rather than an empty one.
+The module authors exactly fifteen user-facing strings: seven headings in generated documents, four display labels for the surface entries returned by the [`surfaces.html`](#surfaceshtml) public partial, and the name and note of two derived `llms.txt` entries -- the complete link index in `## Start here` and the Agent Skills index in `## Optional`. English and Russian ship with the module; every lookup carries an English fallback, so a site whose language ships no translation still renders a real string rather than an empty one.
 
 | Key                             | English                                                        |
 | ------------------------------- | -------------------------------------------------------------- |
@@ -526,8 +659,11 @@ The module authors exactly twelve user-facing strings: seven headings in generat
 | `agent_facts_contact_heading`   | `Contact`                                                      |
 | `agent_llms_start_heading`      | `Start here`                                                   |
 | `agent_surface_llms`            | `llms.txt`                                                     |
+| `agent_surface_llms_index`      | `Complete index`                                               |
 | `agent_surface_facts`           | `Site facts`                                                   |
 | `agent_surface_skills`          | `Agent Skills index`                                           |
+| `agent_llms_index_entry_name`   | `Complete index`                                               |
+| `agent_llms_index_entry_note`   | `Every page of every section, complete.`                       |
 | `agent_skills_entry_name`       | `Agent Skills index`                                           |
 | `agent_skills_entry_note`       | `Machine-readable index of this site's published agent skills` |
 
@@ -539,7 +675,7 @@ The twin's trailing pointer heading follows the resolved `sitemap_section_target
 
 The module deliberately owns **no identity record, resolver, or validator**. A person record's contract is a list of the consuming site's own config paths, which no second site shares, and the module's only would-be consumer of such a record is the `agentfacts` document. A consuming site that wants build-time identity coherence implements it site-side; the module's `[facts.identity]` rows read a real content page and remain the module's own mechanism.
 
-The module ships no `llms-full.txt`, no taxonomy or term twins, no `Accept`-header content negotiation, no CSS, and no JavaScript.
+The module ships no `llms-full.txt` -- the convention's full-CONTENT document, which duplicates page bodies the twins already publish at stable URLs and carries real drift cost with no confirmed consumer. The [complete LINK index](#the-complete-index-llms-indextxt) it does ship is a different artifact and the drift objection does not reach it: it comes from the same page walk as the compact file, so there are no two copies of anything to fall out of step. The module also ships no taxonomy or term twins, no `Accept`-header content negotiation, no CSS, and no JavaScript.
 
 ## Module Structure
 
@@ -558,6 +694,7 @@ modules/agent-readiness/
 │   ├── page.markdown.md
 │   ├── section.markdown.md
 │   ├── home.llmstxt.txt
+│   ├── home.llmsindex.txt
 │   ├── home.agentfacts.md
 │   ├── home.agentskills.json
 │   └── _partials/
@@ -572,18 +709,24 @@ modules/agent-readiness/
 │           ├── skills.html
 │           ├── twin-url.html       # PUBLIC API. See "Public partials".
 │           ├── surfaces.html       # PUBLIC API. See "Public partials".
+│           ├── build-time.html     # PUBLIC API. See "Public partials".
 │           └── lib/
 │               ├── absolute-url.html
+│               ├── build-time-value.html
 │               ├── flatten-value.html
 │               ├── inline.html
+│               ├── llms-entry.html
+│               ├── llms-index-url.html
+│               ├── llms-select.html
 │               ├── map-list.html
 │               ├── markdown-link.html
 │               ├── page-excluded.html
 │               ├── page-included.html
+│               ├── section-pages.html
 │               ├── section.html
 │               ├── skills-index-url.html
 │               └── warn.html
-├── test/                       # Validation suite: sixteen Hugo fixture builds plus Node build-output assertions. See test/README.md.
+├── test/                       # Validation suite: twenty Hugo fixture builds plus Node build-output assertions. See test/README.md.
 ├── go.mod
 ├── hugo.toml
 └── README.md
