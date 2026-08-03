@@ -429,7 +429,13 @@
      shipped target-derived default. Hugo merges i18n files per key with
      the project's value beating a module's, and T returns "" for a key no
      source defines, which the default pipe catches, so the override key
-     resolves exactly when a site defines it. */}}
+     resolves exactly when a site defines it.
+
+     llms_partial_note is the one FORMAT STRING among them: it carries two %d
+     verbs that lib/llms-partial-notice.html fills with the kept and admitted
+     page counts. It is resolved here like every other key rather than
+     formatted here, because the counts are per section and this partial runs
+     once per page. */}}
 {{- $i18n := dict
   "sitemap_heading" (T "agent_sitemap_heading" | default (T "agent_sitemap_heading_sitemap" | default "Sitemap"))
   "sitemap_heading_llms" (T "agent_sitemap_heading" | default (T "agent_sitemap_heading_llms" | default "Site index"))
@@ -440,6 +446,7 @@
   "llms_start_heading" (T "agent_llms_start_heading" | default "Start here")
   "llms_index_entry_name" (T "agent_llms_index_entry_name" | default "Complete index")
   "llms_index_entry_note" (T "agent_llms_index_entry_note" | default "Every page of every section, complete.")
+  "llms_partial_note" (T "agent_llms_partial_note" | default "This section lists %d of %d pages; a page missing here may still exist on the site.")
   "surface_llms" (T "agent_surface_llms" | default "llms.txt")
   "surface_llms_index" (T "agent_surface_llms_index" | default "Complete index")
   "surface_facts" (T "agent_surface_facts" | default "Site facts")

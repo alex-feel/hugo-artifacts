@@ -1,13 +1,15 @@
 # The EXTRA fixture. Its whole purpose is to pin the twin-extra hook contract
 # (layouts/_partials/agent-readiness/twin-extra.html, consumer-authored,
-# module-shipped-none) together with the consumer-side agent_sitemap_heading
-# i18n override, which must win over BOTH target-derived defaults
-# (agent_sitemap_heading_sitemap / agent_sitemap_heading_llms).
+# module-shipped-none) together with the consumer-side i18n overrides: the
+# agent_sitemap_heading key, which must win over BOTH target-derived defaults
+# (agent_sitemap_heading_sitemap / agent_sitemap_heading_llms), and
+# agent_llms_partial_note, the module's one format string, whose two %d verbs
+# must be filled with a capped section's kept and admitted counts.
 #
 # It needs a fixture of its own rather than another environment of the
 # default one: the hook partial is a real template file under layouts/, which
-# every environment of the same fixture would share, and the override key
-# lives in i18n/en.toml, which -- like [module] imports -- is per-fixture
+# every environment of the same fixture would share, and the override keys
+# live in i18n/en.toml, which -- like [module] imports -- is per-fixture
 # rather than per-environment.
 baseURL = 'https://extra.example/'
 title = 'Agent Readiness Extra Fixture'
@@ -37,3 +39,17 @@ locale = 'en-us'
     # so `extra` must be named here or its two regular pages would drop out
     # of every enumerating surface and out of twin membership.
     sections = ['blog', 'extra']
+
+    [params.agent.llms]
+
+      # ONE capped section, which is what makes the agent_llms_partial_note
+      # override above render at all: the notice is emitted only where the
+      # selection dropped a page the shared filter admitted. `extra` admits
+      # two regular pages (included and frontmatter-only; excluded carries
+      # `agent: false`), so this entry keeps one of two and the published line
+      # must read "1 shown, 2 admitted" -- a swap of the verbs, or a count
+      # taken from the wrong collection, changes those digits.
+      [[params.agent.llms.sections]]
+        name = 'Extra'
+        section = 'extra'
+        limit = 1

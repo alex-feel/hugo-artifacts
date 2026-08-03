@@ -19,6 +19,7 @@ import {
   notwinsDir,
   offDir,
   markdownLinks,
+  pageBullets,
   sectionsWithTopLevelBullets,
   warnCount,
 } from './helpers.js';
@@ -111,9 +112,13 @@ test('limit = 0 lists everything and a positive limit truncates', () => {
   // section and differ only in `limit`. Without the second entry the
   // truncation branch never executes at all, because every other entry in
   // the fixture pins limit = 0.
+  //
+  // Counted over PAGE bullets: a truncated section also opens with a
+  // disclosure bullet, which is not a page and which 12-llms-index.spec.js
+  // asserts on its own terms.
   const sections = sectionsWithTopLevelBullets(read('llms.txt'));
-  assert.equal(sections.get('Blog').length, 3, 'limit = 0 lists every admitted page');
-  assert.equal(sections.get('Recent Blog').length, 1, 'limit = 1 lists exactly one');
+  assert.equal(pageBullets(sections.get('Blog')).length, 3, 'limit = 0 lists every admitted page');
+  assert.equal(pageBullets(sections.get('Recent Blog')).length, 1, 'limit = 1 lists exactly one');
 });
 
 // ---- The twin's trailing pointer block ----

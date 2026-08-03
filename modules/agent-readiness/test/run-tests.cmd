@@ -1,5 +1,5 @@
 @echo off
-rem Validates the shipped data files, then builds NINETEEN fixture sites with
+rem Validates the shipped data files, then builds TWENTY fixture sites with
 rem hugo (builds, not servers: no port binding, and a finite build exits by
 rem itself) and runs the Node build-output assertion suite against all
 rem twenty.

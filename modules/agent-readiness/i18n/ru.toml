@@ -4,11 +4,12 @@
 # ({{ T "key" | default "English" }}), so a site whose language ships no
 # translation still renders a real heading rather than an empty string.
 #
-# The module authors exactly fifteen strings: seven headings in generated
+# The module authors exactly sixteen strings: seven headings in generated
 # documents, four display labels for the surface entries returned by the
-# agent-readiness/surfaces.html public partial, and the name and note of two
+# agent-readiness/surfaces.html public partial, the name and note of two
 # derived llms.txt entries -- the complete link index in the `## Start here`
-# section and the Agent Skills index in `## Optional`.
+# section and the Agent Skills index in `## Optional` -- and the notice a
+# narrowed section of the compact /llms.txt opens with.
 # "## Optional" in llms.txt is deliberately NOT a key here: it is fixed by
 # the llmstxt.org convention and is a protocol token, not prose.
 # agent_sitemap_heading is deliberately NOT shipped either, for a different
@@ -64,6 +65,20 @@ agent_llms_index_entry_name = "Полный индекс"
 # describes the TARGET rather than claiming the compact file is truncated,
 # which with no caps configured it is not.
 agent_llms_index_entry_note = "Каждая страница каждого раздела, полностью."
+
+# The notice that opens a section of the compact /llms.txt whose selection
+# dropped pages the shared filter admitted, so a reader cannot mistake a
+# selection for the whole list and read an absence as a fact about the site.
+# A section that dropped nothing does not carry it, and the complete index
+# never does.
+#
+# THIS VALUE IS A FORMAT STRING and is the module's only one: it carries
+# exactly two %d verbs, the number of pages KEPT and then the number
+# ADMITTED, in that order. A translation may place them anywhere in the
+# sentence, but must keep both, keep them in that order, and keep them
+# spelled %d -- a dropped or renamed verb prints a Go formatting error into
+# a published document instead of a number.
+agent_llms_partial_note = "В этом разделе перечислено %d из %d страниц; отсутствие страницы здесь не означает, что её нет на сайте."
 
 # Display label for the llms.txt entry returned by surfaces.html.
 # "llms.txt" is the llmstxt.org protocol token and stays untranslated in

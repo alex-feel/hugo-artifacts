@@ -5,3 +5,18 @@
 # module's default markdown.sitemap_section_target = "llms" -- must carry
 # "## Custom heading" rather than the shipped "## Site index" default.
 agent_sitemap_heading = "Custom heading"
+
+# Overrides the narrowed-selection notice the compact llms.txt opens a capped
+# section with. Two things are proven by one override, and neither can be
+# proven in a build that renders the shipped English string: that the sentence
+# is resolved through T at all rather than written into the template, where
+# every English assertion elsewhere would pass just the same; and that the two
+# %d verbs are filled with the KEPT and ADMITTED counts of a CONSUMER's format
+# string, in that order, rather than with a fixed prefix the module composes
+# around a translated tail.
+#
+# The verbs are deliberately spelled in the opposite order from the shipped
+# string's reading, so the numbers cannot both be right by coincidence: this
+# build's `Extra` section keeps 1 of 2, and a swap would publish "2 shown, 1
+# admitted".
+agent_llms_partial_note = "Partial: %d shown, %d admitted."

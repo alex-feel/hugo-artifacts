@@ -1,0 +1,86 @@
+{{/*
+  agent-readiness/lib/llms-partial-notice.html -- utility (LIB tier).
+
+  Purpose: build the ONE line that tells a reader of the COMPACT /llms.txt
+  that the section it stands in is a SELECTION rather than the whole list,
+  and where the whole list is.
+
+  WHY THE DOCUMENT HAS TO SAY THIS. A capped section reads exactly like a
+  complete one: an H2 and a list of pages, with nothing in either to mark the
+  difference. An agent that reads `## Skills`, does not find a topic there
+  and answers "no experience with it" has produced a confident FALSE
+  NEGATIVE -- a wrong factual claim about a real person, from the document
+  the convention tells agents to read FIRST. That is worse than "I do not
+  know", and it is a failure the reader cannot detect: absence is
+  indistinguishable from omission unless the omission is stated.
+
+  WHY IN THE SECTION, and not once in the preamble. The reader this protects
+  is reading ONE section and asking one question of it. A preamble sentence
+  is a sentence they may have already passed, and a consuming site's prose on
+  some other page -- an /agents/ page, a README -- is on a surface an agent
+  that walked straight into /llms.txt never fetched. The statement has to be
+  where the omission is.
+
+  WHY THE MODULE AND NOT THE CONSUMER. Only the generator holds both numbers,
+  and it holds them for free at the moment it writes the H2: how many pages
+  the shared filter admitted for the section, and how many survived the
+  entry's `select` and `limit`. A consumer can only guess, and a consumer who
+  hard-codes "these sections are partial" in `notes` has authored a claim
+  that goes stale the day a cap moves or a section grows past it. The module
+  already derives what only it can know -- the `## Start here` routes and the
+  Agent Skills entry are emitted, not left to the consumer to declare.
+
+  THE COUNTS ARE THE POINT, not decoration: "19 of 47" tells the reader the
+  SCALE of what it is not seeing, which decides whether one more fetch is
+  worth it. A bare "this list is partial" leaves them unable to tell a
+  section missing one page from one missing thirty.
+
+  THE SHAPE IS A LIST ITEM, so the section stays a pure list. llmstxt.org
+  defines an H2 section as a "file list" whose items are `[name](url)` plus
+  optional notes, and says nothing about prose between the heading and the
+  first item; an item that IS a link therefore stays inside the grammar,
+  while a prose line would sit in a slot the convention never described. It
+  is emitted FIRST, ahead of the pages it qualifies, because a caveat placed
+  after the entries is one a reader who stopped early never reached.
+
+  WITHOUT A ROUTE IT STILL SPEAKS. A site can cap sections while publishing
+  no complete index at all -- `llms_index.enable = false`, or the `llmsindex`
+  format left unwired -- and the false negative is exactly as available to
+  its readers. So the disclosure degrades to a linkless item rather than
+  disappearing: the remedy is gone, the honesty is not. That item is the one
+  shape here the convention's grammar does not describe, and it is the
+  deliberate cost of not letting a configuration silence a true statement.
+
+  Expected context (dict):
+  - .cfg   (dict)   - The resolved config from agent-readiness/config.html.
+  - .url   (string) - The complete index's absolute URL, or "" when that
+    document does not publish.
+  - .kept  (int)    - How many pages the selection kept.
+  - .total (int)    - How many the shared filter admitted.
+
+  Return value: the bullet line (string), with no trailing newline. ONE
+  terminal return.
+*/}}
+
+{{- $cfg := .cfg -}}
+{{- $url := .url | default "" -}}
+
+{{/* The sentence is a FORMAT STRING carrying two %d verbs, kept then total,
+     resolved through the same English-default idiom as every other string in
+     $cfg.i18n. The counts sit inside the translated sentence rather than in a
+     fixed prefix because their position is a property of the language: a
+     translation that must lead with them, or interpose a word between them,
+     can. It goes through lib/inline.html after formatting, like every other
+     interpolated value in these line-oriented documents, because a consumer
+     may override the key with a value carrying a line break. */}}
+{{- $note := partial "agent-readiness/lib/inline.html" (printf $cfg.i18n.llms_partial_note .kept .total) -}}
+
+{{/* The link reuses the complete index's own name, so one document does not
+     call one file two things: the `## Start here` entry and every section
+     notice name it identically. */}}
+{{- $line := printf "- %s" $note -}}
+{{- with $url -}}
+  {{- $line = printf "- %s: %s" (partial "agent-readiness/lib/markdown-link.html" (dict "name" $cfg.i18n.llms_index_entry_name "url" .)) $note -}}
+{{- end -}}
+
+{{- return $line -}}

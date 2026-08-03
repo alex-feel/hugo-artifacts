@@ -124,7 +124,7 @@ test('every bots.toml entry carries a token and a vendor', () => {
   }
 });
 
-test('i18n ships the same fifteen keys in every language', () => {
+test('i18n ships the same sixteen keys in every language', () => {
   const en = parse(readFileSync(join(moduleRoot, 'i18n', 'en.toml'), 'utf8'));
   const ru = parse(readFileSync(join(moduleRoot, 'i18n', 'ru.toml'), 'utf8'));
   const expected = [
@@ -133,6 +133,7 @@ test('i18n ships the same fifteen keys in every language', () => {
     'agent_facts_title',
     'agent_llms_index_entry_name',
     'agent_llms_index_entry_note',
+    'agent_llms_partial_note',
     'agent_llms_start_heading',
     'agent_section_pages_heading',
     'agent_sitemap_heading_llms',
@@ -148,5 +149,25 @@ test('i18n ships the same fifteen keys in every language', () => {
   assert.deepEqual(Object.keys(ru).sort(), expected);
   for (const key of expected) {
     assert.ok(ru[key].length > 0, `${key} must be translated, not empty`);
+  }
+});
+
+test('the one format-string key carries its two %d verbs in every language', () => {
+  // agent_llms_partial_note is filled with the kept and admitted page counts
+  // at render time. A translation that drops a verb, renames one, or reorders
+  // them does not fail a build and does not fail any output assertion that
+  // reads the ENGLISH tree -- it publishes a Go formatting error ("%!d(MISSING)")
+  // into a document whose whole purpose is to be read literally by machines.
+  // Nothing else in the module can catch that, because no fixture builds in
+  // Russian, so the shipped strings are checked as data here.
+  for (const lang of ['en', 'ru']) {
+    const value = parse(
+      readFileSync(join(moduleRoot, 'i18n', `${lang}.toml`), 'utf8'),
+    ).agent_llms_partial_note;
+    assert.deepEqual(
+      [...value.matchAll(/%[a-zA-Z]|%\[\d+\][a-zA-Z]/g)].map((m) => m[0]),
+      ['%d', '%d'],
+      `${lang}: the notice must carry exactly two %d verbs, kept then admitted`,
+    );
   }
 });

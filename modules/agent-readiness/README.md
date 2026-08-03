@@ -439,9 +439,9 @@ url = '/sitemap.xml'
 note = 'Every published URL.'
 ```
 
-Both documents have the same shape: exactly one H1 line, a blockquote summary, an optional blockquote license line, an optional blockquote `> Build time: <stamp>` line, optional prose, a `## Start here` section carrying the derived routes, one H2 per configured section listing `- [name](url): note` items, and a final `## Optional` section collecting the `[[params.agent.llms.optional]]` entries plus the module's own derived Agent Skills entry described below. `Optional`'s heading is emitted only when at least one entry of either kind survived, and `Start here`'s likewise, because an empty H2 claims a section that is not there. `Optional` is a protocol token fixed by the convention and is deliberately not translated; `Start here` is ordinary prose and is translated, through the `agent_llms_start_heading` key.
+Both documents have the same shape: exactly one H1 line, a blockquote summary, an optional blockquote license line, an optional blockquote `> Build time: <stamp>` line, optional prose, a `## Start here` section carrying the derived routes, one H2 per configured section listing `- [name](url): note` items -- opened, in the compact file only, by [one disclosure item when that section's selection dropped pages](#a-narrowed-section-says-so-in-the-section) -- and a final `## Optional` section collecting the `[[params.agent.llms.optional]]` entries plus the module's own derived Agent Skills entry described below. `Optional`'s heading is emitted only when at least one entry of either kind survived, and `Start here`'s likewise, because an empty H2 claims a section that is not there. `Optional` is a protocol token fixed by the convention and is deliberately not translated; `Start here` is ordinary prose and is translated, through the `agent_llms_start_heading` key.
 
-They differ in exactly two places: the compact file applies each section's selection principle while the complete one lists every section whole, and the compact file names the complete index while the complete one does not name itself.
+They differ in exactly three places, and the third follows from the first: the compact file applies each section's selection principle while the complete one lists every section whole; a compact section that dropped pages opens with one line saying so, which the complete file has no occasion for; and the compact file names the complete index while the complete one does not name itself.
 
 ### Which file to start with, and why this beats one file with a longer `## Optional`
 
@@ -489,6 +489,27 @@ select = 'all'         # a small section is complete in both files
 
 **These four keys govern the compact file only.** No value of any of them can reach `/llms-index.txt`, which is what "never truncated" means here: it is a property of the renderer rather than a claim about how a consumer configured it.
 
+#### A narrowed section says so, in the section
+
+A section whose selection dropped pages the shared filter admitted opens with one disclosure item naming the counts and the complete index:
+
+```text
+## Skills
+
+- [Complete index](https://example.org/llms-index.txt): This section lists 19 of 47 pages; a page missing here may still exist on the site.
+- [Terraform](https://example.org/skills/terraform/index.md): ...
+```
+
+**Why the module emits this rather than leaving it to you.** A capped section reads exactly like a complete one -- an H2 and a list of pages, with nothing in either to mark the difference. An agent that reads such a section, does not find a topic in it, and answers "no experience with that" has produced a confident FALSE NEGATIVE from the document the convention tells it to read first. That is worse than "I do not know": it is a wrong factual claim, and the reader cannot detect it, because absence is indistinguishable from omission unless the omission is stated.
+
+**Why a page of your own cannot substitute for it.** Prose you write elsewhere -- an `/agents/` page, a README, the `notes` slot's preamble -- is on a surface the affected reader did not fetch: an agent that walked straight into `/llms.txt` and read one section never saw it. The statement has to be where the omission is. And only the generator holds the two numbers, for free, at the moment it writes the H2; a `notes` string that hard-codes "these sections are partial" is a claim that goes stale the day a cap moves or a section grows past it.
+
+**When it appears, exactly.** Only where the entry's `select` or `limit` dropped at least one admitted page -- so a `flagged` section discloses too, and an uncapped `select = 'first'` or a `select = 'all'` renders byte-for-byte what it rendered before this existed. A notice on every section would teach a reader to discount all of them, including the honest ones. `/llms-index.txt` never carries it, and neither does a section the shared page filter emptied for other reasons: a page `agent: false` excludes is absent from every surface, which is a different fact and not this one's to report.
+
+**It degrades rather than disappearing.** With no complete index to point at -- `[params.agent.llms_index] enable = false`, or `llmsindex` never wired -- the item is still emitted, without the link. The remedy is gone; the honesty is not. That linkless shape is the one thing here the [llmstxt.org](https://llmstxt.org/) grammar does not describe: an H2 section is a list of `[name](url)` items, which the linked form satisfies exactly, and which is why the disclosure is a list item rather than a prose line between the heading and the list.
+
+**There is no switch for it, deliberately.** The cap and its disclosure are one decision: a document that omits pages silently is the failure this exists to prevent, so the way to have no notice is to have nothing dropped -- `limit = 0`, or `select = 'all'`. The wording is yours through the `agent_llms_partial_note` i18n key, which is the module's one format string: it carries exactly two `%d` verbs, the kept count then the admitted one, in that order.
+
 **Every wrong value degrades and warns once**, per the module's contract. An unrecognized `select` falls back to `'first'` and keeps your `limit`, because a typo in a new key must not delete content. An unrecognized `order` falls back to the site's own page order -- and that guard is the one that matters most: `sort` takes a FIELD NAME, and a name no page carries aborts template execution, so a consumer string is validated against the closed vocabulary and never interpolated into it. A `flag` that no page under the section carries omits the heading with a message naming the flag, distinct from the section-matches-nothing message because the remedies differ. `select = 'all'` beside a positive `limit` is a contradiction, and `select` wins, because it names the principle while `limit` parameterizes a different one.
 
 ### The complete index (`/llms-index.txt`)
@@ -517,7 +538,7 @@ This heading collects the derived ROUTES -- the links an agent must not drop -- 
 
 The entry resolves through [`twin-url.html`](#twin-urlhtml), so it carries every publish gate the twin renderer applies: the master switch, `markdown.enable`, a home page opted out in front matter, and the `markdown` format not being wired for the home kind. When any of them withholds the file, this entry is not emitted -- no URL, no warning. `link_markdown = false` suppresses it too, so a site that told `llms.txt` not to link twins gets no twin link here either, keeping the slot consistent with the section bullets rather than making the home page the one exception. The link text is the home page's own `title` and the note its own `description`, so the entry restates nothing you would have to maintain in two places.
 
-**The complete index, in the compact file only** -- a document does not link itself. This is the entry that makes a narrower selection cost reach rather than access. It is gated on the complete index actually publishing, through the same shared implementation [`surfaces.html`](#surfaceshtml) reads, so the two callers can never disagree; it is named and annotated through the `agent_llms_index_entry_name` and `agent_llms_index_entry_note` i18n keys.
+**The complete index, in the compact file only** -- a document does not link itself. This is the entry that makes a narrower selection cost reach rather than access. It is gated on the complete index actually publishing, through the same shared implementation [`surfaces.html`](#surfaceshtml) reads, so the two callers can never disagree; it is named and annotated through the `agent_llms_index_entry_name` and `agent_llms_index_entry_note` i18n keys. Each narrowed section names the same URL again under the same label, so the disclosure and the route arrive together where the omission happened.
 
 **Why neither is in `## Optional`,** where the derived Agent Skills entry lives and where the derivation machinery already existed. The convention defines that heading as links whose "URLs provided there can be skipped if a shorter context is needed... secondary information which can often be skipped" -- and neither a site's front door nor the only route to what a cap dropped is something an agent should drop. The convention reserves no name for an entry point and constrains no H2 name other than `Optional`, and among the generated `llms.txt` files surveyed for this decision the only one that links its own overview at all places it first, ahead of the ordinary sections. So these get their own heading in first position. Preamble prose was rejected for the reason the rest of the document is a link list: an agent parses `- [name](url)`, not a sentence. The contrast with the Agent Skills entry is the point -- that index genuinely is secondary and an agent can drop it without losing the site.
 
@@ -647,27 +668,30 @@ license = true    # emit the license blockquote line in llms.txt
 
 ## i18n
 
-The module authors exactly fifteen user-facing strings: seven headings in generated documents, four display labels for the surface entries returned by the [`surfaces.html`](#surfaceshtml) public partial, and the name and note of two derived `llms.txt` entries -- the complete link index in `## Start here` and the Agent Skills index in `## Optional`. English and Russian ship with the module; every lookup carries an English fallback, so a site whose language ships no translation still renders a real string rather than an empty one.
+The module authors exactly sixteen user-facing strings: seven headings in generated documents, four display labels for the surface entries returned by the [`surfaces.html`](#surfaceshtml) public partial, the name and note of two derived `llms.txt` entries -- the complete link index in `## Start here` and the Agent Skills index in `## Optional` -- and the disclosure a narrowed section of the compact `llms.txt` opens with. English and Russian ship with the module; every lookup carries an English fallback, so a site whose language ships no translation still renders a real string rather than an empty one.
 
-| Key                             | English                                                        |
-| ------------------------------- | -------------------------------------------------------------- |
-| `agent_sitemap_heading_sitemap` | `Sitemap`                                                      |
-| `agent_sitemap_heading_llms`    | `Site index`                                                   |
-| `agent_section_pages_heading`   | `Pages`                                                        |
-| `agent_facts_title`             | `About`                                                        |
-| `agent_facts_identity_heading`  | `Identity`                                                     |
-| `agent_facts_contact_heading`   | `Contact`                                                      |
-| `agent_llms_start_heading`      | `Start here`                                                   |
-| `agent_surface_llms`            | `llms.txt`                                                     |
-| `agent_surface_llms_index`      | `Complete index`                                               |
-| `agent_surface_facts`           | `Site facts`                                                   |
-| `agent_surface_skills`          | `Agent Skills index`                                           |
-| `agent_llms_index_entry_name`   | `Complete index`                                               |
-| `agent_llms_index_entry_note`   | `Every page of every section, complete.`                       |
-| `agent_skills_entry_name`       | `Agent Skills index`                                           |
-| `agent_skills_entry_note`       | `Machine-readable index of this site's published agent skills` |
+| Key | English |
+| --- | --- |
+| `agent_sitemap_heading_sitemap` | `Sitemap` |
+| `agent_sitemap_heading_llms` | `Site index` |
+| `agent_section_pages_heading` | `Pages` |
+| `agent_facts_title` | `About` |
+| `agent_facts_identity_heading` | `Identity` |
+| `agent_facts_contact_heading` | `Contact` |
+| `agent_llms_start_heading` | `Start here` |
+| `agent_surface_llms` | `llms.txt` |
+| `agent_surface_llms_index` | `Complete index` |
+| `agent_surface_facts` | `Site facts` |
+| `agent_surface_skills` | `Agent Skills index` |
+| `agent_llms_index_entry_name` | `Complete index` |
+| `agent_llms_index_entry_note` | `Every page of every section, complete.` |
+| `agent_llms_partial_note` | `This section lists %d of %d pages; a page missing here may still exist on the site.` |
+| `agent_skills_entry_name` | `Agent Skills index` |
+| `agent_skills_entry_note` | `Machine-readable index of this site's published agent skills` |
 
 The twin's trailing pointer heading follows the resolved `sitemap_section_target`: `agent_sitemap_heading_llms` heads the section when it points at `llms.txt`, and `agent_sitemap_heading_sitemap` when it points at `sitemap.xml` -- the latter also heads `/about.md`'s dual-pointer block, which always includes `sitemap.xml`. The `agent_sitemap_heading` key is deliberately NOT shipped: it is the consumer-side override key. Hugo merges i18n files per key with the site's own value winning over a module's, so a site that defines `agent_sitemap_heading` forces that one heading over both target-derived defaults, while an undefined key resolves to the empty string and each lookup falls through to its shipped per-target default.
+
+`agent_llms_partial_note` is the module's one FORMAT STRING: it carries exactly two `%d` verbs, filled with the number of pages the section kept and then the number the shared filter admitted. A translation may place them anywhere in its sentence, but must keep both, keep that order, and keep them spelled `%d` -- a dropped or renamed verb publishes a Go formatting error into the document instead of a number.
 
 `## Optional` in `llms.txt` is deliberately not a translation key: it is fixed by the llmstxt.org convention and is a protocol token, not prose. Inside the translated values, `llms.txt` and `Agent Skills` stay untranslated in every language for the same reason: the former is the llmstxt.org protocol token and the latter is the agentskills.io convention's proper name.
 
@@ -717,6 +741,7 @@ modules/agent-readiness/
 │               ├── inline.html
 │               ├── llms-entry.html
 │               ├── llms-index-url.html
+│               ├── llms-partial-notice.html
 │               ├── llms-select.html
 │               ├── map-list.html
 │               ├── markdown-link.html

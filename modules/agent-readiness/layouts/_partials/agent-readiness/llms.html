@@ -16,8 +16,9 @@
   collection, the link shape, the twin substitution and the escaping. A second
   renderer would duplicate all of it, and duplication is exactly the drift
   objection the split has to answer. What differs is one boolean, applied in
-  two places: the section listing skips selection, and the compact document
-  names the complete one while the complete one does not name itself.
+  three places: the complete document's section listing skips selection, no
+  section of it can open with a narrowed-selection notice, and the compact
+  document names the complete one while the complete one does not name itself.
 
   What these files are and are not: they are LINK INDEXES and carry no facts
   of their own. The facts document (about.md) is the surface that answers "who
@@ -46,7 +47,9 @@
     6. A `## ` H2 collecting the derived route entries -- the home page's own
        Markdown twin, then (compact document only) the complete index -- and
        emitted only when at least one of them survived.
-    7. One `## ` H2 per configured section, each listing `- [name](url): note`.
+    7. One `## ` H2 per configured section, each listing `- [name](url): note`
+       -- opened, in the compact document only, by one notice item when that
+       section's selection dropped pages the shared filter admitted.
     8. A final `## Optional` H2: the consumer's declared entries, plus ONE
        derived entry for the module's own Agent Skills index when that
        surface actually publishes.
@@ -253,8 +256,14 @@
       {{- end -}}
     {{- end -}}
   {{- end -}}
+  {{/* Resolved ONCE, here, because slot 7 reads it too: a section the
+       selection narrowed carries a notice naming the same file. Calling the
+       gate per section would repeat the wiring lookup for every heading and
+       leave two call sites free to disagree about what "publishes" means. */}}
+  {{- $indexUrl := "" -}}
   {{- if not $complete -}}
-    {{- with partial "agent-readiness/lib/llms-index-url.html" (dict "page" $page "cfg" $cfg) -}}
+    {{- $indexUrl = partial "agent-readiness/lib/llms-index-url.html" (dict "page" $page "cfg" $cfg) -}}
+    {{- with $indexUrl -}}
       {{- if not (in $optionalUrls .) -}}
         {{- $indexItem := printf "- %s" (partial "agent-readiness/lib/markdown-link.html" (dict "name" $cfg.i18n.llms_index_entry_name "url" .)) -}}
         {{- $indexItem = printf "%s: %s" $indexItem (partial "agent-readiness/lib/inline.html" $cfg.i18n.llms_index_entry_note) -}}
@@ -277,17 +286,19 @@
          would render an empty H2 with no warning, no error and exit 0.
 
          The COMPACT document then applies the entry's selection principle
-         through lib/llms-select.html; the COMPLETE document skips that step
-         entirely and lists the section as the walk yields it. That is the
-         whole difference between the two files, and it is why "the complete
-         index is never truncated" is a property of this branch rather than a
-         claim about configuration: no `limit`, `select` or `order` value can
-         reach the complete listing. The shared page filter still applies to
-         both -- a page carrying `agent: false`, a noindexed page, the search
-         page, or a page outside the `sections` allow-list is absent from
-         every surface, complete index included. Excluded from every surface
-         is a different thing from omitted by a cap, and only the second is
-         what the complete index restores. */}}
+         through lib/llms-select.html, and says so in the section when that
+         step dropped anything; the COMPLETE document skips both and lists the
+         section as the walk yields it. That is the whole difference between
+         the two files, and it is why "the complete index is never truncated"
+         is a property of this branch rather than a claim about configuration:
+         no `limit`, `select` or `order` value can reach the complete listing,
+         and nothing there has an omission to disclose. The shared page filter
+         still applies to both -- a page carrying `agent: false`, a noindexed
+         page, the search page, or a page outside the `sections` allow-list is
+         absent from every surface, complete index included. Excluded from
+         every surface is a different thing from omitted by a cap, and only the
+         second is what the complete index restores -- and only the second is
+         what the notice discloses. */}}
   {{- range $entry := $llms.sections | default slice -}}
     {{- $section := $entry.section | default "" -}}
     {{- $name := $entry.name | default "" -}}
@@ -338,6 +349,36 @@
         {{- end -}}
       {{- else -}}
         {{- $lines = $lines | append "" | append (printf "## %s" (partial "agent-readiness/lib/inline.html" $name)) | append "" -}}
+
+        {{/* THE SELECTION DISCLOSES ITSELF. A section the entry's `select` or
+             `limit` narrowed opens with one line saying so and naming the
+             route to the rest, because a capped section is otherwise
+             indistinguishable from a complete one and an agent that reads a
+             page's absence as a fact about the site has produced a confident
+             false negative. lib/llms-partial-notice.html carries the full
+             reasoning and the shape.
+
+             The condition is the only honest one available: the shared filter
+             ADMITTED $matched pages and the selection KEPT $items of them, so
+             a section that dropped nothing -- an uncapped `select = 'first'`,
+             `select = 'all'`, a flag every page carries -- says nothing, and
+             its lines stay byte-identical to what this renderer emitted
+             before the notice existed.
+
+             `not $complete` is REDUNDANT today and is kept deliberately.
+             The complete branch never calls lib/llms-select.html, so its
+             $items IS its $matched and the length test already excludes it;
+             deleting the conjunct changes no published byte, and no assertion
+             can see it (verified by mutation). It states the invariant
+             STRUCTURALLY instead: "the complete index never discloses an
+             omission" then survives any future change that lets those two
+             collections differ there, rather than depending on a coincidence
+             of the current code. */}}
+        {{- if and (not $complete) (lt (len $items) (len $matched)) -}}
+          {{- $lines = $lines | append (partial "agent-readiness/lib/llms-partial-notice.html" (dict
+              "cfg" $cfg "url" $indexUrl "kept" (len $items) "total" (len $matched))) -}}
+        {{- end -}}
+
         {{- range $items -}}
           {{- $lines = $lines | append (partial "agent-readiness/lib/llms-entry.html" (dict "item" . "cfg" $cfg)) -}}
         {{- end -}}
