@@ -193,6 +193,42 @@ export function sectionsWithTopLevelBullets(text) {
   return out;
 }
 
+// A narrowed section of the compact llms.txt opens with one DISCLOSURE bullet
+// rather than a page (agent-readiness/lib/llms-partial-notice.html), so every
+// assertion about which pages a section lists has to separate the two. The
+// separation lives here, once, because two spec files ask for it and two
+// private copies would be free to disagree about what the notice looks like.
+//
+// The pattern matches both shapes the notice has: linked, when the complete
+// index publishes, and linkless, when it does not. It matches the ENGLISH
+// sentence, which every fixture that builds a section renders -- the Russian
+// tree of the multilingual build carries no content and therefore no section.
+const SELECTION_NOTICE = /^- (?:\[[^\]]*\]\([^)]*\): )?This section lists (\d+) of (\d+) pages;/;
+
+// The section's bullets with the notice removed: the pages, and only them.
+export function pageBullets(lines) {
+  return (lines ?? []).filter((line) => !SELECTION_NOTICE.test(line));
+}
+
+// The notice itself, parsed, or null when the section carries none. Throws on
+// a second one: two notices under one heading would be a renderer defect that
+// every count-based assertion would otherwise absorb silently.
+export function selectionNotice(lines) {
+  const hits = (lines ?? []).filter((line) => SELECTION_NOTICE.test(line));
+  if (hits.length === 0) return null;
+  if (hits.length > 1) {
+    throw new Error(`a section carries ${hits.length} selection notices, which is never right`);
+  }
+  const [, kept, total] = SELECTION_NOTICE.exec(hits[0]);
+  return {
+    line: hits[0],
+    index: (lines ?? []).indexOf(hits[0]),
+    kept: Number(kept),
+    total: Number(total),
+    url: markdownLinks(hits[0])[0]?.url ?? '',
+  };
+}
+
 // The fixture-only `twindump` surface, parsed into its three blocks. It lives
 // here rather than in one spec because two specs read it: 09 asserts the
 // twin-url and surfaces enumerations, 11 asserts the exposed build stamp. Two

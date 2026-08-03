@@ -34,7 +34,10 @@ import {
   llmsindexoffDir,
   unwiredDir,
   nolinkindexesDir,
+  extraDir,
   markdownLinks,
+  pageBullets,
+  selectionNotice,
   sectionsWithTopLevelBullets,
   siteRelative,
   urlResolves,
@@ -45,17 +48,21 @@ import {
 const COMPACT = 'llms.txt';
 const COMPLETE = 'llms-index.txt';
 
-// The bullets under one `## ` heading, as link URLs, in document order.
+// The PAGE bullets under one `## ` heading. A narrowed section opens with a
+// disclosure bullet that is not a page, so every spec below about which pages
+// a principle picks reads through this; the notice is asserted on its own
+// terms, under "The section discloses its own selection".
+const bulletsUnder = (text, heading) => pageBullets(sectionsWithTopLevelBullets(text).get(heading));
+
+// Those bullets as link URLs, in document order.
 const urlsUnder = (text, heading) =>
-  (sectionsWithTopLevelBullets(text).get(heading) ?? []).map((line) => markdownLinks(line)[0]?.url);
+  bulletsUnder(text, heading).map((line) => markdownLinks(line)[0]?.url);
 
 // The same bullets as link TEXTS, which for a page entry is its title. Titles
 // are what make a selection spec readable: "Post One, not Post Two" says what
 // the principle picked, while "1, not 1" says nothing.
 const titlesUnder = (text, heading) =>
-  (sectionsWithTopLevelBullets(text).get(heading) ?? []).map(
-    (line) => markdownLinks(line)[0]?.text,
-  );
+  bulletsUnder(text, heading).map((line) => markdownLinks(line)[0]?.text);
 
 // A twin URL reduced to the page it belongs to, so a listing that links twins
 // can be compared with one that links HTML pages.
@@ -148,7 +155,7 @@ test('NEVER TRUNCATED: the complete index ignores every cap and selection key', 
     ['Blog By Title', 2],
   ]) {
     assert.equal(
-      sectionsWithTopLevelBullets(compact).get(name).length,
+      bulletsUnder(compact, name).length,
       compactCount,
       `${name} must be narrowed in the compact file`,
     );
@@ -223,6 +230,150 @@ test('the default keeps the pages a cap is meaningless without knowing', () => {
     titlesUnder(compact, 'Projects'),
     ['Project Beta: a title, with punctuation', 'Project Alpha'],
     'unweighted pages degrade to newest first: beta is dated after alpha',
+  );
+});
+
+// ---- The section discloses its own selection ----
+//
+// A capped section reads exactly like a complete one: an H2 and a list of
+// pages. An agent that reads such a section, does not find a topic in it and
+// answers "no experience with that" has produced a confident FALSE NEGATIVE
+// from the document the convention tells it to read first -- worse than "I do
+// not know", and undetectable by the reader, because absence is
+// indistinguishable from omission unless the omission is stated.
+//
+// Two properties carry the whole contract, and they are asserted separately
+// because a renderer can fail either one on its own: the notice is present
+// exactly where pages were dropped, and its counts are the real ones. The
+// counts are checked against the DOCUMENTS rather than against literals, so a
+// fixture that grows a page keeps the specs honest.
+
+test('a narrowed section discloses itself, in the section, with both real counts', () => {
+  const compact = read(COMPACT);
+  const complete = read(COMPLETE);
+  for (const name of ['Recent Blog', 'Featured Blog', 'Blog By Date', 'Blog By Title']) {
+    const notice = selectionNotice(sectionsWithTopLevelBullets(compact).get(name));
+    assert.ok(notice, `${name} drops pages and must say so`);
+    assert.equal(notice.kept, bulletsUnder(compact, name).length, `${name}: kept must be real`);
+    assert.equal(
+      notice.total,
+      urlsUnder(complete, name).length,
+      `${name}: the admitted count must be the complete index's own listing`,
+    );
+    assert.ok(
+      notice.total > notice.kept,
+      `${name}: a notice claiming nothing was dropped is noise`,
+    );
+  }
+});
+
+test('a flagged selection discloses too, because a curated list looks authoritative', () => {
+  // `Featured Blog` drops two of three pages through the FLAG rather than
+  // through `limit`, and a reader has no way to tell the two mechanisms
+  // apart. A notice wired to the cap alone would leave the shape that looks
+  // most like an editorial statement undisclosed.
+  const notice = selectionNotice(sectionsWithTopLevelBullets(read(COMPACT)).get('Featured Blog'));
+  assert.deepEqual([notice.kept, notice.total], [1, 3]);
+});
+
+test('a section that dropped nothing carries no notice at all', () => {
+  // The half that makes the other half worth anything. A notice on every
+  // section teaches a reader to discount all of them, including the honest
+  // ones -- so an uncapped `select = 'first'` and a `select = 'all'` say
+  // nothing, and the byte-identity specs above pin that they say it by
+  // rendering exactly what they rendered before the notice existed.
+  const compact = read(COMPACT);
+  for (const name of ['Blog', 'Projects', 'All Projects']) {
+    assert.equal(
+      selectionNotice(sectionsWithTopLevelBullets(compact).get(name)),
+      null,
+      `${name} lists everything admitted and must claim nothing`,
+    );
+  }
+});
+
+test('the notice opens the section, ahead of the pages it qualifies', () => {
+  // Placement is the difference between a caveat a reader meets and one they
+  // reach only after deciding the section answered them. It is also what
+  // keeps the disclosure attached to the H2 for a reader that truncates.
+  const bullets = sectionsWithTopLevelBullets(read(COMPACT)).get('Blog By Date');
+  assert.equal(selectionNotice(bullets).index, 0);
+});
+
+test('the notice names the complete index, so disclosure and remedy arrive together', () => {
+  // The same URL the `## Start here` entry names, under the same label: one
+  // document must not call one file two things.
+  const notice = selectionNotice(sectionsWithTopLevelBullets(read(COMPACT)).get('Recent Blog'));
+  assert.equal(notice.url, `${BASE_URL}/llms-index.txt`);
+  assert.ok(urlResolves(notice.url), 'and it must resolve to a published file');
+  assert.ok(
+    notice.line.startsWith('- [Complete index]('),
+    'named as the Start here entry names it',
+  );
+});
+
+test('the complete index carries no notice under any heading', () => {
+  // Nothing there is capped, so nothing there has an omission to disclose --
+  // and a "this may be incomplete" line in the document whose whole promise
+  // is completeness would be a false statement about itself.
+  //
+  // This observes the OUTPUT, which is the claim worth making, and it cannot
+  // observe the renderer's `not $complete` conjunct: that branch never calls
+  // the selector, so its kept and admitted collections are the same object
+  // and the length test alone already excludes it. Deleting the conjunct
+  // changes no published byte here (verified by mutation); it is kept in the
+  // renderer as a structural statement, not as a guard this spec covers.
+  const complete = read(COMPLETE);
+  const sections = sectionsWithTopLevelBullets(complete);
+  assert.ok(sections.size > 6, 'the fixture must configure the headings this sweep covers');
+  for (const [name, bullets] of sections) {
+    assert.equal(
+      selectionNotice(bullets),
+      null,
+      `${name} must carry no notice in the complete index`,
+    );
+  }
+  assert.ok(!complete.includes('This section lists'), 'nor anywhere outside a section');
+});
+
+test('with no complete index the notice still discloses, without a route', () => {
+  // Two builds reach this: `llmsindexoff` switched the complete index off
+  // deliberately, `unwired` never added the format to [outputs]. The false
+  // negative is exactly as available to a reader of either, so the disclosure
+  // degrades to a linkless item rather than disappearing -- the remedy is
+  // gone, the honesty is not. This is the one shape whose grammar the
+  // convention does not describe, and it is deliberate: a configuration must
+  // not be able to silence a true statement.
+  for (const [label, dir] of [
+    ['llmsindexoff', llmsindexoffDir],
+    ['unwired', unwiredDir],
+  ]) {
+    const bullets = sectionsWithTopLevelBullets(read(COMPACT, dir)).get('Recent Blog');
+    const notice = selectionNotice(bullets);
+    assert.ok(notice, `${label}: a capped section must disclose itself with no index to point at`);
+    assert.equal(notice.url, '', `${label}: there is no route, so the item carries no link`);
+    assert.deepEqual([notice.kept, notice.total], [1, 3], `${label}: the counts are unaffected`);
+    assert.ok(
+      !read(COMPACT, dir).includes('llms-index.txt'),
+      `${label}: and no notice may name a file that does not publish`,
+    );
+  }
+});
+
+test('the notice sentence is resolved through i18n, not written into the template', () => {
+  // The extra fixture overrides agent_llms_partial_note in its own
+  // i18n/en.toml. Nothing else can prove this: every other build renders the
+  // shipped English, so a sentence hard-coded in the renderer would satisfy
+  // every assertion above. The override's verbs are spelled in the opposite
+  // reading order from the shipped string's, so the two counts cannot both
+  // land right by coincidence.
+  assert.match(
+    read(COMPACT, extraDir),
+    /^## Extra\n\n- \[Complete index\]\(https:\/\/extra\.example\/llms-index\.txt\): Partial: 1 shown, 2 admitted\.$/m,
+  );
+  assert.ok(
+    !read(COMPACT, extraDir).includes('This section lists'),
+    'the shipped English must not survive a consumer override',
   );
 });
 
