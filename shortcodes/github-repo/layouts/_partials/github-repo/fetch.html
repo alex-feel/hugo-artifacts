@@ -379,7 +379,12 @@
     {{- if gt $total 0 -}}
       {{- range $lang, $bytes := $langMap -}}
         {{- $pct := math.Round (math.Mul (math.Div (float $bytes) $total) 100) -}}
-        {{- $color := "#858585" -}}
+        {{/* Empty, never a chosen literal, exactly as the primary-language
+             path above does: a color the module invents is a design decision,
+             and this module ships none. An unmapped language emits no color
+             and the consuming site's own fallback in
+             var(--github-repo-lang-color, ...) decides what it looks like. */}}
+        {{- $color := "" -}}
         {{- with index hugo.Data.github_repo_lang_colors $lang -}}
           {{- $color = . -}}
         {{- end -}}

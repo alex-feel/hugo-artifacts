@@ -292,7 +292,7 @@ Every element uses BEM naming under the `github-repo` block:
 
 - **Block:** `github-repo` (root element: `<article>` for the `card`, `stats`, `lang`, and `hero` variants, `<a>` for `inline` and for every degraded fallback)
 - **Variant modifiers:** `github-repo--inline`, `github-repo--card`, `github-repo--stats`, `github-repo--lang`, `github-repo--hero`
-- **Elements:** `github-repo__title`, `github-repo__title-link`, `github-repo__description`, `github-repo__footer`, `github-repo__meta-item`, `github-repo__lang-dot`, `github-repo__sparkline`, `github-repo__topics`, `github-repo__topic`, `github-repo__cta`, and others
+- **Elements:** `github-repo__title`, `github-repo__title-link`, `github-repo__description`, `github-repo__footer`, `github-repo__meta-item`, `github-repo__lang-dot`, `github-repo__langbar`, `github-repo__langbar-segment`, `github-repo__lang-legend`, `github-repo__lang-legend-item`, `github-repo__lang-pct`, `github-repo__sparkline`, `github-repo__topics`, `github-repo__topic`, `github-repo__cta`, and others
 
 The text layer carries real separator characters and real whitespace between inline fields, so plain-text and Markdown extractions keep adjacent values apart: the inline chip's `github-repo__separator` and the hero breadcrumb's `github-repo__breadcrumb-sep` contain a literal `/`, the eyebrow and star-pill middots are literal `·` characters surrounded by spaces, and the lang legend separates each language name from its `github-repo__lang-pct` percentage with a real space. The whitespace between inline siblings is a visual no-op in the flex layouts these strips are typically given; a consuming site that draws its own dividers can hide the separator characters (for example with `font-size: 0`). The only empty elements are data visualizations that carry their values in inline styles: the language dot (the language name sits next to it as text), the language bar segments (the legend below is their textual equivalent), and the sparkline bars (summarized by the localized `title` tooltip on `github-repo__sparkline`).
 
@@ -315,13 +315,23 @@ The card-family variants deliberately do not wrap the whole card in an `<a>`: a 
 }
 ```
 
-### CSS custom property
+### CSS custom properties
 
-The language dot color is set via the `--github-repo-lang-color` CSS custom property on `.github-repo__lang-dot` elements (inline `style` attribute). Your CSS can reference it:
+| Property | Set on | Value |
+| --- | --- | --- |
+| `--github-repo-lang-color` | `.github-repo__lang-dot`, `.github-repo__langbar-segment` | The language's Linguist hex, or empty when the language is unmapped |
+| `--github-repo-lang-share` | `.github-repo__langbar-segment` | That language's share of the repository, as a percentage |
+
+Both arrive through an inline `style` attribute and neither is a design decision: the color is Linguist's published value for that language and the share is a measured proportion. The module chooses no fallback, so an unmapped language emits an empty value and YOUR fallback is the one that applies:
 
 ```css
-.github-repo__lang-dot {
+.github-repo__lang-dot,
+.github-repo__langbar-segment {
   background-color: var(--github-repo-lang-color, var(--fallback-color, #858585));
+}
+
+.github-repo__langbar-segment {
+  width: var(--github-repo-lang-share, 0%);
 }
 ```
 

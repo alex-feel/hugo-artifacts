@@ -659,6 +659,9 @@ modules/seo/
           enum.html                        # Returns the validated enum value or "" for applicationCategory, availability, itemCondition, gender, interaction types, return-policy category.
           time.html                        # Returns an RFC 3339 string for any time.Time value, or "" (with a deduplicated warn) when unparseable, or "" silently when zero; the single date-format authority.
           num.html                         # Returns the parsed decimal number (int or float) for any author-fed numeric value, or "" (with a deduplicated warn) when unparseable; octal-safe, overflow-safe.
+          as-scalar-list.html              # Returns a consumer-authored value as a slice of SCALARS, dropping and warning once per non-scalar entry; the list shape every string-valued repeated key reads.
+          as-map.html                      # Returns a consumer-authored value as a map, or an empty map with one deduplicated warn when it is anything else; the map shape every table-valued key reads.
+          as-map-list.html                 # Returns a consumer-authored value as a slice of MAPS, accepting a single map as a one-item list and warning once per non-map entry; the shape every repeated-table key reads.
         jsonld/
           website.html                     # Returns the WebSite node dict (home only; self-gates). Called via partialCached.
           organization.html                # Returns the Organization/OnlineStore/LocalBusiness/Person publisher node dict. Called via partialCached.
@@ -673,7 +676,7 @@ modules/seo/
           softwareapplication.html         # Returns the SoftwareApplication node dict (co-typing, enum-validated applicationCategory; self-gates).
           videoobject.html                 # Returns the VideoObject node dict (self-gates to name + thumbnailUrl + uploadDate).
           image-object.html                # Returns an ImageObject dict (or bare URL string) from a normalized image dict; reused by every image-carrying node.
-  test/                                    # Validation suite: a Hugo fixture site built three times (unset, configured, and under a subpath baseURL) plus Node build-output assertions. See test/README.md.
+  test/                                    # Validation suite: a Hugo fixture site built eight times (baseline, configured, subpath, badtypes, offswitch, multilingual, pagination, graph) plus Node build-output assertions. See test/README.md.
 ```
 
 Two consumer-authored hook files (`layouts/_partials/seo/head-extra.html` and `layouts/_partials/seo/jsonld-extra.html`) are intentionally NOT shipped; the module calls them only behind `templates.Exists` guards, so both are zero-cost until you opt in.

@@ -16,8 +16,14 @@ body:
         - [modules/agent-readiness README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/agent-readiness/README.md) -- Full agent-readiness module reference
         - [modules/copy-page README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/copy-page/README.md) -- Full copy-page module reference
         - [modules/pwa README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/pwa/README.md) -- Full PWA module reference
+        - [modules/workbox README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/workbox/README.md) -- Workbox vendor-mount companion of the PWA module
+        - [modules/idb README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/idb/README.md) -- idb vendor-mount companion of the Workbox module
         - [shortcodes/github-repo README](https://github.com/alex-feel/hugo-artifacts/blob/main/shortcodes/github-repo/README.md) -- GitHub-repo shortcode reference
         - [shortcodes/github-profile README](https://github.com/alex-feel/hugo-artifacts/blob/main/shortcodes/github-profile/README.md) -- GitHub-profile shortcode reference
+        - [shortcodes/hf-space README](https://github.com/alex-feel/hugo-artifacts/blob/main/shortcodes/hf-space/README.md) -- Hugging Face Space shortcode reference
+        - [shortcodes/callout README](https://github.com/alex-feel/hugo-artifacts/blob/main/shortcodes/callout/README.md) -- Callout shortcode and blockquote render hook reference
+        - [shortcodes/youtube-embed README](https://github.com/alex-feel/hugo-artifacts/blob/main/shortcodes/youtube-embed/README.md) -- YouTube-embed shortcode reference
+        - [shortcodes/arxiv-paper README](https://github.com/alex-feel/hugo-artifacts/blob/main/shortcodes/arxiv-paper/README.md) -- arXiv-paper shortcode reference
         - [CONTRIBUTING.md](https://github.com/alex-feel/hugo-artifacts/blob/main/CONTRIBUTING.md) -- Development setup and conventions
         - [CLAUDE.md](https://github.com/alex-feel/hugo-artifacts/blob/main/CLAUDE.md) -- Repository architectural rules
 
