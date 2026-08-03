@@ -1,0 +1,162 @@
+{{/*
+  agent-readiness/lib/llms-select.html -- utility (LIB tier).
+
+  Purpose: apply ONE [[llms.sections]] entry's selection principle to the
+  pages that entry's section admits, for the COMPACT /llms.txt only. The
+  complete index never calls this: it publishes the section as the shared page
+  walk yields it, which is what "never truncated, never filtered by the
+  selection principle" means.
+
+  Sections differ in kind, not only in size -- a blog's useful short list is
+  its newest posts, a projects roster's is the ones the author ranked highest,
+  and a third site wants something neither describes -- so the principle is
+  configuration rather than a rule baked in here. Three keys express it, all
+  optional, all per entry:
+
+    select = 'first' | 'flagged' | 'all'   (default 'first')
+    order  = 'weight' | 'date' | 'title'   (default 'weight')
+    flag   = '<front-matter key>'          (default [llms] flag)
+
+  The pipeline is uniform and runs in one order for every principle: filter,
+  then order, then cap. `limit` therefore caps a flagged selection too -- an
+  author who flags forty pages would otherwise get a forty-entry "compact"
+  section, reintroducing exactly the unbounded growth the split exists to fix
+  -- and `order` decides which entries survive that cap in every principle.
+  Only `select = 'all'` is uncapped, because naming everything is the whole
+  content of that principle.
+
+  THE DEFAULTS REPRODUCE THE PRE-SELECTION BEHAVIOR BYTE FOR BYTE.
+  `select = 'first'` with `order = 'weight'` emits NO sort call at all and
+  hands the walk order straight to the same `limit` parser and the same
+  cap guard the module has always used, so a consumer who configures none of
+  these keys gets the document they had. `order = 'weight'` is spelled for the
+  principle rather than for its status as the shipped default -- a value named
+  'default' would silently change meaning if the default ever moved -- and it
+  is accurate: Hugo's own page order is weight ascending with UNWEIGHTED pages
+  LAST, then date descending, then title. Sorting on the Weight field instead
+  would hoist every unweighted page to the head of a "most important first"
+  list, which is the opposite of what a compact index wants.
+
+  WHY `order` IS VALIDATED AGAINST A CLOSED VOCABULARY BEFORE ANY SORT RUNS.
+  `sort` takes a FIELD NAME, and a name no page carries aborts template
+  execution outright ("isn't a field of struct type page.Page"), which would
+  stop the consuming site's build over a one-word config typo -- against this
+  module's published contract. The validated value selects a branch; it is
+  never interpolated into sort's argument.
+
+  WHY `sort` RATHER THAN .ByDate / .ByTitle. The accumulated collection is
+  page.Pages when non-empty but []interface{} when a section matched nothing,
+  and a .By* method on the empty value fails the build -- on exactly the case
+  the empty-section guard exists for. `sort` is total over both.
+
+  Expected context (dict):
+  - .cfg   (dict)  - The resolved config from agent-readiness/config.html.
+  - .entry (map)   - One [[llms.sections]] entry, `section` already normalized.
+  - .items (Pages) - The pages that entry's section admits, walk order.
+
+  Return value: the selected, ordered, capped slice (possibly empty). Every
+  wrong input degrades to a documented fallback and warns once. ONE terminal
+  return.
+*/}}
+
+{{- $cfg := .cfg -}}
+{{- $entry := .entry -}}
+{{- $items := .items -}}
+{{- $llms := $cfg.llms -}}
+{{- $name := $entry.name | default "" -}}
+{{- $section := $entry.section | default "" -}}
+
+{{/* ---- select ---- An unrecognized value falls back to 'first' rather than
+     omitting the section: a typo in a brand-new key must not delete content,
+     and 'first' with the entry's existing `limit` is the behavior the consumer
+     had before they reached for the key. */}}
+{{- $select := lower (trim (printf "%v" ($entry.select | default "first")) " \t\n\r") -}}
+{{- if not (in (slice "first" "flagged" "all") $select) -}}
+  {{- partial "agent-readiness/lib/warn.html" (dict
+      "key" (printf "agent-readiness:warn:llms-bad-select:%s" $select)
+      "message" (printf "[agent-readiness] The [[params.agent.llms.sections]] entry %q has an unrecognized `select` (%q); selecting the first entries instead. Use \"first\", \"flagged\", or \"all\"." $name $select)) -}}
+  {{- $select = "first" -}}
+{{- end -}}
+
+{{/* ---- order ---- Validated BEFORE any sort call, for the reason in the
+     docstring: a consumer string must never reach sort's field argument. */}}
+{{- $order := lower (trim (printf "%v" ($entry.order | default "weight")) " \t\n\r") -}}
+{{- if not (in (slice "weight" "date" "title") $order) -}}
+  {{- partial "agent-readiness/lib/warn.html" (dict
+      "key" (printf "agent-readiness:warn:llms-bad-order:%s" $order)
+      "message" (printf "[agent-readiness] The [[params.agent.llms.sections]] entry %q has an unrecognized `order` (%q); keeping the site's own page order instead. Use \"weight\", \"date\", or \"title\"." $name $order)) -}}
+  {{- $order = "weight" -}}
+{{- end -}}
+
+{{/* ---- limit ---- The parser is unchanged, and deliberately so: `int`
+     raises a template error on a non-numeric value, which would stop the
+     build over a config typo, so a non-numeric limit is reported and read as
+     0, which means "complete". */}}
+{{- $rawLimit := printf "%v" ($entry.limit | default 0) -}}
+{{- $limit := 0 -}}
+{{- if findRE `^[0-9]+$` $rawLimit -}}
+  {{- $limit = int $rawLimit -}}
+{{- else -}}
+  {{- partial "agent-readiness/lib/warn.html" (dict
+      "key" (printf "agent-readiness:warn:llms-bad-limit:%s" $rawLimit)
+      "message" (printf "[agent-readiness] The [[params.agent.llms.sections]] entry %q has a non-numeric `limit` (%q); listing the section complete. Use a non-negative whole number, where 0 means complete." $name $rawLimit)) -}}
+{{- end -}}
+
+{{/* A cap set beside `select = 'all'` is a contradiction, and `select` wins:
+     it names the principle, while `limit` parameterizes a different one. */}}
+{{- if and (eq $select "all") (gt $limit 0) -}}
+  {{- partial "agent-readiness/lib/warn.html" (dict
+      "key" (printf "agent-readiness:warn:llms-all-with-limit:%s" $name)
+      "message" (printf "[agent-readiness] The [[params.agent.llms.sections]] entry %q sets `select = \"all\"` together with `limit = %d`; listing the section complete, because `select` names the principle and `limit` parameterizes a different one. Drop one of the two." $name $limit)) -}}
+  {{- $limit = 0 -}}
+{{- end -}}
+
+{{/* ---- 1. filter ---- Only the flagged principle filters; 'first' and 'all'
+     take the section whole and differ downstream, at the cap. */}}
+{{- if eq $select "flagged" -}}
+  {{/* `index .Params`, never `.Param`: the latter falls back to SITE params,
+       so a site that happens to carry [params] llms_featured = true would
+       have every page of the section flagged, none of which asked for it.
+       Hugo lowercases front-matter keys and maps.Params matches
+       case-insensitively, so case folds -- but underscores and hyphens do
+       not, which is why the empty-result warning quotes the flag verbatim.
+
+       The truthiness test is the module's house list rather than bare
+       truthiness or a strict `eq . true`: bare truthiness accepts the STRING
+       "false", and a strict comparison rejects `yes`, which every other
+       boolean in this module accepts. */}}
+  {{- $flag := lower (trim (printf "%v" ($entry.flag | default $llms.flag | default "llms_featured")) " \t\n\r") -}}
+  {{- $kept := slice -}}
+  {{- range $items -}}
+    {{- if in (slice "true" "1" "yes" "on") (lower (printf "%v" (index .Params $flag))) -}}
+      {{- $kept = $kept | append . -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if and $items (not $kept) -}}
+    {{/* A distinct message from the section-matches-nothing one, because the
+         remedies differ: that one sends the consumer to the content tree,
+         this one to the flag name. The heading is withheld by the caller in
+         both cases -- an empty H2 reads as a fact about the site. */}}
+    {{- partial "agent-readiness/lib/warn.html" (dict
+        "key" (printf "agent-readiness:warn:llms-flag-empty-result:%s:%s" $section $flag)
+        "message" (printf "[agent-readiness] The [[params.agent.llms.sections]] entry %q selects flagged pages, but no page under %q carries a truthy %q front-matter key, so its heading is omitted rather than published empty. Check the spelling of the flag -- letter case folds, but underscores and hyphens do not." $name $section $flag)) -}}
+  {{- end -}}
+  {{- $items = $kept -}}
+{{- end -}}
+
+{{/* ---- 2. order ---- 'weight' emits no call at all: the walk order already
+     IS weight ascending with unweighted pages last, then date, then title. */}}
+{{- if eq $order "date" -}}
+  {{- $items = sort $items "Date" "desc" -}}
+{{- else if eq $order "title" -}}
+  {{- $items = sort $items "Title" -}}
+{{- end -}}
+
+{{/* ---- 3. cap ---- The `gt $limit 0` guard is load-bearing and not
+     cosmetic: `first 0 $items` returns an EMPTY list, so a bare `first`
+     would make limit = 0 publish nothing instead of everything. */}}
+{{- if and (gt $limit 0) (gt (len $items) $limit) -}}
+  {{- $items = first $limit $items -}}
+{{- end -}}
+
+{{- return $items -}}

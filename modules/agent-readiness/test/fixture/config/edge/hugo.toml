@@ -119,6 +119,49 @@ baseURL = 'https://example.org/docs/'
         section = 'blog'
         limit = 'all'
 
+      # The four ways the selection keys can be got wrong. Each degrades to a
+      # documented fallback and warns once; none may fail the build.
+      #
+      # An unrecognized `select` falls back to 'first' rather than omitting
+      # the section: a typo in a brand-new key must not delete content. The
+      # cap makes the fallback OBSERVABLE -- without it the entry would list
+      # the section complete, which is what an omitted-and-restored entry and
+      # a working one look like alike.
+      [[params.agent.llms.sections]]
+        name = 'Bad Select'
+        section = 'blog'
+        select = 'newest'
+        limit = 1
+
+      # An unrecognized `order` is the one that would be FATAL if it reached
+      # `sort`: the function takes a field name, and a name no page carries
+      # aborts template execution. It must be validated against the closed
+      # vocabulary before any sort runs, and fall back to the site's own page
+      # order.
+      [[params.agent.llms.sections]]
+        name = 'Bad Order'
+        section = 'blog'
+        order = 'popularity'
+        limit = 2
+
+      # A flag no page under the section carries. No project is flagged, so
+      # this selects nothing -- and the heading is withheld with a message
+      # naming the FLAG, distinct from the section-matches-nothing message,
+      # because the remedies differ.
+      [[params.agent.llms.sections]]
+        name = 'Flagged Projects'
+        section = 'projects'
+        select = 'flagged'
+
+      # A cap set beside `select = 'all'`. `select` wins and the section is
+      # listed complete, because `select` names the principle while `limit`
+      # parameterizes a different one.
+      [[params.agent.llms.sections]]
+        name = 'All Blog'
+        section = 'blog'
+        select = 'all'
+        limit = 1
+
       [[params.agent.llms.optional]]
         name = 'Sitemap'
         url = '/sitemap.xml'

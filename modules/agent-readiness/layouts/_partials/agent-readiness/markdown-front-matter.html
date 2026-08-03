@@ -24,9 +24,21 @@
     2. description                  (when non-empty)
     3. date                         (when set, RFC 3339)
     4. last_updated                 (when enabled and .Lastmod differs from .Date)
-    5. the per-section keys from cfg.frontmatter.<section>, in declared order
-    6. license                      (when enabled and cfg.license.url is set)
-    7. canonical                    (always last, when enabled)
+    5. build_time                   (when enabled)
+    6. the per-section keys from cfg.frontmatter.<section>, in declared order
+    7. license                      (when enabled and cfg.license.url is set)
+    8. canonical                    (always last, when enabled)
+
+  THE TWO TIME FIELDS ARE DIFFERENT QUESTIONS and are deliberately kept
+  apart. `last_updated` is .Lastmod: when the CONTENT changed. `build_time` is
+  when this BUILD ran, the same string every surface of the build carries and
+  the same one a consuming site can stamp its own surfaces with through the
+  public agent-readiness/build-time.html partial. A daily rebuild refreshes
+  generated figures without touching a content file, so `last_updated` sits
+  still while the document changes; only the build stamp answers "am I holding
+  a cached copy". Folding one into the other would leave a reader that learned
+  a key on one surface unable to use it on any other, so neither name is ever
+  overloaded.
 
   DUPLICATE-KEY GUARD: the builder tracks the keys it has already emitted and
   SKIPS any per-section key that repeats one, warning once per
@@ -89,13 +101,30 @@
   {{- end -}}
   {{- $emitted = $emitted | append "last_updated" -}}
 
+  {{/* 5. build_time -- the BUILD's timestamp, full RFC 3339 with the offset,
+         constant across every document this build publishes. A date alone
+         cannot answer "am I holding a cached copy", which is the question
+         this field exists for and the one `last_updated` above cannot
+         answer. The value comes from the module's public build-time partial,
+         so a consuming site stamping its own surfaces emits the identical
+         string. */}}
+  {{- if $md.build_time -}}
+    {{- $lines = $lines | append (printf "build_time: %s" (partial "agent-readiness/build-time.html" $page | jsonify (dict "noHTMLEscape" true))) -}}
+  {{- end -}}
+  {{/* Reserved UNCONDITIONALLY, outside the emission guard above, exactly as
+       `last_updated` is: with the switch off, a section vocabulary listing
+       `build_time` would otherwise emit it as an ordinary per-section key,
+       and with the switch on it would emit it TWICE -- two equal keys in one
+       YAML mapping node, which is what makes the whole block invalid. */}}
+  {{- $emitted = $emitted | append "build_time" -}}
+
   {{/* Reserve the two trailing keys BEFORE the per-section loop runs, so a
        section map listing `license` or `canonical` is caught by the same
        duplicate guard as one listing `title`. */}}
   {{- $emitted = $emitted | append "license" -}}
   {{- $emitted = $emitted | append "canonical" -}}
 
-  {{/* 5. Per-section keys, in the order the consumer declared them. */}}
+  {{/* 6. Per-section keys, in the order the consumer declared them. */}}
   {{- $section := lower $page.Section -}}
   {{- $map := index $cfg.frontmatter $section -}}
   {{- if reflect.IsMap $map -}}
@@ -105,7 +134,7 @@
         {{- if in $emitted $k -}}
           {{- partial "agent-readiness/lib/warn.html" (dict
               "key" (printf "agent-readiness:warn:duplicate-frontmatter-key:%s/%s" $section $k)
-              "message" (printf "[agent-readiness] Skipping the %q key in [params.agent.frontmatter.%s]: the Markdown twin builder already emits it, and two equal keys in one YAML mapping make the whole front-matter block invalid to strict parsers. Remove it from the section map -- title, description, date, last_updated, license and canonical are always emitted for you." $k $section)) -}}
+              "message" (printf "[agent-readiness] Skipping the %q key in [params.agent.frontmatter.%s]: the Markdown twin builder already emits it, and two equal keys in one YAML mapping make the whole front-matter block invalid to strict parsers. Remove it from the section map -- title, description, date, last_updated, build_time, license and canonical are always emitted for you." $k $section)) -}}
         {{- else -}}
           {{- $v := index $page.Params $k -}}
           {{- if ne $v nil -}}
@@ -131,14 +160,14 @@
     {{- end -}}
   {{- end -}}
 
-  {{/* 6. license -- one URL line, immediately before the always-last
+  {{/* 7. license -- one URL line, immediately before the always-last
          canonical. Inert unless the consumer both enables the switch and
          fills the license table. */}}
   {{- if and $md.license $cfg.license.url -}}
     {{- $lines = $lines | append (printf "license: %s" ($cfg.license.url | jsonify (dict "noHTMLEscape" true))) -}}
   {{- end -}}
 
-  {{/* 7. canonical -- ALWAYS last. Inside a markdown-format template
+  {{/* 8. canonical -- ALWAYS last. Inside a markdown-format template
          .Permalink already returns the page's HTML URL, because the built-in
          markdown output format sets permalinkable = false, so this line is
          free and correct with no extra resolution. */}}

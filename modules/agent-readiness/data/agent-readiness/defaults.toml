@@ -10,11 +10,12 @@
 # (robots.txt, llms.txt, about.md, the skills index) and are honored at
 # tiers 1 and 2 only.
 #
-# EVERY surface's own `enable` is SITE-SCOPED -- markdown, llms, facts and
-# skills_index alike -- because those keys govern whether an ARTIFACT EXISTS
-# rather than what it contains, and a lower tier that switched one document
-# off would leave every other surface still linking it with a URL that 404s.
-# The per-page opt-out that keeps all of them in agreement is `agent: false`.
+# EVERY surface's own `enable` is SITE-SCOPED -- markdown, llms, llms_index,
+# facts and skills_index alike -- because those keys govern whether an
+# ARTIFACT EXISTS rather than what it contains, and a lower tier that switched
+# one document off would leave every other surface still linking it with a URL
+# that 404s. The per-page opt-out that keeps all of them in agreement is
+# `agent: false`.
 
 # --- Master switch (SITE-SCOPED) ---
 # Site-scoped deliberately: every surface must select the same page set, and
@@ -70,6 +71,15 @@ front_matter = true
 canonical = true
 # Emit `last_updated:` (ISO date from .Lastmod) when it differs from `date`.
 last_updated = true
+# Emit `build_time:` (RFC 3339 with offset) -- when this BUILD ran, which is a
+# DIFFERENT question from `last_updated`, when the CONTENT changed. The value
+# is identical in every document one build publishes and is the same string
+# the public agent-readiness/build-time.html partial returns, so a consuming
+# site can stamp its own surfaces with it. Consequence of leaving it on: every
+# twin's bytes change on every build even when no content changed, which
+# matters only to a consumer that diffs published output to decide whether to
+# deploy -- that consumer sets this false.
+build_time = true
 # Emit `license:` (one URL line) immediately before the always-last canonical.
 license = false
 # Emit a member roster in a SECTION twin, between the body and the trailing
@@ -86,9 +96,9 @@ sitemap_section_target = "llms"   # "llms" | "sitemap" | "none"
 # --- Per-section front-matter field maps ---
 # Consumer-declared and intentionally empty here: the vocabulary is
 # site-specific. Shape: [frontmatter.<section>] keys = ["a", "b"].
-# Do NOT list title, description, date, last_updated, or license: the builder
-# emits those itself and skips (with a warning) any per-section key that
-# repeats one.
+# Do NOT list title, description, date, last_updated, build_time, license, or
+# canonical: the builder emits all seven itself and skips (with a warning) any
+# per-section key that repeats one.
 [frontmatter]
 
 # --- llms.txt ---
@@ -101,12 +111,41 @@ notes = ""     # optional free prose after the blockquote
 link_markdown = true
 # Emit one "> Content licensed under [name](url)." line after the summary.
 license = false
-# Ordered sections; each becomes an H2. Shape:
+# Emit one "> Build time: <RFC 3339>" line after the license line. Same value
+# and same trade-off as [markdown] build_time above; the switch is per surface
+# because `license` already is.
+build_time = true
+# Front-matter key that `select = 'flagged'` reads on each page, when an entry
+# names none of its own. An author marks a page for the compact index at the
+# page rather than in config by setting it truthy.
+flag = "llms_featured"
+# Ordered sections; each becomes an H2 in BOTH documents. Shape:
 #   [[llms.sections]] name = "Blog"  section = "blog"  limit = 0
+# Four optional keys per entry decide what the COMPACT /llms.txt keeps; the
+# complete /llms-index.txt ignores all four and lists the section whole:
+#   select = "first" | "flagged" | "all"    (default "first")
+#   order  = "weight" | "date" | "title"    (default "weight" -- the site's
+#            own page order: weight ascending with UNWEIGHTED pages LAST,
+#            then date descending, then title)
+#   limit  = <non-negative whole number>    (0 = complete; ignored by "all")
+#   flag   = "<front-matter key>"           (falls back to `flag` above)
 sections = []
 # Links an agent may drop when shortening context. Shape:
 #   [[llms.optional]] name = "…"  url = "/…"  note = "…"
 optional = []
+
+# --- /llms-index.txt (the complete link index) ---
+# Every page of every section named in [[llms.sections]], never capped and
+# never filtered by that entry's selection principle -- the route /llms.txt
+# names so a narrower compact index costs REACH rather than ACCESS. It carries
+# only this one key: the H1, summary, license, build-time, prose, `Optional`
+# entries and section list all come from [llms] above, because two documents
+# built from one page walk must not be able to drift apart.
+#
+# It renders through the same renderer as /llms.txt, so [llms] enable = false
+# switches BOTH documents off; this key switches off the complete one alone.
+[llms_index]
+enable = true   # SITE-SCOPED (see the header note on surface switches)
 
 # --- /about.md (aggregated facts document) ---
 [facts]
@@ -115,6 +154,9 @@ title = ""     # falls back to the agent_facts_title i18n string, then site.Titl
 summary = ""   # optional one-line blockquote under the H1
 # Link each entry's Markdown twin alongside its HTML URL.
 link_markdown = true
+# Emit one "> Build time: <RFC 3339>" line under the H1 and summary. Same
+# value and same trade-off as [markdown] build_time above.
+build_time = true
 # Ordered complete listings; each becomes an H2 and lists EVERY page the
 # shared filter admits for that section -- never a first-N window. Shape:
 #   [[facts.sections]] name = "Skills"  section = "skills"

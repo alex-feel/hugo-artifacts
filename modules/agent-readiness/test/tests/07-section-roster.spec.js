@@ -50,6 +50,17 @@ const ROSTER_BLOCK = new RegExp(`\\n\\n## ${HEADING}\\n\\n(?:- [^\\n]*\\n)+`, 'g
 const rosterBullets = (rel, dir = publicDir) =>
   sectionsWithTopLevelBullets(read(rel, dir)).get(HEADING) ?? [];
 
+// The two comparisons below hold twins from two SEPARATE Hugo builds against
+// each other, and those builds run seconds apart. The `build_time` front
+// matter field is the build's own timestamp, so it differs between them by
+// construction -- and an unmasked comparison would fail with a message about
+// the roster, sending the reader to the wrong file entirely. Exactly that one
+// line is normalized to a constant; every other byte stays exact, which is
+// what these tests exist to check. Stamp CONSTANCY, which is the property the
+// field actually promises, is asserted WITHIN one build in
+// tests/11-build-stamp.spec.js.
+const maskBuildTime = (text) => text.replace(/^build_time: "[^"]*"$/m, 'build_time: "<masked>"');
+
 test('a section twin carries its roster between the body and the pointer block', () => {
   for (const rel of ['blog/index.md', 'projects/index.md']) {
     const text = read(rel);
@@ -171,8 +182,8 @@ test('section_pages = false restores the pre-roster twin byte for byte', () => {
   // twin exactly -- proving the switch restores the previous output and the
   // roster occupies one contiguous, cleanly removable block.
   for (const rel of ['blog/index.md', 'projects/index.md']) {
-    const on = read(rel);
-    const off = read(rel, nosectionpagesDir);
+    const on = maskBuildTime(read(rel));
+    const off = maskBuildTime(read(rel, nosectionpagesDir));
     const blocks = on.match(ROSTER_BLOCK) ?? [];
     assert.equal(blocks.length, 1, `${rel} must carry exactly one roster block`);
     assert.equal(
@@ -190,8 +201,8 @@ test('the roster key touches no twin outside the section kind', () => {
   for (const rel of ['index.md', 'blog/post-one/index.md', 'projects/alpha/index.md']) {
     assert.ok(exists(rel, nosectionpagesDir), `${rel} must be published in the control build`);
     assert.equal(
-      read(rel),
-      read(rel, nosectionpagesDir),
+      maskBuildTime(read(rel)),
+      maskBuildTime(read(rel, nosectionpagesDir)),
       `${rel} must be byte-identical across the builds`,
     );
   }

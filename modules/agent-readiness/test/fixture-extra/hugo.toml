@@ -13,8 +13,11 @@ baseURL = 'https://extra.example/'
 title = 'Agent Readiness Extra Fixture'
 locale = 'en-us'
 
+# `llmsindex` is wired although this fixture asserts nothing about the
+# complete index: its spec requires the build to emit ZERO warnings, and an
+# enabled-but-unwired complete index warns once by design.
 [outputs]
-  home = ['html', 'markdown', 'llmstxt']
+  home = ['html', 'markdown', 'llmstxt', 'llmsindex']
   section = ['html', 'markdown']
   page = ['html', 'markdown']
 

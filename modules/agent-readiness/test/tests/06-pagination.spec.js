@@ -69,12 +69,13 @@ test('llms.txt lists the five regular pages, the home twin, and no pager URL', (
   // every page-listing section (an extraneous advertised page URL still
   // fails); the pager sweep below runs over every advertised URL.
   //
-  // The expected set carries the home page's own twin as well, contributed by
-  // the derived `## Start here` section. Adding it here rather than deleting
-  // that section from the sweep keeps the enumeration exact: a pager URL
-  // leaking into the leading section would still fail this assertion, and the
-  // home entry is pinned in a second fixture besides the ones in
-  // 03-llms-facts.spec.js.
+  // The expected set carries the two entries the derived `## Start here`
+  // section contributes -- the home page's own twin and the complete link
+  // index -- as well. Naming them here rather than deleting that section from
+  // the sweep keeps the enumeration exact: a pager URL leaking into the
+  // leading section would still fail this assertion, and both derived entries
+  // are pinned in a second fixture besides the ones in 03-llms-facts.spec.js
+  // and 12-llms-index.spec.js.
   const sections = sectionsWithTopLevelBullets(read('llms.txt', paginatedDir));
   sections.delete('Optional');
   const pagePaths = [...sections.values()]
@@ -82,12 +83,30 @@ test('llms.txt lists the five regular pages, the home twin, and no pager URL', (
     .flatMap((line) => markdownLinks(line).map((link) => siteRelative(link.url)));
   assert.deepEqual(
     pagePaths.sort(),
-    ['/index.md', ...POSTS.map((slug) => `/posts/${slug}/index.md`)].sort(),
-    'llms.txt must enumerate exactly the section-s regular pages plus the home twin',
+    ['/index.md', '/llms-index.txt', ...POSTS.map((slug) => `/posts/${slug}/index.md`)].sort(),
+    'llms.txt must enumerate exactly the section-s regular pages plus the two derived routes',
   );
   for (const path of advertisedPaths('llms.txt')) {
     assert.ok(!path.includes('/page/'), `llms.txt advertised the pager URL ${path}`);
   }
+});
+
+test('the complete index lists the five regular pages and no pager URL either', () => {
+  // The complete index is "never truncated", which a paginated section makes
+  // sharp in the opposite direction from a cap: the pages Hugo split across
+  // three pagers must all be listed, and none of the three pager SHELLS may
+  // join them. A renderer that reached for a paginator's own collection would
+  // publish both errors at once.
+  const sections = sectionsWithTopLevelBullets(read('llms-index.txt', paginatedDir));
+  sections.delete('Optional');
+  const pagePaths = [...sections.values()]
+    .flat()
+    .flatMap((line) => markdownLinks(line).map((link) => siteRelative(link.url)));
+  assert.deepEqual(
+    pagePaths.sort(),
+    ['/index.md', ...POSTS.map((slug) => `/posts/${slug}/index.md`)].sort(),
+    'the complete index lists every regular page, the home twin, and no pager',
+  );
 });
 
 test('about.md lists the five regular pages and no pager URL', () => {
@@ -107,7 +126,7 @@ test('every URL the paginated build advertises resolves to a published file', ()
   // the shell), so this is not the pager assertion -- it is the guarantee
   // that the enumeration above is the complete published set rather than a
   // filtered view of a larger, partly broken one.
-  for (const doc of ['llms.txt', 'about.md']) {
+  for (const doc of ['llms.txt', 'llms-index.txt', 'about.md']) {
     for (const path of advertisedPaths(doc)) {
       assert.ok(
         urlResolves(path, paginatedDir),

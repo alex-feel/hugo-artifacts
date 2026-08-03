@@ -1,0 +1,30 @@
+# The `nolinkindexes` environment: NEITHER link-index format wired, with both
+# surfaces left at their shipped `enable = true`.
+#
+# This is the minimal-adoption shape -- a site that imports the module for the
+# Markdown twins and robots.txt and never asked for a link index at all. It is
+# a real consumer configuration and no other build reaches it: `llmsoff` and
+# `llmsindexoff` switch a surface off through params while the formats stay
+# wired, and `unwired` drops only `llmsindex` while keeping `llmstxt`.
+#
+# What it must show: silence. Not wiring a format IS the opt-out, so the module
+# must publish neither document and say nothing about either -- exactly as
+# lib/skills-index-url.html stays silent for a site that never wires
+# `agentskills`.
+#
+# The warning in lib/llms-index-url.html is the reason this build exists. That
+# partial fires when the complete index is enabled and `llmsindex` is missing,
+# and `llms_index.enable` ships TRUE, so without its `llmstxt` gate the message
+# would reach this site too -- and every word of it would be false here: it
+# states that "/llms.txt cannot name it" on a site that publishes no /llms.txt,
+# and prescribes an edit for a surface never requested. Delete that gate and
+# this build turns red; the `unwired` build proves the complementary half, that
+# a site which DOES publish the compact index still hears about the dead route.
+#
+# The three lists are restated in full rather than trimmed, because an
+# environment overlay that dropped `section` or `page` would silently take the
+# twins with it and this build would then be about something else.
+[outputs]
+  home = ['html', 'rss', 'markdown', 'agentfacts', 'agentskills', 'twindump']
+  section = ['html', 'rss', 'markdown']
+  page = ['html', 'markdown']

@@ -29,7 +29,7 @@ A site importing this module together with [`agent-readiness`](../agent-readines
 
 ```toml
 [outputs]
-  home = ['html', 'rss', 'markdown', 'llmstxt', 'agentfacts', 'agentskills', 'searchindex', 'opensearch']
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills', 'searchindex', 'opensearch']
   section = ['html', 'rss', 'markdown']
   page = ['html', 'markdown']
 ```

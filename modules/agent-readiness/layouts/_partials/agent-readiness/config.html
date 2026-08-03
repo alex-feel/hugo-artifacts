@@ -10,10 +10,11 @@
   overrides the tier below it.
 
   SITE-SCOPED keys are honored at the defaults and site tiers ONLY, because
-  they shape site-wide artifacts (robots.txt, llms.txt, about.md, the skills
-  index) that must select the same page set no matter which page renders
-  them: `enable`, `sections`, `exclude_noindex`, `exclude_search_page`,
-  `search_page_path`, `skills`, and the whole `robots` and `license` maps.
+  they shape site-wide artifacts (robots.txt, llms.txt, llms-index.txt,
+  about.md, the skills index) that must select the same page set no matter
+  which page renders them: `enable`, `sections`, `exclude_noindex`,
+  `exclude_search_page`, `search_page_path`, `skills`, and the whole `robots`
+  and `license` maps.
   The per-page opt-out is deliberately NOT one of these -- it is the page's
   own `agent: false` / `agent: {exclude: true}`, which the shared page filter
   honors on every surface at once.
@@ -47,7 +48,7 @@
     page and call-site tiers entirely.
 
   Return value: one dict carrying every resolved key the renderers need --
-  the normalized scalars, the seven nested maps, the pre-normalized llms and
+  the normalized scalars, the eight nested maps, the pre-normalized llms and
   facts section entries, the skills slice, and the i18n map. ONE terminal
   return.
 */}}
@@ -140,7 +141,7 @@
   {{- end -}}
   {{- $maps = merge $maps (dict $k $m) -}}
 {{- end -}}
-{{- range $k := slice "markdown" "llms" "facts" "skills_index" "frontmatter" -}}
+{{- range $k := slice "markdown" "llms" "llms_index" "facts" "skills_index" "frontmatter" -}}
   {{- $m := dict -}}
   {{- with index $defaults $k -}}{{- if reflect.IsMap . -}}{{- $m = merge $m . -}}{{- end -}}{{- end -}}
   {{- range $tier := (cond $siteOnly (slice $sitep) (slice $sitep $pagep $args)) -}}
@@ -155,7 +156,7 @@
   {{- $maps = merge $maps (dict $k $m) -}}
 {{- end -}}
 
-{{/* ---- Every surface's `enable` is SITE-SCOPED ---- These four keys sit
+{{/* ---- Every surface's `enable` is SITE-SCOPED ---- These five keys sit
      inside all-tiers maps but govern whether an ARTIFACT EXISTS rather than
      what that artifact contains, and existence is exactly what the surfaces
      have to agree about. Each one has the same failure shape: a lower tier
@@ -171,7 +172,7 @@
      agreement already exists: `agent: false` in front matter drops the page
      from page-list.html and from its twin together. Every remaining key in
      these maps governs CONTENT and stays settable at all four tiers. */}}
-{{- range $k := slice "markdown" "llms" "facts" "skills_index" -}}
+{{- range $k := slice "markdown" "llms" "llms_index" "facts" "skills_index" -}}
   {{- $siteOnlyMap := dict -}}
   {{- with index $defaults $k -}}{{- if reflect.IsMap . -}}{{- $siteOnlyMap = merge $siteOnlyMap . -}}{{- end -}}{{- end -}}
   {{- $sv := index $sitep $k -}}
@@ -207,7 +208,7 @@
         {{- end -}}
       {{- end -}}
     {{- end -}}
-    {{- range $k := slice "markdown" "llms" "facts" "skills_index" -}}
+    {{- range $k := slice "markdown" "llms" "llms_index" "facts" "skills_index" -}}
       {{- with index $tier $k -}}
         {{- if and (reflect.IsMap .) (isset . "enable") -}}
           {{- partial "agent-readiness/lib/warn.html" (dict
@@ -229,9 +230,10 @@
 
 {{- $boolKeys := dict
   "robots" (slice "enable" "sitemap")
-  "markdown" (slice "enable" "front_matter" "canonical" "last_updated" "license" "sitemap_section" "section_pages")
-  "llms" (slice "enable" "link_markdown" "license")
-  "facts" (slice "enable" "link_markdown" "sitemap_section")
+  "markdown" (slice "enable" "front_matter" "canonical" "last_updated" "build_time" "license" "sitemap_section" "section_pages")
+  "llms" (slice "enable" "link_markdown" "license" "build_time")
+  "llms_index" (slice "enable")
+  "facts" (slice "enable" "link_markdown" "sitemap_section" "build_time")
   "skills_index" (slice "enable")
 -}}
 {{- range $mapName, $keys := $boolKeys -}}
@@ -436,7 +438,10 @@
   "facts_identity_heading" (T "agent_facts_identity_heading" | default "Identity")
   "facts_contact_heading" (T "agent_facts_contact_heading" | default "Contact")
   "llms_start_heading" (T "agent_llms_start_heading" | default "Start here")
+  "llms_index_entry_name" (T "agent_llms_index_entry_name" | default "Complete index")
+  "llms_index_entry_note" (T "agent_llms_index_entry_note" | default "Every page of every section, complete.")
   "surface_llms" (T "agent_surface_llms" | default "llms.txt")
+  "surface_llms_index" (T "agent_surface_llms_index" | default "Complete index")
   "surface_facts" (T "agent_surface_facts" | default "Site facts")
   "surface_skills" (T "agent_surface_skills" | default "Agent Skills index")
   "skills_entry_name" (T "agent_skills_entry_name" | default "Agent Skills index")

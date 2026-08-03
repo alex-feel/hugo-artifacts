@@ -1,0 +1,52 @@
+{{/*
+  agent-readiness/lib/build-time-value.html -- INTERNAL (lib tier).
+
+  Purpose: compute the build's timestamp ONCE and remember it in hugo.Store,
+  so every later reader of that key gets the identical string.
+
+  DO NOT CALL THIS DIRECTLY. Call the PUBLIC
+  agent-readiness/build-time.html, which wraps this in the `partialCached`
+  that makes the one-value-per-build guarantee hold. This file on its own is
+  only half of the mechanism, and the half that races; the wrapper's docstring
+  records the measurements that make the pairing necessary.
+
+  WHY THE STORE AND NOT JUST `now`. A per-call `now` spread across a long
+  build makes two documents of the same deploy disagree by seconds, which is
+  exactly the drift the stamp exists to let a reader detect. The store is
+  documented as global across every template for the duration of ONE build and
+  NOT persisted between builds, which is precisely the lifetime wanted: one
+  value within a build, a fresh value on the next one.
+
+  WHY THE GET-THEN-SET IS SAFE HERE AND NOT ON ITS OWN. The check-then-set
+  below is not atomic and Hugo renders pages in parallel, so with hundreds of
+  concurrent first callers it genuinely races -- measured, a bare store
+  check-then-set called from every page of a four-language, 1200-file site
+  produced TWO different values in 6 of 12 builds. The wrapper's
+  `partialCached` is what makes it sound: it collapses the callers from one
+  per page to one per language, and language sites render in sequence, so the
+  later language reads the value the earlier one stored. The same measurement
+  with the wrapper in place produced ONE distinct value in 12 of 12 builds, at
+  nanosecond precision, across four languages and 1205 files.
+
+  PRECISION. The layout is RFC 3339 with the offset -- the same literal the
+  twins already use for `date` -- because the field's whole purpose is BYTE
+  COMPARISON: a reader holding two documents decides "same deploy or not" by
+  comparing the strings, and a site feeding the module's value into its own
+  HTML meta tag needs the two to match character for character. A date-only
+  form cannot answer "am I holding this morning's cached copy"; a form without
+  the offset is ambiguous between machines.
+
+  Expected context: none is read; the wrapper passes a constant.
+
+  Return value: the build timestamp as an RFC 3339 string. ONE terminal
+  return.
+*/}}
+
+{{- $key := "agent-readiness:build-time" -}}
+{{- $stamp := hugo.Store.Get $key -}}
+{{- if not $stamp -}}
+  {{- $stamp = now.Format "2006-01-02T15:04:05Z07:00" -}}
+  {{- hugo.Store.Set $key $stamp -}}
+{{- end -}}
+
+{{- return $stamp -}}

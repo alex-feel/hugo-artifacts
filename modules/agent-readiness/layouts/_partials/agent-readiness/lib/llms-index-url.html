@@ -1,0 +1,72 @@
+{{/*
+  agent-readiness/lib/llms-index-url.html -- utility (LIB tier).
+
+  Purpose: the ONE answer to "does the complete link index actually publish,
+  and at which URL". agent-readiness/llms.html reads it to name the complete
+  index from /llms.txt's `## Start here` section, and
+  agent-readiness/surfaces.html reads it for the public surface enumeration;
+  factoring the answer here keeps the two callers from ever drifting apart on
+  the gate set, exactly as lib/skills-index-url.html does for the Agent Skills
+  index.
+
+  PUBLISHED, not merely wired. The answer reproduces the gates of
+  layouts/home.llmsindex.txt: cfg.enable, cfg.llms.enable (the complete index
+  renders through the same renderer as /llms.txt, so the llms surface switch
+  governs both documents), cfg.llms_index.enable, and the llmsindex format
+  wired on the PAGE'S OWN LANGUAGE home. An enabled renderer always emits at
+  least its H1 line, so enabled-and-wired IS published. The format leaves
+  `root` unset and therefore publishes per language (/llms-index.txt,
+  /ru/llms-index.txt), which is why the lookup goes through the caller's own
+  site rather than hugo.Sites.Default -- unlike the skills index, whose one
+  root-pinned file every language must answer with.
+
+  THE UNWIRED CASE WARNS, and that is the point of routing the answer through
+  a partial rather than through a bare format lookup. `[outputs]` does not
+  merge from module configuration and a site-level `[outputs] home` key
+  REPLACES Hugo's default list, so an existing consumer who upgrades gets the
+  new format only by editing that list. Silently, they would publish a compact
+  /llms.txt whose only route to the dropped pages is a URL that 404s.
+  errorf is not an option: this module never fails a build over its own
+  configuration.
+
+  THE WARNING IS GATED ON llmstxt BEING WIRED, which is narrower than it first
+  looks and deliberately so. `llms_index.enable` ships true, so without this
+  gate the message would also reach a site that wires NEITHER link index --
+  one importing the module for twins and robots.txt alone -- and every word of
+  it would be wrong for that reader: no /llms.txt exists to name anything, and
+  the remedy it prescribes is for a surface they never asked for. Wiring
+  neither format IS the opt-out, and lib/skills-index-url.html stays silent in
+  the identical situation. So the warning fires exactly when the consumer
+  publishes the compact index that would otherwise carry a dead route, which
+  is the upgrade case it exists for, and a deliberately disabled surface says
+  nothing -- mirroring the sitemap_section_target = 'llms' precedent in
+  markdown-page.html. The URL itself is NOT gated this way: a site may wire
+  llmsindex alone, and it publishes and resolves normally.
+
+  Expected context (dict):
+  - .page (Page) - The page whose language site is asked.
+  - .cfg  (dict) - The resolved config from agent-readiness/config.html.
+
+  Return value: the complete index's ABSOLUTE Permalink (string) when the
+  surface publishes, else "". ONE terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $cfg := .cfg -}}
+{{- $url := "" -}}
+
+{{- if and $cfg.enable $cfg.llms.enable $cfg.llms_index.enable -}}
+  {{- with $page.Site.Home.OutputFormats.Get "llmsindex" -}}
+    {{- $url = .Permalink -}}
+  {{- else -}}
+    {{/* Only a site that actually publishes the compact index can be left with
+         a dead route, so only that site hears about it. See the docstring. */}}
+    {{- if $page.Site.Home.OutputFormats.Get "llmstxt" -}}
+      {{- partial "agent-readiness/lib/warn.html" (dict
+          "key" "agent-readiness:warn:llms-index-not-wired"
+          "message" "[agent-readiness] The complete link index is enabled but the llmsindex output format is not wired to the home page, so /llms-index.txt is not published and /llms.txt cannot name it. Add 'llmsindex' to your existing [outputs] home list -- the config list replaces the ENTIRE default home list, so keep every format you already wire there -- or set [params.agent.llms_index] enable = false.") -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $url -}}

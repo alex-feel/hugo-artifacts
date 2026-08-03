@@ -52,12 +52,12 @@ A site importing this module together with [`agent-readiness`](../agent-readines
 
 ```toml
 [outputs]
-  home = ['html', 'rss', 'markdown', 'llmstxt', 'agentfacts', 'agentskills', 'searchindex', 'opensearch']
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills', 'searchindex', 'opensearch']
   section = ['html', 'rss', 'markdown']
   page = ['html', 'markdown']
 ```
 
-Only `[outputs]` needs this care. `[outputFormats]` and `[mediaTypes]` DO merge additively from module configuration, which is why `searchindex`, `opensearch`, `llmstxt`, `agentfacts` and `agentskills` are usable by name in the list above although the site defines none of them. Naming `opensearch` there is harmless while `params.search.opensearch.enable` is unset: the format stays wired and publishes nothing. The [`seo`](../seo/README.md) module defines no output format of its own, but it READS this list: `[seo.alternates] formats` advertises exactly the formats your `[outputs]` lists wire for that page kind. The combination is covered by the cross-module suite in [`modules/test-composition/`](../test-composition/README.md).
+Only `[outputs]` needs this care. `[outputFormats]` and `[mediaTypes]` DO merge additively from module configuration, which is why `searchindex`, `opensearch`, `llmstxt`, `llmsindex`, `agentfacts` and `agentskills` are usable by name in the list above although the site defines none of them. Naming `opensearch` there is harmless while `params.search.opensearch.enable` is unset: the format stays wired and publishes nothing. The [`seo`](../seo/README.md) module defines no output format of its own, but it READS this list: `[seo.alternates] formats` advertises exactly the formats your `[outputs]` lists wire for that page kind. The combination is covered by the cross-module suite in [`modules/test-composition/`](../test-composition/README.md).
 
 ### Content Security Policy
 

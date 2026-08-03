@@ -4,10 +4,11 @@
 # ({{ T "key" | default "English" }}), so a site whose language ships no
 # translation still renders a real heading rather than an empty string.
 #
-# The module authors exactly twelve strings: seven headings in generated
-# documents, three display labels for the surface entries returned by the
-# agent-readiness/surfaces.html public partial, and the name and note of
-# the derived Agent Skills index entry in llms.txt's `## Optional` section.
+# The module authors exactly fifteen strings: seven headings in generated
+# documents, four display labels for the surface entries returned by the
+# agent-readiness/surfaces.html public partial, and the name and note of two
+# derived llms.txt entries -- the complete link index in the `## Start here`
+# section and the Agent Skills index in `## Optional`.
 # "## Optional" in llms.txt is deliberately NOT a key here: it is fixed by
 # the llmstxt.org convention and is a protocol token, not prose.
 # agent_sitemap_heading is deliberately NOT shipped either, for a different
@@ -47,15 +48,31 @@ agent_facts_identity_heading = "Идентификация"
 # H2 of the contact block in about.md.
 agent_facts_contact_heading = "Контакты"
 
-# H2 of the llms.txt section holding the derived link to the home page's own
-# Markdown twin. Unlike "## Optional", which the llmstxt.org convention fixes
-# as a protocol token, this heading is ordinary prose and is translated.
+# H2 of the llms.txt section holding the derived routes an agent must not drop
+# -- the home page's own Markdown twin and, in the compact document, the
+# complete link index. Unlike "## Optional", which the llmstxt.org convention
+# fixes as a protocol token, this heading is ordinary prose and is translated.
 agent_llms_start_heading = "Начните отсюда"
+
+# Link text of the derived complete-index entry that llms.html appends to the
+# `## Start here` section of the COMPACT /llms.txt. It names the document that
+# lists every page of every section, so a narrower compact index costs reach
+# rather than access.
+agent_llms_index_entry_name = "Полный индекс"
+
+# Note of that same entry, rendered after the `- [name](url): ` prefix. It
+# describes the TARGET rather than claiming the compact file is truncated,
+# which with no caps configured it is not.
+agent_llms_index_entry_note = "Каждая страница каждого раздела, полностью."
 
 # Display label for the llms.txt entry returned by surfaces.html.
 # "llms.txt" is the llmstxt.org protocol token and stays untranslated in
 # every language.
 agent_surface_llms = "llms.txt"
+
+# Display label for the complete link index (/llms-index.txt) entry returned
+# by surfaces.html.
+agent_surface_llms_index = "Полный индекс"
 
 # Display label for the facts document (/about.md) entry returned by
 # surfaces.html.
