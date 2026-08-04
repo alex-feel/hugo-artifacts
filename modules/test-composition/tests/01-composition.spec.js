@@ -71,6 +71,7 @@ test('one build publishes every module document side by side', () => {
     'opensearch.xml',
     'robots.txt',
     'index.html',
+    'manifest.webmanifest',
   ]) {
     assert.ok(existsSync(join(publicDir, relPath)), `public/${relPath} must be published`);
     assert.ok(published(relPath).trim().length > 0, `public/${relPath} must not be empty`);
@@ -92,7 +93,7 @@ test('the merged home list carries every format the three modules define', () =>
   // The built-in formats a replacing list silently drops. `markdown` drives
   // the agent-readiness twins; `html` and `rss` are Hugo defaults that a
   // consumer-authored list has to restate.
-  for (const format of ['html', 'rss', 'markdown']) {
+  for (const format of ['html', 'rss', 'markdown', 'webappmanifest']) {
     assert.ok(home.includes(format), `the merged home list must restate ${format}`);
   }
 });

@@ -23,7 +23,7 @@ locale = 'en-us'
 enableRobotsTXT = true
 
 [outputs]
-  home = ['html', 'rss', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills', 'searchindex', 'opensearch']
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills', 'searchindex', 'opensearch', 'webappmanifest']
   section = ['html', 'rss', 'markdown']
   page = ['html', 'markdown']
 
@@ -40,6 +40,9 @@ enableRobotsTXT = true
 
   [[module.imports]]
     path = "github.com/alex-feel/hugo-artifacts/modules/search"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/pwa"
 
 [params]
 
