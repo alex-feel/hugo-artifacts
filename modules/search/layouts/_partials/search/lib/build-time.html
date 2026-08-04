@@ -1,0 +1,73 @@
+{{/*
+  search/lib/build-time.html -- INTERNAL (lib tier).
+
+  Purpose: the ONE build timestamp for the whole build, as an RFC 3339 string
+  with the offset, for the `generated` field of /searchindex.json.
+
+  WHAT THE FIELD IS FOR, and why a per-render `now` cannot do it. `digest`
+  answers "is this different"; it cannot answer "which one is newer". A client
+  holding a cached index can hash what it has and see that the two disagree,
+  but disagreement has no direction, and the direction is the whole question:
+  is MY copy the stale one. Only a timestamp answers that, and only if the
+  value is a property of the BUILD rather than of the moment one document
+  happened to render. Two documents of one deploy stamped seconds apart report
+  drift that is not there, which is strictly worse than shipping no field --
+  and this index renders once per LANGUAGE, so a per-render `now` splits
+  /searchindex.json from /ru/searchindex.json of the same build.
+
+  THE SIBLING OWNS THE MECHANISM, and this partial prefers it. The
+  agent-readiness module publishes agent-readiness/build-time.html as public
+  API for exactly this purpose, and its docstring records the measurements
+  that make the shape necessary: `partialCached` alone caches PER LANGUAGE
+  (two values, 21 ms apart), a bare hugo.Store check-then-set races (two
+  values in 6 of 12 builds), and resources.FromString does not deduplicate by
+  target path at all. When that partial is present -- the site imports the
+  module, or overrides the path itself -- this one delegates, and the two
+  modules then agree BY CONSTRUCTION rather than by coincidence. That matters
+  because a consuming site running both publishes the twins, both link
+  indexes, /about.md, its own HTML meta and this index in one deploy, and a
+  reader compares them.
+
+  WHY DELEGATION RATHER THAN A HARD DEPENDENCY. Requiring the sibling module
+  would mount its layouts into every search-only site, and agent-readiness
+  ships layouts/robots.txt: a site that imported this module for search alone
+  would silently start serving a generated robots.txt. A soft, template-level
+  probe buys the shared value where both modules are present and costs a
+  search-only site nothing.
+
+  WHY DELEGATION RATHER THAN A SHARED STORE KEY. Two modules writing one
+  hugo.Store key with their own `partialCached` wrappers are two concurrent
+  first callers, and the check-then-set between them is not atomic -- the same
+  race as the bare store, at lower odds. Lower odds are worse than none here:
+  it would fail rarely and inexplicably. Exactly one writer per build is the
+  property that makes the value trustworthy, so when the sibling is present it
+  is the only writer, and lib/build-time-value.html below is never reached.
+
+  The fallback is a duplicate of the sibling's mechanism, deliberately, and it
+  is DEAD CODE in any build where the sibling exists. It is what lets this
+  module carry the field on its own terms; a search-only site is a real
+  consumer and must not get a field that means less for it.
+
+  templates.Exists takes a path under layouts/ and the partials directory is
+  `_partials` from Hugo v0.146 (the pre-0.146 `partials/` spelling returns
+  false here -- verified against this repository's own composition fixture,
+  where the underscored form returns true for the module-mounted partial).
+
+  Expected context: none is read; it is passed through to the sibling, which
+  reads none either.
+
+  Return value: the build timestamp as an RFC 3339 string. ONE terminal
+  return.
+*/}}
+
+{{- $stamp := "" -}}
+{{- if templates.Exists "_partials/agent-readiness/build-time.html" -}}
+  {{- $stamp = partial "agent-readiness/build-time.html" . -}}
+{{- else -}}
+  {{/* The `partialCached` sits HERE rather than inside the value partial: it
+       keys globally on (template name, variant keys), so the wrapper is what
+       collapses the racing writers to one per language. */}}
+  {{- $stamp = partialCached "search/lib/build-time-value.html" "" -}}
+{{- end -}}
+
+{{- return $stamp -}}

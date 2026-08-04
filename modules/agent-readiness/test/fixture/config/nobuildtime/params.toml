@@ -1,4 +1,4 @@
-# The `nobuildtime` environment: the three per-surface `build_time` switches
+# The `nobuildtime` environment: the four per-surface `build_time` switches
 # set false on top of the default configuration, and nothing else.
 #
 # It is the only build in which those switches decide anything. Everywhere
@@ -7,10 +7,10 @@
 # and leave the whole suite green -- the failure shape that made `off`,
 # `nolinkmd` and `nosectionpages` separate environments too.
 #
-# All three keys, one environment, because they are one concept: "this
+# All four keys, one environment, because they are one concept: "this
 # consumer diffs published output to decide whether to deploy, and a stamp
 # that changes every build defeats that". A consumer who wants the stamp on
-# some surfaces and not others sets the keys independently -- they are three
+# some surfaces and not others sets the keys independently -- they are four
 # switches for exactly that reason, mirroring the two independent `license`
 # switches over one underlying fact.
 #
@@ -28,4 +28,7 @@
     build_time = false
 
   [agent.facts]
+    build_time = false
+
+  [agent.skills_index]
     build_time = false

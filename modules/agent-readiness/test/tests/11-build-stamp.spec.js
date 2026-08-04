@@ -30,7 +30,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {join} from 'node:path';
+import {basename, join} from 'node:path';
 import {parse as parseYaml} from 'yaml';
 import {
   read,
@@ -67,10 +67,20 @@ function stampFromDocument(rel, dir) {
   return match ? match[1] : undefined;
 }
 
+// The Agent Skills discovery index, whose stamp is a JSON key rather than a
+// front-matter field or a blockquote line. It publishes only in the default
+// language and only when at least one skill survived validation and fetch, so
+// the builds that carry it are named per sweep rather than assumed.
+const SKILLS_INDEX = '.well-known/agent-skills/index.json';
+const stampFromSkillsIndex = (dir) => JSON.parse(read(SKILLS_INDEX, dir)).generated;
+
 // Every stamp the build wrote or exposed, gathered from every channel that
 // carries one, as {label, value} so a failure names the surface that
 // disagreed rather than reporting two anonymous strings.
-function allStamps(dir, {dumps = ['twindump.txt'], docs = ['llms.txt', 'about.md']} = {}) {
+function allStamps(
+  dir,
+  {dumps = ['twindump.txt'], docs = ['llms.txt', 'about.md'], jsons = []} = {},
+) {
   const out = [];
   for (const twin of publishedTwins(dir)) {
     out.push({label: `twin ${twin}`, value: stampFromTwin(twin.replace(/^\//, ''), dir)});
@@ -78,23 +88,31 @@ function allStamps(dir, {dumps = ['twindump.txt'], docs = ['llms.txt', 'about.md
   for (const rel of docs) {
     out.push({label: rel, value: stampFromDocument(rel, dir)});
   }
+  for (const rel of jsons) {
+    out.push({label: rel, value: stampFromSkillsIndex(dir)});
+  }
   for (const rel of dumps) {
     out.push({label: `${rel} exposed value`, value: parseDump(rel, dir).buildTime});
   }
   return out;
 }
 
-test('every twin, llms.txt, about.md and the exposed value carry ONE stamp', () => {
+test('every twin, llms.txt, about.md, the skills index and the exposed value carry ONE stamp', () => {
   // The cross-document comparison the acceptance criteria ask for, at full
   // width: not two independent regex matches that would both pass against
   // different values, but one distinct-value count over every surface of the
   // build at once.
-  for (const [name, dir] of [
-    ['baseline', publicDir],
-    ['configured', configuredDir],
-    ['minimal', minimalDir],
+  //
+  // The skills index joins the sweep for the two builds that publish one.
+  // `minimal` configures no skills, so it emits no file at all -- an empty
+  // JSON shell at a .well-known path claims a capability that does not exist
+  // -- and naming it here would fail on the absence rather than on a stamp.
+  for (const [name, dir, jsons] of [
+    ['baseline', publicDir, [SKILLS_INDEX]],
+    ['configured', configuredDir, [SKILLS_INDEX]],
+    ['minimal', minimalDir, []],
   ]) {
-    const stamps = allStamps(dir);
+    const stamps = allStamps(dir, {jsons});
     assert.ok(stamps.length > 3, `${name}: the build must carry several stamped surfaces`);
     for (const {label, value} of stamps) {
       assert.ok(value !== undefined, `${name}: ${label} carries no stamp at all`);
@@ -127,6 +145,11 @@ test('the twins carry the stamp the module EXPOSES, not a second value of their 
   }
   assert.equal(stampFromDocument('llms.txt', publicDir), exposed, 'llms.txt must carry it too');
   assert.equal(stampFromDocument('about.md', publicDir), exposed, 'about.md must carry it too');
+  assert.equal(
+    stampFromSkillsIndex(publicDir),
+    exposed,
+    'and so must the skills index, whose per-skill digests answer a different question',
+  );
 });
 
 test('the multilingual build carries one stamp across BOTH language trees', () => {
@@ -243,6 +266,20 @@ test('with the switches off, no surface carries a stamp and nothing else moves',
       `${rel} must carry no build-time line with the switch off`,
     );
   }
+  // The skills index loses its key entirely rather than carrying an empty
+  // string: a `generated` present and blank would read to a client as a
+  // document that failed to date itself.
+  const skills = JSON.parse(read(SKILLS_INDEX, nobuildtimeDir));
+  assert.ok(
+    !Object.prototype.hasOwnProperty.call(skills, 'generated'),
+    'the skills index must carry no generated key with the switch off',
+  );
+  assert.ok(skills.skills.length > 0, 'while still publishing the entries it is there for');
+  assert.equal(
+    skills.$schema,
+    'https://schemas.agentskills.io/discovery/0.2.0/schema.json',
+    'and the schema identifier is untouched by the stamp switch',
+  );
 });
 
 test('the switches govern what is WRITTEN, not what the public partial returns', () => {
@@ -335,11 +372,23 @@ test('every stamped surface reads the exposed value instead of timing itself', (
   // partial, and it must contain no timestamp call of its own. Comment blocks
   // are stripped first -- the module's templates are heavily commented and
   // prose legitimately contains the word "now".
+  //
+  // The skills index is an output-format LAYOUT rather than a partial, which
+  // is why the list carries paths rather than names: it stamps a JSON key
+  // through the same public partial, and leaving it out of this sweep would
+  // leave the module's newest stamped surface the one place a second clock
+  // could appear unnoticed.
   const partialsDir = join(moduleRoot, 'layouts', '_partials', 'agent-readiness');
-  const emitters = ['markdown-front-matter.html', 'llms.html', 'facts.html'];
+  const emitters = [
+    join(partialsDir, 'markdown-front-matter.html'),
+    join(partialsDir, 'llms.html'),
+    join(partialsDir, 'facts.html'),
+    join(moduleRoot, 'layouts', 'home.agentskills.json'),
+  ];
 
-  for (const name of emitters) {
-    const source = readFileSync(join(partialsDir, name), 'utf8');
+  for (const path of emitters) {
+    const name = basename(path);
+    const source = readFileSync(path, 'utf8');
     const code = source.replace(/\{\{-?\/\*[\s\S]*?\*\/-?\}\}/g, '');
 
     assert.ok(
@@ -358,26 +407,30 @@ test('every stamped surface reads the exposed value instead of timing itself', (
 });
 
 test('each stamped surface obeys its OWN build_time switch', () => {
-  // The three switches are independent on purpose, and `nobuildtime` -- the one
-  // environment that sets any of them -- sets all three together, so every
+  // The four switches are independent on purpose, and `nobuildtime` -- the one
+  // environment that sets any of them -- sets all four together, so every
   // surface loses its stamp there whichever key it actually read. Cross-wiring
   // is therefore invisible to the published bytes: mutating llms.html to gate
   // on the Markdown twins' switch instead of its own left the whole suite
-  // green. Splitting the environments to separate three switches behaviorally
-  // costs two more Hugo builds and still only distinguishes them pairwise, so
+  // green. Splitting the environments to separate four switches behaviorally
+  // costs three more Hugo builds and still only distinguishes them pairwise, so
   // the wiring is locked at the source instead, where it is exact.
   const partialsDir = join(moduleRoot, 'layouts', '_partials', 'agent-readiness');
+  const layoutsDir = join(moduleRoot, 'layouts');
   const owners = [
-    ['markdown-front-matter.html', 'markdown', /\$md\.build_time|\$cfg\.markdown\.build_time/],
-    ['llms.html', 'llms', /\$llms\.build_time|\$cfg\.llms\.build_time/],
-    ['facts.html', 'facts', /\$facts\.build_time|\$cfg\.facts\.build_time/],
+    [
+      join(partialsDir, 'markdown-front-matter.html'),
+      'markdown',
+      /\$md\.build_time|\$cfg\.markdown\.build_time/,
+    ],
+    [join(partialsDir, 'llms.html'), 'llms', /\$llms\.build_time|\$cfg\.llms\.build_time/],
+    [join(partialsDir, 'facts.html'), 'facts', /\$facts\.build_time|\$cfg\.facts\.build_time/],
+    [join(layoutsDir, 'home.agentskills.json'), 'skills_index', /\$cfg\.skills_index\.build_time/],
   ];
 
-  for (const [file, own, ownPattern] of owners) {
-    const code = readFileSync(join(partialsDir, file), 'utf8').replace(
-      /\{\{-?\/\*[\s\S]*?\*\/-?\}\}/g,
-      '',
-    );
+  for (const [path, own, ownPattern] of owners) {
+    const file = basename(path);
+    const code = readFileSync(path, 'utf8').replace(/\{\{-?\/\*[\s\S]*?\*\/-?\}\}/g, '');
     assert.match(
       code,
       ownPattern,

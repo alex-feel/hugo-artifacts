@@ -1,5 +1,29 @@
 {{ define "main" }}
   <h1>{{ .Title }}</h1>
+  {{/* Fixture-only WHITE-BOX probe of the build stamp, and it earns its
+       coupling to a lib partial. This fixture builds in well under a second
+       while the stamp's precision is one second, so every value a build
+       produces lands in the same second: comparing the `generated` field of
+       the two languages' indexes cannot tell the one-value-per-build
+       mechanism from a per-render `now`, and that equality would stay green
+       against the exact defect the field exists to rule out.
+
+       What a broken mechanism cannot fake is the hugo.Store entry. This site
+       imports search ALONE, so search/lib/build-time.html must take its
+       FALLBACK path and write `search:build-time`; a mechanism reduced to a
+       bare `now` never writes the key and leaves this attribute empty. The
+       resolver is called on the line above the read so the probe cannot
+       depend on render order -- it materializes the value it then observes.
+       Renaming the key in the module is a deliberate act that updates this
+       line with it. The composition suite asserts the OTHER half: with the
+       agent-readiness module present, this same key must stay EMPTY, because
+       the resolver delegates instead of writing its own. */}}
+  <div
+    id="build-stamp-probe"
+    data-resolved="{{ partial "search/lib/build-time.html" . }}"
+    data-store="{{ hugo.Store.Get "search:build-time" | default "" }}"
+    data-sibling-present="{{ templates.Exists "_partials/agent-readiness/build-time.html" }}"
+  ></div>
   {{/* worker and cache are BACKEND-SCOPED: this call-site override attempt
        MUST be ignored, keeping the site-tier values on the shared backend. */}}
   {{ partial "search/inline.html" (dict "page" . "worker" false "cache" false) }}

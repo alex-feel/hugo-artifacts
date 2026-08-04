@@ -1,4 +1,30 @@
 {{ define "main" }}
   <h1>{{ .Title }}</h1>
+  {{/* Fixture-only WHITE-BOX probe of the cross-module build stamp, and the
+       only thing in either module's suite that can prove the two agree BY
+       CONSTRUCTION rather than by coincidence. Both fixtures build in well
+       under a second while the stamp's precision is one second, so two
+       independently computed values land on the same string: asserting that
+       /searchindex.json's `generated` equals the twins' `build_time` stays
+       green even if the search module computed its own value and never
+       consulted the sibling at all.
+
+       The store entries are what cannot be faked. The search module resolves
+       its stamp by DELEGATING to agent-readiness/build-time.html when that
+       partial exists, so on this site -- which imports both -- the search
+       module's own fallback must never run and `search:build-time` must stay
+       EMPTY, while `agent-readiness:build-time` carries the value. Deleting
+       the delegation inverts both attributes and changes no published byte.
+
+       Each store read is preceded by the call that would populate it, so the
+       probe cannot depend on render order. Renaming either key in either
+       module is a deliberate act that updates this line with it. */}}
+  <div
+    id="build-stamp-probe"
+    data-search-resolved="{{ partial "search/lib/build-time.html" . }}"
+    data-search-store="{{ hugo.Store.Get "search:build-time" | default "" }}"
+    data-agent-resolved="{{ partial "agent-readiness/build-time.html" . }}"
+    data-agent-store="{{ hugo.Store.Get "agent-readiness:build-time" | default "" }}"
+  ></div>
   {{ .Content }}
 {{ end }}

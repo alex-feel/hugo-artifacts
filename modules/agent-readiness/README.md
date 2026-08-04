@@ -117,7 +117,9 @@ The intended consumer is a site-side discovery surface -- an `/agents/` page or 
 <meta name="build-time" content="{{ partial "agent-readiness/build-time.html" . }}">
 ```
 
-Returns the build's timestamp as an RFC 3339 string with the offset (`2026-08-03T03:05:13+03:00`). The value is **constant for the whole build and identical in every document the build publishes, in every language**, and it is the same string the module writes into every twin's `build_time` front-matter key and into the `> Build time:` line of `llms.txt` and `/about.md`. It is not persisted between builds: two consecutive builds return two different values, which is the point.
+Returns the build's timestamp as an RFC 3339 string with the offset (`2026-08-03T03:05:13+03:00`). The value is **constant for the whole build and identical in every document the build publishes, in every language**, and it is the same string the module writes into every twin's `build_time` front-matter key, into the `> Build time:` line of `llms.txt` and `/about.md`, and into the `generated` key of the Agent Skills index. It is not persisted between builds: two consecutive builds return two different values, which is the point.
+
+This partial is public API for consuming sites AND for sibling modules: the [`search`](../search/README.md) module reads it -- through `templates.Exists`, so it stays optional -- to stamp `/searchindex.json`, which is why a site running both publishes one string across every dated document of a deploy.
 
 The partial exists so a consuming site can stamp its own surfaces -- an HTML `<meta>` tag, a generated JSON document, anything -- with the value the module's surfaces already carry. Feeding a separately-computed `now` into those would make two documents of one deploy disagree by seconds and report drift that is not there, which is worse than no stamp at all. It reads no context; pass the conventional `.`.
 
@@ -370,22 +372,25 @@ A twin carries two timestamps, and they answer **different questions**. Conflati
 
 `last_updated` cannot answer "am I holding a cached copy". A site that rebuilds on a schedule refreshes generated figures without touching a content file, so `last_updated` sits still while the published document changes. `build_time` is the field that moves, and its full RFC 3339 form is deliberate: a date alone cannot distinguish this morning's build from last night's.
 
-**The value is one string per build**, identical in every twin, in the `> Build time:` line of `llms.txt` and `/about.md`, in every language, and identical to what the [`build-time.html`](#build-timehtml) public partial returns -- so a site that stamps its own `<meta name="build-time">` from that partial publishes a value a reader can compare byte for byte against any of the module's documents. It is not persisted between builds, so a rebuild always produces a new one.
+**The value is one string per build**, identical in every twin, in the `> Build time:` line of `llms.txt` and `/about.md`, in the `generated` key of the Agent Skills index, in every language, and identical to what the [`build-time.html`](#build-timehtml) public partial returns -- so a site that stamps its own `<meta name="build-time">` from that partial publishes a value a reader can compare byte for byte against any of the module's documents. A site that also runs the [`search`](../search/README.md) module gets the same string in `/searchindex.json`'s `generated` field, because that module reads this partial when it is present. It is not persisted between builds, so a rebuild always produces a new one.
 
-Three independent switches decide which of the module's own documents carry it, mirroring the two independent `license` switches over one underlying fact:
+Four independent switches decide which of the module's own documents carry it, mirroring the two independent `license` switches over one underlying fact:
 
 ```toml
 [params.agent.markdown]
 build_time = true    # the `build_time:` front-matter key in every twin
 
 [params.agent.llms]
-build_time = true    # the `> Build time: <stamp>` line in llms.txt
+build_time = true    # the `> Build time: <stamp>` line in llms.txt and llms-index.txt
 
 [params.agent.facts]
 build_time = true    # the same line in /about.md
+
+[params.agent.skills_index]
+build_time = true    # the `generated` key in the Agent Skills index
 ```
 
-**Consumer-visible consequence of leaving them on, stated plainly:** every twin, `llms.txt` and `/about.md` changes bytes on **every** build, even when no content changed. That is harmless for an ordinary deploy and it is exactly what a staleness detector requires -- but a consumer that diffs published output to decide whether to deploy, invalidates a CDN from a changed-file list, or commits `public/` to version control will now see the whole set change every build. Those consumers set the switches false. The default is on, because a stamp shipped off by default fixes the problem only for consumers who read this paragraph.
+**Consumer-visible consequence of leaving them on, stated plainly:** every twin, both link indexes, `/about.md` and the skills index change bytes on **every** build, even when no content changed. That is harmless for an ordinary deploy and it is exactly what a staleness detector requires -- but a consumer that diffs published output to decide whether to deploy, invalidates a CDN from a changed-file list, or commits `public/` to version control will now see the whole set change every build. Those consumers set the switches false. The default is on, because a stamp shipped off by default fixes the problem only for consumers who read this paragraph.
 
 ### `last_updated` accuracy precondition
 
@@ -618,12 +623,45 @@ Publishes `/.well-known/agent-skills/index.json`, plus one republished `/.well-k
 [params.agent.skills_index]
 enable = true
 schema = 'https://schemas.agentskills.io/discovery/0.2.0/schema.json'
+build_time = true     # emit the top-level `generated` stamp
 
 [[params.agent.skills]]
 name = 'my-skill'
 description = '<verbatim from the SKILL.md description front matter>'
 source = 'https://raw.githubusercontent.com/owner/repo/<commit SHA>/skills/my-skill/SKILL.md'
 ```
+
+```json
+{
+  "$schema": "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
+  "generated": "2026-08-04T03:05:13+03:00",
+  "skills": [
+    {
+      "name": "my-skill",
+      "type": "skill-md",
+      "description": "...",
+      "url": "/.well-known/agent-skills/my-skill/SKILL.md",
+      "digest": "sha256:3567d32c..."
+    }
+  ]
+}
+```
+
+### `generated` answers what `digest` cannot
+
+A digest says **"is this different"**. It cannot say **"which one is newer"**, and for a client holding a cached index the direction is the whole question: is MY copy the stale one. Two opaque hashes that disagree cannot answer it; a timestamp can.
+
+The gap bites harder here than on any other surface this module publishes, because of what the index is FOR. A stale index points an agent at a skill body it believes is current -- and the digest beside it **verifies**, against the old bytes the client also cached. Index and body stay perfectly self-consistent, both out of date, every check green.
+
+The value is [the build stamp](#the-build-time-line): the same string from the same [`build-time.html`](#build-timehtml) that every twin's `build_time`, both link indexes' and `/about.md`'s `> Build time:` line, and a consuming site's own `<meta>` carry. It is **top level, not per skill** -- the document is published as a unit and its entries never come from different builds, so a field per entry would be N copies of one fact. `skills_index.build_time = false` withholds the key entirely rather than emitting it empty, matching the three other per-surface stamp switches.
+
+### The `$schema` decision: the key is added, the identifier is not touched
+
+The discovery draft settles this in the module's favor, explicitly rather than by omission. Verbatim from the [RFC](https://github.com/cloudflare/agent-skills-discovery-rfc): **"Clients MUST ignore unrecognized fields."** A conforming client is therefore required to tolerate `generated`, and the forward-compatibility rule is the spec's own, not an assumption about what happens to validate today.
+
+The declared `$schema` URI does not resolve (`schemas.agentskills.io` is NXDOMAIN, verified), and that is also by design rather than a defect: the RFC states the URI **"does not need to be resolvable, though it MAY point to a JSON Schema document"** and that it is an **"opaque identifier"** clients **"MUST match against known schema URIs to determine how to process the index"**. So the value stays EXACTLY as configured. Minting a new one to signal the extra key would be the one genuinely unsafe move available: clients "encountering an unrecognized `$schema` URI SHOULD warn the user and SHOULD NOT process the index" -- the index would be refused wholesale in exchange for advertising an addition the spec already permits.
+
+The residual risk is future-only and is worth naming: if a published schema ever appears with `additionalProperties: false`, the key becomes invalid the day validation arrives. The alternative that avoids it -- an HTTP `Last-Modified` header on the index -- is not something a Hugo module can guarantee, because it lives in the consuming site's edge configuration, not in the generated document. A field the module can guarantee beats a header it cannot. The long-term home for this is the RFC repository itself, where the shape is defined.
 
 ### The digest contract
 

@@ -147,6 +147,82 @@ test('the OpenSearch description names the fixture site', () => {
   assert.match(xml, /template="https:\/\/composition\.example\/search\/\?q=\{searchTerms\}"/);
 });
 
+test('ONE build stamp reaches every module that publishes a dated document', () => {
+  // The point of a build stamp is that a reader can COMPARE surfaces: the
+  // twins, both link indexes, /about.md and the search index all come out of
+  // one deploy, and a reader who finds two values there learns nothing except
+  // that the site is unreliable. Neither module's own suite can see this --
+  // each is proven against a fixture that imports it alone -- so the shared
+  // value is a composition property or it is nothing.
+  const stamp = /^> Build time: (.+)$/m.exec(published('llms.txt'));
+  assert.ok(stamp, 'the compact link index must carry a build-time line');
+  const value = stamp[1];
+  assert.match(
+    value,
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})$/,
+    'RFC 3339 with an offset',
+  );
+
+  assert.equal(/^> Build time: (.+)$/m.exec(published('about.md'))[1], value, 'about.md agrees');
+  assert.equal(
+    /^> Build time: (.+)$/m.exec(published('llms-index.txt'))[1],
+    value,
+    'the complete link index agrees',
+  );
+  // Compared as a literal rather than through a constructed pattern: the
+  // offset's `+` is a regex quantifier, and a RegExp built from the value
+  // would quietly match a DIFFERENT timestamp.
+  assert.ok(
+    published('index.md').includes(`\nbuild_time: "${value}"\n`),
+    "the home twin's front-matter stamp agrees",
+  );
+  assert.equal(
+    JSON.parse(published('searchindex.json')).generated,
+    value,
+    'and the search index, published by a DIFFERENT module, carries the same string',
+  );
+});
+
+test('the search module reaches that stamp by DELEGATION, not by coincidence', () => {
+  // The equality above is necessary and nowhere near sufficient. This fixture
+  // builds in well under a second while the stamp's precision is one second,
+  // so a search module that computed its own value would print the same
+  // string and satisfy every assertion in the test above. Deleting the
+  // delegation changes no published byte anywhere in this tree.
+  //
+  // The store entries are what cannot be faked. search/lib/build-time.html
+  // delegates to agent-readiness/build-time.html when that partial exists, so
+  // here the search module's own fallback must never run: `search:build-time`
+  // stays EMPTY while `agent-readiness:build-time` holds the value. The
+  // fixture's probe calls each resolver immediately before reading its key,
+  // so the observation cannot depend on render order.
+  //
+  // This is also the only place the repository verifies that templates.Exists
+  // sees a partial mounted from a MODULE rather than from the project -- the
+  // fact the whole soft-dependency design rests on.
+  const html = published('index.html');
+  const attr = (name) => {
+    const match = new RegExp(`${name}="([^"]*)"`).exec(html);
+    assert.ok(match, `the fixture probe must emit ${name}`);
+    return match[1];
+  };
+
+  assert.equal(
+    attr('data-search-store'),
+    '',
+    'the search module must not write its own stamp key when the sibling is present',
+  );
+  assert.ok(
+    attr('data-agent-store').length > 0,
+    'while the sibling module must have written its own',
+  );
+  // Both resolvers return one string. The attribute values are HTML-escaped
+  // (`+` becomes `&#43;`), which is why they are compared with each other
+  // rather than with the published RFC 3339 text.
+  assert.equal(attr('data-search-resolved'), attr('data-agent-resolved'));
+  assert.equal(attr('data-agent-resolved'), attr('data-agent-store'));
+});
+
 test('the combined build reports no warning, error or deprecation line', () => {
   // Every module in the chain degrades by warning rather than failing, so a
   // silent composition regression surfaces here first: an exit-0 build whose

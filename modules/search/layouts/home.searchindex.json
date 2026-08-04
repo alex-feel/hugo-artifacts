@@ -8,10 +8,20 @@
   noHTMLEscape is safe for a standalone .json file and smaller; the envelope
   must not be inlined into a <script> tag as-is.
 
-  Envelope (schemaVersion 1): schemaVersion, lang, generated (RFC 3339,
-  data-only, excluded from the digest), docCount, digest (xxHash of the
-  serialized docs -- the content signal the client-side cache key requires,
-  because this URL is stable rather than fingerprinted), docs.
+  Envelope (schemaVersion 1): schemaVersion, lang, generated (the BUILD's
+  RFC 3339 timestamp, data-only, excluded from the digest), docCount, digest
+  (xxHash of the serialized docs -- the content signal the client-side cache
+  key requires, because this URL is stable rather than fingerprinted), docs.
+
+  `generated` answers what `digest` cannot. A digest says "is this
+  different"; it cannot say "which one is newer", and a client holding a
+  cached index needs the direction to know whether ITS copy is the stale one.
+  The value therefore comes from search/lib/build-time.html rather than from
+  `now`: it is constant for the whole build, identical in every language's
+  index, and identical to what the agent-readiness module stamps into its own
+  surfaces when a site runs both. A per-render `now` here would split
+  /searchindex.json from /ru/searchindex.json of one deploy and report drift
+  that is not there.
 
   Inclusion filters, in order: master switch (enable = false empties the
   range but the envelope still emits so the wired URL never 404s); section
@@ -109,7 +119,7 @@
 {{- $envelope := dict
   "schemaVersion" 1
   "lang" site.Language.Name
-  "generated" (now.Format "2006-01-02T15:04:05Z07:00")
+  "generated" (partial "search/lib/build-time.html" .)
   "docCount" (len $docs)
   "digest" (hash.XxHash ($docs | jsonify))
   "docs" $docs

@@ -182,6 +182,12 @@ sitemap_section = true
 [skills_index]
 enable = true   # SITE-SCOPED (see the header note on surface switches)
 schema = "https://schemas.agentskills.io/discovery/0.2.0/schema.json"
+# Emit the top-level "generated" key: the build's RFC 3339 timestamp. Same
+# value and same trade-off as [markdown] build_time above. It answers what the
+# per-skill `digest` cannot -- a digest says "is this different", never "which
+# one is newer" -- and the discovery convention explicitly requires clients to
+# ignore fields they do not recognize.
+build_time = true
 # Consumer-declared array of tables; empty emits NO file at all. Shape:
 #   [[params.agent.skills]] name = "…" description = "…" source = "<pinned raw URL>"
 
