@@ -1,0 +1,12 @@
+# Hugo arxiv-paper module -- English UI strings.
+# Every template lookup pipes through `| default "<English>"`, so a site language without
+# these keys still renders.
+# The citations key is a plural-form table selected by Hugo's CLDR rules from an integer
+# count. The word sits next to a compact-formatted number ("1.2k"), so at or above a
+# thousand the count passed for selection is 1000, whose category fits a rounded quantity;
+# raw counts below 1000 select their own form. This mirrors the sibling hf-space module,
+# where the same compact-number-plus-noun pairing is resolved the same way.
+
+[arxiv_paper_citations_word]
+one = "citation"
+other = "citations"

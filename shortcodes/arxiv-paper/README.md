@@ -322,6 +322,9 @@ All icons (external link, download, document, authors, subject tag, calendar, qu
 shortcodes/arxiv-paper/
   go.mod
   hugo.toml
+  i18n/
+    en.toml                       # UI strings, incl. the citations plural-form table
+    ru.toml
   data/
     arxiv_categories.json         # 155 category code -> human-readable name
     arxiv_archive_groups.json     # 20 archive prefix -> broad group
