@@ -42,23 +42,45 @@
   SHOULD NOT process the index", which makes inventing a new value the one
   genuinely unsafe move available. See the README for the full decision.
 
-  The whole document is ONE Go dict serialized with a single jsonify call --
-  never hand-assembled JSON. noHTMLEscape is safe and smaller for a
-  standalone .json file; this envelope must not be inlined into a <script>
-  tag as-is.
+  MEMBER ORDER IS CHOSEN, NOT INHERITED: `$schema`, then `generated`, then
+  `skills` -- everything that DESCRIBES the document before the thing that IS
+  it. A reader that samples a large JSON document from the front (a curl
+  piped to head, a truncated preview, a streaming parser, an agent working to
+  a context budget) then learns the format identifier and the build time from
+  the first hundred-odd bytes, whatever the skill list weighs.
+
+  That order is what a single jsonify call happens to produce today, and
+  today only: jsonify serializes a Go map's keys ALPHABETICALLY, so the
+  payload sits last purely because `$` (0x24) sorts ahead of letters and no
+  key yet sorts after `skills`. One future key named `updated`, `version` or
+  `warnings` would move the metadata behind the payload with nothing to say
+  so -- which is exactly how the sibling search module's index came to carry
+  its build stamp sixty-five bytes from the end of a quarter-megabyte
+  document, where capable readers concluded three times over that it was
+  absent. So the members are emitted one at a time, and `skills` is appended
+  after the conditional block below rather than beside its siblings, which
+  makes "the payload is last" a property of the code's shape.
+
+  Every VALUE still goes through jsonify -- escaping, quoting and the nested
+  indentation of the skill list stay the encoder's job (`prefix` is what
+  indents that nested array to its parent's level), and the only characters
+  written by hand are the braces, the colons, the commas and the three key
+  names. noHTMLEscape is safe and smaller for a standalone .json file; this
+  envelope must not be inlined into a <script> tag as-is.
 */ -}}
 {{- $page := . -}}
 {{- $cfg := partial "agent-readiness/config.html" (dict "page" . "site_only" true) -}}
 {{- if and $cfg.enable $cfg.skills_index.enable site.Language.IsDefault -}}
   {{- $skills := partial "agent-readiness/skills.html" (dict "page" . "cfg" $cfg) -}}
   {{- with $skills -}}
-    {{/* Assembled as a variable rather than piped inline, because the stamp is
-         conditional: `with` has rebound the dot to the skill slice, so the
-         page the build-time partial is handed comes from the capture above. */}}
-    {{- $envelope := dict "$schema" $cfg.skills_index.schema "skills" . -}}
+    {{/* `with` has rebound the dot to the skill slice, so the page the
+         build-time partial is handed comes from the capture above. */}}
+    {{- $opts := dict "noHTMLEscape" true "indent" "  " "prefix" "  " -}}
+    {{- $members := slice (printf `  "$schema": %s` (jsonify $opts $cfg.skills_index.schema)) -}}
     {{- if $cfg.skills_index.build_time -}}
-      {{- $envelope = merge $envelope (dict "generated" (partial "agent-readiness/build-time.html" $page)) -}}
+      {{- $members = $members | append (printf `  "generated": %s` (jsonify $opts (partial "agent-readiness/build-time.html" $page))) -}}
     {{- end -}}
-    {{- $envelope | jsonify (dict "noHTMLEscape" true "indent" "  ") -}}
+    {{- $members = $members | append (printf `  "skills": %s` (jsonify $opts .)) -}}
+    {{- printf "{\n%s\n}" (delimit $members ",\n") -}}
   {{- end -}}
 {{- end -}}

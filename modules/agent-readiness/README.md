@@ -647,6 +647,14 @@ source = 'https://raw.githubusercontent.com/owner/repo/<commit SHA>/skills/my-sk
 }
 ```
 
+### Member order is part of the format: metadata first, payload last
+
+**The members are emitted in the order shown above, and `skills` is always last.** Everything that DESCRIBES the document precedes the thing that IS it, so a reader sampling the file from the front -- a `curl` piped to `head`, a truncated preview, a streaming parser, an agent working to a context budget -- learns the schema identifier and the build time from the first hundred-odd bytes, whatever the skill list weighs. The metadata block is a fixed size regardless of how many skills the index carries.
+
+That is a deliberate property rather than a lucky one. Serialized as a single Go map, `jsonify` orders keys ALPHABETICALLY, and this document came out right only because `$` sorts ahead of letters and no key yet sorts after `skills` -- one future key named `updated`, `version` or `warnings` would move the metadata behind the payload with nothing to announce it. That is not hypothetical: the sibling [`search`](../search/README.md) module's index carried its build stamp sixty-five bytes from the end of a quarter-megabyte document for exactly this reason, where capable readers concluded three times over that the field was absent. So the members are emitted one at a time here, the payload is appended after the conditional stamp rather than beside its siblings, and the test suite pins the published order.
+
+What you may rely on is the guarantee, not the sequence: **every metadata member precedes `skills`, and nothing follows it.** JSON member order carries no semantics, so a conforming client cannot observe any of this and none can be broken by it; the order exists entirely for readers that never reach the end. Read fields by name, as you would from any JSON.
+
 ### `generated` answers what `digest` cannot
 
 A digest says **"is this different"**. It cannot say **"which one is newer"**, and for a client holding a cached index the direction is the whole question: is MY copy the stale one. Two opaque hashes that disagree cannot answer it; a timestamp can.

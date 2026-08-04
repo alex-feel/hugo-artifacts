@@ -11,6 +11,7 @@ import {
   exists,
   minimalDir,
   multilingualDir,
+  nobuildtimeDir,
   publicDir,
   publishedPath,
   sha256File,
@@ -52,6 +53,57 @@ test('the index parses and declares its schema', () => {
   assert.equal(doc.$schema, 'https://schemas.agentskills.io/discovery/0.2.0/schema.json');
   assert.ok(Array.isArray(doc.skills));
   assert.ok(doc.skills.length > 0);
+});
+
+// The metadata block is a fixed size no matter how many skills the index
+// carries, so this budget holds for a site publishing fifty of them exactly
+// as it does for the fixture's one. It is generous enough for a longer
+// configured `$schema` URI, which is the only member here that can grow.
+const HEAD_BUDGET = 300;
+
+test('the index describes itself BEFORE it delivers itself', () => {
+  // Everything that DESCRIBES the document precedes the thing that IS it, so
+  // a reader sampling this file from the front -- a curl piped to head, a
+  // truncated preview, a streaming parser, an agent working to a context
+  // budget -- learns the format identifier and the build time without
+  // reading the skill list.
+  //
+  // What this asserts is the PUBLISHED order, which is the only thing a
+  // reader can observe, and it is deliberately not a proof of the mechanism
+  // that produces it: the template emits its members one at a time and
+  // appends the payload after the conditional stamp, but a single jsonify of
+  // a Go map would produce these same bytes TODAY, because `$` sorts ahead
+  // of letters and no key yet sorts after `skills`. That equivalence is
+  // precisely the hazard -- a later key named `updated`, `version` or
+  // `warnings` reorders a map-serialized document and nothing says so. This
+  // assertion is what says so.
+  const raw = read(INDEX);
+  assert.deepEqual(Object.keys(JSON.parse(raw)), ['$schema', 'generated', 'skills']);
+
+  const payloadAt = raw.indexOf('"skills":');
+  assert.ok(payloadAt > 0, 'the payload member must be present');
+  assert.ok(
+    payloadAt < HEAD_BUDGET,
+    `the metadata block must fit in ${HEAD_BUDGET} bytes, found the payload at ${payloadAt}`,
+  );
+  for (const key of ['$schema', 'generated']) {
+    const at = raw.indexOf(`"${key}":`);
+    assert.ok(at > 0, `"${key}" must be present`);
+    assert.ok(at < payloadAt, `"${key}" must precede the payload`);
+  }
+  assert.ok(raw.trimEnd().endsWith('}'), 'the document must close on the skills array');
+});
+
+test('withholding the stamp drops a member without moving the payload', () => {
+  // The stamp is conditional, so the member list has two shapes and the
+  // payload has to be last in both. A build with `skills_index.build_time =
+  // false` is the shape a map-serialized envelope would also get right by
+  // accident, and the shape an emission that appended the payload beside its
+  // siblings could get wrong.
+  const doc = JSON.parse(read(INDEX, nobuildtimeDir));
+  assert.deepEqual(Object.keys(doc), ['$schema', 'skills']);
+  assert.ok(Array.isArray(doc.skills));
+  assert.ok(doc.skills.length > 0, 'the switch must withhold the stamp, not the index');
 });
 
 test('the index dates itself at the top level, beside the per-skill digests', () => {
