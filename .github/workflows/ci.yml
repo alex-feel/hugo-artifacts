@@ -42,7 +42,7 @@ jobs:
       - name: Set up Hugo (extended)
         uses: peaceiris/actions-hugo@v3
         with:
-          hugo-version: '0.161.1'
+          hugo-version: '0.164.0'
           extended: true
 
       - name: Set up Node.js
@@ -198,6 +198,23 @@ jobs:
             dir: modules/images/test
             run: bash run-tests.sh
             deps: true
+          # The SECOND images row exists because that suite is the only one
+          # whose subject is version-gated: modules/images emits AVIF from
+          # Hugo 0.163.0 and warns-and-degrades below it, and
+          # tests/07-avif-gate.spec.js asserts BOTH sides by branching on the
+          # building Hugo's version. With one pinned version only one branch
+          # can ever execute, so the three assertions describing what the
+          # module actually publishes with AVIF enabled -- the avif chain is
+          # emitted, it precedes the webp chain, derivatives land on disk --
+          # were dead code in CI while the pin sat below the gate. Both sides
+          # of a version gate have to run somewhere, so this row runs the
+          # same suite below it while the row above runs at the pinned
+          # current Hugo.
+          - name: images (below the AVIF gate)
+            dir: modules/images/test
+            run: bash run-tests.sh
+            deps: true
+            hugo: '0.161.1'
           - name: seo
             dir: modules/seo/test
             run: bash run-tests.sh
@@ -252,7 +269,10 @@ jobs:
       - name: Set up Hugo (extended)
         uses: peaceiris/actions-hugo@v3
         with:
-          hugo-version: '0.161.1'
+          # A row may pin its own Hugo; everything else gets the current
+          # one. Only modules/images uses the override, to run its
+          # version-gated suite on both sides of the gate.
+          hugo-version: ${{ matrix.hugo || '0.164.0' }}
           extended: true
 
       - name: Set up Node.js
@@ -308,7 +328,7 @@ jobs:
       - name: Set up Hugo (extended)
         uses: peaceiris/actions-hugo@v3
         with:
-          hugo-version: '0.161.1'
+          hugo-version: '0.164.0'
           extended: true
 
       - name: Set up Node.js
