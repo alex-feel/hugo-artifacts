@@ -1,0 +1,15 @@
+{{/*
+  Regular-page template for the fixture site, identical in shape to home.html
+  so a spec reads either page through the same wrapper.
+
+  It exists because the language-scope suite needs a SECOND configuration of
+  the same widget, and putting it on the home page would have put a second
+  language row, and a second of everything else the call renders, inside the
+  reach of every spec that locates its subject by class from the top of the
+  document.
+*/}}
+{{ define "main" }}
+  <div id="fixture-profile" data-fixture-page="{{ .Kind }}">
+    {{ .Content }}
+  </div>
+{{ end }}

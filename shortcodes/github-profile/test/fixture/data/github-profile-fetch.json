@@ -5,9 +5,12 @@
       "Field names and nesting mirror the snapshot query in the module partial github-profile/build-query.html, with the byRepo aliased block already grafted into contributionsCollection exactly as the real fetch.html grafts it before returning.",
       "Values are chosen so every branch of section-headline.html renders at once: a non-negative mergedPrCount, externalRepos and externalOrgs above zero, a non-zero 90-day recency, a rank level, and a non-zero restrictedContributionsCount so the floor note and its github-profile__sep--note separator (the minifier defect site) render.",
       "The calendar spans 14 weeks (98 days), deliberately more than the 90-day recency window, so derive.html truncates it: 63 of the 98 days are active but only 55 fall inside the window. The trailing 12 days are active (current streak 12) and the longest run is 21 days.",
-      "repositoriesContributedTo.totalCount (18) deliberately exceeds its node count (6): the external-repositories metric must read totalCount, not the length of the node list, and GitHub genuinely returns fewer nodes than totalCount when a policy nulls individual entries.",
-      "Nine distinct languages resolve across the owned and contributed repositories, so derive.html truncates the list to its top eight and Ruby, the smallest, drops.",
-      "The language byte counts sum to exactly 1,500,000 so the rendered shares are exact, and they are chosen to cover every shape a share can take: values landing ON a whole number (Go 44.0%, HTML 4.0%), values ROUNDING onto one (Rust 8.98 and CSS 3.02), ordinary one-decimal values, and a language under 0.05% of the total that renders 0.0% and keeps its entry (Lua, inside the top eight, with Ruby smaller still and cut by the cap). The earlier counts produced a nonzero decimal for every language, which is why a float printing its shortest form -- 44 beside 23.9 -- was invisible to this fixture.",
+      "repositoriesContributedTo.totalCount (20) deliberately exceeds its node count (8): the external-repositories metric must read totalCount, not the length of the node list, and GitHub genuinely returns fewer nodes than totalCount when a policy nulls individual entries.",
+      "The two blocks carrying repositories the person does not own answer different questions, exactly as the query asks them. repositoriesContributedTo keeps all four contribution types and carries NO language counts: it feeds the contributed list and the external-footprint metrics. codeContributedTo narrows to COMMIT and PULL_REQUEST and carries nothing but language counts. issue-only-org/tracker appears in the first and not the second, which is what an issue-only contribution looks like in a real response.",
+      "issue-only-org/tracker is 4,000,000 bytes of Kotlin, and Kotlin appears in no other repository here. Under the old aggregation it would have been the second-largest language in the row on the strength of one filed issue, so its absence under BOTH scopes is one exact assertion rather than a judgement about a share that moved.",
+      "The owned repositories -- the DEFAULT language set -- sum to exactly 1,000,000 bytes so the rendered shares are exact, and they cover every shape a share can take: values landing ON a whole number (Python 40.0%, TypeScript 25.0%, Go 15.0%, Shell 5.0%), values ROUNDING onto one (HTML 9.58 and Lua 2.17), ordinary one-decimal values, and a language under 0.05% of the total that renders 0.0% and keeps its entry (HCL, inside the top eight, with Ruby smaller still and cut by the cap at nine distinct languages).",
+      "Adding codeContributedTo brings the worked-in set to exactly 12,000,000 bytes, of which mega-org/monolith alone is 10,489,000. That one external repository takes the row from 15.0% Go to 82.8% Go, which is the distortion this fixture exists to pin: the default must not admit it and the opt-in must, or neither assertion means anything.",
+      "No share here lands on an exact half at the rounding step. Hugo's math.Round rounds a half AWAY from zero while several other languages round it to even, so a fixture value sitting on x.x5 would encode one implementation's tie-break as an expected string; every value is placed off the boundary instead.",
       "Every value here is static. The only build-varying field the module derives from it is tenureYears, which grows with the wall clock because it is measured from createdAt to now."
     ]
   },
@@ -133,15 +136,21 @@
           "languages": {
             "edges": [
               {
-                "size": 400000,
+                "size": 150000,
                 "node": {
                   "name": "Go"
                 }
               },
               {
-                "size": 12000,
+                "size": 30000,
                 "node": {
                   "name": "Shell"
+                }
+              },
+              {
+                "size": 300,
+                "node": {
+                  "name": "HCL"
                 }
               }
             ]
@@ -153,21 +162,21 @@
           "languages": {
             "edges": [
               {
-                "size": 300000,
+                "size": 250000,
                 "node": {
                   "name": "TypeScript"
                 }
               },
               {
-                "size": 40000,
+                "size": 95800,
                 "node": {
-                  "name": "CSS"
+                  "name": "HTML"
                 }
               },
               {
-                "size": 28000,
+                "size": 32000,
                 "node": {
-                  "name": "HTML"
+                  "name": "CSS"
                 }
               }
             ]
@@ -179,13 +188,13 @@
           "languages": {
             "edges": [
               {
-                "size": 190000,
+                "size": 400000,
                 "node": {
                   "name": "Python"
                 }
               },
               {
-                "size": 400,
+                "size": 21700,
                 "node": {
                   "name": "Lua"
                 }
@@ -199,13 +208,13 @@
           "languages": {
             "edges": [
               {
-                "size": 15150,
+                "size": 20000,
                 "node": {
                   "name": "Shell"
                 }
               },
               {
-                "size": 300,
+                "size": 200,
                 "node": {
                   "name": "Ruby"
                 }
@@ -1018,7 +1027,7 @@
       ]
     },
     "repositoriesContributedTo": {
-      "totalCount": 18,
+      "totalCount": 20,
       "nodes": [
         {
           "nameWithOwner": "fixture-labs/toolkit",
@@ -1032,22 +1041,6 @@
           "owner": {
             "login": "fixture-labs",
             "__typename": "Organization"
-          },
-          "languages": {
-            "edges": [
-              {
-                "size": 260000,
-                "node": {
-                  "name": "Go"
-                }
-              },
-              {
-                "size": 87000,
-                "node": {
-                  "name": "Rust"
-                }
-              }
-            ]
           }
         },
         {
@@ -1062,22 +1055,6 @@
           "owner": {
             "login": "open-fixture",
             "__typename": "Organization"
-          },
-          "languages": {
-            "edges": [
-              {
-                "size": 47700,
-                "node": {
-                  "name": "Rust"
-                }
-              },
-              {
-                "size": 10000,
-                "node": {
-                  "name": "Python"
-                }
-              }
-            ]
           }
         },
         {
@@ -1092,16 +1069,6 @@
           "owner": {
             "login": "solo-maintainer",
             "__typename": "User"
-          },
-          "languages": {
-            "edges": [
-              {
-                "size": 58500,
-                "node": {
-                  "name": "TypeScript"
-                }
-              }
-            ]
           }
         },
         {
@@ -1116,22 +1083,6 @@
           "owner": {
             "login": "fixture-labs",
             "__typename": "Organization"
-          },
-          "languages": {
-            "edges": [
-              {
-                "size": 32000,
-                "node": {
-                  "name": "HTML"
-                }
-              },
-              {
-                "size": 5300,
-                "node": {
-                  "name": "CSS"
-                }
-              }
-            ]
           }
         },
         {
@@ -1146,16 +1097,6 @@
           "owner": {
             "login": "another-org",
             "__typename": "Organization"
-          },
-          "languages": {
-            "edges": [
-              {
-                "size": 13450,
-                "node": {
-                  "name": "Python"
-                }
-              }
-            ]
           }
         },
         {
@@ -1168,11 +1109,129 @@
           "owner": {
             "login": "quiet-user",
             "__typename": "User"
+          }
+        },
+        {
+          "nameWithOwner": "mega-org/monolith",
+          "description": "An external monolith an order of magnitude larger than everything the fixture person owns; they landed one merged pull request in it.",
+          "url": "https://github.com/mega-org/monolith",
+          "stargazerCount": 5200,
+          "forkCount": 640,
+          "primaryLanguage": {
+            "name": "Go"
           },
+          "owner": {
+            "login": "mega-org",
+            "__typename": "Organization"
+          }
+        },
+        {
+          "nameWithOwner": "issue-only-org/tracker",
+          "description": "An external repository the fixture person has only ever filed an issue on.",
+          "url": "https://github.com/issue-only-org/tracker",
+          "stargazerCount": 610,
+          "forkCount": 88,
+          "primaryLanguage": {
+            "name": "Kotlin"
+          },
+          "owner": {
+            "login": "issue-only-org",
+            "__typename": "Organization"
+          }
+        }
+      ]
+    },
+    "codeContributedTo": {
+      "nodes": [
+        {
+          "nameWithOwner": "mega-org/monolith",
           "languages": {
             "edges": [
               {
-                "size": 200,
+                "size": 9489000,
+                "node": {
+                  "name": "Go"
+                }
+              },
+              {
+                "size": 1000000,
+                "node": {
+                  "name": "Rust"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "nameWithOwner": "fixture-labs/toolkit",
+          "languages": {
+            "edges": [
+              {
+                "size": 300000,
+                "node": {
+                  "name": "Go"
+                }
+              },
+              {
+                "size": 100000,
+                "node": {
+                  "name": "Rust"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "nameWithOwner": "solo-maintainer/gadget",
+          "languages": {
+            "edges": [
+              {
+                "size": 60000,
+                "node": {
+                  "name": "TypeScript"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "nameWithOwner": "fixture-labs/docs-site",
+          "languages": {
+            "edges": [
+              {
+                "size": 30000,
+                "node": {
+                  "name": "HTML"
+                }
+              },
+              {
+                "size": 5000,
+                "node": {
+                  "name": "CSS"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "nameWithOwner": "another-org/pipeline",
+          "languages": {
+            "edges": [
+              {
+                "size": 15000,
+                "node": {
+                  "name": "Python"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "nameWithOwner": "quiet-user/snippets",
+          "languages": {
+            "edges": [
+              {
+                "size": 1000,
                 "node": {
                   "name": "Lua"
                 }

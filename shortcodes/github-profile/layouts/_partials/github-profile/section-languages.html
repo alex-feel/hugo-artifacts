@@ -1,8 +1,21 @@
 {{/*
-  Language depth: byte-weighted shares aggregated across owned non-fork and
-  externally contributed repositories. The share reaches CSS only as
-  objective measured data (--github-profile-lang-share, a percentage), never
-  as a color choice.
+  Language depth: byte-weighted shares over the repository set the
+  languageScope parameter selected. The share reaches CSS only as objective
+  measured data (--github-profile-lang-share, a percentage), never as a color
+  choice.
+
+  The LABEL is chosen by that scope rather than fixed, and that is the point
+  of this section rather than a detail of it. "Languages by code volume" is a
+  claim about code the person wrote, and it is true only of repositories they
+  own; over repositories they merely worked in, the same numbers are
+  whole-repository byte counts and the heading has to say so. Deriving both
+  from one variable is what keeps a future scope from shipping with a
+  heading that outruns its data -- which is the defect this section had.
+
+  data-language-scope publishes the same fact to a machine, because a
+  consumer reading data-lang and data-pct cannot otherwise tell which
+  question the numbers answer, and the two answers differ by an order of
+  magnitude on a real profile.
 
   .pct arrives from derive.html ALREADY rendered to one decimal place, which
   is why the three surfaces below print it verbatim: the visible text, the
@@ -14,10 +27,18 @@
 */}}
 
 {{- $d := .d -}}
+{{- $scope := $d.languageScope | default "owned" -}}
+{{- $labelKey := "github_profile_languages_label" -}}
+{{- $labelFallback := "Languages by code volume" -}}
+{{- if eq $scope "worked-in" -}}
+  {{- $labelKey = "github_profile_languages_worked_in_label" -}}
+  {{- $labelFallback = "Languages in repositories worked in" -}}
+{{- end -}}
+{{- $label := T $labelKey | default $labelFallback -}}
 {{- if gt (len $d.languages) 0 -}}
 <section class="github-profile__section github-profile__section--languages">
-  {{- partial "github-profile/section-title.html" (dict "token" "languages" "key" "github_profile_languages_label" "fallback" "Languages by code volume") }}
-  <ul class="github-profile__languages" aria-label="{{ T "github_profile_languages_label" | default "Languages by code volume" }}">
+  {{- partial "github-profile/section-title.html" (dict "token" "languages" "key" $labelKey "fallback" $labelFallback) }}
+  <ul class="github-profile__languages" data-language-scope="{{ $scope }}" aria-label="{{ $label }}">
     {{- range $d.languages }}
     <li class="github-profile__lang"
         data-lang="{{ .name }}"

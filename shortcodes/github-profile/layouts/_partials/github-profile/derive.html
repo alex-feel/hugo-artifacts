@@ -17,6 +17,9 @@
   - .showStreak (bool)   Whether to compute calendar streaks.
   - .showRank (bool)     Whether to compute the activity score.
   - .nameOverride (string) Display-name override from the shortcode call.
+  - .languageScope (string) Which repositories the language row measures:
+                         "owned" or "worked-in". Optional; omitting it means
+                         "owned", which is what the Markdown variant does.
 
   Returns: the normalized dict documented field-by-field in the README's
   Styling section (every data-* attribute maps to one of these fields).
@@ -28,14 +31,34 @@
 {{- $showStreak := .showStreak -}}
 {{- $showRank := .showRank -}}
 {{- $nameOverride := .nameOverride -}}
+{{/* The scope is normalized here rather than trusted, and the reason is the
+     ATTRIBUTE rather than the aggregation. Any value other than "worked-in"
+     already aggregates as "owned" by falling through the test below, so a bad
+     value could not produce a wrong row -- but it would reach
+     data-language-scope unchanged and publish a claim the row does not match,
+     which is the exact failure this whole parameter exists to prevent.
+
+     No caller can currently deliver one: the HTML entry template validates
+     the parameter and errorfs, and the Markdown variant renders no language
+     row at all. So a mutation of these two lines survives the suite, and it
+     is meant to -- nothing about the published output changes. Keep them
+     anyway; derive.html is one partial call away from any consumer. */}}
+{{- $languageScope := .languageScope | default "owned" -}}
+{{- if not (in (slice "owned" "worked-in") $languageScope) -}}
+  {{- $languageScope = "owned" -}}
+{{- end -}}
 
 {{- $user := $raw.user -}}
 
+{{/* languageScope is echoed even on the degraded path so the field is always
+     present: a renderer reading it does not have to distinguish "no scope"
+     from "no data". */}}
 {{- $data := dict
   "apiOk" $raw.apiOk
   "degradedReason" $raw.degradedReason
   "mergedPrCount" $raw.mergedPrCount
   "historyEffective" "year"
+  "languageScope" $languageScope
 -}}
 
 {{- if $raw.apiOk -}}
@@ -202,9 +225,37 @@
 {{- end -}}
 
 {{/* ---------- Language byte shares ---------- */}}
-{{/* Aggregated across owned non-fork repositories AND externally
-     contributed repositories, so the shares reflect measured code depth
-     wherever the person works, not only their own account. */}}
+{{/* The set of repositories this row measures is the languageScope
+     parameter's whole job, and the reason it exists is that the two answers
+     are not close to each other.
+
+     A repository's language byte counts describe the REPOSITORY, not any one
+     person's share of it. Over repositories the person owns, that is a fair
+     approximation of what they wrote. Over repositories they merely touched
+     it is not, and the error is not small: on a real profile, 90.5% of the
+     charted bytes came from repositories the person had never committed to,
+     and the row published 20.7% Go for someone who has never written a line
+     of it -- 22 MB of it arriving from ONE repository they had filed an
+     issue on. The more useful someone is in other people's projects, the
+     less their own chart is about them, and nothing in the output hinted at
+     it.
+
+     So "owned" is the default, and it is what the section's "by code volume"
+     label claims. "worked-in" widens the set to repositories the person has
+     actually written code in -- codeContributedTo, which the query narrows
+     to COMMIT and PULL_REQUEST, so an issue-only or review-only repository
+     is absent from it entirely -- and the section relabels itself to say the
+     unit is the repository worked in rather than the code written, because
+     whole-repository attribution still applies there: one merged typo fix in
+     a 22 MB project still contributes 22 MB.
+
+     Weighting an external repository by actual authorship is the answer
+     neither scope gives, and it is not purchasable: GraphQL exposes no
+     per-language authorship, and the REST contributor-statistics endpoint
+     gives per-contributor line counts with no language split, one request
+     per repository. Scoping is available today; weighting is not, and a
+     label that says which set is in play is worth more than a number that
+     silently mixes them. */}}
 {{- $langBytes := dict -}}
 {{- $ownedNodes := slice -}}
 {{- $ownedStars := 0 -}}
@@ -217,6 +268,14 @@
   {{- $externalRepos = partial "github-profile/to-int.html" (index . "totalCount") -}}
   {{- $contribNodes = index . "nodes" | default (slice) -}}
 {{- end -}}
+{{- $codeNodes := slice -}}
+{{- with index $user "codeContributedTo" -}}
+  {{- $codeNodes = index . "nodes" | default (slice) -}}
+{{- end -}}
+{{- $langRepoSets := slice $ownedNodes -}}
+{{- if eq $languageScope "worked-in" -}}
+  {{- $langRepoSets = $langRepoSets | append $codeNodes -}}
+{{- end -}}
 {{/* Connection node lists ([Repository], [Organization], [PinnableItem],
      [SocialAccount]) have NULLABLE items in the schema, and GitHub nulls
      individual nodes the token cannot see (organization policy or SAML
@@ -228,7 +287,7 @@
      therefore skips non-map items. The languages EDGE list needs no such
      guard: a null edge yields size 0 and an empty name, which the
      existing name-and-size filter below already drops. */}}
-{{- range $repoSet := slice $ownedNodes $contribNodes -}}
+{{- range $repoSet := $langRepoSets -}}
   {{- range $repoSet -}}
     {{- if reflect.IsMap . -}}
     {{- with index . "languages" -}}

@@ -14,6 +14,12 @@
   - history (string, optional): Contribution window. "year" (rolling ~1-year
     window, GitHub's own profile framing) or "all" (all-time totals summed
     from per-year queries). Default: "year"
+  - language-scope (string, optional): Which repositories the language row
+    measures. "owned" (the person's own non-fork repositories, where
+    repository byte counts approximate what they wrote) or "worked-in"
+    (those plus repositories they have committed to or opened a pull request
+    in, attributed whole). The section relabels itself under "worked-in", so
+    the claim always matches the set. Default: "owned"
   - show-streak (bool, optional): Compute and expose current/longest
     contribution streaks on the calendar. Default: false
   - show-rank (bool, optional): Compute the transparent activity score
@@ -33,12 +39,14 @@
     github-profile user="alex-feel"
     github-profile user="alex-feel" variant="full" history="all"
     github-profile user="alex-feel" sections="headline,calendar" show-streak="true"
+    github-profile user="alex-feel" language-scope="worked-in"
 */}}
 
 {{- $user := .Get "user" -}}
 {{- $variant := .Get "variant" | default "card" -}}
 {{- $sectionsRaw := .Get "sections" | default "" -}}
 {{- $history := .Get "history" | default "year" -}}
+{{- $languageScope := .Get "language-scope" | default "owned" -}}
 {{- $showStreak := eq (lower (printf "%v" (.Get "show-streak" | default false))) "true" -}}
 {{- $showRank := eq (lower (printf "%v" (.Get "show-rank" | default false))) "true" -}}
 {{- $mergedPrs := eq (lower (printf "%v" (.Get "merged-prs" | default false))) "true" -}}
@@ -72,6 +80,10 @@
 {{- $validAvatar := slice "fetch" "hotlink" "none" -}}
 {{- if not (in $validAvatar $avatar) -}}
   {{- errorf "The %q shortcode received invalid avatar %q. Must be one of: fetch, hotlink, none. See %s" .Name $avatar .Position -}}
+{{- end -}}
+{{- $validLanguageScope := slice "owned" "worked-in" -}}
+{{- if not (in $validLanguageScope $languageScope) -}}
+  {{- errorf "The %q shortcode received invalid language-scope %q. Must be one of: owned, worked-in. See %s" .Name $languageScope .Position -}}
 {{- end -}}
 
 {{/* Resolve the section list: the variant preset, unless a sections CSV
@@ -115,6 +127,7 @@
   "showStreak" $showStreak
   "showRank" $showRank
   "nameOverride" $name
+  "languageScope" $languageScope
 ) -}}
 
 {{/* Dispatch to the renderer. */}}

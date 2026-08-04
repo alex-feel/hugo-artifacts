@@ -39,6 +39,20 @@
     calendar is one -- but they carry no access-controlled object, so
     nothing in them can be withheld.) The split is data-equivalent to the
     single-block query at identical rate-limit cost (verified empirically).
+  - repositoriesContributedTo is requested TWICE, under different
+    contributionTypes, because two sections want different questions
+    answered. The unaliased block answers "which repositories has this
+    person worked in", so it keeps all four contribution types and feeds the
+    contributed list and the external-footprint counts. The codeContributedTo
+    alias answers "which repositories has this person written CODE in", so it
+    narrows to COMMIT and PULL_REQUEST and carries nothing but the language
+    byte counts. Filing an issue enrolls a repository in the first and not in
+    the second, which is the whole point: a language chart built from the
+    first attributes a 22 MB codebase to someone whose only contribution to
+    it was one issue. Measured against the live API, the split costs nothing:
+    the whole snapshot stays at 2 rate-limit points (nodeCount 2232 -> 2332),
+    because the languages sub-selection MOVED between two connections of the
+    same width rather than being duplicated.
   - contributionsCollection is called without from/to in the snapshot, which
     yields the rolling ~1-year window ending now -- the same window GitHub's
     own profile page shows.
@@ -123,6 +137,11 @@
         forkCount
         primaryLanguage { name }
         owner { login __typename }
+      }
+    }
+    codeContributedTo: repositoriesContributedTo(first: 100, includeUserRepositories: false, contributionTypes: [COMMIT, PULL_REQUEST]) {
+      nodes {
+        nameWithOwner
         languages(first: 10, orderBy: {field: SIZE, direction: DESC}) { edges { size node { name } } }
       }
     }
