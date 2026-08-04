@@ -7,10 +7,15 @@
 # `llmsindexoff` switch a surface off through params while the formats stay
 # wired, and `unwired` drops only `llmsindex` while keeping `llmstxt`.
 #
-# What it must show: silence. Not wiring a format IS the opt-out, so the module
-# must publish neither document and say nothing about either -- exactly as
-# lib/skills-index-url.html stays silent for a site that never wires
-# `agentskills`.
+# What it must show: silence about the two documents. Not wiring a format IS
+# the opt-out, so the module must publish neither and say nothing about either
+# -- exactly as lib/skills-index-url.html stays silent for a site that never
+# wires `agentskills`. The twins' trailing pointer section is the one thing
+# that does speak here: with both link indexes gone it has nothing left to
+# name, so it is omitted and says so once, naming the edit. That is a
+# different message from the one below and fires for a different reason -- the
+# consumer asked for the pointer through `sitemap_section_target` and cannot
+# see why it is missing.
 #
 # The warning in lib/llms-index-url.html is the reason this build exists. That
 # partial fires when the complete index is enabled and `llmsindex` is missing,

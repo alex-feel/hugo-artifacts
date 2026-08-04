@@ -34,8 +34,10 @@ const ORIGIN = 'https://extra.example';
 const hookBlock = (title) => `## Extra facts\n\n- Page: ${title}\n- Search page: /search`;
 
 // The trailing pointer block, byte-exact: the consumer's agent_sitemap_heading
-// override ("Custom heading") in place of either shipped default.
-const POINTER = `\n\n## Custom heading\n\n- [llms.txt](${ORIGIN}/llms.txt)\n`;
+// override ("Custom heading") in place of either shipped default. This fixture
+// wires both link-index formats, so the block names both documents -- the
+// override replaces the HEADING alone and leaves the links it heads untouched.
+const POINTER = `\n\n## Custom heading\n\n- [llms.txt](${ORIGIN}/llms.txt)\n- [Complete index](${ORIGIN}/llms-index.txt)\n`;
 
 test('the extra build produces zero warnings', () => {
   // Every guard this build could trip is deliberately absent: the fixture

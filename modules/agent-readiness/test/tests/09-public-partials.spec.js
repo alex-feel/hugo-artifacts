@@ -4,7 +4,7 @@
 // the site recording what twin-url.html returned, a marker line, then one
 // line per surfaces.html entry, then the build-time block that
 // tests/11-build-stamp.spec.js reads. Every claim is checked against the
-// published tree in BOTH directions across all sixteen environment builds,
+// published tree in BOTH directions across all seventeen environment builds,
 // so neither partial can list a file the build withheld, nor withhold one
 // the build published.
 import {test} from 'node:test';
@@ -27,6 +27,7 @@ import {
   llmsindexoffDir,
   unwiredDir,
   nolinkindexesDir,
+  nocompactDir,
   nolinkmdDir,
   parseDump,
   publishedTwins,
@@ -63,6 +64,12 @@ const builds = [
   {name: 'llmsindexoff', dir: llmsindexoffDir},
   {name: 'unwired', dir: unwiredDir},
   {name: 'nolinkindexes', dir: nolinkindexesDir},
+  // The one build in which the enumeration must report a llms_index surface
+  // WITHOUT a llms one. Every other build either publishes both link indexes
+  // or publishes the compact one alone, so a surfaces.html that resolved the
+  // complete index's URL through the compact index's format would pass
+  // everywhere else.
+  {name: 'nocompact', dir: nocompactDir},
   // `nolinkmd` was built by both runners and read by other specs but was never
   // in this list, so the both-directions invariant went unproven on the one
   // environment where llms.txt withholds its derived twin entry -- exactly the

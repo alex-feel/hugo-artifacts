@@ -5,9 +5,10 @@
 # translation still renders a real heading rather than an empty string.
 #
 # The module authors exactly sixteen strings: seven headings in generated
-# documents, four display labels for the surface entries returned by the
-# agent-readiness/surfaces.html public partial, the name and note of two
-# derived llms.txt entries -- the complete link index in the `## Start here`
+# documents, four display labels for the module's site-level surfaces --
+# returned by the agent-readiness/surfaces.html public partial, and, for the
+# two link indexes, also naming them in a twin's trailing pointer section --
+# the name and note of two derived llms.txt entries -- the complete link index in the `## Start here`
 # section and the Agent Skills index in `## Optional` -- and the notice a
 # narrowed section of the compact /llms.txt opens with.
 # "## Optional" in llms.txt is deliberately NOT a key here: it is fixed by
@@ -80,13 +81,16 @@ agent_llms_index_entry_note = "Каждая страница каждого ра
 # a published document instead of a number.
 agent_llms_partial_note = "В этом разделе перечислено %d из %d страниц; отсутствие страницы здесь не означает, что её нет на сайте."
 
-# Display label for the llms.txt entry returned by surfaces.html.
+# Display label of the compact link index (/llms.txt), wherever the module
+# names that document: the entry surfaces.html returns, and the first link of
+# a Markdown twin's trailing pointer section. One document carries one name,
+# so renaming it is this one key rather than one key per call site.
 # "llms.txt" is the llmstxt.org protocol token and stays untranslated in
 # every language.
 agent_surface_llms = "llms.txt"
 
-# Display label for the complete link index (/llms-index.txt) entry returned
-# by surfaces.html.
+# Display label of the complete link index (/llms-index.txt), in the same two
+# places and for the same reason.
 agent_surface_llms_index = "Полный индекс"
 
 # Display label for the facts document (/about.md) entry returned by
