@@ -53,30 +53,75 @@
 
 {{- $icons := partial "pwa/functions/icon-list.html" . -}}
 
-{{- $manifest := dict
-    "name" $name
-    "short_name" $shortName
-    "description" $description
-    "start_url" $startUrl
-    "scope" $scope
-    "id" $id
-    "display" $display
-    "display_override" $displayOverride
-    "theme_color" $themeColor
-    "background_color" $bgColor
-    "icons" $icons
+{{/* The members are emitted one at a time, in a chosen order, because the
+     order is load-bearing and a Go map cannot carry one: jsonify serializes
+     map keys ALPHABETICALLY, which put `background_color` first and pushed
+     `name`, `id`, `short_name`, `scope` and `start_url` behind the `icons`
+     array. That array is consumer-supplied and unbounded -- a generated
+     favicon set runs to ten or more entries at five lines each -- so on a
+     real site the members that say WHAT THE APP IS sit seventy lines into a
+     document whose first screen is icon paths. Anything that samples this
+     file from the front reads none of them.
+
+     So: identity, then localization, then navigation, then presentation,
+     with the unbounded array LAST. Nothing that parses a manifest can
+     observe the difference -- JSON member order carries no semantics -- and
+     the only readers affected are the ones that never reach the end.
+
+     Every VALUE goes through jsonify, so escaping and the nested indentation
+     of the arrays stay the encoder's job (`prefix` is what indents those to
+     their parent's level). HTML escaping stays ON, matching what this
+     document has always emitted.
+
+     An OPTIONAL member is omitted entirely rather than emitted empty. The
+     manifest specification types each of these, and a member present with a
+     null or empty value is not a neutral no-op: a validator rejects it and a
+     processor discards it, so the only thing it can do is cost the consumer
+     a lint failure they did not cause. */}}
+{{- $opts := dict "indent" "  " "prefix" "  " -}}
+{{- $members := slice -}}
+{{- $member := "" -}}
+
+{{- range $pair := slice
+    (slice "name" $name)
+    (slice "short_name" $shortName)
+    (slice "id" $id)
+    (slice "description" $description)
+    (slice "lang" $lang)
+    (slice "dir" $dir)
+    (slice "start_url" $startUrl)
+    (slice "scope" $scope)
+    (slice "display" $display)
+    (slice "display_override" $displayOverride)
+    (slice "theme_color" $themeColor)
+    (slice "background_color" $bgColor)
 -}}
-
-{{- with $lang -}}
-  {{- $manifest = merge $manifest (dict "lang" .) -}}
+  {{- with (index $pair 1) -}}
+    {{- $member = printf "  %s: %s" (jsonify $opts (index $pair 0)) (jsonify $opts .) -}}
+    {{- $members = $members | append $member -}}
+  {{- end -}}
 {{- end -}}
 
-{{- with $dir -}}
-  {{- $manifest = merge $manifest (dict "dir" .) -}}
+{{/* categories is typed as a SEQUENCE of strings. `len` accepts a string in
+     Hugo and returns its rune count, so a scalar written for this key --
+     `categories = "news"` rather than `["news"]` -- passed a length-only
+     gate and published a JSON string where an array belongs, silently. Every
+     other mis-shaped input in this module warns exactly once; this one now
+     does too. */}}
+{{- if reflect.IsSlice $categories -}}
+  {{- with $categories -}}
+    {{- $members = $members | append (printf "  %s: %s" (jsonify $opts "categories") (jsonify $opts .)) -}}
+  {{- end -}}
+{{- else if $categories -}}
+  {{- $warnKey := "pwa:warn:manifest-categories-shape" -}}
+  {{- if not (hugo.Store.Get $warnKey) -}}
+    {{- hugo.Store.Set $warnKey true -}}
+    {{- warnf "modules/pwa: ignoring params.pwa.manifest.categories -- it expects a list of category strings (e.g. [\"news\", \"weather\"]), but a single value arrived, and the manifest specification types this member as a list. No categories are emitted." -}}
+  {{- end -}}
 {{- end -}}
 
-{{- if gt (len $categories) 0 -}}
-  {{- $manifest = merge $manifest (dict "categories" $categories) -}}
+{{- with $icons -}}
+  {{- $members = $members | append (printf "  %s: %s" (jsonify $opts "icons") (jsonify $opts .)) -}}
 {{- end -}}
 
-{{- $manifest | jsonify (dict "indent" "  ") | safeJS -}}
+{{- printf "{\n%s\n}" (delimit $members ",\n") | safeJS -}}
