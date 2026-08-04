@@ -258,8 +258,32 @@
 {{- $languages := slice -}}
 {{- if gt $langTotal 0 -}}
   {{- range $name, $bytes := $langBytes -}}
-    {{/* Share rounded to one decimal place. */}}
-    {{- $pct := math.Div (math.Round (math.Mul (math.Div (float $bytes) (float $langTotal)) 1000)) 10 -}}
+    {{/* Share rounded to one decimal place and RENDERED here, once, as a
+         string that carries that decimal whatever the value. A float prints
+         its shortest form, so a share landing on a whole number came out as
+         "1" beside its neighbors' "1.1" and "0.7": invisible to a reader,
+         an exception to the format for anything parsing the row as
+         homogeneous.
+
+         Formatting where the number is DERIVED rather than at each render
+         site is what makes that unrepeatable. One string serves the visible
+         text, the data-pct attribute and the --github-profile-lang-share
+         custom property, so the three can never disagree, and a surface
+         added later inherits the format instead of having to remember it.
+
+         printf and deliberately not lang.FormatPercent: the same string
+         reaches CSS and a data attribute, where a locale's comma decimal
+         separator is invalid in one and unparseable in the other. Exact
+         bytes stay in `bytes` for any consumer that computes rather than
+         displays.
+
+         A share below 0.05% renders "0.0" and the language KEEPS its entry.
+         The row is a measurement, and dropping a measured language because
+         its rounded share reads oddly would quietly curate it; the entry's
+         presence is itself the signal, and a site that would rather hide
+         those can select them exactly -- which only a uniform format makes
+         possible. */}}
+    {{- $pct := printf "%.1f" (math.Div (math.Round (math.Mul (math.Div (float $bytes) (float $langTotal)) 1000)) 10) -}}
     {{- $languages = $languages | append (dict "name" $name "pct" $pct "bytes" $bytes) -}}
   {{- end -}}
   {{- $languages = sort $languages "bytes" "desc" -}}

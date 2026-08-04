@@ -7,6 +7,7 @@
       "The calendar spans 14 weeks (98 days), deliberately more than the 90-day recency window, so derive.html truncates it: 63 of the 98 days are active but only 55 fall inside the window. The trailing 12 days are active (current streak 12) and the longest run is 21 days.",
       "repositoriesContributedTo.totalCount (18) deliberately exceeds its node count (6): the external-repositories metric must read totalCount, not the length of the node list, and GitHub genuinely returns fewer nodes than totalCount when a policy nulls individual entries.",
       "Nine distinct languages resolve across the owned and contributed repositories, so derive.html truncates the list to its top eight and Ruby, the smallest, drops.",
+      "The language byte counts sum to exactly 1,500,000 so the rendered shares are exact, and they are chosen to cover every shape a share can take: values landing ON a whole number (Go 44.0%, HTML 4.0%), values ROUNDING onto one (Rust 8.98 and CSS 3.02), ordinary one-decimal values, and a language under 0.05% of the total that renders 0.0% and keeps its entry (Lua, inside the top eight, with Ruby smaller still and cut by the cap). The earlier counts produced a nonzero decimal for every language, which is why a float printing its shortest form -- 44 beside 23.9 -- was invisible to this fixture.",
       "Every value here is static. The only build-varying field the module derives from it is tenureYears, which grows with the wall clock because it is measured from createdAt to now."
     ]
   },
@@ -132,13 +133,13 @@
           "languages": {
             "edges": [
               {
-                "size": 420000,
+                "size": 400000,
                 "node": {
                   "name": "Go"
                 }
               },
               {
-                "size": 15000,
+                "size": 12000,
                 "node": {
                   "name": "Shell"
                 }
@@ -152,13 +153,13 @@
           "languages": {
             "edges": [
               {
-                "size": 310000,
+                "size": 300000,
                 "node": {
                   "name": "TypeScript"
                 }
               },
               {
-                "size": 42000,
+                "size": 40000,
                 "node": {
                   "name": "CSS"
                 }
@@ -184,7 +185,7 @@
                 }
               },
               {
-                "size": 9000,
+                "size": 400,
                 "node": {
                   "name": "Lua"
                 }
@@ -198,13 +199,13 @@
           "languages": {
             "edges": [
               {
-                "size": 21000,
+                "size": 15150,
                 "node": {
                   "name": "Shell"
                 }
               },
               {
-                "size": 4000,
+                "size": 300,
                 "node": {
                   "name": "Ruby"
                 }
@@ -1065,13 +1066,13 @@
           "languages": {
             "edges": [
               {
-                "size": 51000,
+                "size": 47700,
                 "node": {
                   "name": "Rust"
                 }
               },
               {
-                "size": 12000,
+                "size": 10000,
                 "node": {
                   "name": "Python"
                 }
@@ -1095,7 +1096,7 @@
           "languages": {
             "edges": [
               {
-                "size": 64000,
+                "size": 58500,
                 "node": {
                   "name": "TypeScript"
                 }
@@ -1119,13 +1120,13 @@
           "languages": {
             "edges": [
               {
-                "size": 33000,
+                "size": 32000,
                 "node": {
                   "name": "HTML"
                 }
               },
               {
-                "size": 6000,
+                "size": 5300,
                 "node": {
                   "name": "CSS"
                 }
@@ -1149,7 +1150,7 @@
           "languages": {
             "edges": [
               {
-                "size": 15000,
+                "size": 13450,
                 "node": {
                   "name": "Python"
                 }
@@ -1171,7 +1172,7 @@
           "languages": {
             "edges": [
               {
-                "size": 2000,
+                "size": 200,
                 "node": {
                   "name": "Lua"
                 }
