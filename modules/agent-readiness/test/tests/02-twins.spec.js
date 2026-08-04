@@ -115,6 +115,20 @@ test('last_updated is emitted only when it differs from date', () => {
     !('last_updated' in without),
     'a last_updated equal to date is noise and must be omitted',
   );
+
+  // The case that only a gate comparing at the PUBLISHED precision can get
+  // right: projects/alpha carries a lastmod later the SAME CALENDAR DAY as
+  // its date. The field is a calendar date, so there is nothing here to
+  // report -- and gating at second precision published
+  // last_updated: "2026-01-15" beside date: "2026-01-15T09:00:00Z", which a
+  // reader parsing both as timestamps reads as an update NINE HOURS BEFORE
+  // publication, because a bare date is midnight.
+  const sameDay = parseStrict(splitFrontMatter(read('projects/alpha/index.md')).frontMatter);
+  assert.equal(sameDay.date, '2026-01-15T09:00:00Z');
+  assert.ok(
+    !('last_updated' in sameDay),
+    'a lastmod differing from date only in time-of-day is noise at this precision and must be omitted',
+  );
 });
 
 test('the body is rendered Markdown with shortcode output inline and no chrome', () => {

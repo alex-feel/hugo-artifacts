@@ -93,9 +93,21 @@
          date is noise. See the README for the accuracy precondition: this
          value is a real per-file git date only when the consuming site sets
          enableGitInfo = true AND its build environment has full per-file
-         commit history. */}}
+         commit history.
+
+         THE GATE COMPARES AT THE PRECISION THE FIELD IS PUBLISHED AT, which
+         is the calendar day. Comparing at second precision instead let a
+         Lastmod later the SAME DAY through, and the twin then published
+         last_updated: "2026-01-15" beside date: "2026-01-15T09:00:00Z" --
+         the exact duplication this gate exists to suppress, and worse than
+         duplication: read as timestamps, a bare date is midnight, so the
+         page appeared to have been updated nine hours BEFORE it was
+         published. That combination is not an edge case. The README makes
+         enableGitInfo the precondition for this field, so Lastmod is the
+         commit time, and a page committed on the day it is dated hits it
+         every time. */}}
   {{- if $md.last_updated -}}
-    {{- if and (not $page.Lastmod.IsZero) (ne ($page.Lastmod.Format "2006-01-02T15:04:05Z07:00") ($page.Date.Format "2006-01-02T15:04:05Z07:00")) -}}
+    {{- if and (not $page.Lastmod.IsZero) (ne ($page.Lastmod.Format "2006-01-02") ($page.Date.Format "2006-01-02")) -}}
       {{- $lines = $lines | append (printf "last_updated: %s" ($page.Lastmod.Format "2006-01-02" | jsonify (dict "noHTMLEscape" true))) -}}
     {{- end -}}
   {{- end -}}

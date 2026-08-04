@@ -31,11 +31,11 @@ A site-level template always overrides the module's, by Hugo's ordinary template
 
 Your site configuration holds exactly ONE `[outputs]` table, and its lists are the union of every module's needs. A second `[outputs]` table in the same file fails the configuration load outright (`unmarshal failed: toml: table outputs already exists`); pasting one module README's `[outputs]` block over another's leaves a single table that loads cleanly, exits 0, warns about nothing -- and silently stops publishing every document the replaced list asked for. So do not copy the block above into a site that already has one: MERGE the names into the list already there.
 
-A site importing this module together with [`search`](../search/README.md) wires all of them at once:
+A site importing this module together with [`search`](../search/README.md), [`seo`](../seo/README.md) and [`pwa`](../pwa/README.md) wires all of them at once:
 
 ```toml
 [outputs]
-  home = ['html', 'rss', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills', 'searchindex', 'opensearch']
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills', 'searchindex', 'opensearch', 'webappmanifest']
   section = ['html', 'rss', 'markdown']
   page = ['html', 'markdown']
 ```
@@ -370,7 +370,7 @@ A twin carries two timestamps, and they answer **different questions**. Conflati
 | `last_updated` | When did the CONTENT change? | the page's `.Lastmod` | ISO date, `2026-06-15` |
 | `build_time`   | When did this BUILD run?     | one value per build   | RFC 3339 with offset   |
 
-`last_updated` cannot answer "am I holding a cached copy". A site that rebuilds on a schedule refreshes generated figures without touching a content file, so `last_updated` sits still while the published document changes. `build_time` is the field that moves, and its full RFC 3339 form is deliberate: a date alone cannot distinguish this morning's build from last night's.
+`last_updated` is emitted only when it names a DIFFERENT CALENDAR DAY from `date`, because the calendar day is the precision it is published at: a lastmod later the same day says nothing the date does not already say, and read as timestamps a bare date is midnight, so publishing it beside a same-day `date` reports the page as updated hours BEFORE it went out. `last_updated` also cannot answer "am I holding a cached copy". A site that rebuilds on a schedule refreshes generated figures without touching a content file, so `last_updated` sits still while the published document changes. `build_time` is the field that moves, and its full RFC 3339 form is deliberate: a date alone cannot distinguish this morning's build from last night's.
 
 **The value is one string per build**, identical in every twin, in the `> Build time:` line of `llms.txt` and `/about.md`, in the `generated` key of the Agent Skills index, in every language, and identical to what the [`build-time.html`](#build-timehtml) public partial returns -- so a site that stamps its own `<meta name="build-time">` from that partial publishes a value a reader can compare byte for byte against any of the module's documents. A site that also runs the [`search`](../search/README.md) module gets the same string in `/searchindex.json`'s `generated` field, because that module reads this partial when it is present. It is not persisted between builds, so a rebuild always produces a new one.
 
