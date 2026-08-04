@@ -24,16 +24,18 @@ import assert from 'node:assert/strict';
 import {BUILDS, page, element, elementsByClass, textOf} from './helpers.js';
 
 // Name and rendered share of every item the fixture's byte counts produce,
-// in the order the row lists them (bytes descending).
+// in the order the row lists them (bytes descending). These are the OWNED
+// repositories alone, which is what the default scope measures; spec 09 holds
+// the same row under language-scope="worked-in".
 const EXPECTED = [
-  ['Go', '44.0'],
-  ['TypeScript', '23.9'],
-  ['Python', '14.2'],
-  ['Rust', '9.0'],
-  ['HTML', '4.0'],
-  ['CSS', '3.0'],
-  ['Shell', '1.8'],
-  ['Lua', '0.0'],
+  ['Python', '40.0'],
+  ['TypeScript', '25.0'],
+  ['Go', '15.0'],
+  ['HTML', '9.6'],
+  ['Shell', '5.0'],
+  ['CSS', '3.2'],
+  ['Lua', '2.2'],
+  ['HCL', '0.0'],
 ];
 
 // Attribute values are read quote-tolerantly: the minifier strips the quotes
@@ -51,6 +53,9 @@ const shareProperty = (openTag) => {
   return match[1];
 };
 
+// The home page's row. Its widget takes no language-scope parameter at all,
+// so this is the DEFAULT the module ships, not a configuration the fixture
+// opted into.
 const items = (dir) => elementsByClass(page(dir), 'github-profile__lang');
 
 for (const build of BUILDS) {
@@ -123,9 +128,9 @@ for (const build of BUILDS) {
     // row: dropping it because its rounded share reads oddly would quietly
     // curate the data, and the entry's presence is itself the signal that the
     // language is there at all. `bytes` carries the unrounded truth.
-    const lua = items(build.dir).find((li) => attr(li.openTag, 'data-lang') === 'Lua');
-    assert.ok(lua, 'the sub-0.05% language must still be listed');
-    assert.equal(textOf(element(lua.inner, 'github-profile__lang-pct').inner), '0.0%');
-    assert.equal(attr(lua.openTag, 'data-pct'), '0.0');
+    const hcl = items(build.dir).find((li) => attr(li.openTag, 'data-lang') === 'HCL');
+    assert.ok(hcl, 'the sub-0.05% language must still be listed');
+    assert.equal(textOf(element(hcl.inner, 'github-profile__lang-pct').inner), '0.0%');
+    assert.equal(attr(hcl.openTag, 'data-pct'), '0.0');
   });
 }

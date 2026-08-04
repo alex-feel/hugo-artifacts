@@ -22,7 +22,14 @@ github_profile_streak_longest = "longest streak"
 github_profile_calendar_period = "last 12 months"
 github_profile_calendar_less = "Less"
 github_profile_calendar_more = "More"
+# Two labels for one section, selected by the language-scope parameter. The
+# first is a claim about code the person wrote and holds only over
+# repositories they own; the second says the unit is the repository worked in,
+# because those byte counts belong to the whole repository rather than to any
+# one contributor. Override either, but keep that distinction: it is the only
+# thing telling a reader which question the percentages answer.
 github_profile_languages_label = "Languages by code volume"
+github_profile_languages_worked_in_label = "Languages in repositories worked in"
 github_profile_org_rollup_label = "Contributions by organization"
 github_profile_contributed_label = "Contributes to"
 github_profile_orgs_label = "Organizations"

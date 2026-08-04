@@ -25,8 +25,12 @@ import {BUILDS, headline, childNodes, extractedText} from './helpers.js';
 const GROUPS = [
   '1.8k commits',
   '1.3k merged pull requests',
-  '18 external repositories',
-  '3 organizations',
+  // The external footprint counts every repository the person worked in,
+  // including the one they only filed an issue on. That is correct, and it is
+  // the counterpart to the language row excluding the same repository: the two
+  // sections answer different questions and are supposed to disagree here.
+  '20 external repositories',
+  '5 organizations',
   '55 active days in the last 90',
   'A+ activity score',
 ];

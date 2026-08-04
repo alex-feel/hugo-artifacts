@@ -1,0 +1,31 @@
+{{/*
+  Publishes the REAL github-profile/build-query.html output so a spec can
+  assert the request the module would send.
+
+  Why this page exists. The fixture shadows fetch.html to make the suite
+  offline, and fetch.html is build-query.html's only caller -- so the query
+  text is the one part of this module that no build in this repository ever
+  produced. Nothing checked it, and this change put a load-bearing invariant
+  inside it: the language counts must come from a connection narrowed to
+  COMMIT and PULL_REQUEST, or an issue filed on a 22 MB project is charted as
+  22 MB of that project's language. A regression there would leave every
+  other assertion in this suite green, because they all read canned data that
+  a person maintains by hand.
+
+  Both kinds are rendered, so the years branch is executed too -- the same
+  argument applies to it, less sharply.
+
+  The output is base64-encoded rather than printed. It is JSON containing
+  quotes and newlines, and encoding it means no HTML escaping, no minifier
+  whitespace handling, and no <pre> semantics sit between what the partial
+  returned and what the spec reads.
+*/}}
+{{ define "main" }}
+  {{- $login := "fixture-dev" -}}
+  <div
+    id="fixture-query"
+    data-snapshot-query="{{ partial "github-profile/build-query.html" (dict "kind" "snapshot" "login" $login "years" (slice)) | base64Encode }}"
+    data-years-query="{{ partial "github-profile/build-query.html" (dict "kind" "years" "login" $login "years" (slice 2019 2020 2021)) | base64Encode }}"
+    data-login="{{ $login }}"
+  ></div>
+{{ end }}

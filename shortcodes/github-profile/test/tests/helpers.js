@@ -35,10 +35,14 @@ export function read(rel, dir = normalDir) {
   return readFileSync(join(dir, rel), 'utf8');
 }
 
-// The fixture's single page, read as text rather than parsed.
-export function page(dir) {
-  return read('index.html', dir);
+// A published page, read as text rather than parsed. Defaults to the home
+// page, which is what every spec but the language-scope one asserts against.
+export function page(dir, rel = 'index.html') {
+  return read(rel, dir);
 }
+
+// The fixture's second page: the same widget under language-scope="worked-in".
+export const WORKED_IN_PAGE = 'languages-worked-in/index.html';
 
 const VOID_ELEMENTS = new Set([
   'area',

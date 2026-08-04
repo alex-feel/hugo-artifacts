@@ -74,7 +74,7 @@ The `sections` parameter overrides the preset with a comma-separated token list,
 | `headline` | Metric strip: commits, pull requests, external repositories and organizations, 90-day recency |
 | `calendar` | Contribution calendar (heatmap) with per-day counts and quartile levels, a visible locale-formatted summary (total, unit, window), and a less-to-more legend |
 | `org-rollup` | Per-organization contribution rollup: commits, issues, pull requests, reviews per owner |
-| `languages` | Byte-weighted language shares across owned and contributed repositories |
+| `languages` | Byte-weighted language shares over the repository set `language-scope` selects (default: the person's own non-fork repositories) |
 | `reviews` | Pull request reviews given |
 | `contributed` | Externally contributed repositories (not owned by the person), by stars |
 | `orgs` | Public organization memberships |
@@ -85,6 +85,27 @@ The `sections` parameter overrides the preset with a comma-separated token list,
 {{</* github-profile user="octocat" sections="headline,calendar,contributed" */>}}
 ```
 
+### Language scope
+
+The `languages` section reports byte-weighted language shares, and `language-scope` decides which repositories it counts. The heading changes with the scope, so the claim and the data always describe the same set.
+
+| Value | Repositories counted | Heading |
+| --- | --- | --- |
+| `owned` (default) | The person's own non-fork repositories | `Languages by code volume` |
+| `worked-in` | Those, plus external repositories the person has committed to or opened a pull request in | `Languages in repositories worked in` |
+
+```go-html-template
+{{</* github-profile user="octocat" language-scope="worked-in" */>}}
+```
+
+**Why the default is the narrow one.** GitHub reports language byte counts per REPOSITORY, never per contributor. Over repositories a person owns, those counts approximate what they wrote. Over repositories they merely touched, they do not, and the gap is not marginal: `repositoriesContributedTo` enrolls a repository on _any_ contribution, so filing a single issue on a 22 MB Go project would contribute 22 MB of Go to the chart. On a real profile that mechanism supplied 90.5% of the charted bytes and published `Go 20.7%` for someone who had never written a line of Go. The distortion grows with how useful a person is in other people's projects, and nothing in the output hints at it.
+
+**What `worked-in` still cannot tell you.** It narrows the external set to repositories with real code contributions -- the module asks for those through a second GraphQL connection restricted to `COMMIT` and `PULL_REQUEST`, so an issue-only or review-only repository contributes nothing under either scope -- but attribution is still whole-repository. One merged typo fix in a 22 MB project still contributes 22 MB. That is what the heading means by _repositories worked in_ rather than _code written_, and it is why this is opt-in.
+
+Weighting an external repository by actual authorship would be the correct answer and is not available: GraphQL exposes no per-language authorship, and the REST contributor-statistics endpoint returns per-contributor line counts with no language split, at one request per repository. Scoping is purchasable today; weighting is not.
+
+Machine consumers read the scope from `data-language-scope` on the list, so the numbers are never presented without the question they answer.
+
 ## Parameters
 
 | Parameter | Type | Required | Default | Description |
@@ -93,6 +114,7 @@ The `sections` parameter overrides the preset with a comma-separated token list,
 | `variant` | string | no | `card` | Section preset: `compact`, `card`, `full` |
 | `sections` | string | no | preset | Comma-separated section tokens overriding the preset, rendered in order |
 | `history` | string | no | `year` | Contribution window: `year` (rolling ~1-year window, GitHub's own profile framing) or `all` (all-time totals via one extra GraphQL request) |
+| `language-scope` | string | no | `owned` | Which repositories the `languages` row measures: `owned` (the person's own non-fork repositories) or `worked-in` (those plus repositories they have written code in). The section's heading changes with it -- see Language scope |
 | `show-streak` | bool | no | `false` | Compute current/longest contribution streaks and expose them on the calendar |
 | `show-rank` | bool | no | `false` | Compute the transparent activity score (see Computed Metrics) |
 | `merged-prs` | bool | no | `false` | Fetch the lifetime merged-PR count via one extra REST Search request |
@@ -104,7 +126,7 @@ The `sections` parameter overrides the preset with a comma-separated token list,
 Validation:
 
 - Omitting `user`, or passing a value that is not a well-formed GitHub login (alphanumerics and inner hyphens, at most 39 characters), fails the build with an error message.
-- Passing an invalid `variant`, `history`, or `avatar` value fails the build with an error message.
+- Passing an invalid `variant`, `history`, `avatar`, or `language-scope` value fails the build with an error message.
 - Unknown `sections` tokens emit a warning and are ignored; if nothing valid remains, the variant preset applies.
 
 ## Authentication
@@ -173,7 +195,7 @@ Everything beyond raw API fields is computed at build time from data already fet
 - **External footprint** counts repositories the person does not own (`repositoriesContributedTo` with `includeUserRepositories: false`) and the distinct organizations among their owners.
 - **90-day recency** counts active days and total contributions over the trailing 90 calendar days.
 - **All-time totals** (`history="all"`) sum one aliased `contributionsCollection` block per contribution year; each block spans one calendar year, respecting the API's 1-year span limit.
-- **Language shares** aggregate per-repository language byte counts across owned non-fork and contributed repositories, normalized to percentages. Every share renders with **exactly one decimal place**, whatever the value: a whole-number share prints `44.0%`, never `44%`, so the row is one format for anything reading it as a set. The top eight languages by byte volume are listed; a language whose share rounds below `0.05%` renders `0.0%` and KEEPS its entry rather than being dropped, because the row is a measurement and its presence is itself the signal that the language is there at all -- a site that would rather hide those can select them exactly, on `[data-pct="0.0"]`, which is only possible because the format is uniform.
+- **Language shares** aggregate per-repository language byte counts over the set `language-scope` selects -- the person's own non-fork repositories by default -- normalized to percentages. See [Language scope](#language-scope) for what each set does and does not claim. Every share renders with **exactly one decimal place**, whatever the value: a whole-number share prints `44.0%`, never `44%`, so the row is one format for anything reading it as a set. The top eight languages by byte volume are listed; a language whose share rounds below `0.05%` renders `0.0%` and KEEPS its entry rather than being dropped, because the row is a measurement and its presence is itself the signal that the language is there at all -- a site that would rather hide those can select them exactly, on `[data-pct="0.0"]`, which is only possible because the format is uniform.
 - **Streaks** (`show-streak="true"`) walk the contribution calendar: the current streak is the consecutive run ending today (or yesterday when today has no contribution yet); the longest streak is the historical maximum run.
 - **Activity score** (`show-rank="true"`) is the [github-readme-stats](https://github.com/anuraghazra/github-readme-stats) formula, computed transparently: commits, pull requests, issues, and reviews through `1 - 2^(-x/median)`; stars and followers through `x/(x+median)`; weights 2/3/1/1/4/1; medians 250 (1,000 for all-time commits), 50, 25, 2, 50, 10; the weighted percentile maps to levels S through C at thresholds 1, 12.5, 25, 37.5, 50, 62.5, 75, 87.5, 100. It is off by default because composite scores are gameable vanity; when you enable it, the formula above is the whole story -- no black box. The percentile reaches `data-rank-percentile` rendered to **one decimal place** whatever the value, for the same reason the language shares are: a bare float prints its shortest form, and a percentile landing on a whole number would publish `8` where every other profile publishes `7.4`.
 
@@ -181,6 +203,7 @@ Everything beyond raw API fields is computed at build time from data already fet
 
 - **Every total is a floor, not a ceiling.** Private contributions surface only as an aggregate count (`restrictedContributionsCount`), and only when the person opted into showing private activity; concealed organization memberships never appear; private-repository detail is invisible to any third-party token at any scope. A low number never proves low output.
 - **The default PR number counts authored pull requests** in the contribution window, not merged ones; the label says so. A strictly merged lifetime count requires `merged-prs="true"`.
+- **Language bytes belong to repositories, not to people.** GitHub publishes no per-contributor language breakdown at all, so every share here is a repository's byte count standing in for a person's. The default scope keeps that substitution defensible by counting only repositories the person owns; `language-scope="worked-in"` widens it and relabels the section to say so. Neither is a measure of authorship, and the `contributed` section and external-footprint counts deliberately answer a different question -- they count every repository worked in, an issue-only one included, which is why those numbers and the language row can disagree.
 - **GitHub's native achievement badges (Pull Shark, Galaxy Brain, and the rest) are not exposed by any GitHub API.** The module does not scrape profile HTML and does not fake badges.
 - **Counts are inflatable and deflatable.** Commit generators can fabricate activity, while squash merges, unlinked commit emails, and non-default-branch work make real activity undercount. The widget presents activity evidence, not a productivity score.
 - **Logins are mutable.** A renamed account frees its old login for someone else. The widget records the immutable account id in `data-user-id`; update the `user` parameter promptly after a rename.
@@ -210,6 +233,7 @@ Sentence-shaped plural-table keys receive a map with two entries: `count` select
 | `github_profile_restricted_note` | `plus {{ .formatted }} private contributions` (plural forms) | Private-floor note |
 | `github_profile_streak_current` / `_longest` / `_days` | `current streak` / `longest streak` / `{{ .formatted }} days` (plural forms) | Streak labels |
 | `github_profile_languages_label` / `_org_rollup_label` / `_contributed_label` / `_orgs_label` / `_pinned_label` / `_socials_label` | `Languages by code volume` / `Contributions by organization` / `Contributes to` / `Organizations` / `Pinned repositories` / `Elsewhere` | Section `aria-label`s |
+| `github_profile_languages_worked_in_label` | `Languages in repositories worked in` | Replaces `_languages_label` under `language-scope="worked-in"`; an override must keep saying that the unit is the repository rather than the person's code |
 | `github_profile_rank_label` | `activity score` | Activity score label |
 
 ## Styling
@@ -275,6 +299,7 @@ Sites preferring attribute selectors can style `[data-level="FOURTH_QUARTILE"]` 
 | `data-level` | calendar legend cells | Quartile enum, one cell per level |
 | `data-legend` | calendar legend labels | `less`, `more` |
 | `data-section` | list-section titles | Section token (`org-rollup`, `languages`, `contributed`, `orgs`, `pinned`, `socials`) |
+| `data-language-scope` | language list | Which repositories the shares measure: `owned` or `worked-in` (see [Language scope](#language-scope)) |
 | `data-lang`, `data-pct` | language items | Language name and share; `data-pct` is the printed percentage without the sign, always one decimal place (`44.0`, `0.7`, `0.0`) |
 | `data-org`, `data-owner-type`, `data-commits`, `data-issues`, `data-prs`, `data-reviews`, `data-total` | rollup items | Owner login, `Organization`/`User`, per-type and total counts |
 | `data-repo`, `data-stars`, `data-lang` | contributed/pinned items | Repository identification and stats |
