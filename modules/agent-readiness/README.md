@@ -105,7 +105,7 @@ The widget renders on exactly the pages whose twin publishes and receives the so
 
 Returns an ordered slice of dicts, each `{key, url, label}`, enumerating the site-level agent surfaces the module actually publishes under the resolved config: `llms` (the compact `llms.txt` link index), then `llms_index` (the complete `/llms-index.txt` one), then `facts` (the `/about.md` facts document), then `skills` (the Agent Skills index at `/.well-known/agent-skills/index.json`). Every `url` is absolute. Every `label` is the module's i18n-resolved display string (`agent_surface_llms`, `agent_surface_llms_index`, `agent_surface_facts`, `agent_surface_skills`), so a consumer renders the list without authoring labels. An entry is present only when its document publishes, and the slice may be empty.
 
-Each entry reproduces its producer's own publish gates rather than merely checking the wired format. `llms` requires the master switch, `llms.enable`, and the `llmstxt` format wired on the page's own language home -- an enabled `llms.txt` always emits at least its H1 line, so enabled-and-wired is published. `llms_index` requires those three plus `llms_index.enable`, on the `llmsindex` format. `facts` requires the master switch, `facts.enable`, and the `agentfacts` format wired on the page's own language home, by the same reasoning. `skills` reproduces all four gates of the index file itself -- the master switch, `skills_index.enable`, the `agentskills` format wired on the default site's home, and at least one skill surviving validation and fetch -- through the same shared implementation that feeds the [derived `llms.txt` entry](#llmstxt), so the two callers can never disagree about whether the index exists. The `llms_index` gate set is shared the same way, with the [derived complete-index route](#the--start-here-section) in `llms.txt`.
+Each entry reproduces its producer's own publish gates rather than merely checking the wired format. `llms` requires the master switch, `llms.enable`, and the `llmstxt` format wired on the page's own language home -- an enabled `llms.txt` always emits at least its H1 line, so enabled-and-wired is published. `llms_index` requires those three plus `llms_index.enable`, on the `llmsindex` format. `facts` requires the master switch, `facts.enable`, and the `agentfacts` format wired on the page's own language home, by the same reasoning. `skills` reproduces all four gates of the index file itself -- the master switch, `skills_index.enable`, the `agentskills` format wired on the default site's home, and at least one skill surviving validation and fetch -- through the same shared implementation that feeds the [derived `llms.txt` entry](#llmstxt), so the two callers can never disagree about whether the index exists. The `llms_index` gate set is shared the same way, with the [derived complete-index route](#the--start-here-section) in `llms.txt` and with every twin's [trailing pointer section](#the-trailing-pointer-section) -- three callers, one answer.
 
 On a multilingual site the `llms`, `llms_index` and `facts` entries follow the calling page's language, because those documents publish per language (`/llms.txt`, `/ru/llms.txt`). The `skills` entry is evaluated against the default language's site whatever language calls, because the index's format sets `root = true` and publishes once for the whole site, so every language must answer with the one file that actually exists.
 
@@ -205,7 +205,7 @@ Warnings are emitted for:
 - a complete link index that is enabled while the `llmsindex` output format is not wired to the home page, so `/llms-index.txt` cannot publish and `llms.txt` withholds the route rather than naming a URL that 404s;
 - a bare value where a table belongs, in ANY array-of-tables key (`skills`, `llms.sections`, `llms.optional`, `facts.sections`, `facts.identity.rows`, and a contact page's channels) -- skipped rather than dropped, because a dropped entry publishes a surface indistinguishable from one the consumer never configured;
 - a scalar written for a consumer sub-table (`facts.identity`, `facts.contact`) -- the whole block is ignored, because `[params.agent.facts] contact = '/contact'` is the natural mis-write of `[params.agent.facts.contact] page = '/contact'`;
-- a `markdown.sitemap_section_target` that is not `llms`, `sitemap`, or `none`, and a `sitemap_section_target = 'llms'` whose `llmstxt` format is not wired to the home page;
+- a `markdown.sitemap_section_target` that is not `llms`, `sitemap`, or `none`, and a `sitemap_section_target = 'llms'` on a site where NEITHER link-index format is wired to the home page, leaving the section nothing to name;
 - a `[params.agent.license]` with a `url` but no `name`, where the `llms.txt` line would render an empty link label;
 - a skill whose remote source could not be fetched, whose fields are invalid, or whose `name` repeats another entry's;
 - a scalar written where a list belongs (`robots.allow`, `robots.disallow`, `robots.bots`, `robots.bots_allow`, `robots.bots_disallow`, `robots.extra`, `llms.sections`, `llms.optional`, `facts.sections`, `frontmatter.<section>.keys`), which is read as a one-item list; and the two array-of-tables keys `skills` and `facts.identity.rows`, which are ignored;
@@ -271,7 +271,7 @@ last_updated          = true    # Emit `last_updated:` when .Lastmod differs fro
 build_time            = true    # Emit `build_time:` -- when the BUILD ran. See "The two time fields" below.
 license               = false   # Emit `license:` -- requires [params.agent.license] url.
 section_pages         = true    # Emit the member roster in a SECTION twin. See "The member roster" below.
-sitemap_section       = true    # Append the trailing pointer section.
+sitemap_section       = true    # Append the trailing pointer section. See "The trailing pointer section" below.
 sitemap_section_target = 'llms' # 'llms' | 'sitemap' | 'none'. Case-folded; an unrecognized value warns. The default heading follows the resolved target ('Site index' for llms, 'Sitemap' for sitemap); the agent_sitemap_heading i18n key overrides both.
 ```
 
@@ -330,6 +330,34 @@ A **section** twin carries a complete roster of the section's member pages betwe
 Membership is the same shared filter every other surface resolves through, narrowed to pages under the section's path at a segment boundary, so the roster is the identical set `llms.txt` and `/about.md` list for that section and is complete by definition -- never a first-N window, including for a section Hugo splits across pagers. Each item links the member's Markdown twin when the built-in `markdown` format is wired for the page kind, else its HTML permalink, and every URL is absolute, because a twin is routinely read detached from the site it came from. A section whose admitted member set is empty emits no heading and no list.
 
 The home twin never carries a roster: every regular page sits under `/`, so a home roster would enumerate the whole site, and that site-level enumeration is `llms.txt`'s job. Switch rosters off with `section_pages = false`, which restores the section twin to exactly its body plus the pointer section.
+
+### The trailing pointer section
+
+Every twin ends with one pointer block -- a `## Site index` heading and the routes out of the page into the site's own enumeration. Twins are the surface an agent lands on most, and this block is the cheapest route it has, so what the block names decides what a reader can find.
+
+Under the default `sitemap_section_target = 'llms'` it names **every link index the site publishes**, the compact `/llms.txt` first and the complete [`/llms-index.txt`](#the-complete-index-llms-indextxt) second:
+
+```markdown
+## Site index
+
+- [llms.txt](https://example.com/llms.txt)
+- [Complete index](https://example.com/llms-index.txt)
+```
+
+The plural is the point. The compact document is capped by construction on any site large enough to configure a cap, so a pointer naming it alone sends an agent asking "does this site have a page about X" to the one enumeration allowed to omit X -- where an absence reads as a fact about the site. That is the same false negative the [narrowed-section disclosure](#a-narrowed-section-says-so-in-the-section) exists to prevent one level down: the disclosure tells a reader already inside `llms.txt` to go further, and this block is where "further" is the first stop instead of a second hop. Naming both costs one line and needs no configuration, which matters because the site that most needs the complete index is the one large enough to be capped, and its author has no signal that the twins are under-pointing.
+
+Each link is emitted only when its own document actually publishes, never merely when its output format is wired, so the four wirings degrade into each other rather than into a dead link:
+
+| Wired in `[outputs] home` | The section names                                                   |
+| ------------------------- | ------------------------------------------------------------------- |
+| `llmstxt` and `llmsindex` | both, complete second                                               |
+| `llmstxt` only            | `llms.txt` alone                                                    |
+| `llmsindex` only          | the complete index alone                                            |
+| neither                   | nothing -- the section is omitted, with one warning naming the edit |
+
+`[params.agent.llms] enable = false` takes both documents down together and the section with them, in silence: the surface was switched off deliberately. `[params.agent.llms_index] enable = false` drops the second link the same way. Both link texts are the surface display labels (`agent_surface_llms`, `agent_surface_llms_index`), so a document carries one name wherever the module names it -- here, and in what [`surfaces.html`](#surfaceshtml) returns.
+
+`sitemap_section_target = 'sitemap'` points the block at `sitemap.xml` under the `Sitemap` heading instead, and `'none'` omits it. Every URL is absolute: a twin is routinely read detached from the site it came from, where a relative path has no base to resolve against.
 
 ### Front matter
 
@@ -533,7 +561,9 @@ The complete index carries the same H1, summary, license line, build-time line a
 
 `[params.agent.llms_index] enable = false` withholds the complete index alone, in silence; `[params.agent.llms] enable = false` withholds both documents, because they share one renderer. Either way `llms.txt` stops naming the file rather than pointing at a URL that 404s.
 
-**`llmsindex` must be added to your `[outputs] home` list**, and the module cannot do it for you: Hugo does not merge a module's `[outputs]` configuration into the site's, and a site-level `[outputs]` key replaces the default list for that kind rather than extending it. A site that enables the complete index and does not wire the format gets one warning per build naming the edit and the replacement hazard, and `llms.txt` withholds the route rather than publishing a dead link.
+**Three surfaces name it, and all three resolve through one shared gate**: `llms.txt`'s [`## Start here`](#the--start-here-section) section, every twin's [trailing pointer section](#the-trailing-pointer-section), and the entry [`surfaces.html`](#surfaceshtml) returns. Each asks whether the document PUBLISHES rather than whether its format is wired, from one implementation, so no surface can name a file another one knows was never written.
+
+**`llmsindex` must be added to your `[outputs] home` list**, and the module cannot do it for you: Hugo does not merge a module's `[outputs]` configuration into the site's, and a site-level `[outputs]` key replaces the default list for that kind rather than extending it. A site that enables the complete index and does not wire the format gets one warning per build naming the edit and the replacement hazard, and both `llms.txt` and the twins withhold the route rather than publishing a dead link.
 
 ### The `## Start here` section
 
@@ -714,7 +744,7 @@ license = true    # emit the license blockquote line in llms.txt
 
 ## i18n
 
-The module authors exactly sixteen user-facing strings: seven headings in generated documents, four display labels for the surface entries returned by the [`surfaces.html`](#surfaceshtml) public partial, the name and note of two derived `llms.txt` entries -- the complete link index in `## Start here` and the Agent Skills index in `## Optional` -- and the disclosure a narrowed section of the compact `llms.txt` opens with. English and Russian ship with the module; every lookup carries an English fallback, so a site whose language ships no translation still renders a real string rather than an empty one.
+The module authors exactly sixteen user-facing strings: seven headings in generated documents, four display labels for the module's site-level surfaces -- returned by the [`surfaces.html`](#surfaceshtml) public partial, and, for the two link indexes, also naming them in a twin's [trailing pointer section](#the-trailing-pointer-section) -- the name and note of two derived `llms.txt` entries (the complete link index in `## Start here` and the Agent Skills index in `## Optional`), and the disclosure a narrowed section of the compact `llms.txt` opens with. English and Russian ship with the module; every lookup carries an English fallback, so a site whose language ships no translation still renders a real string rather than an empty one.
 
 | Key | English |
 | --- | --- |
@@ -735,7 +765,7 @@ The module authors exactly sixteen user-facing strings: seven headings in genera
 | `agent_skills_entry_name` | `Agent Skills index` |
 | `agent_skills_entry_note` | `Machine-readable index of this site's published agent skills` |
 
-The twin's trailing pointer heading follows the resolved `sitemap_section_target`: `agent_sitemap_heading_llms` heads the section when it points at `llms.txt`, and `agent_sitemap_heading_sitemap` when it points at `sitemap.xml` -- the latter also heads `/about.md`'s dual-pointer block, which always includes `sitemap.xml`. The `agent_sitemap_heading` key is deliberately NOT shipped: it is the consumer-side override key. Hugo merges i18n files per key with the site's own value winning over a module's, so a site that defines `agent_sitemap_heading` forces that one heading over both target-derived defaults, while an undefined key resolves to the empty string and each lookup falls through to its shipped per-target default.
+The twin's trailing pointer heading follows the resolved `sitemap_section_target`: `agent_sitemap_heading_llms` heads the section when it points at the link indexes, and `agent_sitemap_heading_sitemap` when it points at `sitemap.xml` -- the latter also heads `/about.md`'s dual-pointer block, which always includes `sitemap.xml`. The links the section heads carry their own labels, `agent_surface_llms` and `agent_surface_llms_index`, which are the same two keys the surface enumeration uses; overriding the heading leaves them untouched. The `agent_sitemap_heading` key is deliberately NOT shipped: it is the consumer-side override key. Hugo merges i18n files per key with the site's own value winning over a module's, so a site that defines `agent_sitemap_heading` forces that one heading over both target-derived defaults, while an undefined key resolves to the empty string and each lookup falls through to its shipped per-target default.
 
 `agent_llms_partial_note` is the module's one FORMAT STRING: it carries exactly two `%d` verbs, filled with the number of pages the section kept and then the number the shared filter admitted. A translation may place them anywhere in its sentence, but must keep both, keep that order, and keep them spelled `%d` -- a dropped or renamed verb publishes a Go formatting error into the document instead of a number.
 

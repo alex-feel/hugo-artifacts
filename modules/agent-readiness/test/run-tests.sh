@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Validates the shipped data files, then builds TWENTY fixture sites with
+# Validates the shipped data files, then builds TWENTY-ONE fixture sites with
 # hugo (builds, not servers: no port binding, and a finite build exits by
-# itself) and runs the Node build-output assertion suite against all twenty.
+# itself) and runs the Node build-output assertion suite against all
+# twenty-one.
 #
 # The data-file check runs FIRST, before any build. That ordering is the
 # point: a malformed registry otherwise surfaces as an opaque Hugo failure at
 # some unrelated template, and the reader has to work backwards to it.
 #
-# The twenty builds:
+# The twenty-one builds:
 #   baseline   -- every content-license key unset, proving the license
 #                 surfaces are inert until a consumer opts in;
 #   configured -- the license table filled and both switches on, plus
@@ -57,7 +58,13 @@
 #                 surface was switched off deliberately;
 #   nolinkindexes -- NEITHER link-index format wired while both surfaces stay
 #                 enabled: the minimal-adoption shape, in which the module
-#                 must publish no index and say nothing about either;
+#                 must publish no index and say nothing about either, and the
+#                 twins' pointer section is dropped with one warning;
+#   nocompact  -- the mirror of `unwired`: `llmsindex` wired while `llmstxt` is
+#                 absent from the [outputs] home list, the only build in which
+#                 the twins' pointer section carries the complete index alone
+#                 and the only one that proves the compact index's own publish
+#                 gate decides a byte;
 #   unwired    -- the complete index left ENABLED while llmsindex is absent
 #                 from the [outputs] home list, which is the state every
 #                 existing consumer lands in after upgrading, because a
@@ -117,6 +124,7 @@ LOG_FILE_NOBUILDTIME="$HERE/hugo-build-nobuildtime.log"
 LOG_FILE_LLMSINDEXOFF="$HERE/hugo-build-llmsindexoff.log"
 LOG_FILE_UNWIRED="$HERE/hugo-build-unwired.log"
 LOG_FILE_NOLINKINDEXES="$HERE/hugo-build-nolinkindexes.log"
+LOG_FILE_NOCOMPACT="$HERE/hugo-build-nocompact.log"
 LOG_FILE_SHADOW="$HERE/hugo-build-shadow.log"
 LOG_FILE_PAGINATED="$HERE/hugo-build-paginated.log"
 LOG_FILE_WIDGETS="$HERE/hugo-build-widgets.log"
@@ -139,7 +147,7 @@ kill_stray_hugo() {
 }
 cleanup_interrupted() {
   kill_stray_hugo
-  rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_NOTWINS"     "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_LLMSOFF" "$LOG_FILE_EDGE" "$LOG_FILE_OFF"     "$LOG_FILE_BADTABLES" "$LOG_FILE_NSOFF" "$LOG_FILE_NOSECTIONPAGES" "$LOG_FILE_NOLINKMD"     "$LOG_FILE_NOBUILDTIME" "$LOG_FILE_LLMSINDEXOFF" "$LOG_FILE_UNWIRED" "$LOG_FILE_NOLINKINDEXES" "$LOG_FILE_SHADOW" "$LOG_FILE_PAGINATED" "$LOG_FILE_WIDGETS" "$LOG_FILE_EXTRA"
+  rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_NOTWINS"     "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_LLMSOFF" "$LOG_FILE_EDGE" "$LOG_FILE_OFF"     "$LOG_FILE_BADTABLES" "$LOG_FILE_NSOFF" "$LOG_FILE_NOSECTIONPAGES" "$LOG_FILE_NOLINKMD"     "$LOG_FILE_NOBUILDTIME" "$LOG_FILE_LLMSINDEXOFF" "$LOG_FILE_UNWIRED" "$LOG_FILE_NOLINKINDEXES" "$LOG_FILE_NOCOMPACT" "$LOG_FILE_SHADOW" "$LOG_FILE_PAGINATED" "$LOG_FILE_WIDGETS" "$LOG_FILE_EXTRA"
 }
 trap cleanup_interrupted INT TERM
 trap kill_stray_hugo EXIT
@@ -219,6 +227,7 @@ build "$FIXTURE_DIR" nobuildtime public/nobuildtime "$LOG_FILE_NOBUILDTIME"
 build "$FIXTURE_DIR" llmsindexoff public/llmsindexoff "$LOG_FILE_LLMSINDEXOFF"
 build "$FIXTURE_DIR" unwired public/unwired "$LOG_FILE_UNWIRED"
 build "$FIXTURE_DIR" nolinkindexes public/nolinkindexes "$LOG_FILE_NOLINKINDEXES"
+build "$FIXTURE_DIR" nocompact public/nocompact "$LOG_FILE_NOCOMPACT"
 build "$SHADOW_DIR" "" public "$LOG_FILE_SHADOW"
 build "$PAGINATED_DIR" "" public "$LOG_FILE_PAGINATED"
 build "$WIDGETS_DIR" "" public "$LOG_FILE_WIDGETS"
@@ -240,6 +249,7 @@ export FIXTURE_PUBLIC_NOBUILDTIME="$FIXTURE_DIR/public/nobuildtime"
 export FIXTURE_PUBLIC_LLMSINDEXOFF="$FIXTURE_DIR/public/llmsindexoff"
 export FIXTURE_PUBLIC_UNWIRED="$FIXTURE_DIR/public/unwired"
 export FIXTURE_PUBLIC_NOLINKINDEXES="$FIXTURE_DIR/public/nolinkindexes"
+export FIXTURE_PUBLIC_NOCOMPACT="$FIXTURE_DIR/public/nocompact"
 export FIXTURE_PUBLIC_SHADOW="$SHADOW_DIR/public"
 export FIXTURE_PUBLIC_PAGINATED="$PAGINATED_DIR/public"
 export FIXTURE_PUBLIC_WIDGETS="$WIDGETS_DIR/public"
@@ -260,6 +270,7 @@ export HUGO_BUILD_LOG_NOBUILDTIME="$LOG_FILE_NOBUILDTIME"
 export HUGO_BUILD_LOG_LLMSINDEXOFF="$LOG_FILE_LLMSINDEXOFF"
 export HUGO_BUILD_LOG_UNWIRED="$LOG_FILE_UNWIRED"
 export HUGO_BUILD_LOG_NOLINKINDEXES="$LOG_FILE_NOLINKINDEXES"
+export HUGO_BUILD_LOG_NOCOMPACT="$LOG_FILE_NOCOMPACT"
 export HUGO_BUILD_LOG_SHADOW="$LOG_FILE_SHADOW"
 export HUGO_BUILD_LOG_PAGINATED="$LOG_FILE_PAGINATED"
 export HUGO_BUILD_LOG_WIDGETS="$LOG_FILE_WIDGETS"

@@ -1,0 +1,30 @@
+# The `nocompact` environment: the COMPLETE link index wired while the compact
+# one's `llmstxt` format is absent from the [outputs] home list.
+#
+# It is the mirror image of `unwired`, and it exists because the twins' pointer
+# section names every link index the site publishes rather than one fixed
+# document. With only this half wired, the section must still be emitted and
+# must carry the complete index alone -- a site whose only enumeration is
+# /llms-index.txt would otherwise get no route to it from the surface an agent
+# lands on most, which is the same false negative the pointer's plural exists
+# to prevent. `unwired` proves the other single-format half and `nolinkindexes`
+# the neither-wired one, where the section is dropped with one warning.
+#
+# It needs an environment of its own because [outputs] is site configuration
+# rather than params, and because every other build keeps `llmstxt` wired: with
+# the format present everywhere else, deleting the compact index's own
+# publish gate from markdown-page.html would change no published byte.
+#
+# The module must say NOTHING here. `llms_index.enable` ships true and its
+# format is wired, so lib/llms-index-url.html has nothing to report; the
+# pointer's own warning fires only when NEITHER format is wired. Not wiring
+# `llmstxt` is itself the opt-out from the compact document, exactly as not
+# wiring `agentskills` is the opt-out from the skills index.
+#
+# The three lists are restated in full rather than trimmed, because an
+# environment overlay that dropped `section` or `page` would silently take the
+# twins with it and this build would then be about something else.
+[outputs]
+  home = ['html', 'rss', 'markdown', 'llmsindex', 'agentfacts', 'agentskills', 'twindump']
+  section = ['html', 'rss', 'markdown']
+  page = ['html', 'markdown']

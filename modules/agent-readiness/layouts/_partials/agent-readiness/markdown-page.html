@@ -129,16 +129,55 @@
     {{- end -}}
   {{- end -}}
 
-  {{/* Trailing pointer section, emitted as an ABSOLUTE URL because a twin
-       is routinely read detached from the site it came from, where a
-       relative path has no base to resolve against.
+  {{/* Trailing pointer section, emitted as ABSOLUTE URLs because a twin is
+       routinely read detached from the site it came from, where a relative
+       path has no base to resolve against.
 
-       The heading follows the resolved target: llms.txt is a curated link
-       index, not a URL enumeration, so its section is headed by
+       The heading follows the resolved target: a link index is a curated
+       list, not a URL enumeration, so the llms target is headed by
        $cfg.i18n.sitemap_heading_llms while the sitemap target keeps
        $cfg.i18n.sitemap_heading. Both resolve in config.html, where the
        consumer-side agent_sitemap_heading i18n key overrides either
        default.
+
+       THE LLMS TARGET NAMES EVERY LINK INDEX THE SITE PUBLISHES -- the
+       compact /llms.txt first, the complete /llms-index.txt second -- and
+       it is the plural that matters. The compact document is capped by
+       construction on any site large enough to configure a cap, so a
+       pointer naming it alone sends a reader asking "does this site have a
+       page about X" to the one enumeration allowed to omit X, where an
+       absence reads as a fact about the site. That is the false negative
+       lib/llms-partial-notice.html exists to prevent one level down, and
+       this section is the place where the route out of the compact
+       document can be the reader's FIRST stop rather than a second hop.
+       The two documents publish together or not at all and the compact one
+       already names the complete one from its own `## Start here`, so a
+       twin naming only the compact one was the single place in the chain
+       where the pair was split.
+
+       Compact first: it is the document the llmstxt.org convention names
+       and the one an agent knows how to read; the complete index is the
+       route out of it. Either may be absent -- a site wires the formats it
+       wants -- and the section carries whichever survived, so the four
+       wirings degrade into each other rather than into nothing.
+
+       Each URL reproduces its own document's PUBLISH gates, never merely
+       its format being wired: an output format answers "is it wired", not
+       "did llms.html render anything into it", and with llms.enable false
+       the renderer emits zero bytes and Hugo publishes neither file. The
+       complete index resolves through lib/llms-index-url.html, the shared
+       implementation llms.html and surfaces.html read, so no caller can
+       drift from that gate set; llms.enable is checked once here because
+       it governs both documents. Both link indexes leave `root` unset and
+       therefore publish per language, and the two lookups spell the same
+       question differently -- the global `site` is the language being
+       RENDERED, while that partial asks the page's own -- because a twin
+       is always rendered by the site it belongs to, which is the one case
+       where the two cannot differ.
+
+       Labels are the surface display strings, so one document carries one
+       name wherever the module names it -- the pointer here, the entry
+       surfaces.html returns. Renaming either is one i18n key, not two.
 
        llms.txt IS a home output format and resolves through it. `sitemap`
        is NOT -- it is a page KIND -- so that lookup never matches and the
@@ -147,44 +186,41 @@
        The configured target is case-folded and trimmed before it is
        matched. Every other enumerated value in this module is normalized
        the same way, and here an unnormalized miss is invisible: "LLMS"
-       would match no branch, leave the target empty and emit nothing at
+       would match no branch, leave the section empty and emit nothing at
        all, with no warning and exit 0. An unrecognized value now says so
        once rather than silently dropping the section. */}}
   {{- $wanted := lower (trim (printf "%v" ($md.sitemap_section_target | default "llms")) " \t\n\r") -}}
   {{- if and $md.sitemap_section (ne $wanted "none") -}}
-    {{- $target := "" -}}
-    {{- $label := "" -}}
+    {{- $items := slice -}}
     {{- $heading := "" -}}
     {{- if eq $wanted "llms" -}}
-      {{/* Gated on llms.enable as well as on the format being wired, for
-           the same reason the twin links are gated on markdown.enable: the
-           output format answers "is it wired", not "did llms.html render
-           anything into it". With the switch off, llms.html emits zero
-           bytes and Hugo publishes no /llms.txt, so pointing at it would
-           put a dead link in the tail of every twin.
-
-           Switched off deliberately, so no warning -- unlike the wired
-           case below, where the consumer asked for the pointer and the
-           format is missing, which they cannot see without being told. */}}
+      {{/* Switched off deliberately, so no warning -- unlike the
+           neither-wired case below, where the consumer asked for the
+           pointer and no format carries it, which they cannot see without
+           being told. */}}
       {{- if $cfg.llms.enable -}}
+        {{- $heading = $cfg.i18n.sitemap_heading_llms -}}
         {{- with site.Home.OutputFormats.Get "llmstxt" -}}
-          {{- $target = .Permalink -}}
-          {{- $label = "llms.txt" -}}
-          {{- $heading = $cfg.i18n.sitemap_heading_llms -}}
-        {{- else -}}
+          {{- $items = $items | append (printf "- %s" (partial "agent-readiness/lib/markdown-link.html" (dict "name" $cfg.i18n.surface_llms "url" .Permalink))) -}}
+        {{- end -}}
+        {{- with partial "agent-readiness/lib/llms-index-url.html" (dict "page" $page "cfg" $cfg) -}}
+          {{- $items = $items | append (printf "- %s" (partial "agent-readiness/lib/markdown-link.html" (dict "name" $cfg.i18n.surface_llms_index "url" .))) -}}
+        {{- end -}}
+        {{- if not $items -}}
           {{- partial "agent-readiness/lib/warn.html" (dict
-              "key" "agent-readiness:warn:sitemap-section-no-llmstxt"
-              "message" "[agent-readiness] The Markdown twins are configured with sitemap_section_target = \"llms\", but the llmstxt output format is not wired to the home page, so the trailing pointer section is omitted. Add 'llmstxt' to your existing [outputs] home list -- the config list replaces the ENTIRE default home list, so keep every format you already wire there -- or set sitemap_section_target to \"sitemap\" or \"none\".") -}}
+              "key" "agent-readiness:warn:sitemap-section-no-index"
+              "message" "[agent-readiness] The Markdown twins are configured with sitemap_section_target = \"llms\", but neither link-index output format is wired to the home page, so the trailing pointer section is omitted. Add 'llmstxt' (and 'llmsindex' for the complete index) to your existing [outputs] home list -- the config list replaces the ENTIRE default home list, so keep every format you already wire there -- or set sitemap_section_target to \"sitemap\" or \"none\".") -}}
         {{- end -}}
       {{- end -}}
     {{- else if eq $wanted "sitemap" -}}
+      {{- $target := "" -}}
       {{- with site.Home.OutputFormats.Get "sitemap" -}}
         {{- $target = .Permalink -}}
       {{- else -}}
         {{- $target = "sitemap.xml" | absURL -}}
       {{- end -}}
-      {{- $label = "sitemap.xml" -}}
       {{- $heading = $cfg.i18n.sitemap_heading -}}
+      {{- $items = $items | append (printf "- %s" (partial "agent-readiness/lib/markdown-link.html" (dict "name" "sitemap.xml" "url" $target))) -}}
     {{- else -}}
       {{- partial "agent-readiness/lib/warn.html" (dict
           "key" (printf "agent-readiness:warn:unknown-sitemap-target:%s" $wanted)
@@ -195,12 +231,12 @@
          inline: the closing trim marker of an inline block eats the final
          newline, and a text document ends with one -- the same standard
          robots.txt, llms.txt and about.md are held to. The heading and the
-         link go through the same line-safety routines as every other
+         links go through the same line-safety routines as every other
          value in the line-oriented documents. safeHTML because this
          partial is in the .html namespace while the twin is plain text,
-         so an ampersand in the URL would otherwise become an entity. */}}
-    {{- with $target -}}
-      {{- printf "\n\n## %s\n\n- %s\n" (partial "agent-readiness/lib/inline.html" $heading) (partial "agent-readiness/lib/markdown-link.html" (dict "name" $label "url" .)) | safeHTML -}}
+         so an ampersand in a URL would otherwise become an entity. */}}
+    {{- with $items -}}
+      {{- printf "\n\n## %s\n\n%s\n" (partial "agent-readiness/lib/inline.html" $heading) (delimit . "\n") | safeHTML -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}

@@ -15,7 +15,9 @@
 # lib/llms-index-url.html would change no published byte anywhere else.
 #
 # What it must show: no /llms-index.txt in the tree, no complete-index bullet
-# in /llms.txt, no llms_index entry from surfaces.html, and EXACTLY ONE
+# in /llms.txt, no llms_index entry from surfaces.html, no second link in the
+# twins' trailing pointer section -- which must stay byte-identical to what it
+# was before that section named more than one document -- and EXACTLY ONE
 # warning naming the missing wiring and the two ways out.
 #
 # The three lists are restated in full rather than trimmed, because an

@@ -127,7 +127,14 @@ test('a twin ends with the pointer section, byte-exactly', () => {
   // Rewritten to assemble its own terminating newline, because the closing
   // trim marker of the previous inline form ate it. Nothing asserted the
   // tail, so the missing newline shipped unnoticed.
-  const tail = '\n\n## Site index\n\n- [llms.txt](https://fixture.example/llms.txt)\n';
+  //
+  // This build wires both link-index formats, so the section names both
+  // documents, compact first. Which documents it names under which wiring is
+  // the contract of tests/12-llms-index.spec.js; what this test owns is the
+  // byte layout around them -- one blank line, one heading, one blank line,
+  // one bullet per line, and exactly one terminating newline.
+  const tail =
+    '\n\n## Site index\n\n- [llms.txt](https://fixture.example/llms.txt)\n- [Complete index](https://fixture.example/llms-index.txt)\n';
   for (const rel of ['index.md', 'blog/post-one/index.md']) {
     assert.ok(read(rel).endsWith(tail), `${rel} must end with the pointer block and one newline`);
   }

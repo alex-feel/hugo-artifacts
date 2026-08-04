@@ -34,6 +34,7 @@ import {
   llmsindexoffDir,
   unwiredDir,
   nolinkindexesDir,
+  nocompactDir,
   extraDir,
   markdownLinks,
   pageBullets,
@@ -557,6 +558,155 @@ test('with the twins off, the complete index falls back to HTML permalinks', () 
   const complete = read(COMPLETE, notwinsDir);
   assert.ok(!complete.includes('/index.md'), 'no twin URL for a file that was never written');
   assert.match(complete, /^- \[Post One\]\(https:\/\/fixture\.example\/blog\/post-one\/\)/m);
+});
+
+// ---- The twins' pointer section ----
+//
+// A twin's trailing `## Site index` block is the cheapest, most-landed-on
+// route into a site's own enumeration, and it used to carry exactly one link:
+// the COMPACT index. On any site large enough to configure a cap that document
+// is narrower than the site by construction, so an agent that arrives on a
+// twin, follows the one link it is given, and does not find what it came for
+// answers that the site has no such page. That is the same false negative the
+// selection notice above exists to prevent one level down -- the notice tells
+// a reader INSIDE the compact file to go further, and this section is where
+// "further" can be the first stop instead of a second hop.
+//
+// The two documents publish together or not at all and the compact one
+// already names the complete one from its own `## Start here`, so a twin
+// naming only the compact one was the single place in the chain where the
+// pair was split. Each of the four wirings gets its own assertion below,
+// because that is where a regression would land: the pair is a DEFAULT, so
+// nothing about it is visible in a build where both formats happen to be
+// wired.
+const pointerLinks = (rel, dir, heading = 'Site index') =>
+  (sectionsWithTopLevelBullets(read(rel, dir)).get(heading) ?? []).map(
+    (line) => markdownLinks(line)[0],
+  );
+
+test('with both formats wired, every twin names both indexes, complete second', () => {
+  // Read from the baseline build, whose twins are the shape a consumer gets
+  // with no pointer configuration at all: `sitemap_section_target` is left at
+  // its shipped "llms" everywhere in this fixture.
+  const expected = [
+    {text: 'llms.txt', url: `${BASE_URL}/${COMPACT}`},
+    {text: 'Complete index', url: `${BASE_URL}/${COMPLETE}`},
+  ];
+  // A page twin, a section twin and the home twin: one renderer writes all
+  // three, and the block sits after a roster in exactly one of them.
+  for (const rel of ['index.md', 'blog/index.md', 'blog/post-one/index.md']) {
+    assert.deepEqual(pointerLinks(rel), expected, `${rel} must name both indexes`);
+    for (const {url} of pointerLinks(rel)) {
+      assert.ok(urlResolves(url), `${rel} points at ${url}, which is not published`);
+    }
+  }
+});
+
+test('the pointed-at compact index really is narrower than the complete one', () => {
+  // Anti-vacuity for the pair. If nothing in this fixture were ever dropped
+  // from the compact file, the second link would be a formality and a
+  // regression that removed it would cost nothing observable here. The
+  // fixture caps `Recent Blog` at one page of three, and the compact file
+  // says so in the section itself.
+  const notice = selectionNotice(sectionsWithTopLevelBullets(read(COMPACT)).get('Recent Blog'));
+  assert.ok(notice, 'the compact index must contain a narrowed section');
+  assert.ok(notice.kept < notice.total, `${notice.kept} of ${notice.total} is not a narrowing`);
+  assert.equal(
+    bulletsUnder(read(COMPLETE), 'Recent Blog').length,
+    notice.total,
+    'while the complete index lists every admitted page under the same heading',
+  );
+});
+
+test('with only llmstxt wired, the pointer is exactly what it always was', () => {
+  // The second link is gated on the complete index PUBLISHING, not on the
+  // module wanting to name it, so a site that never wired `llmsindex` must
+  // get a byte-identical section rather than a link to a file that 404s.
+  const tail = `\n\n## Site index\n\n- [llms.txt](${BASE_URL}/${COMPACT})\n`;
+  for (const rel of ['index.md', 'blog/post-one/index.md']) {
+    const text = read(rel, unwiredDir);
+    assert.ok(text.endsWith(tail), `${rel} must end with the one-link section and one newline`);
+    assert.ok(!text.includes(COMPLETE), `${rel} must not name a document this build never wrote`);
+  }
+});
+
+test('llms_index.enable = false leaves the compact index alone in the pointer, in silence', () => {
+  // The other way to have no complete index, and the one where the format IS
+  // wired: a pointer that consulted the output format alone would name a file
+  // this build deliberately did not write.
+  const tail = `\n\n## Site index\n\n- [llms.txt](${BASE_URL}/${COMPACT})\n`;
+  assert.ok(read('index.md', llmsindexoffDir).endsWith(tail));
+  assert.ok(!read('index.md', llmsindexoffDir).includes(COMPLETE));
+  assert.equal(
+    warnCount(/link-index output format/, 'llmsindexoff'),
+    0,
+    'no warning for a deliberate choice',
+  );
+});
+
+test('with only llmsindex wired, the pointer names the complete index alone', () => {
+  // The mirror case, and the reason the section is assembled from whatever
+  // publishes rather than anchored to the compact document. A site whose only
+  // enumeration is /llms-index.txt would otherwise get no route to it at all
+  // from the surface an agent lands on most -- the same false negative, one
+  // wiring over.
+  assert.ok(!exists(COMPACT, nocompactDir), 'no compact index is published here');
+  assert.ok(exists(COMPLETE, nocompactDir), 'while the complete one is');
+  const tail = `\n\n## Site index\n\n- [Complete index](${BASE_URL}/${COMPLETE})\n`;
+  for (const rel of ['index.md', 'blog/post-one/index.md']) {
+    const text = read(rel, nocompactDir);
+    assert.ok(text.endsWith(tail), `${rel} must end with the complete index alone`);
+    assert.ok(!text.includes(`/${COMPACT}`), `${rel} must not name the document that is missing`);
+  }
+  assert.equal(
+    warnCount(/link-index output format/, 'nocompact'),
+    0,
+    'not wiring the compact index is itself the opt-out, so nothing is reported',
+  );
+});
+
+test('with neither format wired, the section is dropped and the edit is named once', () => {
+  // Nothing left to point at. The section is withheld rather than published
+  // empty or pointing at a 404, and the consumer -- who asked for the pointer
+  // and cannot see why it is missing -- is told what to add, including the
+  // replacement hazard that makes the edit non-obvious. Nothing asserted this
+  // warning while it named `llmstxt` alone.
+  for (const rel of ['index.md', 'blog/post-one/index.md']) {
+    const text = read(rel, nolinkindexesDir);
+    assert.ok(!text.includes('## Site index'), `${rel} must carry no pointer section`);
+    assert.ok(!text.includes(COMPACT), `${rel} must name neither document`);
+  }
+  assert.equal(warnCount(/neither link-index output format is wired/, 'nolinkindexes'), 1);
+  assert.equal(
+    warnCount(/replaces the ENTIRE default home list/, 'nolinkindexes'),
+    1,
+    'and the message carries the replacement hazard, as its llmsindex counterpart does',
+  );
+});
+
+test('the pointer names each document in the language the twin was published into', () => {
+  // The two link texts are i18n keys rather than literals, and only a second
+  // language can tell the difference: an English-only fixture renders the
+  // shipped default either way, so a hard-coded "Complete index" would pass
+  // every other assertion in this file. The URLs are per-language too -- both
+  // formats leave `root` unset -- so the section answers for the site it
+  // belongs to rather than for the default one.
+  assert.deepEqual(pointerLinks('ru/index.md', multilingualDir, 'Индекс сайта'), [
+    {text: 'llms.txt', url: `${BASE_URL}/ru/llms.txt`},
+    {text: 'Полный индекс', url: `${BASE_URL}/ru/llms-index.txt`},
+  ]);
+});
+
+test('with the llms surface switched off, no twin points anywhere, and silently', () => {
+  // Both documents render through one renderer, so `llms.enable = false`
+  // takes the whole section with them -- and says nothing, because the
+  // consumer switched the surface off deliberately. The format stays wired in
+  // this build, so a pointer that trusted the format would publish two dead
+  // links per twin.
+  for (const rel of ['index.md', 'blog/post-one/index.md']) {
+    assert.ok(!read(rel, llmsoffDir).includes('## Site index'), `${rel} must carry no pointer`);
+  }
+  assert.equal(warnCount(/link-index output format/, 'llmsoff'), 0);
 });
 
 test('the complete index publishes per language, and each language names its own', () => {

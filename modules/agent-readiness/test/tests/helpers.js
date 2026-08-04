@@ -1,7 +1,7 @@
 /* global process */
 // Shared helpers for the build-output assertion specs.
 //
-// The runner exports NINETEEN published trees, and every one of them is
+// The runner exports TWENTY published trees, and every one of them is
 // load-bearing:
 // FIXTURE_PUBLIC (every content-license key unset), FIXTURE_PUBLIC_CONFIGURED
 // (the license table filled and both switches on, plus the bots_allow with
@@ -38,8 +38,12 @@
 // must emit the wire-it-up warning),
 // FIXTURE_PUBLIC_NOLINKINDEXES (NEITHER link-index format wired while both
 // surfaces stay enabled -- the minimal-adoption shape, and the complement of
-// `unwired`: it is the build that must stay SILENT, because not wiring a
-// format is itself the opt-out),
+// `unwired`: it is the build that must stay SILENT about the complete index,
+// while the twins' pointer section, having nothing left to name, is dropped
+// with one warning of its own), FIXTURE_PUBLIC_NOCOMPACT (the mirror of
+// `unwired` -- `llmsindex` wired while `llmstxt` is not, the only build in
+// which the pointer section carries the complete index alone and the only one
+// in which the compact index's own publish gate decides a byte),
 // FIXTURE_PUBLIC_SHADOW (a
 // fixture that ships its own layouts/robots.txt), FIXTURE_PUBLIC_PAGINATED
 // (a fixture whose single section spills past pagerSize, the only shape in
@@ -94,6 +98,9 @@ export const llmsindexoffDir = resolve(
 export const unwiredDir = resolve(process.env.FIXTURE_PUBLIC_UNWIRED ?? 'fixture/public/unwired');
 export const nolinkindexesDir = resolve(
   process.env.FIXTURE_PUBLIC_NOLINKINDEXES ?? 'fixture/public/nolinkindexes',
+);
+export const nocompactDir = resolve(
+  process.env.FIXTURE_PUBLIC_NOCOMPACT ?? 'fixture/public/nocompact',
 );
 export const shadowDir = resolve(process.env.FIXTURE_PUBLIC_SHADOW ?? 'fixture-shadow/public');
 export const paginatedDir = resolve(
@@ -291,6 +298,7 @@ export function buildLog(which = 'baseline') {
     llmsindexoff: 'HUGO_BUILD_LOG_LLMSINDEXOFF',
     unwired: 'HUGO_BUILD_LOG_UNWIRED',
     nolinkindexes: 'HUGO_BUILD_LOG_NOLINKINDEXES',
+    nocompact: 'HUGO_BUILD_LOG_NOCOMPACT',
     shadow: 'HUGO_BUILD_LOG_SHADOW',
     paginated: 'HUGO_BUILD_LOG_PAGINATED',
     widgets: 'HUGO_BUILD_LOG_WIDGETS',
