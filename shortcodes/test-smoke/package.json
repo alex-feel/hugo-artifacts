@@ -1,0 +1,9 @@
+{
+  "name": "shortcode-smoke-tests",
+  "private": true,
+  "type": "module",
+  "description": "Build-output assertion suite for the five shortcode modules that ship no suite of their own: arxiv-paper, callout, github-repo, hf-space and youtube-embed. Not a Hugo module: this directory holds one fixture that imports all five, invokes each once, and asserts what they emit. It carries no dependencies -- node --test and node:assert are enough -- so it needs no npm install of its own.",
+  "scripts": {
+    "test": "node --test \"tests/*.spec.js\""
+  }
+}
