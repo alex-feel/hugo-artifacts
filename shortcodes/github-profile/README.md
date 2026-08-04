@@ -173,7 +173,7 @@ Everything beyond raw API fields is computed at build time from data already fet
 - **External footprint** counts repositories the person does not own (`repositoriesContributedTo` with `includeUserRepositories: false`) and the distinct organizations among their owners.
 - **90-day recency** counts active days and total contributions over the trailing 90 calendar days.
 - **All-time totals** (`history="all"`) sum one aliased `contributionsCollection` block per contribution year; each block spans one calendar year, respecting the API's 1-year span limit.
-- **Language shares** aggregate per-repository language byte counts across owned non-fork and contributed repositories, normalized to percentages.
+- **Language shares** aggregate per-repository language byte counts across owned non-fork and contributed repositories, normalized to percentages. Every share renders with **exactly one decimal place**, whatever the value: a whole-number share prints `44.0%`, never `44%`, so the row is one format for anything reading it as a set. The top eight languages by byte volume are listed; a language whose share rounds below `0.05%` renders `0.0%` and KEEPS its entry rather than being dropped, because the row is a measurement and its presence is itself the signal that the language is there at all -- a site that would rather hide those can select them exactly, on `[data-pct="0.0"]`, which is only possible because the format is uniform.
 - **Streaks** (`show-streak="true"`) walk the contribution calendar: the current streak is the consecutive run ending today (or yesterday when today has no contribution yet); the longest streak is the historical maximum run.
 - **Activity score** (`show-rank="true"`) is the [github-readme-stats](https://github.com/anuraghazra/github-readme-stats) formula, computed transparently: commits, pull requests, issues, and reviews through `1 - 2^(-x/median)`; stars and followers through `x/(x+median)`; weights 2/3/1/1/4/1; medians 250 (1,000 for all-time commits), 50, 25, 2, 50, 10; the weighted percentile maps to levels S through C at thresholds 1, 12.5, 25, 37.5, 50, 62.5, 75, 87.5, 100. It is off by default because composite scores are gameable vanity; when you enable it, the formula above is the whole story -- no black box.
 
@@ -236,7 +236,7 @@ Each list section (`org-rollup`, `languages`, `contributed`, `orgs`, `pinned`, `
 The calendar day cells and language items carry only custom-property indirections and measured values -- never color choices:
 
 - `--github-profile-day-level` on each `github-profile__calendar-day` points at a site-defined `--github-profile-level-0` through `--github-profile-level-4` token, mapped from GitHub's quartile enum.
-- `--github-profile-lang-share` on each `github-profile__lang` carries the measured percentage (e.g., `42.1%`) for bar-width styling.
+- `--github-profile-lang-share` on each `github-profile__lang` carries the measured percentage (e.g., `42.1%`) for bar-width styling. It is the same one-decimal string the item prints and the same one `data-pct` carries, formatted once where the share is derived, so the three can never disagree. It is deliberately locale-independent -- `lang.FormatPercent` would render a comma decimal separator in most locales, which is invalid in a CSS value and unparseable in a data attribute.
 
 Example site-side calendar palette:
 
@@ -275,7 +275,7 @@ Sites preferring attribute selectors can style `[data-level="FOURTH_QUARTILE"]` 
 | `data-level` | calendar legend cells | Quartile enum, one cell per level |
 | `data-legend` | calendar legend labels | `less`, `more` |
 | `data-section` | list-section titles | Section token (`org-rollup`, `languages`, `contributed`, `orgs`, `pinned`, `socials`) |
-| `data-lang`, `data-pct` | language items | Language name and share |
+| `data-lang`, `data-pct` | language items | Language name and share; `data-pct` is the printed percentage without the sign, always one decimal place (`44.0`, `0.7`, `0.0`) |
 | `data-org`, `data-owner-type`, `data-commits`, `data-issues`, `data-prs`, `data-reviews`, `data-total` | rollup items | Owner login, `Organization`/`User`, per-type and total counts |
 | `data-repo`, `data-stars`, `data-lang` | contributed/pinned items | Repository identification and stats |
 | `data-owner-type` | contributed items only | Owner type (`Organization`/`User`) |

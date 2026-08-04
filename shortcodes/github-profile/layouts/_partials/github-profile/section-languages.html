@@ -4,6 +4,12 @@
   objective measured data (--github-profile-lang-share, a percentage), never
   as a color choice.
 
+  .pct arrives from derive.html ALREADY rendered to one decimal place, which
+  is why the three surfaces below print it verbatim: the visible text, the
+  data-pct attribute and the custom property carry one string and cannot
+  drift apart. Do not re-format it here, and do not compute a share from
+  .bytes -- a second formatting is a second format.
+
   Context: the render.html context dict (.d carries the normalized data).
 */}}
 
