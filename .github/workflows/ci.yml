@@ -5,12 +5,6 @@ on:
   push:
     branches:
       - main
-  # The network suite runs on a schedule rather than on every push: it fetches
-  # the GitHub, Hugging Face, arXiv and YouTube APIs at build time, so an
-  # outage or a rate limit on somebody else's service would otherwise block an
-  # unrelated merge. Nightly still catches a break within a day.
-  schedule:
-    - cron: '17 4 * * *'
   workflow_dispatch:
 
 permissions:
@@ -42,7 +36,7 @@ jobs:
       - name: Set up Hugo (extended)
         uses: peaceiris/actions-hugo@v3
         with:
-          hugo-version: '0.161.1'
+          hugo-version: '0.164.0'
           extended: true
 
       - name: Set up Node.js
@@ -170,13 +164,19 @@ jobs:
           go install github.com/editorconfig-checker/editorconfig-checker/v3/cmd/editorconfig-checker@v3.0.3
           "$(go env GOPATH)/bin/editorconfig-checker"
 
-  # Every suite that is deterministic offline, one job per suite so a failure
+  # EVERY suite, one job per suite so a failure
   # names the module that broke rather than a single opaque red X, and so the
   # slowest suite does not set the wall clock for all of them. Before this
   # existed CI ran lints only: it never rendered a template, so no template
   # error of any kind could turn it red, and three suites were silently broken
   # on a maintainer machine for an unknown length of time without anything
   # surfacing it.
+  #
+  # Nothing is held out for being network-dependent. A module changes exactly
+  # once, in a pull request, so that is the only moment its templates can break
+  # and the only moment worth testing them; a suite moved off the blocking set
+  # re-tests unchanged code on a timer and leaves the one change that matters
+  # unguarded.
   suites:
     name: Suite (${{ matrix.name }})
     runs-on: ubuntu-latest
@@ -196,6 +196,34 @@ jobs:
         include:
           - name: images
             dir: modules/images/test
+            run: bash run-tests.sh
+            deps: true
+          # The SECOND images row exists because that suite is the only one
+          # whose subject is version-gated: modules/images emits AVIF from
+          # Hugo 0.163.0 and warns-and-degrades below it, and
+          # tests/07-avif-gate.spec.js asserts BOTH sides by branching on the
+          # building Hugo's version. With one pinned version only one branch
+          # can ever execute, so the three assertions describing what the
+          # module actually publishes with AVIF enabled -- the avif chain is
+          # emitted, it precedes the webp chain, derivatives land on disk --
+          # were dead code in CI while the pin sat below the gate. Both sides
+          # of a version gate have to run somewhere, so this row runs the
+          # same suite below it while the row above runs at the pinned
+          # current Hugo.
+          - name: images (below the AVIF gate)
+            dir: modules/images/test
+            run: bash run-tests.sh
+            deps: true
+            hugo: '0.161.1'
+          # Fetches raw.githubusercontent.com for its skills index and calls
+          # the GitHub, Hugging Face, arXiv and YouTube APIs in its widgets
+          # build. It blocks anyway, because a module changes exactly once --
+          # in a pull request -- so that is the only moment its templates can
+          # break and the only moment worth testing them. It is also the only
+          # build in this repository that renders shortcodes/arxiv-paper,
+          # callout, github-repo, hf-space and youtube-embed at all.
+          - name: agent-readiness
+            dir: modules/agent-readiness/test
             run: bash run-tests.sh
             deps: true
           - name: seo
@@ -252,7 +280,10 @@ jobs:
       - name: Set up Hugo (extended)
         uses: peaceiris/actions-hugo@v3
         with:
-          hugo-version: '0.161.1'
+          # A row may pin its own Hugo; everything else gets the current
+          # one. Only modules/images uses the override, to run its
+          # version-gated suite on both sides of the gate.
+          hugo-version: ${{ matrix.hugo || '0.164.0' }}
           extended: true
 
       - name: Set up Node.js
@@ -280,53 +311,9 @@ jobs:
 
       - name: Run the suite
         working-directory: ${{ matrix.dir }}
-        run: ${{ matrix.run }}
-
-  # Held out of the blocking set on purpose. This suite proves the remote-fetch
-  # digest guarantee, which cannot be proven without a real fetch, and its
-  # widgets build calls the GitHub, Hugging Face, arXiv and YouTube APIs. Those
-  # degrade to WARN lines when tokenless or rate-limited, by design -- but an
-  # outage on somebody else's service must not block an unrelated pull request,
-  # so it runs nightly and on demand instead.
-  suites-network:
-    name: Suite (agent-readiness, network)
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 1
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: '1.22'
-          cache: false
-
-      - name: Set up Hugo (extended)
-        uses: peaceiris/actions-hugo@v3
-        with:
-          hugo-version: '0.161.1'
-          extended: true
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: modules/agent-readiness/test/package-lock.json
-
-      - name: Install suite dependencies
-        working-directory: modules/agent-readiness/test
-        run: npm ci --no-audit --no-fund
-
-      - name: Run the suite
-        working-directory: modules/agent-readiness/test
-        # The token raises the GitHub API rate limit for the widgets build.
-        # Absent it the build still succeeds and degrades with WARN lines,
-        # which the runner's log gates tolerate deliberately.
         env:
+          # Raises the GitHub API rate limit for the suites that fetch at build
+          # time. Absent it those builds still succeed and degrade with WARN
+          # lines, which their runners' log gates tolerate deliberately.
           HUGO_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bash run-tests.sh
+        run: ${{ matrix.run }}

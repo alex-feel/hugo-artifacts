@@ -16,7 +16,12 @@ import {fileURLToPath} from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const modulesRoot = resolve(here, '..', '..');
-const MODULES = ['seo', 'agent-readiness', 'search'];
+// pwa joins the trio because it also requires a home output entry, and a
+// module whose README shows a bare [outputs] block is exactly the trap this
+// file exists to close: a consumer who wired the other three and then
+// followed pwa literally lands on a second table (a load failure) or a
+// replacing list (an exit-0 build that silently stops publishing).
+const MODULES = ['seo', 'agent-readiness', 'search', 'pwa'];
 const HEADING = '### Combining this module with other modules that wire output formats';
 
 const readme = (moduleName) => readFileSync(join(modulesRoot, moduleName, 'README.md'), 'utf8');
@@ -33,7 +38,10 @@ const requiredFormats = () => {
     );
   });
   assert.ok(defined.length >= 5, 'the modules must define at least five output formats');
-  return [...defined, 'html', 'rss', 'markdown'];
+  // webappmanifest is listed with the built-ins rather than derived: pwa
+  // defines no [outputFormats] table because the format is one of Hugo's
+  // own, so nothing in a module configuration can announce it.
+  return [...defined, 'html', 'rss', 'markdown', 'webappmanifest'];
 };
 
 for (const moduleName of MODULES) {
@@ -41,13 +49,19 @@ for (const moduleName of MODULES) {
     const text = readme(moduleName);
     const headingAt = text.indexOf(HEADING);
     assert.notEqual(headingAt, -1, `${moduleName}/README.md must carry "${HEADING}"`);
-    // Installation comes before Requirements in this repository's README
-    // order, and the rule belongs with the wiring it corrects.
-    const requirementsAt = text.indexOf('\n## Requirements');
-    assert.notEqual(requirementsAt, -1);
+    // The rule belongs WITH the wiring it corrects: a reader copying an
+    // [outputs] block has to meet it at that moment, not several sections
+    // later. Stated as "the same top-level section as the first [outputs]
+    // example" rather than "before ## Requirements", because that heading is
+    // an artifact of one README shape -- pwa's leads with a Quick start and
+    // has no Requirements section at all, so the proxy silently failed on
+    // the one module whose README needed the rule most.
+    const outputsAt = text.indexOf('[outputs]');
+    assert.notEqual(outputsAt, -1, `${moduleName}/README.md must show an [outputs] block`);
+    const nextSectionAt = text.indexOf('\n## ', outputsAt);
     assert.ok(
-      headingAt < requirementsAt,
-      `${moduleName}/README.md must state the rule inside Installation, before Requirements`,
+      nextSectionAt === -1 || headingAt < nextSectionAt,
+      `${moduleName}/README.md must state the rule beside its [outputs] wiring, not in a later section`,
     );
     // The two shapes a consumer actually reaches: the loud one and the silent
     // one. Naming both is what stops the silent one from being read as a

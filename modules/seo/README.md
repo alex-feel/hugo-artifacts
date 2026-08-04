@@ -25,11 +25,11 @@ Confirm resolution with `hugo mod graph`. For local development against a checko
 
 This module defines no output format of its own, but it READS your `[outputs]` lists: `[seo.alternates]` advertises a format when the page CARRIES it, which is a fact about those lists. Your site configuration holds exactly ONE `[outputs]` table, and its lists are the union of every module's needs. A second `[outputs]` table in the same file fails the configuration load outright (`unmarshal failed: toml: table outputs already exists`); pasting one module README's `[outputs]` block over another's leaves a single table that loads cleanly, exits 0, warns about nothing -- and silently stops publishing every document the replaced list asked for, taking the alternates this module advertises with it. So do not copy any module's block wholesale into a site that already has one: MERGE the names into the list already there.
 
-A site importing this module together with [`agent-readiness`](../agent-readiness/README.md) and [`search`](../search/README.md) wires all of them at once:
+A site importing this module together with [`agent-readiness`](../agent-readiness/README.md), [`search`](../search/README.md) and [`pwa`](../pwa/README.md) wires all of them at once:
 
 ```toml
 [outputs]
-  home = ['html', 'rss', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills', 'searchindex', 'opensearch']
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills', 'searchindex', 'opensearch', 'webappmanifest']
   section = ['html', 'rss', 'markdown']
   page = ['html', 'markdown']
 ```

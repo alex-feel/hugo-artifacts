@@ -470,6 +470,19 @@
   {{- end -}}
 {{- end -}}
 
+{{/* The percentile leaves this partial RENDERED to one decimal place, for the
+     same reason the language share does: the arithmetic above is the
+     identical round-to-one-decimal idiom, and a float prints its shortest
+     form, so a percentile landing on a whole number published
+     data-rank-percentile="8" where every other profile publishes "7.4". One
+     profile carries one percentile, so nothing looks wrong on the page; the
+     inconsistency is across the pages and sites a consumer compares, which
+     is exactly where a machine-readable attribute is read. The FLOAT is what
+     the threshold loop above compares against, so the conversion belongs
+     here -- the boundary between the computation and the record this partial
+     returns. */}}
+{{- $rankPercentileText := printf "%.1f" $rankPercentile -}}
+
 {{- $data = merge $data (dict
   "login" $login
   "userId" $userId
@@ -496,7 +509,7 @@
   "pinned" $pinned
   "socials" $socials
   "rankLevel" $rankLevel
-  "rankPercentile" $rankPercentile
+  "rankPercentile" $rankPercentileText
 ) -}}
 
 {{- else -}}

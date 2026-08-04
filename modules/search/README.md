@@ -48,11 +48,11 @@ Troubleshooting: if surfaces warn that the index is not wired even though you co
 
 Path A above edits a table you may already own: your site configuration holds exactly ONE `[outputs]` table, and its lists are the union of every module's needs. A second `[outputs]` table in the same file fails the configuration load outright (`unmarshal failed: toml: table outputs already exists`); pasting one module README's `[outputs]` block over another's leaves a single table that loads cleanly, exits 0, warns about nothing -- and silently stops publishing every document the replaced list asked for, this module's search corpus included. So do not copy the block above into a site that already has one: MERGE `searchindex` into the list already there.
 
-A site importing this module together with [`agent-readiness`](../agent-readiness/README.md) wires all of them at once:
+A site importing this module together with [`agent-readiness`](../agent-readiness/README.md), [`seo`](../seo/README.md) and [`pwa`](../pwa/README.md) wires all of them at once:
 
 ```toml
 [outputs]
-  home = ['html', 'rss', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills', 'searchindex', 'opensearch']
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills', 'searchindex', 'opensearch', 'webappmanifest']
   section = ['html', 'rss', 'markdown']
   page = ['html', 'markdown']
 ```
@@ -116,6 +116,8 @@ The index template emits one envelope per language (`/searchindex.json`, `/ru/se
 **The members are emitted in the order shown above, and `docs` is always last.** That is a deliberate property of the document, not an artifact of how it happens to serialize: every field that DESCRIBES the index precedes the field that IS the index, so a reader learns the schema version, the build time, the language, the content digest and the record count from roughly the first hundred bytes -- whatever the payload weighs.
 
 It is a fix for a failure that was observed rather than imagined. Serialized as one Go map, the members came out alphabetically, which put `docs` third and left `generated`, `lang` and `schemaVersion` behind it -- on a quarter-megabyte index, sixty-five bytes from the end of the file. Capable readers inspected such a document three times between them and reported the build stamp missing every time, once after the field had already been added. The mechanism is ordinary and applies to every large JSON document: a reader samples it from the front. A `curl` piped to `head`, a truncated preview, a streaming parser surfacing early keys, an agent reading a prefix under a context budget -- each finds `digest` and `docCount` and stops long before the end. Metadata behind the payload is metadata only a full parse recovers, and a full parse of a quarter-megabyte index is exactly what a reader asking "is my copy current" is trying to avoid. A build stamp that costs more to read than the document it describes has no reason to exist.
+
+**The same rule applies inside each record, where the bytes actually are.** A record's members are emitted identity first and indexed body last: `href`, `title`, `section`, `sectionTitle`, `date`, `description`, `image`, `keywords`, then one array per configured taxonomy, then `summary`, `headings` and `content`. Serialized as a map it came out alphabetically, which put `content` -- truncated to `content_max_length`, 8000 characters by default -- second, ahead of `href` and `title`. A reader working through a prefix of the `docs` array therefore spent its budget inside one page's body without learning which page the body belonged to; on the fixture corpus, `href` sat an average of 200 bytes into each record and is now at byte 1 of every one. The three buckets exist because a record's key set is not fixed: one array per CONFIGURED taxonomy joins it under a name the consuming site chooses, so those land between the identity fields and the bulk ones, and `content` stays last by construction rather than by remembering to keep it there.
 
 What you may rely on is the guarantee, not the sequence: **every metadata member precedes `docs`, and nothing follows it.** JSON member order carries no semantics, so a parser cannot observe any of this and no consumer can be broken by it; the order exists entirely for readers that never reach the end. The exact sequence above is what the module emits today and the test suite pins it, so a refactor that rebuilds the envelope as a map is a failing build rather than a silent regression -- but a consumer should read fields by name, as it would from any JSON.
 
@@ -345,6 +347,7 @@ modules/search/
 │               ├── guard.html          # config-shape guard
 │               ├── listparam.html      # list-valued config key normalizer
 │               ├── record.html         # per-page index record builder
+│               ├── record-json.html    # serializes one record, identity first, body last
 │               ├── headings.html       # heading-tree walker
 │               ├── build-time.html     # the index `generated` stamp: sibling module first
 │               └── build-time-value.html # its fallback, for a search-only site

@@ -63,8 +63,18 @@ stop_hugo() {
     kill "$HUGO_PID" 2>/dev/null || true
     HUGO_PID=""
   fi
-  # Belt-and-suspenders: kill any hugo process that survived parent shell termination.
-  pkill hugo 2>/dev/null || true
+  # Belt-and-suspenders: kill any hugo process that survived parent shell
+  # termination. Git Bash on Windows ships neither pgrep nor pkill, so this
+  # falls back to the Windows-native equivalent -- without it the branch
+  # silently no-ops and every run leaks an orphaned hugo.exe, which the
+  # PRE-LAUNCH check below (which does have the tasklist fallback) then
+  # correctly refuses to run against. The asymmetry made the runner abort on
+  # a process it had leaked itself.
+  if command -v pkill >/dev/null 2>&1; then
+    pkill hugo 2>/dev/null || true
+  else
+    taskkill //F //IM hugo.exe >/dev/null 2>&1 || true
+  fi
   # Wait for the port to be released (up to 5s) so the next pass's pre-launch
   # check does not false-fail.
   if command -v lsof >/dev/null 2>&1; then

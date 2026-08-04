@@ -65,7 +65,7 @@
     {{- end }}
     {{- if .hasCitations }}
     <span class="arxiv-paper__meta-item arxiv-paper__citations" data-arxiv-metrics-asof="{{ $.metricsAsOf }}">
-      {{- partial "arxiv-paper/icon.html" (dict "name" "quote" "class" "arxiv-paper__icon") }} {{ partial "arxiv-paper/compact-number.html" .citationCount }} citations
+      {{- partial "arxiv-paper/icon.html" (dict "name" "quote" "class" "arxiv-paper__icon") }} {{ partial "arxiv-paper/compact-number.html" .citationCount }} {{ T "arxiv_paper_citations_word" (cond (lt .citationCount 1000) .citationCount 1000) | default "citations" }}
     </span>
     {{- end }}
   </div>

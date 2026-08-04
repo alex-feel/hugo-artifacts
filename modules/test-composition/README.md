@@ -1,12 +1,12 @@
 # Cross-module composition test suite
 
-Node build-output assertions for the ONE surface that `modules/seo`, `modules/agent-readiness` and `modules/search` share: the consuming site's single `[outputs]` table. This directory is a test suite, not a Hugo module -- it ships no `layouts/`, no `assets/` and no `go.mod` of its own, and nothing imports it. Only [`fixture/`](fixture/) carries a `go.mod`, because a Hugo consumer site needs one.
+Node build-output assertions for the ONE surface that `modules/seo`, `modules/agent-readiness`, `modules/search` and `modules/pwa` share: the consuming site's single `[outputs]` table. This directory is a test suite, not a Hugo module -- it ships no `layouts/`, no `assets/` and no `go.mod` of its own, and nothing imports it. Only [`fixture/`](fixture/) carries a `go.mod`, because a Hugo consumer site needs one.
 
 ## Why this suite exists
 
 Each module is proven on its own by its own suite, against a fixture that imports that module alone. No single-module fixture can see what happens when a site imports two or three of them at once, and that is exactly where the modules interact:
 
-- `[outputFormats]` and `[mediaTypes]` shipped in a module's `hugo.toml` merge ADDITIVELY into the consumer configuration. A site that imports `agent-readiness` and `search` can name `llmstxt`, `llmsindex`, `agentfacts`, `agentskills`, `searchindex` and `opensearch` without defining any of them.
+- `[outputFormats]` and `[mediaTypes]` shipped in a module's `hugo.toml` merge ADDITIVELY into the consumer configuration. A site that imports `agent-readiness` and `search` can name `llmstxt`, `llmsindex`, `agentfacts`, `agentskills`, `searchindex` and `opensearch` without defining any of them. `pwa` needs one more name in the same list, `webappmanifest`, and defines no `[outputFormats]` table for it because that format is one of Hugo's own -- so nothing in a module configuration announces it, and only this README and the suite's built-in list carry it.
 - `[outputs]` does NOT. Hugo replaces the output list per page kind rather than merging it, and a module's own `[outputs]` table never reaches the consumer configuration at all, so every module README has to show an `[outputs]` block of its own.
 
 A consumer who follows two of those READMEs literally lands in one of two states. Two `[outputs]` tables in one file is a hard configuration-load failure (`unmarshal failed: toml: table outputs already exists`), which is loud and self-correcting. One table replacing the other loads cleanly, exits 0, prints no warning -- and silently stops publishing every document the replaced list asked for. The second shape is what this suite catches.
@@ -15,9 +15,9 @@ A consumer who follows two of those READMEs literally lands in one of two states
 
 | Assertion | What it holds |
 | --- | --- |
-| every module document is published side by side | `/llms.txt`, `/llms-index.txt`, `/about.md`, `/index.md`, `/searchindex.json`, `/opensearch.xml`, `/robots.txt` and `/index.html` all exist, non-empty, out of ONE build |
-| the merged home list carries every format the three modules define | the list is checked against the `[outputFormats.*]` names read out of `modules/agent-readiness/hugo.toml` and `modules/search/hugo.toml`, so a module that adds a format a consumer must wire fails here until the fixture wires it |
-| exactly one `[outputs]` table | the merged single table is the only shape that can hold all three modules |
+| every module document is published side by side | `/llms.txt`, `/llms-index.txt`, `/about.md`, `/index.md`, `/searchindex.json`, `/opensearch.xml`, `/robots.txt`, `/manifest.webmanifest` and `/index.html` all exist, non-empty, out of ONE build |
+| the merged home list carries every format the modules define | the list is checked against the `[outputFormats.*]` names read out of `modules/agent-readiness/hugo.toml` and `modules/search/hugo.toml`, plus the built-in names a replacing list drops (`html`, `rss`, `markdown`, and `webappmanifest` for `pwa`), so a module that adds a format a consumer must wire fails here until the fixture wires it |
+| exactly one `[outputs]` table | the merged single table is the only shape that can hold all four modules |
 | the twins describe the page the index holds | the agent-readiness `llms.txt` / `about.md` entries and the search index record name the same page |
 | the seo head surface and the search body markup coexist | the seo module contributes head markup only, so its composition evidence is that its markup renders on the same page through the same `baseof.html` |
 | ONE build stamp reaches every dated document | the twins' `build_time`, both link indexes' and `/about.md`'s `> Build time:` line, and the search index's `generated` field are one string, although two different modules write them |
@@ -40,4 +40,4 @@ modules\test-composition\run-tests.cmd
 
 Either script performs the pre-launch hugo process check, builds `fixture/` once into `fixture/public/`, fails on any deprecation or error line in `hugo-build.log`, and then runs the specs against the published tree. The suite has no npm dependencies: `node --test` and `node:assert` are enough, so no `npm install` is needed in this directory.
 
-The fixture resolves the three modules through `fixture/hugo.work` plus a `replace` in `fixture/go.mod`, both pointing at the sibling module directories in this repository, so the suite always tests the working tree rather than a published tag.
+The fixture resolves the four modules through `fixture/hugo.work` plus a `replace` in `fixture/go.mod`, both pointing at the sibling module directories in this repository, so the suite always tests the working tree rather than a published tag.

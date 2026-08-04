@@ -1,0 +1,7 @@
+# Hugo arxiv-paper module -- Russian UI strings.
+
+[arxiv_paper_citations_word]
+one = "цитирование"
+few = "цитирования"
+many = "цитирований"
+other = "цитирования"

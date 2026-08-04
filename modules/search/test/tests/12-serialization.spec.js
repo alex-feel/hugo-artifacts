@@ -148,3 +148,41 @@ test('the document describes itself BEFORE it delivers itself', () => {
   ]);
   expect(raw.trimEnd().endsWith(']}'), 'the document must close on the docs array').toBe(true);
 });
+
+test('and so does every RECORD: identity first, indexed body last', () => {
+  // The same argument one level down, where the bytes actually are. A record
+  // is a Go map too, so it serialized alphabetically and `content` -- the
+  // indexed body, truncated to 8000 characters by default -- came SECOND,
+  // ahead of `href` and `title`. A reader working through a prefix of the
+  // docs array spent its whole budget inside one page's body without ever
+  // learning which page that body belonged to.
+  //
+  // This corpus is the right place to assert it: its single record carries a
+  // 3000-character unbroken run, so the gap between "first key" and "after
+  // the body" is thousands of bytes rather than a rounding error.
+  expect(serializationDir, 'the runner must export SERIALIZATION_DIR').toBeTruthy();
+  const raw = readFileSync(join(serializationDir, 'searchindex.json'), 'utf8');
+  const doc = JSON.parse(raw).docs.find((d) => d.href === '/blog/serialize/');
+  expect(doc, 'the probe page must be indexed').toBeTruthy();
+
+  const keys = Object.keys(doc);
+  expect(keys[0]).toBe('href');
+  expect(keys[1]).toBe('title');
+  expect(keys[keys.length - 1]).toBe('content');
+
+  // The taxonomy arrays are the reason this is three buckets and not one
+  // list: their names come from consumer configuration, so they cannot be
+  // enumerated in the template. They belong between the identity fields and
+  // the bulk ones, and never after the body.
+  for (const taxonomy of ['tags', 'categories']) {
+    expect(keys, `${taxonomy} must be present in this corpus`).toContain(taxonomy);
+    expect(keys.indexOf(taxonomy)).toBeGreaterThan(keys.indexOf('href'));
+    expect(keys.indexOf(taxonomy)).toBeLessThan(keys.indexOf('content'));
+  }
+
+  // The byte-level consequence, and the guard that keeps it meaningful: the
+  // body really is long here, so reaching `href` after it would have cost
+  // thousands of bytes.
+  expect(doc.content.length).toBeGreaterThan(3000);
+  expect(raw.indexOf('"href":')).toBeLessThan(raw.indexOf('"content":'));
+});

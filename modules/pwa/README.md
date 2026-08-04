@@ -27,6 +27,21 @@ theme_color = "#3367d6"
 background_color = "#ffffff"
 ```
 
+### Combining this module with other modules that wire output formats
+
+This module needs `webappmanifest` in your `home` output list, and your site configuration holds exactly ONE `[outputs]` table whose lists are the union of every module's needs. A second `[outputs]` table in the same file fails the configuration load outright (`unmarshal failed: toml: table outputs already exists`); pasting one module README's `[outputs]` block over another's leaves a single table that loads cleanly, exits 0, warns about nothing -- and silently stops publishing every document the replaced list asked for. That silent shape is the dangerous one, and it cuts both ways here: copy this module's block over another's and you lose that module's documents; copy another's over this one's and the manifest stops being generated, which takes installability with it. So do not copy any module's block wholesale into a site that already has one: MERGE the names into the list already there.
+
+A site importing this module together with [`seo`](../seo/README.md), [`agent-readiness`](../agent-readiness/README.md) and [`search`](../search/README.md) wires all of them at once:
+
+```toml
+[outputs]
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills', 'searchindex', 'opensearch', 'webappmanifest']
+  section = ['html', 'rss', 'markdown']
+  page = ['html', 'markdown']
+```
+
+Only `[outputs]` needs this care: `[outputFormats]` and `[mediaTypes]` DO merge additively from module configuration, which is why the format names above are usable although the site defines none of them -- and `webappmanifest` needs no definition at all, because it is one of Hugo's built-in formats. The combination is covered by the cross-module suite in [`modules/test-composition/`](../test-composition/README.md).
+
 In your `layouts/baseof.html` `<head>`:
 
 ```go-html-template
@@ -116,7 +131,7 @@ If you are already on a subpath and were compensating by hand -- writing `sw_pat
 | `href` | string | `"/manifest.webmanifest"` | Path of the manifest file, used in `rfg-static` mode. Override only if you change the output route. Site-root-relative: normalized against `baseURL`. |
 | `name` | string | `""` | Falls back to `site.Title` if empty. PWA install prompt uses this. |
 | `short_name` | string | `""` | Home-screen label. Falls back to `name` if empty. |
-| `description` | string | `""` | Falls back to `site.Params.description`. |
+| `description` | string | `""` | Falls back to `site.Params.description`. Omitted from the manifest entirely when both are empty, rather than emitted as `null`: the specification types this member as a string, so a processor discards a null and a schema validator rejects it -- a lint failure the consumer did not cause. |
 | `display` | string | `"standalone"` | Top-level `display` mode for legacy clients. |
 | `display_override` | array | `["window-controls-overlay", "standalone", "minimal-ui"]` | Modern fallback chain. First-supported wins. |
 | `theme_color` | string | `"#ffffff"` | UI accent color. Use `params.pwa.favicon.theme_color.{light,dark}` for paired values. |
@@ -126,7 +141,13 @@ If you are already on a subpath and were compensating by hand -- writing `sw_pat
 | `id` | string | `"/"` | Stable PWA identity per W3C. **Set once, never change** (changing breaks reinstalls). Site-root-relative: normalized against `baseURL` -- see [Paths and subpath deployments](#paths-and-subpath-deployments-baseurl-with-a-path) for why, and for how to pin a historical value. |
 | `lang` | string | `""` | BCP47 language tag. Falls back to `site.Language.Lang`. |
 | `dir` | string | `""` | Text direction (`ltr`, `rtl`, `auto`). |
-| `categories` | array | `[]` | Optional W3C category tags (see [W3C Manifest spec](https://w3c.github.io/manifest/)). |
+| `categories` | array | `[]` | Optional W3C category tags (see [W3C Manifest spec](https://w3c.github.io/manifest/)). Must be a LIST: the member is typed as a sequence, so a single value written for it (`categories = "news"` rather than `["news"]`) is ignored with one build warning rather than published as a JSON string a validator rejects. |
+
+### Manifest member order
+
+The manifest is emitted identity first and `icons` last: `name`, `short_name`, `id`, `description`, `lang`, `dir`, `start_url`, `scope`, `display`, `display_override`, `theme_color`, `background_color`, `categories`, `icons`. JSON member order carries no semantics, so nothing that parses a manifest can observe this -- it is for readers that do not parse the whole file. Serialized as one Go map the members came out alphabetically, which led with `background_color` and pushed every member that says WHAT THE APP IS behind the `icons` array; that array is consumer-supplied and unbounded, so with a generated favicon set of ten or more entries the app name sat seventy lines into a document whose first screen is icon paths.
+
+Optional members are omitted when they carry no value rather than emitted null or empty, so the document contains only members that say something.
 
 ### Manifest icons (`params.pwa.manifest.icons.*`)
 

@@ -192,6 +192,23 @@ test.describe('search index envelope', () => {
         'docCount',
         'docs',
       ]);
+      // Every record leads with what identifies it. Asserted over the whole
+      // corpus rather than on one probe, because the member list varies per
+      // record -- a page without a date, a description, an image or a
+      // taxonomy term simply omits those members, and the order has to hold
+      // for each shape.
+      for (const doc of JSON.parse(raw).docs) {
+        const keys = Object.keys(doc);
+        expect(keys[0], `${doc.href} must lead with href`).toBe('href');
+        expect(keys[1], `${doc.href} must name itself second`).toBe('title');
+        if (keys.includes('content')) {
+          expect(keys[keys.length - 1], `${doc.href} must trail with its body`).toBe('content');
+        }
+      }
+      // At the byte level, for the first record: the array opens straight
+      // onto an identity, which is what a reader sampling the front gets.
+      expect(raw.slice(raw.indexOf('"docs":')).startsWith('"docs":[{"href":')).toBe(true);
+
       expect(raw.indexOf('"docs":'), `${path} puts docs last`).toBe(
         Math.max(
           ...['schemaVersion', 'generated', 'lang', 'digest', 'docCount', 'docs'].map((k) =>
