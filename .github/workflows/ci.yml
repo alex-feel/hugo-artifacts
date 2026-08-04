@@ -1,10 +1,13 @@
 name: CI
 
 on:
+  # Pull requests only. A merge into main produces a commit whose TREE is
+  # identical to the head that was just tested, so a push trigger re-runs
+  # every suite over bytes that already passed minutes earlier -- the same
+  # waste as testing on a timer, for the same reason: the code did not change
+  # between the two runs. Keep pull requests required to be up to date with
+  # main, and the merged result is the tree the pull request run covered.
   pull_request:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
