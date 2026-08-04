@@ -171,4 +171,34 @@ test.describe('search index envelope', () => {
     expect(morph.content).toContain('ёлка');
     expect(morph.content).toContain('Компас');
   });
+
+  test('every language SERVES its metadata before its payload', async ({request}) => {
+    // The order over the wire, in both languages, on the document a client
+    // actually fetches. The byte-level treatment lives in the serialization
+    // spec; this one exists because a reader meets the index HERE, and
+    // because the emitter builds the member list per render -- a language
+    // whose branch diverged would still parse, and would still pass every
+    // value assertion above.
+    for (const path of ['/searchindex.json', '/ru/searchindex.json']) {
+      const raw = await (await request.get(path)).text();
+      // JSON member order carries no semantics, so a parser cannot see this
+      // and no consumer can be broken by it -- but JSON.parse preserves
+      // insertion order for string keys, which makes the order readable.
+      expect(Object.keys(JSON.parse(raw)), `${path} member order`).toEqual([
+        'schemaVersion',
+        'generated',
+        'lang',
+        'digest',
+        'docCount',
+        'docs',
+      ]);
+      expect(raw.indexOf('"docs":'), `${path} puts docs last`).toBe(
+        Math.max(
+          ...['schemaVersion', 'generated', 'lang', 'digest', 'docCount', 'docs'].map((k) =>
+            raw.indexOf(`"${k}":`),
+          ),
+        ),
+      );
+    }
+  });
 });

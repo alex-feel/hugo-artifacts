@@ -3,15 +3,14 @@
 
   Rendered once per language into that language's URL tree
   (/searchindex.json, /ru/searchindex.json) because Hugo renders the home
-  page's output formats per language. The whole document is ONE Go dict
-  serialized with a single jsonify call -- never hand-assembled JSON.
-  noHTMLEscape is safe for a standalone .json file and smaller; the envelope
-  must not be inlined into a <script> tag as-is.
+  page's output formats per language.
 
-  Envelope (schemaVersion 1): schemaVersion, lang, generated (the BUILD's
-  RFC 3339 timestamp, data-only, excluded from the digest), docCount, digest
-  (xxHash of the serialized docs -- the content signal the client-side cache
-  key requires, because this URL is stable rather than fingerprinted), docs.
+  Envelope (schemaVersion 1), in the order it is emitted and for the reason
+  documented at the emission site below -- metadata first, payload last:
+  schemaVersion, generated (the BUILD's RFC 3339 timestamp, data-only,
+  excluded from the digest), lang, digest (xxHash of the serialized docs --
+  the content signal the client-side cache key requires, because this URL is
+  stable rather than fingerprinted), docCount, docs.
 
   `generated` answers what `digest` cannot. A digest says "is this
   different"; it cannot say "which one is newer", and a client holding a
@@ -116,12 +115,41 @@
     {{- end -}}
   {{- end -}}
 {{- end -}}
-{{- $envelope := dict
-  "schemaVersion" 1
-  "lang" site.Language.Name
-  "generated" (partial "search/lib/build-time.html" .)
-  "docCount" (len $docs)
-  "digest" (hash.XxHash ($docs | jsonify))
-  "docs" $docs
+{{/* The envelope is emitted member by member, in a FIXED order, because the
+     order is load-bearing and a Go map cannot carry one: jsonify serializes
+     map keys alphabetically, which put `docs` third and left `generated`,
+     `lang` and `schemaVersion` behind a payload that reaches hundreds of
+     kilobytes on a real site. Every reader that samples this document from
+     the front -- a curl piped to head, a truncated preview, a streaming
+     parser, an agent working to a context budget -- then finds `digest` and
+     `docCount`, finds no timestamp, and concludes there is none. That is not
+     hypothetical: two independent readers reached exactly that conclusion
+     three times over, and the second of them re-checked after the field was
+     added and reported it still missing. The stamp exists to be cheaper than
+     reading the document; behind the payload it is strictly more expensive.
+
+     So: every field that DESCRIBES the document precedes the field that IS
+     the document. JSON member order carries no semantics, so nothing that
+     parses this file can notice the change, and the only readers affected
+     are the ones that never reach the end.
+
+     Every VALUE goes through jsonify, so escaping, quoting and number
+     formatting stay the encoder's job -- the only characters written by hand
+     are the braces, colons, commas and the six key names, which are fixed
+     ASCII literals. The serialization suite reads these bytes against a
+     corpus of quotes, ampersands, backslashes, newlines and non-ASCII for
+     exactly that reason. `noHTMLEscape` is safe for a standalone .json file
+     and smaller; the envelope must not be inlined into a <script> tag as-is.
+     The digest's input is deliberately NOT this serialization: it stays the
+     default-escaped jsonify of the docs alone, unchanged, so no cached
+     client sees a digest move for a reason that is not a content change. */}}
+{{- $json := dict "noHTMLEscape" true -}}
+{{- $members := slice
+  (printf `"schemaVersion":%s` (jsonify $json 1))
+  (printf `"generated":%s` (jsonify $json (partial "search/lib/build-time.html" .)))
+  (printf `"lang":%s` (jsonify $json site.Language.Name))
+  (printf `"digest":%s` (jsonify $json (hash.XxHash ($docs | jsonify))))
+  (printf `"docCount":%s` (jsonify $json (len $docs)))
+  (printf `"docs":%s` (jsonify $json $docs))
 -}}
-{{- $envelope | jsonify (dict "noHTMLEscape" true) -}}
+{{- printf "{%s}" (delimit $members ",") -}}

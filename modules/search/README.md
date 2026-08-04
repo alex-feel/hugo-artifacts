@@ -101,15 +101,23 @@ The index template emits one envelope per language (`/searchindex.json`, `/ru/se
 ```json
 {
   "schemaVersion": 1,
-  "lang": "en",
   "generated": "2026-07-10T12:00:00Z",
-  "docCount": 79,
+  "lang": "en",
   "digest": "8d9bb85f86b9ee73",
+  "docCount": 79,
   "docs": []
 }
 ```
 
 `schemaVersion` is the compatibility contract between the emitted index and the module script: the client validates it and degrades predictably on a mismatch (skewed deploys), and it reserves headroom for future shape evolution such as sharding. `digest` is a content hash of the serialized records; the client-side cache key requires it because the index URL is stable rather than fingerprinted. All fields are DATA ONLY -- no pre-rendered HTML ever enters the index -- and the envelope must not be inlined into a `<script>` tag as-is (it is serialized without HTML escaping, which is safe only for a standalone `.json` file).
+
+### Member order is part of the format: metadata first, payload last
+
+**The members are emitted in the order shown above, and `docs` is always last.** That is a deliberate property of the document, not an artifact of how it happens to serialize: every field that DESCRIBES the index precedes the field that IS the index, so a reader learns the schema version, the build time, the language, the content digest and the record count from roughly the first hundred bytes -- whatever the payload weighs.
+
+It is a fix for a failure that was observed rather than imagined. Serialized as one Go map, the members came out alphabetically, which put `docs` third and left `generated`, `lang` and `schemaVersion` behind it -- on a quarter-megabyte index, sixty-five bytes from the end of the file. Capable readers inspected such a document three times between them and reported the build stamp missing every time, once after the field had already been added. The mechanism is ordinary and applies to every large JSON document: a reader samples it from the front. A `curl` piped to `head`, a truncated preview, a streaming parser surfacing early keys, an agent reading a prefix under a context budget -- each finds `digest` and `docCount` and stops long before the end. Metadata behind the payload is metadata only a full parse recovers, and a full parse of a quarter-megabyte index is exactly what a reader asking "is my copy current" is trying to avoid. A build stamp that costs more to read than the document it describes has no reason to exist.
+
+What you may rely on is the guarantee, not the sequence: **every metadata member precedes `docs`, and nothing follows it.** JSON member order carries no semantics, so a parser cannot observe any of this and no consumer can be broken by it; the order exists entirely for readers that never reach the end. The exact sequence above is what the module emits today and the test suite pins it, so a refactor that rebuilds the envelope as a map is a failing build rather than a silent regression -- but a consumer should read fields by name, as it would from any JSON.
 
 ### `generated` answers what `digest` cannot
 

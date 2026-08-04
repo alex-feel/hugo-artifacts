@@ -90,7 +90,61 @@ test('the emitted index is valid JSON with no double encoding', () => {
   // JSON.parse already proved the document is well formed; these check that
   // the encoder ran exactly once, so a reader does not have to unescape
   // twice to recover the author's text.
+  //
+  // These are also what makes the envelope's hand-written frame safe. The
+  // template emits its six members in a fixed order rather than serializing
+  // one Go map, because a map cannot carry an order -- but every VALUE still
+  // goes through the encoder, and this corpus of quotes, ampersands,
+  // backslashes, newlines and non-ASCII is precisely the input that would
+  // expose a frame that started escaping by hand.
   for (const bad of ['&amp;#', '&amp;lt;', '&amp;amp;', '\\\\"q\\\\"']) {
     expect(raw).not.toContain(bad);
   }
+});
+
+// The number of leading bytes a reader should have to spend to learn what
+// this document is and when it was built. The real document is a quarter of
+// a megabyte; the metadata is a fixed-size prefix regardless.
+const HEAD_BUDGET = 200;
+
+test('the document describes itself BEFORE it delivers itself', () => {
+  expect(serializationDir, 'the runner must export SERIALIZATION_DIR').toBeTruthy();
+  const raw = readFileSync(join(serializationDir, 'searchindex.json'), 'utf8');
+
+  // Position, not presence -- and the distinction is the whole test. The
+  // fields were present all along, sixty-five bytes from the end of a
+  // quarter-megabyte document, and capable readers inspected it three times
+  // between them and reported the build stamp missing. A large JSON document
+  // gets sampled from the front: a curl piped to head, a truncated preview,
+  // a streaming parser surfacing early keys, an agent reading a prefix under
+  // a context budget. Every one of those found `digest` and `docCount` and
+  // stopped. A presence assertion passes against all of it.
+  const docsAt = raw.indexOf('"docs":');
+  expect(docsAt).toBeGreaterThan(0);
+  expect(docsAt, `the whole metadata block must fit in ${HEAD_BUDGET} bytes`).toBeLessThan(
+    HEAD_BUDGET,
+  );
+  for (const key of ['schemaVersion', 'generated', 'lang', 'digest', 'docCount']) {
+    const at = raw.indexOf(`"${key}":`);
+    expect(at, `"${key}" must be present`).toBeGreaterThan(0);
+    expect(at, `"${key}" must precede the payload`).toBeLessThan(docsAt);
+  }
+
+  // And the guard that keeps the budget meaningful: a document short enough
+  // to fit inside it would satisfy the assertions above no matter where its
+  // members sat. This corpus carries a 3000-character run for that reason.
+  expect(raw.length).toBeGreaterThan(HEAD_BUDGET * 10);
+
+  // `docs` is the LAST member. JSON.parse preserves insertion order for
+  // string keys, so the parsed key list IS the emitted order -- which also
+  // states, in one line, that nothing new may be appended after the payload.
+  expect(Object.keys(JSON.parse(raw))).toEqual([
+    'schemaVersion',
+    'generated',
+    'lang',
+    'digest',
+    'docCount',
+    'docs',
+  ]);
+  expect(raw.trimEnd().endsWith(']}'), 'the document must close on the docs array').toBe(true);
 });
