@@ -1,0 +1,64 @@
+# Fixture site for the shortcode smoke suite.
+#
+# It imports the five shortcode modules that ship no suite of their own and
+# invokes each one once, so that something in this repository renders their
+# templates and asserts what comes out.
+#
+# EVERY ONE of these modules fetches remote data at build time and is required
+# by this repository's conventions to degrade gracefully rather than fail. That
+# makes their ENRICHED output non-deterministic here -- it depends on whether
+# the runner has network, whether a proxy answers, and whether Hugo's resource
+# cache already holds a response -- so the assertions are written against what
+# is true in BOTH modes. See the suite README.
+baseURL = 'https://smoke.example/'
+title = 'Shortcode Smoke Fixture'
+locale = 'en-us'
+
+# The render timeout, raised well above Hugo's 60s default. Three of these
+# modules budget around 30s per fetch attempt, and a BLACK-HOLED network (a
+# host that neither resolves fast nor refuses, which is what a restricted CI
+# egress looks like) burns that budget before degrading. At the default the
+# page dies with "timed out rendering the page", which is a hard build failure
+# that graceful degradation cannot rescue.
+timeout = '300s'
+
+disableKinds = ['taxonomy', 'term', 'rss', 'sitemap', '404']
+
+# The home page also renders as Markdown, which is what selects each module's
+# <name>.markdown.md variant over its HTML entry template. An [outputs] list
+# REPLACES the default for its page kind, so 'html' is restated here.
+[outputs]
+  home = ['html', 'markdown']
+
+[module]
+
+  [module.hugoVersion]
+    min = "0.160.0"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/shortcodes/arxiv-paper"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/shortcodes/callout"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/shortcodes/github-repo"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/shortcodes/hf-space"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/shortcodes/youtube-embed"
+
+# arXiv answers application/atom+xml, which is not one of the media types
+# Hugo's default security policy lets resources.GetRemote accept. A module
+# cannot ship this -- security policy is resolved from the SITE configuration
+# only -- so a consuming site must add it, and this fixture models one that
+# did. The entry is additive -- it does not restrict the application/json
+# responses github-repo and hf-space rely on -- and deliberately UNANCHORED at
+# the end, because the response carries a `; charset=utf-8` suffix that a
+# trailing `$` defeats.
+[security]
+
+  [security.http]
+    mediaTypes = ['^application/atom\+xml']

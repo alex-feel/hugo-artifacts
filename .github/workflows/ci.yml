@@ -98,6 +98,7 @@ jobs:
             modules/agent-readiness/test/fixture-extra
             modules/copy-page/test/fixture
             shortcodes/github-profile/test/fixture
+            shortcodes/test-smoke/fixture
             modules/test-composition/fixture
           )
           for leaf in "${leaves[@]}"; do
@@ -257,6 +258,9 @@ jobs:
             dir: shortcodes/github-profile/test
             run: bash run-tests.sh
             deps: true
+          - name: shortcode-smoke
+            dir: shortcodes/test-smoke
+            run: bash run-tests.sh
           - name: composition
             dir: modules/test-composition
             run: bash run-tests.sh

@@ -1,0 +1,8 @@
+go 1.22
+
+use ./
+use ../../arxiv-paper
+use ../../callout
+use ../../github-repo
+use ../../hf-space
+use ../../youtube-embed
