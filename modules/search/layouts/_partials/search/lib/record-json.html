@@ -1,0 +1,67 @@
+{{/*
+  search/lib/record-json.html -- INTERNAL (lib tier).
+
+  Purpose: serializes ONE index record to a JSON object with its members in a
+  chosen order, identity first and the indexed body last.
+
+  WHY THIS EXISTS AT ALL. A record is built as a Go dict, and jsonify
+  serializes a map's keys ALPHABETICALLY, which put `content` -- the indexed
+  body, truncated to content_max_length and 8000 characters by default --
+  second, ahead of `href` and `title`. Nothing that parses the index notices,
+  because member order carries no meaning to a parser. What notices is a
+  reader that does NOT parse the whole document: a curl piped to head, a
+  truncated preview, a streaming parser, an agent working to a context
+  budget. Such a reader spends its entire budget inside the first record's
+  body text and never learns which page that body belongs to. The envelope
+  was fixed for exactly this reason one level up; a record's own members are
+  where the bytes actually are.
+
+  So: identity and display fields first, the bulk fields last. A reader who
+  gets ten kilobytes of this array now learns what several dozen documents
+  ARE, instead of reading one document's body.
+
+  THE ORDER IS THREE BUCKETS, not one list, because a record's key set is not
+  fixed: one array per CONFIGURED taxonomy joins it under a name the
+  consuming site chooses. HEAD and TAIL name the members this module knows;
+  everything else -- the taxonomies today, any field added later -- lands in
+  the middle, in Hugo's sorted map order. `content` is therefore last by
+  construction rather than by remembering to keep it there, and a new field
+  cannot displace it.
+
+  Keys go through jsonify like values do, because a taxonomy name comes from
+  consumer configuration and this template does not get to assume its
+  spelling.
+
+  Expected context (dict):
+  - .record (map) - One record from search/lib/record.html.
+  - .opts   (map) - The jsonify options the index emits with, so this
+    serialization matches the envelope's byte for byte.
+
+  Return value: one JSON object string, no surrounding whitespace. One
+  terminal return.
+*/}}
+
+{{- $record := .record -}}
+{{- $opts := .opts -}}
+
+{{- $head := slice "href" "title" "section" "sectionTitle" "date" "description" "image" "keywords" -}}
+{{- $tail := slice "summary" "headings" "content" -}}
+
+{{- $members := slice -}}
+{{- range $key := $head -}}
+  {{- if isset $record $key -}}
+    {{- $members = $members | append (printf "%s:%s" (jsonify $opts $key) (jsonify $opts (index $record $key))) -}}
+  {{- end -}}
+{{- end -}}
+{{- range $key, $value := $record -}}
+  {{- if and (not (in $head $key)) (not (in $tail $key)) -}}
+    {{- $members = $members | append (printf "%s:%s" (jsonify $opts $key) (jsonify $opts $value)) -}}
+  {{- end -}}
+{{- end -}}
+{{- range $key := $tail -}}
+  {{- if isset $record $key -}}
+    {{- $members = $members | append (printf "%s:%s" (jsonify $opts $key) (jsonify $opts (index $record $key))) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return (printf "{%s}" (delimit $members ",")) -}}

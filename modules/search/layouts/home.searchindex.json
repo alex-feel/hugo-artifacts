@@ -33,7 +33,17 @@
 {{- $cfg := partial "search/config.html" (dict "page" . "site_only" true) -}}
 {{- $searchPagePath := "" -}}
 {{- with site.GetPage $cfg.page_path -}}{{- $searchPagePath = .Path -}}{{- end -}}
+{{- $json := dict "noHTMLEscape" true -}}
+{{/* Two representations of the same records, and both are load-bearing.
+     $docs holds the record DICTS and feeds the digest, whose definition is
+     frozen: the default-escaped jsonify of this slice, so a rebuild that
+     changed no content leaves every client's cache key alone. $docsJson
+     holds each record already serialized with its members in a chosen
+     order, which is what actually reaches the file -- see
+     search/lib/record-json.html for why a record's own member order is
+     worth this much machinery. */}}
 {{- $docs := slice -}}
+{{- $docsJson := slice -}}
 {{/* Scratch, not a dict accumulator: the sentinel needs EXACT-key
      lookups on both sides, and merge folds map keys case-insensitively,
      so a case-variant href would swallow a later true duplicate's
@@ -111,6 +121,7 @@
       {{- else -}}
         {{- $seen.Set $record.href true -}}
         {{- $docs = $docs | append $record -}}
+        {{- $docsJson = $docsJson | append (partial "search/lib/record-json.html" (dict "record" $record "opts" $json)) -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}
@@ -133,23 +144,28 @@
      parses this file can notice the change, and the only readers affected
      are the ones that never reach the end.
 
+     The SAME argument applies one level down, to a record's own members,
+     which is why `docs` is joined from records that search/lib/record-json.html
+     already serialized rather than handed whole to jsonify: a record is a
+     map too, and alphabetical order put its indexed body ahead of its href
+     and title.
+
      Every VALUE goes through jsonify, so escaping, quoting and number
      formatting stay the encoder's job -- the only characters written by hand
-     are the braces, colons, commas and the six key names, which are fixed
-     ASCII literals. The serialization suite reads these bytes against a
+     are the braces, brackets, colons, commas and the six key names, which are
+     fixed ASCII literals. The serialization suite reads these bytes against a
      corpus of quotes, ampersands, backslashes, newlines and non-ASCII for
      exactly that reason. `noHTMLEscape` is safe for a standalone .json file
      and smaller; the envelope must not be inlined into a <script> tag as-is.
      The digest's input is deliberately NOT this serialization: it stays the
      default-escaped jsonify of the docs alone, unchanged, so no cached
      client sees a digest move for a reason that is not a content change. */}}
-{{- $json := dict "noHTMLEscape" true -}}
 {{- $members := slice
   (printf `"schemaVersion":%s` (jsonify $json 1))
   (printf `"generated":%s` (jsonify $json (partial "search/lib/build-time.html" .)))
   (printf `"lang":%s` (jsonify $json site.Language.Name))
   (printf `"digest":%s` (jsonify $json (hash.XxHash ($docs | jsonify))))
   (printf `"docCount":%s` (jsonify $json (len $docs)))
-  (printf `"docs":%s` (jsonify $json $docs))
+  (printf `"docs":[%s]` (delimit $docsJson ","))
 -}}
 {{- printf "{%s}" (delimit $members ",") -}}
