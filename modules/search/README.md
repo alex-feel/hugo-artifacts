@@ -111,6 +111,18 @@ The index template emits one envelope per language (`/searchindex.json`, `/ru/se
 
 `schemaVersion` is the compatibility contract between the emitted index and the module script: the client validates it and degrades predictably on a mismatch (skewed deploys), and it reserves headroom for future shape evolution such as sharding. `digest` is a content hash of the serialized records; the client-side cache key requires it because the index URL is stable rather than fingerprinted. All fields are DATA ONLY -- no pre-rendered HTML ever enters the index -- and the envelope must not be inlined into a `<script>` tag as-is (it is serialized without HTML escaping, which is safe only for a standalone `.json` file).
 
+### `generated` answers what `digest` cannot
+
+`digest` says **"is this different"**. It cannot say **"which one is newer"**, and for a client holding a cached copy the direction is the whole question: is MY copy the stale one. Two opaque hashes that disagree cannot answer that; a timestamp can. It matters most for this document of all the ones a site publishes, because the index is the largest single machine artifact here and therefore the one a fetcher is most likely to keep and reuse -- and a stale copy fails silently in the worst way, returning confident results from a corpus that no longer exists.
+
+**The value is a property of the BUILD, not of the moment a document rendered.** It is constant for the whole build and identical in every language's index, so `/searchindex.json` and `/ru/searchindex.json` of one deploy carry the same string. That is not cosmetic: two documents of one deploy stamped seconds apart report drift that is not there, which is strictly worse than shipping no field at all.
+
+`generated` is excluded from `digest`, deliberately. The digest is the client's cache key for the CORPUS, so a rebuild that changed no content keeps it stable even though the document's bytes moved.
+
+**Where the value comes from, and why.** When the sibling [`agent-readiness`](../agent-readiness/README.md) module is present -- the site imports it, or overrides the partial path itself -- this module reads its public `agent-readiness/build-time.html`, so a site running both gets ONE string across the Markdown twins, both link indexes, `/about.md`, its own HTML `<meta>` and this index. That is the entire point of a stamp: a reader compares surfaces. When the partial is absent, this module computes the value itself, with the same mechanism, and a search-only site gets a field that means exactly as much for it.
+
+The alternatives were weighed and rejected. **Requiring** the sibling module would mount its layouts into every search-only site, and it ships a `layouts/robots.txt` -- a site that imported this module for search alone would silently start serving a generated `robots.txt`. **Computing independently even when the sibling is present** would put two clocks in one build, which is precisely the drift the field exists to let a reader rule out. **Sharing one `hugo.Store` key** between the two modules would make them two concurrent first writers over a check-then-set that is not atomic: the same race, at lower odds, which is worse than none because it would fail rarely and inexplicably. Delegation leaves exactly one writer per build.
+
 Each record carries: `href` (the page's relative permalink; also the engine's document id), `title`, `section` and `sectionTitle` (grouping key and label), `date` (`YYYY-MM-DD`, omitted when the page has none), `description`, `summary` (truncated to `summary_max_length`), `keywords` (extra matching terms: front matter `search.keywords` when present, else the standard `keywords` front matter), one array per configured taxonomy (`tags`, `categories` by default), `content` (indexed body text, truncated to `content_max_length`; never stored client-side), `image` (only when `show_image` is enabled at the defaults or site tier), and `headings` (sub-records with `id`/`level`/`title`, only when `headings = true`).
 
 Authored strings reach the index exactly as written: `title`, `description` and `keywords` come straight from the front matter, so angle brackets, ampersands, quotation marks, backslashes, embedded newlines and non-ASCII all survive, and a title such as `Using <div> elements` is indexed under that spelling. Entity spellings are decoded in every text field the module composes -- the authored ones (`title`, `sectionTitle`, `description`, `keywords`) and the rendered ones (`summary`, `content`, the heading titles) alike -- so a title written `R&amp;D` is indexed as `R&D` and a result label reads as the page reads. The taxonomy arrays are the exception: they carry Hugo's own term titles verbatim, and Hugo title-cases a title it derives from the term name. The fields sourced from RENDERED markup -- `summary` and `content` -- are additionally stripped of tags, because there they are markup rather than text.
@@ -325,6 +337,8 @@ modules/search/
 │               ├── guard.html          # config-shape guard
 │               ├── listparam.html      # list-valued config key normalizer
 │               ├── record.html         # per-page index record builder
-│               └── headings.html       # heading-tree walker
+│               ├── headings.html       # heading-tree walker
+│               ├── build-time.html     # the index `generated` stamp: sibling module first
+│               └── build-time-value.html # its fallback, for a search-only site
 └── test/                               # Playwright suite + fixture (see test/README.md)
 ```

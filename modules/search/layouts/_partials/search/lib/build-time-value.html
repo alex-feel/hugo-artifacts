@@ -1,0 +1,50 @@
+{{/*
+  search/lib/build-time-value.html -- INTERNAL (lib tier).
+
+  Purpose: compute the build's timestamp ONCE and remember it in hugo.Store,
+  for a site that runs this module WITHOUT its sibling agent-readiness.
+
+  DO NOT CALL THIS DIRECTLY, and do not call it at all when
+  agent-readiness/build-time.html is available. search/lib/build-time.html is
+  the entry point: it prefers the sibling and wraps this in the
+  `partialCached` that makes the one-value-per-build guarantee hold. This file
+  on its own is only half of the mechanism, and the half that races.
+
+  WHY THE STORE AND NOT JUST `now`. A per-render `now` makes two documents of
+  one deploy disagree, which is the drift the field exists to let a reader
+  rule out. hugo.Store is global across every template for the duration of ONE
+  build and is not persisted between builds -- exactly the lifetime wanted:
+  one value within a build, a fresh value on the next.
+
+  WHY THE GET-THEN-SET IS SAFE ONLY UNDER THE WRAPPER. The check-then-set
+  below is not atomic and Hugo renders in parallel, so concurrent first
+  callers each pass the check. The sibling module measured a bare
+  check-then-set producing two different values in 6 of 12 builds of a
+  four-language site, and the same code under `partialCached` producing one
+  value in 12 of 12; see agent-readiness/build-time.html for the full record.
+
+  THE KEY IS THIS MODULE'S OWN, deliberately, and is never the sibling's. Two
+  modules sharing one key would be two writers racing over it; the sibling is
+  preferred by DELEGATION instead, which leaves exactly one writer per build.
+  A test fixture probes this key to prove which path a build took, so renaming
+  it is a deliberate act that updates the probe with it.
+
+  PRECISION. RFC 3339 with the offset, the same literal the sibling emits,
+  because the field's purpose is BYTE COMPARISON across surfaces of one
+  deploy: a form without the offset is ambiguous between machines, and a
+  date-only form cannot answer "am I holding this morning's cached copy".
+
+  Expected context: none is read; the wrapper passes a constant.
+
+  Return value: the build timestamp as an RFC 3339 string. ONE terminal
+  return.
+*/}}
+
+{{- $key := "search:build-time" -}}
+{{- $stamp := hugo.Store.Get $key -}}
+{{- if not $stamp -}}
+  {{- $stamp = now.Format "2006-01-02T15:04:05Z07:00" -}}
+  {{- hugo.Store.Set $key $stamp -}}
+{{- end -}}
+
+{{- return $stamp -}}
