@@ -44,7 +44,7 @@
 #                 the only build in which that conjunct alone decides whether
 #                 llms.txt names a twin, so deleting it from either emitter
 #                 changes a published byte;
-#   nobuildtime -- the three per-surface build_time switches set false on top
+#   nobuildtime -- the four per-surface build_time switches set false on top
 #                 of the default configuration, the only build in which those
 #                 switches decide a published byte: everywhere else the stamp
 #                 is on, so deleting a build_time conjunct from the twin

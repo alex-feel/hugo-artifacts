@@ -16,15 +16,49 @@
        the default language's file. A multilingual site emits the index once,
        from the default language.
 
+  THE `generated` KEY, emitted under cfg.skills_index.build_time (default
+  true), is this build's timestamp from the same agent-readiness/build-time.html
+  every other stamped surface reads, so it is byte-identical to every twin's
+  `build_time`, to both link indexes' and about.md's `> Build time:` line, and
+  to whatever a consuming site stamps its own surfaces with.
+
+  It answers what the per-skill `digest` cannot. A digest says "is this
+  different"; it never says "which one is NEWER", and a client holding a
+  cached index needs the direction to know whether ITS copy is the stale one.
+  That bites hardest here of all the module's surfaces: a stale index points
+  an agent at a skill body it believes is current, and the digest beside it
+  VERIFIES -- against the old bytes the client also cached. Index and body
+  stay perfectly self-consistent and both are out of date.
+
+  TOP LEVEL, not per skill: the document is published as a unit and its
+  entries never come from different builds, so a field per entry would be N
+  copies of one fact.
+
+  THE ADDED KEY IS SANCTIONED BY THE CONVENTION, not merely unvalidated. The
+  discovery draft states "Clients MUST ignore unrecognized fields" and says of
+  the schema URI that it "does not need to be resolvable" -- so `$schema`
+  stays EXACTLY as configured. It is an opaque version identifier there, and
+  clients "encountering an unrecognized $schema URI SHOULD warn the user and
+  SHOULD NOT process the index", which makes inventing a new value the one
+  genuinely unsafe move available. See the README for the full decision.
+
   The whole document is ONE Go dict serialized with a single jsonify call --
   never hand-assembled JSON. noHTMLEscape is safe and smaller for a
   standalone .json file; this envelope must not be inlined into a <script>
   tag as-is.
 */ -}}
+{{- $page := . -}}
 {{- $cfg := partial "agent-readiness/config.html" (dict "page" . "site_only" true) -}}
 {{- if and $cfg.enable $cfg.skills_index.enable site.Language.IsDefault -}}
   {{- $skills := partial "agent-readiness/skills.html" (dict "page" . "cfg" $cfg) -}}
   {{- with $skills -}}
-    {{- dict "$schema" $cfg.skills_index.schema "skills" . | jsonify (dict "noHTMLEscape" true "indent" "  ") -}}
+    {{/* Assembled as a variable rather than piped inline, because the stamp is
+         conditional: `with` has rebound the dot to the skill slice, so the
+         page the build-time partial is handed comes from the capture above. */}}
+    {{- $envelope := dict "$schema" $cfg.skills_index.schema "skills" . -}}
+    {{- if $cfg.skills_index.build_time -}}
+      {{- $envelope = merge $envelope (dict "generated" (partial "agent-readiness/build-time.html" $page)) -}}
+    {{- end -}}
+    {{- $envelope | jsonify (dict "noHTMLEscape" true "indent" "  ") -}}
   {{- end -}}
 {{- end -}}

@@ -54,6 +54,33 @@ test('the index parses and declares its schema', () => {
   assert.ok(doc.skills.length > 0);
 });
 
+test('the index dates itself at the top level, beside the per-skill digests', () => {
+  // A digest answers "is this different"; it cannot answer "which one is
+  // NEWER", and a client holding a cached index needs the direction to know
+  // whether ITS copy is the stale one. That gap is sharpest on this surface:
+  // a stale index points an agent at a skill body it believes is current, and
+  // the digest beside it VERIFIES against the old bytes the client also
+  // cached, so index and body stay self-consistent and both are wrong.
+  //
+  // Top level, not per skill: the document is published as a unit and its
+  // entries never come from different builds, so a field per entry would be N
+  // copies of one fact. The value's IDENTITY with every other surface of the
+  // build is asserted in 11-build-stamp.spec.js, which is where the stamp's
+  // one-value-per-build contract lives; here it is the shape and the place.
+  const doc = index();
+  assert.match(
+    doc.generated,
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})$/,
+    'RFC 3339 with an offset, the same form every other stamped surface carries',
+  );
+  for (const entry of doc.skills) {
+    assert.ok(
+      !Object.prototype.hasOwnProperty.call(entry, 'generated'),
+      `${entry.name}: the stamp belongs to the document, not to each entry`,
+    );
+  }
+});
+
 test('every entry url resolves to a published file', () => {
   for (const entry of index().skills) {
     assert.ok(
