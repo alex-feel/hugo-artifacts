@@ -9,6 +9,14 @@ Thumbs.db
 # a genuine exception with `git add -f`.
 *.log
 
+# Secrets. `examples/backend-express/.env.example` instructs the reader to copy
+# it to `.env` and fill in a database URL and a VAPID private key, so the file
+# it tells them to create must be unstageable before they create it. The
+# example itself stays tracked.
+.env
+.env.*
+!.env.example
+
 # Hugo build artifacts
 public/
 resources/
