@@ -7,6 +7,13 @@
 **/.code-review-graph/
 **/.playwright-cli/
 
+# The Agent Skills fixture ORIGIN corpus: Markdown test DATA served over HTTP
+# to the module's own fetcher, never Markdown documents. Several of these files
+# are deliberately malformed -- TOML front matter, an unterminated YAML
+# sequence, no front matter at all -- which is precisely what they exist to
+# prove, so reformatting them would delete the test.
+modules/agent-readiness/test/fixture-origin/
+
 # Lock files and minified bundles (Prettier should not rewrite them).
 **/package-lock.json
 **/*.min.js

@@ -39,6 +39,17 @@ test('defaults.toml declares every table the cascade merges', () => {
   }
 });
 
+test('the shipped supporting-file disposition is the one that cannot delete a surface', () => {
+  // The skills index emits NO FILE when no entry survives, so shipping 'omit'
+  // as the default would let a best-effort detector -- one that can only see
+  // the file names a body happens to mention -- remove a consumer's whole
+  // /.well-known/agent-skills/ surface on the build after they imported the
+  // module. 'warn' publishes and says so; a consumer who wants the stricter
+  // reading opts into it deliberately.
+  const {skills_index: skillsIndex} = loadToml('defaults.toml');
+  assert.equal(skillsIndex.on_supporting_files, 'warn');
+});
+
 test('defaults.toml ships a permissive robots policy', () => {
   // A Disallow shipped as a module default would deindex a consumer's site
   // on the build after they imported the module -- and a shipped Allow would

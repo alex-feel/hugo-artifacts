@@ -1,0 +1,138 @@
+{{/*
+  agent-readiness/lib/skill-siblings.html -- INTERNAL (lib tier).
+
+  Purpose: turn the guesses from agent-readiness/lib/skill-references.html
+  into a FACT, by resolving each candidate against the skill's own source URL
+  and asking the origin whether that file is really there. A skill whose
+  supporting files exist upstream is a multi-file skill whatever its body
+  looks like, and one whose candidates all 404 is prose that happened to
+  mention a file name.
+
+  This is the whole reason the module can say anything at all about supporting
+  files: it cannot enumerate a remote directory, and no forge-independent way
+  to do so exists, so it verifies the names the body itself supplies.
+
+  THREE OUTCOMES, NOT TWO. resources.GetRemote reports an HTTP 404 as a nil
+  resource, a 2xx as a resource, and 403, 429, 5xx, a timeout, a DNS failure
+  or a security-policy refusal as an ERROR. Collapsing that error into
+  "absent" would make a rate-limited origin report every multi-file skill as
+  single-file, so it is reported as INDETERMINATE and never as evidence of
+  absence. One error is special and means the opposite: a media-type failure
+  is raised only after a response has been received, so it proves the file is
+  there.
+
+  WHAT IS NEVER PROBED, each guard for a measured reason:
+    - a source whose URL carries a query string, because the sibling would be
+      requested without it and a signed URL would 404 for the wrong reason;
+    - a source that is not directory-shaped -- no directory segment, or a last
+      segment with no extension -- because candidates would then resolve
+      against the ORIGIN ROOT and hit unrelated documents;
+    - a candidate that resolves outside the skill's own directory, whether by
+      a leading slash or by `..`. Those are reported separately: they cannot
+      live inside an archive either, since the draft forbids an archive from
+      containing "path traversal sequences (`..`) or absolute paths";
+    - a candidate that resolves to a directory rather than a file, because any
+      host with an index document answers 200 for one and would prove nothing.
+
+  Every probe carries an explicit short timeout. Hugo's default retries a
+  failing remote fetch for a full minute, and a skill with several candidates
+  against a rate-limited origin would otherwise add minutes to a consumer's
+  build.
+
+  Expected context (dict):
+  - .source     (string) - The entry's source URL.
+  - .candidates (slice)  - Candidate target strings, most trustworthy first.
+  - .limit      (int)    - Maximum number of probes to spend on this skill.
+
+  Return value: a dict carrying
+    .verdict   (string) - "found", "absent", "indeterminate" or "unverifiable";
+    .target    (string) - the candidate that was found, else "";
+    .url       (string) - the absolute URL that answered, else "";
+    .probes    (int)    - how many requests were actually issued;
+    .truncated (bool)   - true when the limit stopped it short of the
+                          candidate list;
+    .outside   (slice)  - candidates that resolve outside the skill directory.
+  ONE terminal return.
+*/}}
+
+{{- $source := .source | default "" -}}
+{{- $candidates := .candidates | default slice -}}
+{{- $limit := .limit | default 4 -}}
+
+{{- $verdict := "absent" -}}
+{{- $found := false -}}
+{{- $indeterminate := false -}}
+{{- $target := "" -}}
+{{- $foundURL := "" -}}
+{{- $probes := 0 -}}
+{{- $truncated := false -}}
+{{- $outside := slice -}}
+
+{{- $u := urls.Parse $source -}}
+{{- $dir := path.Dir $u.Path -}}
+{{- $base := path.Base $u.Path -}}
+
+{{- if or (ne $u.RawQuery "") (eq $dir ".") (eq $dir "/") (not (strings.Contains $base ".")) -}}
+  {{- $verdict = "unverifiable" -}}
+{{- else -}}
+  {{/* An INDETERMINATE probe never stops the search: a later candidate may
+       still answer, and only exhausting the list without a hit makes the
+       uncertainty the final word. */}}
+  {{- range $candidate := $candidates -}}
+    {{- if and (not $found) (lt $probes $limit) -}}
+      {{- $resolved := "" -}}
+      {{- if hasPrefix $candidate "/" -}}
+        {{- $outside = $outside | append $candidate -}}
+      {{- else if hasSuffix $candidate "/" -}}
+        {{/* A directory reference: nothing to verify, and probing it would
+             collect a 200 from any host that serves an index document. */}}
+      {{- else -}}
+        {{- $resolved = path.Join $dir $candidate -}}
+        {{- if not (hasPrefix $resolved (printf "%s/" $dir)) -}}
+          {{- $outside = $outside | append $candidate -}}
+          {{- $resolved = "" -}}
+        {{- else if not (strings.Contains (path.Base $resolved) ".") -}}
+          {{- $resolved = "" -}}
+        {{- end -}}
+      {{- end -}}
+      {{- with $resolved -}}
+        {{- $probeURL := printf "%s://%s%s" $u.Scheme $u.Host . -}}
+        {{- $probes = add $probes 1 -}}
+        {{- $probe := try (resources.GetRemote $probeURL (dict "timeout" "5s")) -}}
+        {{- with $probe.Err -}}
+          {{/* Hugo raises this one only after a response has arrived, so it
+               is a hit whose body Hugo declined to represent, not a miss.
+               The match is on the message because Hugo exposes no error
+               kind here; misreading it costs a warning, never a wrong
+               publication. */}}
+          {{- if strings.Contains (printf "%v" .) "media type" -}}
+            {{- $found = true -}}
+            {{- $target = $candidate -}}
+            {{- $foundURL = $probeURL -}}
+          {{- else -}}
+            {{- $indeterminate = true -}}
+          {{- end -}}
+        {{- else with $probe.Value -}}
+          {{- $found = true -}}
+          {{- $target = $candidate -}}
+          {{- $foundURL = $probeURL -}}
+        {{- end -}}
+      {{- end -}}
+    {{- else if not $found -}}
+      {{- $truncated = true -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if $found -}}
+    {{- $verdict = "found" -}}
+  {{- else if $indeterminate -}}
+    {{- $verdict = "indeterminate" -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return (dict
+    "verdict" $verdict
+    "target" $target
+    "url" $foundURL
+    "probes" $probes
+    "truncated" $truncated
+    "outside" $outside) -}}

@@ -1,0 +1,74 @@
+{{/*
+  agent-readiness/lib/skill-archive.html -- INTERNAL (lib tier).
+
+  Purpose: decide from the BYTES what a fetched skill artifact actually is,
+  because nothing else in the chain can be trusted to say so.
+
+  WHY THE BYTES AND NOT THE URL OR THE HEADER. resources.Copy retains the
+  SOURCE resource's media type and accepts any target extension, so copying a
+  gzip stream to a `.zip` path publishes a file whose name lies and whose
+  media type still says gzip (measured on Hugo v0.164.0). The response header
+  is no better: the same archive arrives as `application/gzip` from one host
+  and `application/x-gzip` or `application/octet-stream` from another, and the
+  discovery draft tells CLIENTS to fall back to the URL extension for exactly
+  that reason. The magic number is the one signal that cannot disagree with
+  the file, so it -- and only it -- picks the published extension.
+
+  The two formats are the two the draft requires clients to support: "Archives
+  SHOULD be in `.tar.gz` (gzip-compressed tar) or `.zip` format. Clients MUST
+  support at least `.tar.gz` and `.zip`."
+
+  ROOTEDNESS, FOR ZIP ONLY. The draft requires that "The archive MUST contain
+  a `SKILL.md` file at the root". A zip stores its member names UNCOMPRESSED,
+  so the question is answerable from the raw bytes without unpacking: every
+  occurrence of `SKILL.md` that is preceded by a slash belongs to a nested
+  member, so an archive whose `SKILL.md` count equals its `/SKILL.md` count
+  carries no root-level one. That test cannot produce a false refusal -- a
+  root member's name is not preceded by a slash, so the counts cannot be
+  equal -- while it can miss a nested archive whose compressed payload happens
+  to contain those eight bytes, which costs nothing beyond the refusal not
+  firing. A .tar.gz stores its names COMPRESSED and Hugo cannot decompress, so
+  the same question is unanswerable there and the publisher owns it.
+
+  Expected context (dict):
+  - .content (string) - The fetched artifact's raw bytes.
+
+  Return value: a dict carrying
+    .format (string) - "gzip", "zip", or "" when the bytes are neither;
+    .ext    (string) - the published extension for that format, or "";
+    .note   (string) - "" when unremarkable, else "empty-zip", "spanned-zip"
+                       or "text", each naming what the bytes look like instead;
+    .rooted (bool)   - false only when a zip provably carries no root-level
+                       SKILL.md; true for every other input, including every
+                       gzip stream, where the question cannot be answered.
+  ONE terminal return.
+*/}}
+
+{{- $content := .content | default "" -}}
+{{- $format := "" -}}
+{{- $ext := "" -}}
+{{- $note := "" -}}
+{{- $rooted := true -}}
+
+{{/* hasPrefix compares bytes and is safe on content that is not valid UTF-8;
+     substr and slicestr are NOT -- they walk runes, and a lone 0x8b becomes
+     U+FFFD -- so no byte inspection here ever indexes. */}}
+{{- if hasPrefix $content "\x1f\x8b" -}}
+  {{- $format = "gzip" -}}
+  {{- $ext = ".tar.gz" -}}
+{{- else if hasPrefix $content "PK\x03\x04" -}}
+  {{- $format = "zip" -}}
+  {{- $ext = ".zip" -}}
+  {{- $rooted = gt (strings.Count "SKILL.md" $content) (strings.Count "/SKILL.md" $content) -}}
+{{- else if hasPrefix $content "PK\x05\x06" -}}
+  {{/* End-of-central-directory as the FIRST record: a zip with no members. */}}
+  {{- $note = "empty-zip" -}}
+{{- else if hasPrefix $content "PK\x07\x08" -}}
+  {{/* The spanned/split-archive marker: the rest of this archive is in
+       another file, so what was fetched is not a complete artifact. */}}
+  {{- $note = "spanned-zip" -}}
+{{- else if hasPrefix $content "---" -}}
+  {{- $note = "text" -}}
+{{- end -}}
+
+{{- return (dict "format" $format "ext" $ext "note" $note "rooted" $rooted) -}}

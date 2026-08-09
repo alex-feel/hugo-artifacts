@@ -1,18 +1,25 @@
 @echo off
-rem Validates the shipped data files, then builds TWENTY-ONE fixture sites with
-rem hugo (builds, not servers: no port binding, and a finite build exits by
-rem itself) and runs the Node build-output assertion suite against all
-rem twenty-one.
+rem Validates the shipped data files, starts the fixture ORIGIN, then builds
+rem TWENTY-TWO fixture sites with hugo (builds, not servers: no port binding,
+rem and a finite build exits by itself) and runs the Node build-output
+rem assertion suite against all twenty-two.
 rem Windows mirror of run-tests.sh: data check first, pre-launch process
 rem check, then a hard fail on any deprecation, error, or missing-layout line
 rem in any build log.
 rem
-rem NETWORK: the agent-skills specs exercise a real build-time remote fetch,
-rem because the digest guarantee cannot be proven without one. The widgets
-rem build additionally fetches the widget modules' remote APIs (GitHub, the
-rem Hugging Face Hub, arXiv, YouTube posters); those fetches degrade with
-rem WARN lines when tokenless or rate-limited, which the log gates below
-rem deliberately tolerate -- they hard-fail on deprecations and errors only.
+rem THE ORIGIN: the agent-skills specs exercise a real build-time remote fetch,
+rem because the digest guarantee cannot be proven without one, and those
+rem fetches are answered by serve-origin.mjs on 127.0.0.1 rather than by
+rem anybody else's endpoint. cmd has no trap, so an early `exit /b` here can
+rem leave the origin running; that is bounded rather than unhandled -- the
+rem server gives up on its own after fifteen minutes, and every run stops a
+rem previous one before starting its own.
+rem
+rem NETWORK: the widgets build still fetches the widget modules' remote APIs
+rem (GitHub, the Hugging Face Hub, arXiv, YouTube posters); those fetches
+rem degrade with WARN lines when tokenless or rate-limited, which the log gates
+rem below deliberately tolerate -- they hard-fail on deprecations and errors
+rem only.
 setlocal
 
 pushd "%~dp0"
@@ -47,10 +54,30 @@ set LOG_FILE_LLMSINDEXOFF=%~dp0hugo-build-llmsindexoff.log
 set LOG_FILE_UNWIRED=%~dp0hugo-build-unwired.log
 set LOG_FILE_NOLINKINDEXES=%~dp0hugo-build-nolinkindexes.log
 set LOG_FILE_NOCOMPACT=%~dp0hugo-build-nocompact.log
+set LOG_FILE_STRICTSKILLS=%~dp0hugo-build-strictskills.log
 set LOG_FILE_SHADOW=%~dp0hugo-build-shadow.log
 set LOG_FILE_PAGINATED=%~dp0hugo-build-paginated.log
 set LOG_FILE_WIDGETS=%~dp0hugo-build-widgets.log
 set LOG_FILE_EXTRA=%~dp0hugo-build-extra.log
+set ORIGIN_LOG=%~dp0fixture-origin.log
+rem Fixed, because a Hugo configuration file cannot learn a port at run time
+rem and the fixture's `source` URLs name this one. Kept in step with the value
+rem in serve-origin.mjs and in fixture\config\_default\hugo.toml.
+set ORIGIN_PORT=51313
+
+rem ---- The fixture origin ----
+rem The stop first clears an origin left behind by an aborted run; a port held
+rem by anything else makes the listen fail, which `wait` reports with the
+rem server's own message rather than letting the builds fetch from whatever is
+rem actually there.
+call node "%~dp0serve-origin.mjs" stop >nul 2>&1
+start "agent-readiness-origin" /b node "%~dp0serve-origin.mjs" serve %ORIGIN_PORT% > "%ORIGIN_LOG%" 2>&1
+call node "%~dp0serve-origin.mjs" wait %ORIGIN_PORT%
+if errorlevel 1 (
+  echo The fixture origin did not start on 127.0.0.1:%ORIGIN_PORT%:
+  type "%ORIGIN_LOG%"
+  exit /b 1
+)
 
 pushd "%~dp0fixture"
 rem Hugo --cleanDestinationDir never deletes dot-prefixed paths (a stale
@@ -176,6 +203,13 @@ if errorlevel 1 (
   popd
   exit /b 1
 )
+hugo -e strictskills --gc --logLevel info --cleanDestinationDir --destination public\strictskills > "%LOG_FILE_STRICTSKILLS%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(strictskills^):
+  type "%LOG_FILE_STRICTSKILLS%"
+  popd
+  exit /b 1
+)
 popd
 
 pushd "%~dp0fixture-shadow"
@@ -234,7 +268,7 @@ if errorlevel 1 (
 )
 popd
 
-for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_MINIMAL%" "%LOG_FILE_NOTWINS%" "%LOG_FILE_MULTILINGUAL%" "%LOG_FILE_LLMSOFF%" "%LOG_FILE_EDGE%" "%LOG_FILE_OFF%" "%LOG_FILE_BADTABLES%" "%LOG_FILE_NSOFF%" "%LOG_FILE_NOSECTIONPAGES%" "%LOG_FILE_NOLINKMD%" "%LOG_FILE_NOBUILDTIME%" "%LOG_FILE_LLMSINDEXOFF%" "%LOG_FILE_UNWIRED%" "%LOG_FILE_NOLINKINDEXES%" "%LOG_FILE_NOCOMPACT%" "%LOG_FILE_SHADOW%" "%LOG_FILE_PAGINATED%" "%LOG_FILE_WIDGETS%" "%LOG_FILE_EXTRA%") do (
+for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_MINIMAL%" "%LOG_FILE_NOTWINS%" "%LOG_FILE_MULTILINGUAL%" "%LOG_FILE_LLMSOFF%" "%LOG_FILE_EDGE%" "%LOG_FILE_OFF%" "%LOG_FILE_BADTABLES%" "%LOG_FILE_NSOFF%" "%LOG_FILE_NOSECTIONPAGES%" "%LOG_FILE_NOLINKMD%" "%LOG_FILE_NOBUILDTIME%" "%LOG_FILE_LLMSINDEXOFF%" "%LOG_FILE_UNWIRED%" "%LOG_FILE_NOLINKINDEXES%" "%LOG_FILE_NOCOMPACT%" "%LOG_FILE_STRICTSKILLS%" "%LOG_FILE_SHADOW%" "%LOG_FILE_PAGINATED%" "%LOG_FILE_WIDGETS%" "%LOG_FILE_EXTRA%") do (
   findstr /I "deprecat" %%L >nul 2>&1
   if not errorlevel 1 (
     echo Hugo reported deprecations in %%L:
@@ -272,6 +306,7 @@ set FIXTURE_PUBLIC_LLMSINDEXOFF=%~dp0fixture\public\llmsindexoff
 set FIXTURE_PUBLIC_UNWIRED=%~dp0fixture\public\unwired
 set FIXTURE_PUBLIC_NOLINKINDEXES=%~dp0fixture\public\nolinkindexes
 set FIXTURE_PUBLIC_NOCOMPACT=%~dp0fixture\public\nocompact
+set FIXTURE_PUBLIC_STRICTSKILLS=%~dp0fixture\public\strictskills
 set FIXTURE_PUBLIC_SHADOW=%~dp0fixture-shadow\public
 set FIXTURE_PUBLIC_PAGINATED=%~dp0fixture-paginated\public
 set FIXTURE_PUBLIC_WIDGETS=%~dp0fixture-widgets\public
@@ -293,6 +328,7 @@ set HUGO_BUILD_LOG_LLMSINDEXOFF=%LOG_FILE_LLMSINDEXOFF%
 set HUGO_BUILD_LOG_UNWIRED=%LOG_FILE_UNWIRED%
 set HUGO_BUILD_LOG_NOLINKINDEXES=%LOG_FILE_NOLINKINDEXES%
 set HUGO_BUILD_LOG_NOCOMPACT=%LOG_FILE_NOCOMPACT%
+set HUGO_BUILD_LOG_STRICTSKILLS=%LOG_FILE_STRICTSKILLS%
 set HUGO_BUILD_LOG_SHADOW=%LOG_FILE_SHADOW%
 set HUGO_BUILD_LOG_PAGINATED=%LOG_FILE_PAGINATED%
 set HUGO_BUILD_LOG_WIDGETS=%LOG_FILE_WIDGETS%
@@ -313,4 +349,5 @@ rem The logs are retained (gitignored at the repo root) so the documented
 rem re-run recipe can read them without rebuilding.
 rem Belt-and-suspenders cleanup, mirroring modules/search/test/run-tests.cmd.
 taskkill /F /IM hugo.exe >nul 2>&1
+call node "%~dp0serve-origin.mjs" stop >nul 2>&1
 exit /b %EXITCODE%

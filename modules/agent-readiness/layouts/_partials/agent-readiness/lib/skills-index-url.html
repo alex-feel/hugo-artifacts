@@ -21,6 +21,12 @@
   constant keys, so the whole build resolves the default-site config and
   the skills slice once, however many callers ask.
 
+  home.agentskills.json shares the skills cache key rather than calling the
+  resolver a second time. That resolution is not cheap and has not been for
+  some time: it fetches every configured source, parses each SKILL.md's front
+  matter, and probes the origin for the supporting files a body names. Two
+  independent calls would pay all of it twice for one identical answer.
+
   Expected context: none is read; pass an empty dict.
 
   Return value: the index's ABSOLUTE Permalink (string) when the surface

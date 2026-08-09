@@ -1,7 +1,7 @@
 /* global process */
 // Shared helpers for the build-output assertion specs.
 //
-// The runner exports TWENTY published trees, and every one of them is
+// The runner exports TWENTY-TWO published trees, and every one of them is
 // load-bearing:
 // FIXTURE_PUBLIC (every content-license key unset), FIXTURE_PUBLIC_CONFIGURED
 // (the license table filled and both switches on, plus the bots_allow with
@@ -44,6 +44,11 @@
 // `unwired` -- `llmsindex` wired while `llmstxt` is not, the only build in
 // which the pointer section carries the complete index alone and the only one
 // in which the compact index's own publish gate decides a byte),
+// FIXTURE_PUBLIC_STRICTSKILLS (the single key
+// skills_index.on_supporting_files = 'omit' over the default configuration,
+// the only build in which a skill proven to ship supporting files is refused
+// rather than published with a warning, so the whole omit branch executes
+// nowhere else),
 // FIXTURE_PUBLIC_SHADOW (a
 // fixture that ships its own layouts/robots.txt), FIXTURE_PUBLIC_PAGINATED
 // (a fixture whose single section spills past pagerSize, the only shape in
@@ -101,6 +106,9 @@ export const nolinkindexesDir = resolve(
 );
 export const nocompactDir = resolve(
   process.env.FIXTURE_PUBLIC_NOCOMPACT ?? 'fixture/public/nocompact',
+);
+export const strictskillsDir = resolve(
+  process.env.FIXTURE_PUBLIC_STRICTSKILLS ?? 'fixture/public/strictskills',
 );
 export const shadowDir = resolve(process.env.FIXTURE_PUBLIC_SHADOW ?? 'fixture-shadow/public');
 export const paginatedDir = resolve(
@@ -299,6 +307,7 @@ export function buildLog(which = 'baseline') {
     unwired: 'HUGO_BUILD_LOG_UNWIRED',
     nolinkindexes: 'HUGO_BUILD_LOG_NOLINKINDEXES',
     nocompact: 'HUGO_BUILD_LOG_NOCOMPACT',
+    strictskills: 'HUGO_BUILD_LOG_STRICTSKILLS',
     shadow: 'HUGO_BUILD_LOG_SHADOW',
     paginated: 'HUGO_BUILD_LOG_PAGINATED',
     widgets: 'HUGO_BUILD_LOG_WIDGETS',

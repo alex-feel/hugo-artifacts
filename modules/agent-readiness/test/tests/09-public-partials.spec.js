@@ -4,7 +4,7 @@
 // the site recording what twin-url.html returned, a marker line, then one
 // line per surfaces.html entry, then the build-time block that
 // tests/11-build-stamp.spec.js reads. Every claim is checked against the
-// published tree in BOTH directions across all seventeen environment builds,
+// published tree in BOTH directions across all eighteen environment builds,
 // so neither partial can list a file the build withheld, nor withhold one
 // the build published.
 import {test} from 'node:test';
@@ -29,6 +29,7 @@ import {
   nolinkindexesDir,
   nocompactDir,
   nolinkmdDir,
+  strictskillsDir,
   parseDump,
   publishedTwins,
   siteRelative,
@@ -75,6 +76,10 @@ const builds = [
   // environment where llms.txt withholds its derived twin entry -- exactly the
   // shape this file asserts about.
   {name: 'nolinkmd', dir: nolinkmdDir},
+  // The one build in which a configured skill is REFUSED rather than
+  // published, so the skills surface has to keep answering for the index
+  // that still exists with one fewer entry in it.
+  {name: 'strictskills', dir: strictskillsDir},
 ];
 
 for (const {name, dir, base = '', dumps = [{rel: 'twindump.txt', prefix: ''}]} of builds) {

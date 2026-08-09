@@ -1,0 +1,56 @@
+{{/*
+  agent-readiness/lib/repo-archive-url.html -- INTERNAL (lib tier).
+
+  Purpose: recognize a URL that asks a code-forge to generate a SOURCE ARCHIVE
+  of a whole repository, because such an archive can never satisfy the
+  discovery draft's "The archive contents represent the skill directory --
+  files are placed at the archive root, not nested inside a wrapper
+  directory."
+
+  Every forge in the list wraps its output in one directory named for the
+  repository and the ref. Verified by fetching and listing: GitHub's
+  `codeload.github.com/octocat/Hello-World/tar.gz/<sha>` and its `.zip`
+  sibling both yield `Hello-World-<sha>/README`; GitLab's `/-/archive/` and
+  Forgejo's `/archive/` behave the same way. A client that unpacks one finds
+  no `SKILL.md` at the root and is required to reject it, so the module
+  refuses it at build time instead, where the consumer can still act.
+
+  This is a HEURISTIC over URL shape, and it is deliberately narrow in both
+  directions. It cannot see a forge it does not know, and it must not fire on
+  a RELEASE ASSET -- `github.com/<owner>/<repo>/releases/download/...` is the
+  supported way to publish a purpose-built archive and is exactly what the
+  README recommends -- so each pattern is anchored at the path segment where
+  the forge's generator actually lives rather than matched loosely. A path
+  that merely contains a directory called `archive`, such as a raw file at
+  `<owner>/<repo>/<ref>/archive/skill.tar.gz`, is four segments deep and does
+  not match.
+
+  The check runs BEFORE the fetch, against the CONFIGURED url, because the
+  browser-facing spellings redirect to the generator and resources.GetRemote
+  follows redirects silently.
+
+  Expected context (dict):
+  - .url (string) - The configured source URL.
+
+  Return value: a string naming the matched forge pattern when the URL is a
+  repository source archive, else "". ONE terminal return.
+*/}}
+
+{{- $u := urls.Parse (.url | default "") -}}
+{{- $host := lower $u.Host -}}
+{{- $path := $u.Path -}}
+{{- $hit := "" -}}
+
+{{- if eq $host "codeload.github.com" -}}
+  {{- $hit = "codeload.github.com" -}}
+{{- else if and (eq $host "api.github.com") (findRE `^/repos/[^/]+/[^/]+/(tarball|zipball)(/|$)` $path 1) -}}
+  {{- $hit = "api.github.com/repos/<owner>/<repo>/tarball|zipball" -}}
+{{- else if findRE `^/.+/-/archive/` $path 1 -}}
+  {{- $hit = "GitLab <namespace>/-/archive/" -}}
+{{- else if findRE `^/[^/]+/[^/]+/archive/` $path 1 -}}
+  {{- $hit = "<owner>/<repo>/archive/ (GitHub, Gitea, Forgejo)" -}}
+{{- else if findRE `^/[^/]+/[^/]+/get/` $path 1 -}}
+  {{- $hit = "Bitbucket <owner>/<repo>/get/" -}}
+{{- end -}}
+
+{{- return $hit -}}

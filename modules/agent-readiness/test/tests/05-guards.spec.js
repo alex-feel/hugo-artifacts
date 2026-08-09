@@ -544,19 +544,41 @@ test('map- and list-valued front-matter values are rendered, never stringified',
   assert.ok(!/\[[a-z]+ [a-z]+\]/.test(about), 'no Go slice debug form either');
 });
 
+// ---- The skills index schema identifier ----
+
+test('a $schema that is not an absolute URI is refused, and the default published', () => {
+  // The discovery convention makes this field the one thing a client keys its
+  // whole decision on: an index whose `$schema` it does not recognize is one
+  // it "SHOULD NOT process". A relative or empty value therefore publishes a
+  // document conforming clients discard wholesale -- silently, with every
+  // other gate green, because nothing else in the file changes.
+  //
+  // The edge build configures `agent-skills/0.2.0`. What must publish is the
+  // shipped default, and the substitution must be named.
+  assert.equal(
+    warnCount(/Ignoring \[params.agent.skills_index\] schema "agent-skills\/0.2.0"/, 'edge'),
+    1,
+  );
+  const doc = JSON.parse(read('.well-known/agent-skills/index.json', edgeDir));
+  assert.equal(doc.$schema, 'https://schemas.agentskills.io/discovery/0.2.0/schema.json');
+});
+
 // ---- Skill name uniqueness ----
 
 test('a duplicate skill name is refused, with one warning', () => {
-  // The name is the sole published path segment. Publishing both entries
-  // would serve ONE file while the index advertised two digests for it, so at
-  // least one advertised digest could not match the bytes at its own URL --
-  // which a verifying agent is entitled to read as tampering.
+  // The name is the sole published path segment, so two entries wearing it
+  // resolve to ONE published artifact. Hugo's resources.Copy returns whichever
+  // resource reached that target first, so the second entry would advertise
+  // its own description and digest over the FIRST entry's bytes: both entries
+  // verify, and one of them describes a skill this site never published. The
+  // name is also the index key a client caches by and the URL a consumer's
+  // readers bookmark.
   assert.equal(warnCount(/second agent skill named/), 1);
 
   const doc = JSON.parse(read('.well-known/agent-skills/index.json'));
   const names = doc.skills.map((s) => s.name);
   assert.equal(new Set(names).size, names.length, 'no name may appear twice in the index');
-  assert.equal(names.filter((n) => n === 'fixture-skill').length, 1);
+  assert.equal(names.filter((n) => n === 'fixture-single').length, 1);
 });
 
 // ---- The suite's own attribution invariant ----

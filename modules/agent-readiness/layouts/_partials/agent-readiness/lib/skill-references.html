@@ -1,0 +1,97 @@
+{{/*
+  agent-readiness/lib/skill-references.html -- INTERNAL (lib tier).
+
+  Purpose: collect the file names a SKILL.md body appears to reference, so the
+  caller can go and ask the origin whether they exist. This partial only
+  NOMINATES; it decides nothing. Precision comes from the probe that follows,
+  which is why the patterns below are tuned for recall and a false nomination
+  costs one HTTP request rather than a wrong verdict.
+
+  WHY THREE CLASSES, MEASURED. The obvious detector -- a Markdown link whose
+  destination is relative -- was run against the seventeen skills published in
+  github.com/anthropics/skills (sixteen of them multi-file, one single-file):
+  it fires on ONE of the sixteen. Real skills name their supporting files in
+  prose. `pdf/SKILL.md` says "see REFERENCE.md" and "read FORMS.md" with no
+  link syntax at all, and the format specification's own File references
+  example is a bare `scripts/extract.py` on its own line. Adding the two prose
+  classes below raises the same measurement to sixteen of sixteen with no
+  false nomination on the single-file skill.
+
+    A. a Markdown link or image destination that is relative;
+    B. a slash-bearing path with a file extension, the shape the spec's own
+       example uses;
+    C. an ALL-CAPS file name with a documentary extension. The all-caps rule
+       is load-bearing: a `Word.ext` pattern also matches ordinary prose such
+       as `Claude.ai`, and the measured absence of false nominations depends
+       on requiring capitals.
+
+  WHAT IS STRIPPED, AND WHAT IS NOT. Fenced code blocks are removed for every
+  class: a fenced example demonstrating a skill's layout is not that skill's
+  own reference. Code SPANS are removed for classes A and C only, because a
+  link inside backticks is an example while class B's natural habitat is
+  exactly a span -- the discovery draft writes its own supporting-file
+  reference as `` `scripts/deploy.sh` ``. Indented code blocks are deliberately
+  NOT stripped: they are indistinguishable from a nested list continuation,
+  and dropping them would cost recall, which the probe cannot recover.
+
+  The front-matter block IS scanned along with the body. That is where a
+  bundled license file is usually named -- the format specification defines
+  `license` as a "License name or reference to a bundled license file" -- and
+  in the corpus above it is the ONLY signal for fifteen of the sixteen
+  multi-file skills.
+
+  Expected context (dict):
+  - .body (string) - The fetched SKILL.md, verbatim.
+
+  Return value: an ordered, deduplicated slice of candidate target strings,
+  each already stripped of any `#fragment` and `?query`, and each free of a
+  scheme, of a protocol-relative prefix, of whitespace and of a percent sign
+  (path.Join performs no percent-encoding, so an encoded target could not be
+  resolved faithfully). May be empty. ONE terminal return.
+*/}}
+
+{{- $body := .body | default "" -}}
+
+{{/* These two patterns cannot be backtick raw strings, because both contain
+     backticks. The doubled backslashes are therefore regex escapes surviving
+     Go's own string unescaping, not a typo. */}}
+{{- $nofence := replaceRE "(?s)(^|\\n)(?:```|~~~)[^\\n]*\\n.*?\\n(?:```|~~~)[ \\t]*(?:\\n|$)" "$1" $body -}}
+{{- $nocode := replaceRE "`[^`\\n]*`" "" $nofence -}}
+
+{{- $raw := slice -}}
+{{- range findRESubmatch `!?\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)` $nocode -1 -}}
+  {{- $raw = $raw | append (index . 1) -}}
+{{- end -}}
+{{- range findRESubmatch `(?:^|[^\w./:-])([a-zA-Z][\w.-]*(?:/[\w.-]+)+\.[A-Za-z0-9]{1,5})` $nofence -1 -}}
+  {{- $raw = $raw | append (index . 1) -}}
+{{- end -}}
+{{- range findRESubmatch `(?:^|[^\w./-])([A-Z][A-Z0-9_-]*\.(?:md|txt|json|ya?ml|sh|py|js|ts|csv|toml))` $nocode -1 -}}
+  {{- $raw = $raw | append (index . 1) -}}
+{{- end -}}
+
+{{- $candidates := slice -}}
+{{- range $target := $raw -}}
+  {{/* Fragment and query are stripped before anything else, so `guide.md#top`
+       and `guide.md` nominate the same file once. */}}
+  {{- $target = index (split (index (split $target "#") 0) "?") 0 -}}
+  {{- $keep := ne $target "" -}}
+  {{- if $keep -}}
+    {{/* A destination carrying a scheme, or a protocol-relative one, names
+         somewhere else entirely and can never be a file inside this skill's
+         directory. `SKILL.md` names the artifact being published, not a
+         supporting file beside it. */}}
+    {{- if or
+        (findRE `^[a-zA-Z][a-zA-Z0-9+.-]*:` $target 1)
+        (hasPrefix $target "//")
+        (eq $target "SKILL.md")
+        (findRE `[\s%]` $target 1)
+        (in $candidates $target) -}}
+      {{- $keep = false -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if $keep -}}
+    {{- $candidates = $candidates | append $target -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $candidates -}}
