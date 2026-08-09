@@ -3,7 +3,8 @@
 
   Purpose: build the WebSite JSON-LD node. Emitted once per language home page
   and referenced by every other page via the #website @id. Enables Google's
-  site-name feature and the Sitelinks Search Box.
+  site-name feature, and -- when seo.website.search_url_template is set --
+  declares the site's search endpoint as a schema.org SearchAction.
 
   Expected context: `site` (NOT a Page). Invoked as
     {{ partialCached "seo/jsonld/website.html" site site.Language.Name }}
@@ -81,8 +82,13 @@
     {{- $node = merge $node (dict "publisher" (dict "@id" (printf "%s#organization" $url))) -}}
   {{- end -}}
 
-  {{/* potentialAction SearchAction (Sitelinks Search Box). The template
-       MUST contain the literal {search_term_string}; relative values are
+  {{/* potentialAction SearchAction: a machine-readable declaration of the
+       site's search endpoint. It fed Google's Sitelinks Search Box, which
+       Google removed from Search results on 2024-11-21; no current consumer
+       of the property is known, and Google states that leaving unsupported
+       structured data in place causes no issues, so this stays opt-in and
+       off by default. The template MUST contain the literal
+       {search_term_string} and is published verbatim; relative values are
        absolutized through seo/lib/absolute-url.html, which keeps the baseURL
        path. Missing placeholder warns once site-wide. */}}
   {{- with $website.search_url_template -}}

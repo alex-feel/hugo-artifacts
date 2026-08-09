@@ -98,7 +98,7 @@ The full annotated surface:
   [params.seo.website]
     name                = "Acme Documentation"   # WebSite.name override; else params.seo.organization.name; else site.Title.
     alternate_name      = "acme.example"   # WebSite.alternateName (Google suggests the lowercase domain as a backup site name).
-    search_url_template = "https://acme.example/search/?q={search_term_string}"  # Enables SearchAction (Sitelinks Search Box). MUST contain the literal {search_term_string}; a site-root or relative value is absolutized against the full baseURL, path included.
+    search_url_template = "https://acme.example/search/?q={search_term_string}"  # Emits a schema.org SearchAction naming your search endpoint; buys no Google feature (read its row in the WebSite table below). MUST contain the literal {search_term_string}, which is published verbatim; a site-root or relative value is absolutized against the full baseURL, path included.
 
   # --- Organization / publisher node (home + optional flagged About page) ---
   [params.seo.organization]
@@ -224,7 +224,7 @@ The full annotated surface:
 | --- | --- | --- | --- |
 | `name` | string | `params.seo.organization.name` -> `site.Title` | `WebSite.name` override. |
 | `alternate_name` | string | `""` | `WebSite.alternateName`. Google suggests the lowercase domain as a backup site name. |
-| `search_url_template` | string | `""` | Enables the SearchAction / Sitelinks Search Box. MUST contain the literal `{search_term_string}`; a site-root or relative value is absolutized against the full `baseURL`, path included. Missing the placeholder emits a site-wide warn and no SearchAction. |
+| `search_url_template` | string | `""` | Emits `WebSite.potentialAction` as a schema.org `SearchAction` naming your site's search endpoint. It fed Google's Sitelinks Search Box, which Google removed from Search results on 2024-11-21; no current consumer of the property is known, and Google states that leaving unsupported structured data in place causes no issues. Leave the key unset unless you want the declaration for its own sake. MUST contain the literal `{search_term_string}`, which is published verbatim in the emitted URL, so give your search endpoint a `noindex` directive if you do not want that URL indexed. A site-root or relative value is absolutized against the full `baseURL`, path included. Missing the placeholder emits a site-wide warn and no SearchAction. |
 
 ### Organization (`params.seo.organization.*`, home + optional flagged About page)
 
@@ -607,7 +607,7 @@ Adopt the module in three steps: import it, add the single `{{ partial "seo/head
 1. **Import.** Add the `[[module.imports]]` block and run `hugo mod get github.com/alex-feel/hugo-artifacts/modules/seo`; confirm with `hugo mod graph`.
 2. **Replace the head region.** In `baseof.html`, replace your site's entire SEO head (title, description, canonical, OG, Twitter, hreflang, robots, verification, and all inline JSON-LD -- whether in `<head>` or `<body>`) with the one partial call inside `<head>`. This alone moves JSON-LD out of `<body>`, removes duplicate canonicals, and closes the common `og:site_name`/`og:locale`/`og:image:alt` gaps. Keep your `<html lang>` attribute and viewport tag (outside the module's scope).
 3. **Map site params (optional, removes deprecation).** `params.metadata.{title_suffix,description,image,keywords}` -> `params.seo.{title_suffix,description,default_image,keywords}`; `params.twitter` -> `params.seo.twitter_site`; `params.site_verification.*` -> `params.seo.verification.*`. The module reads the old locations as aliases, so this step can be deferred.
-4. **Populate the publisher.** Fill `[params.seo.organization]` (name/url/logo/same_as at minimum) and `[params.seo.website]` (alternate_name, search_url_template). This is usually net-new eligibility: the site-name feature, the Sitelinks Search Box, and the knowledge-panel logo.
+4. **Populate the publisher.** Fill `[params.seo.organization]` (name/url/logo/same_as at minimum) and `[params.seo.website]` (alternate_name). This is usually net-new eligibility: the site-name feature and the knowledge-panel logo. `search_url_template` is a separate opt-in that buys no Google feature -- read its row in the WebSite configuration table before setting it.
 5. **Configure type dispatch.** Because the shipped default emits no content node on unmapped pages, set `[params.seo.types.sections]` for your article-bearing sections (e.g. `blog = "BlogPosting"`) -- one line replaces per-page `seo.type` annotations.
 6. **Remove `<base href>` and `<meta name="keywords">`** from your templates. The module never emits either and relies on absolute `.Permalink` throughout.
 
