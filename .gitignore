@@ -2,12 +2,14 @@
 Thumbs.db
 .DS_Store
 
-# Captured output. Every log this repository produces is scratch -- a build
-# capture, a test runner's server log, a one-off shell redirect -- and none is
-# ever committed, so the class is ignored rather than enumerated name by name:
-# the name nobody anticipated is exactly the one that reaches a commit. Force
-# a genuine exception with `git add -f`.
+# Captured output and process bookkeeping. Every log and pid file this
+# repository produces is scratch -- a build capture, a test runner's server log
+# and the pid it stops it by, a one-off shell redirect -- and none is ever
+# committed, so the class is ignored rather than enumerated name by name: the
+# name nobody anticipated is exactly the one that reaches a commit. Force a
+# genuine exception with `git add -f`.
 *.log
+*.pid
 
 # Secrets. `examples/backend-express/.env.example` instructs the reader to copy
 # it to `.env` and fill in a database URL and a VAPID private key, so the file
@@ -22,12 +24,6 @@ public/
 resources/
 .hugo_build.lock
 
-# The agent-readiness fixture ORIGIN's pid file. The runners start that server
-# before the builds and stop it afterwards, and the pid file is removed on an
-# interrupt; tracked here so a hard-killed run cannot leave an untracked file
-# behind.
-origin.pid
-
 # Go
 vendor/
 
@@ -38,21 +34,12 @@ node_modules/
 test-results/
 playwright-report/
 
-# Static overlay builds the search and copy-page test runners produce and
-# remove; tracked here so a hard-killed run cannot leave untracked directories
-# behind. Each one's captured log is covered by the *.log rule above, so a new
-# overlay adds one line here rather than two. Extend this list whenever
-# modules/search/test/run-tests.sh or modules/copy-page/test/run-tests.sh gains
-# an overlay.
-.opensearch-hostile/
-.opensearch-off/
-.subpath/
-.scalar-tables/
-.serialization/
-.shape-tables/
-.shape-bools/
-.shape-lists/
-.multilingual/
+# Scratch build directories a module's test runner writes beside itself: the
+# static overlays the search suite builds under one config each, and anything
+# a future runner adds. They are removed on a clean exit and left behind by a
+# hard kill, and every one of them is dot-prefixed inside a test/ directory,
+# which no tracked file is.
+**/test/.*/
 
 # IDE
 .idea/
