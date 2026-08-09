@@ -46,6 +46,8 @@ const PUBLISHED = [
   ['fixture-selfref', 'skill-md'],
   ['fixture-unverifiable', 'skill-md'],
   ['fixture-cdn-archive', 'archive'],
+  ['fixture-archive-dot', 'archive'],
+  ['fixture-archive-unclear', 'archive'],
 ];
 
 // Every configured entry that must be refused, with the warning that must name
@@ -121,7 +123,7 @@ test('the index parses and declares its schema', () => {
 
 // The metadata block is a fixed size no matter how many skills the index
 // carries, so this budget holds for a site publishing fifty of them exactly
-// as it does for the fixture's twelve. It is generous enough for a longer
+// as it does for the fixture's fourteen. It is generous enough for a longer
 // configured `$schema` URI, which is the only member here that can grow.
 const HEAD_BUDGET = 300;
 
@@ -284,6 +286,32 @@ test('an archive is published under the extension its BYTES call for', () => {
     readFileSync(resolve(moduleRoot, 'test/fixture-origin/archives/rooted.tar.gz')),
     'the republished archive must be the fetched archive, unchanged',
   );
+});
+
+test('a zip is judged rooted, nested or unclear, and only nested is refused', () => {
+  // The rootedness test is COUNTING, not parsing, and the three fixtures pin
+  // each state it can reach. `rooted-dot.zip` stores its root members with a
+  // `./` prefix, which some zip writers do and which a naive
+  // separator-preceded count reads as nested -- a false refusal.
+  // `unclear.zip` is genuinely wrapper-nested but carries one extra
+  // unseparated occurrence of the name inside an uncompressed member's text,
+  // which counting cannot tell from a root member; it publishes, and says so,
+  // because refusing on an ambiguous count would delete correct archives.
+  // `nested.zip` reaches neither and is refused.
+  const published = index().skills.map((s) => s.name);
+  assert.ok(published.includes('fixture-archive-dot'), 'a ./-prefixed root member is at the root');
+  assert.equal(warnCount(/fixture-archive-dot/), 0, 'and is unremarkable');
+
+  assert.ok(published.includes('fixture-archive-unclear'), 'an ambiguous count still publishes');
+  assert.equal(
+    warnCount(
+      /Publishing the agent skill "fixture-archive-unclear", but its zip does not look like/,
+    ),
+    1,
+    'with the ambiguity named',
+  );
+
+  assert.ok(!published.includes('fixture-nested-zip'), 'a wrapper-nested zip is refused');
 });
 
 test('a skill-md entry with no description takes the one from its own front matter', () => {

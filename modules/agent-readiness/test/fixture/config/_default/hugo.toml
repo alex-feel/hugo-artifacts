@@ -389,6 +389,26 @@ enableRobotsTXT = true
       description = 'An archive whose ordinary CDN path contains an archive segment, which is not a forge endpoint.'
       source = 'http://127.0.0.1:51313/cdn/skills/archive/skill.zip'
 
+    # A zip whose root members are stored with a `./` prefix, which some zip
+    # writers do. That IS the root, and counting separator-preceded
+    # occurrences without counting `./` back in refused it.
+    [[params.agent.skills]]
+      name = 'fixture-archive-dot'
+      type = 'archive'
+      description = 'A fixture skill archive whose root member is stored with a ./ prefix, which is still the root.'
+      source = 'http://127.0.0.1:51313/archives/rooted-dot.zip'
+
+    # A wrapper-nested zip carrying ONE extra unseparated occurrence of the
+    # name, in an uncompressed member's text. Counting cannot tell that from a
+    # root member, and the total lands one short of what a real root member
+    # produces -- the state the module reports rather than trusting, because a
+    # zip index cannot be parsed from a template.
+    [[params.agent.skills]]
+      name = 'fixture-archive-unclear'
+      type = 'archive'
+      description = 'An archive whose root SKILL.md cannot be confirmed from its raw bytes, which is published with a warning rather than trusted.'
+      source = 'http://127.0.0.1:51313/archives/unclear.zip'
+
     # ---- Refused ----
 
     # A URL that passes the absolute-http(s) test and then fails to parse.
