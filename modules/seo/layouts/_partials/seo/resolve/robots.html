@@ -2,7 +2,7 @@
   Produces the single all-bots robots directive string and the per-bot map,
   merging four inputs with token union and most-restrictive-wins per axis. Pure
   value chooser: the only side effects are deduplicated warns (via
-  lib/warn.html) when a deprecated token is stripped and (via lib/num.html)
+  lib/warn.html) when seo.robots_bots is not a table and (via lib/num.html)
   when a parameterized token's numeric value is unparseable and the token is
   dropped.
 
@@ -26,9 +26,14 @@
   max-snippet and max-video-preview values parse as SIGNED DECIMAL integers
   through lib/num.html ("-1" is the legitimate unlimited sentinel; "010" reads
   as 10, never octal); an unparseable value drops that one token with a
-  deduped warn while the rest of the directive keeps merging. Deprecated
-  tokens (noarchive, nocache, nositelinkssearchbox, noodp) are stripped with a
-  deduped warn. When the merged set is empty, "" is returned (no tag emitted).
+  deduped warn while the rest of the directive keeps merging. Every token this
+  resolver does not reduce itself passes through untouched: robots meta is
+  specified so that a crawler ignores what it does not read, so an unknown or
+  obsolete token costs nothing, while a build-time list of which tokens are
+  dead is a per-vendor judgment no universal module can keep current -- one
+  such list silently deleted noarchive and nocache, which Google retired but
+  Bing reads to control Bing Chat answers and generative-AI training. When the
+  merged set is empty, "" is returned (no tag emitted).
 
   Per-bot targeting comes from the seo.robots_bots map; each bot value is merged
   with the same semantics against the all-bots set.
@@ -38,7 +43,6 @@
 
 {{- $page := . -}}
 
-{{- $deprecated := slice "noarchive" "nocache" "nositelinkssearchbox" "noodp" -}}
 {{- $previewRank := dict "none" 3 "standard" 2 "large" 1 -}}
 
 {{/* Collect the raw directive source strings for the ALL-BOTS set, in order. */}}
@@ -113,13 +117,7 @@
   {{- range $raw := (split $src ",") -}}
     {{- $tok := $raw | strings.TrimSpace | lower -}}
     {{- if $tok -}}
-      {{- if in $deprecated $tok -}}
-        {{/* Deprecated: strip with a deduped warn (keyed per page + token). */}}
-        {{- partial "seo/lib/warn.html" (dict
-          "key" (printf "seo:warn:robots-deprecated:%s:%s" $tok $page.RelPermalink)
-          "message" (printf "[seo] robots directive on %q contains deprecated token %q (unsupported since 2026); token stripped." $page.RelPermalink $tok)
-        ) -}}
-      {{- else if eq $tok "none" -}}
+      {{- if eq $tok "none" -}}
         {{- $hasNoindex = true -}}
         {{- $hasNofollow = true -}}
       {{- else if eq $tok "noindex" -}}
@@ -164,8 +162,11 @@
       {{- else if hasPrefix $tok "unavailable_after:" -}}
         {{- $unavailable = strings.TrimPrefix "unavailable_after:" $tok -}}
       {{- else if not (in $simple $tok) -}}
-        {{/* Pass-through simple tokens: nosnippet, noimageindex, notranslate,
-             indexifembedded (order-preserving, deduped). */}}
+        {{/* Pass-through simple tokens, order-preserving and deduped:
+             nosnippet, noimageindex, notranslate, indexifembedded, the
+             Bing-read noarchive and nocache, and anything else the consumer
+             writes -- this resolver reduces the tokens it knows and never
+             judges the rest. */}}
         {{- $simple = $simple | append $tok -}}
       {{- end -}}
     {{- end -}}
@@ -224,7 +225,7 @@
     {{- range $src := $botSources -}}
       {{- range $raw := (split $src ",") -}}
         {{- $tok := $raw | strings.TrimSpace | lower -}}
-        {{- if and $tok (not (in $deprecated $tok)) -}}
+        {{- if $tok -}}
           {{- if eq $tok "none" -}}
             {{- $bHasNoindex = true -}}
             {{- $bHasNofollow = true -}}

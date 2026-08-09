@@ -123,6 +123,7 @@ export const PAGES = {
   scalarSeoBlock: 'blog/scalar-seo-block/index.html',
   falsySeoBlock: 'blog/falsy-seo-block/index.html',
   keywordsFallback: 'blog/keywords-fallback/index.html',
+  robotsAiUsage: 'blog/robots-ai-usage/index.html',
   home: 'index.html',
   page: 'page/index.html',
   blogSection: 'blog/index.html',
