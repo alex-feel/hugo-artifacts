@@ -2,7 +2,9 @@
   home.agentskills.json -- the Agent Skills discovery index.
 
   Publishes /.well-known/agent-skills/index.json alongside one republished
-  /.well-known/agent-skills/<name>/SKILL.md per indexed skill.
+  artifact per indexed skill: /.well-known/agent-skills/<name>/SKILL.md for a
+  skill distributed as a single file, /.well-known/agent-skills/<name>.tar.gz
+  or <name>.zip for one distributed as an archive.
 
   FOUR GATES, and the file is emitted only when all four pass:
     1. cfg.enable            -- the module master switch.
@@ -71,7 +73,13 @@
 {{- $page := . -}}
 {{- $cfg := partial "agent-readiness/config.html" (dict "page" . "site_only" true) -}}
 {{- if and $cfg.enable $cfg.skills_index.enable site.Language.IsDefault -}}
-  {{- $skills := partial "agent-readiness/skills.html" (dict "page" . "cfg" $cfg) -}}
+  {{/* partialCached under the SAME key lib/skills-index-url.html uses, so the
+       validation, the fetches, the front-matter parse, the sibling probes and
+       the hashing all happen ONCE for the build however many callers ask.
+       Sharing the key is safe because this template renders only from the
+       default language, so the page and config it resolves are the ones that
+       partial resolves for itself. */}}
+  {{- $skills := partialCached "agent-readiness/skills.html" (dict "page" . "cfg" $cfg) "agent-readiness:skills-index:skills" -}}
   {{- with $skills -}}
     {{/* `with` has rebound the dot to the skill slice, so the page the
          build-time partial is handed comes from the capture above. */}}

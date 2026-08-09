@@ -219,7 +219,7 @@ jobs:
             run: bash run-tests.sh
             deps: true
             hugo: '0.161.1'
-          # Fetches raw.githubusercontent.com for its skills index and calls
+          # Serves its own skills-index fixtures from a loopback origin it starts itself and calls
           # the GitHub, Hugging Face, arXiv and YouTube APIs in its widgets
           # build. It blocks anyway, because a module changes exactly once --
           # in a pull request -- so that is the only moment its templates can

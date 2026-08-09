@@ -26,6 +26,13 @@
 //     exclusions): bare URLs inside shortcode arguments, javascript:
 //     destinations, bracketed-title probes, and attribute blocks whose line
 //     structure is semantically load-bearing.
+//   - modules/agent-readiness/test/fixture-origin/ is the Agent Skills
+//     fixture ORIGIN corpus: Markdown test DATA served over HTTP to the
+//     module's own fetcher (paralleling the .prettierignore exclusion).
+//     Several files are deliberately malformed -- TOML front matter, an
+//     unterminated YAML sequence, no front matter at all -- which is exactly
+//     what they exist to prove, so linting them reports on the fixture's
+//     purpose rather than on a defect.
 //   - **/layouts/**/*.md files are Hugo TEMPLATES, not Markdown documents:
 //     Hugo's output-format template naming is [kind].[format].[suffix], so a
 //     Markdown-emitting template is necessarily named *.md (page.markdown.md,
@@ -57,6 +64,7 @@
     "modules/pwa/test/IOS_MANUAL_MATRIX.md",
     "modules/images/test/fixture/content/**",
     "modules/agent-readiness/test/fixture-widgets/content/**",
+    "modules/agent-readiness/test/fixture-origin/**",
     "shortcodes/test-smoke/fixture/content/**",
     "**/layouts/**/*.md",
     "**/test-results/**",

@@ -1,0 +1,20 @@
+# The `strictskills` environment: the single key
+# skills_index.on_supporting_files = 'omit' on top of the default
+# configuration, and nothing else.
+#
+# It is the only build in which that key decides anything. Everywhere else the
+# disposition is the shipped 'warn', so the entire omit branch -- the one a
+# consumer opts into when they would rather publish nothing than publish a
+# skill whose supporting files this site cannot serve -- would never execute
+# and deleting it would leave the suite green. That is the failure shape `off`,
+# `nolinkmd`, `nosectionpages` and `nobuildtime` each got an environment for.
+#
+# One entry moves: `fixture-multi`, whose body links references/GUIDE.md and
+# whose origin really answers for that file. Every other published entry must
+# be untouched here, because the key governs PROVEN supporting files and
+# nothing else -- an entry that also disappears would mean the disposition is
+# reaching cases it was never meant to decide.
+[agent]
+
+  [agent.skills_index]
+    on_supporting_files = 'omit'

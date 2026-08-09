@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Validates the shipped data files, then builds TWENTY-ONE fixture sites with
-# hugo (builds, not servers: no port binding, and a finite build exits by
-# itself) and runs the Node build-output assertion suite against all
-# twenty-one.
+# Validates the shipped data files, starts the fixture ORIGIN, then builds
+# TWENTY-TWO fixture sites with hugo (builds, not servers: no port binding, and
+# a finite build exits by itself) and runs the Node build-output assertion
+# suite against all twenty-two.
 #
 # The data-file check runs FIRST, before any build. That ordering is the
 # point: a malformed registry otherwise surfaces as an opaque Hugo failure at
 # some unrelated template, and the reader has to work backwards to it.
 #
-# The twenty-one builds:
+# The twenty-two builds:
 #   baseline   -- every content-license key unset, proving the license
 #                 surfaces are inert until a consumer opts in;
 #   configured -- the license table filled and both switches on, plus
@@ -72,6 +72,11 @@
 #                 than extending it. The only build in which the format
 #                 conjunct decides a byte, and the only one that must emit the
 #                 wire-it-up warning;
+#   strictskills -- the single key skills_index.on_supporting_files = 'omit'
+#                 over the default configuration, the only build in which a
+#                 skill PROVEN to ship supporting files is refused rather than
+#                 published with a warning, and therefore the only one in which
+#                 that whole branch executes at all;
 #   shadow     -- a fixture shipping its own layouts/robots.txt, proving the
 #                 documented silent-override hazard;
 #   paginated  -- a fixture whose single section spills past pagerSize, so
@@ -94,11 +99,17 @@
 # process check, and hard-fails on any deprecation or error output in any
 # build log.
 #
-# NETWORK: the agent-skills specs exercise a real build-time remote fetch,
-# because the digest guarantee cannot be proven without one. The widgets
-# build additionally fetches the widget modules' remote APIs (GitHub, the
-# Hugging Face Hub, arXiv, YouTube posters); those fetches degrade with
-# WARN lines when tokenless or rate-limited, which the log gates below
+# THE ORIGIN: the agent-skills specs exercise a real build-time remote fetch,
+# because the digest guarantee -- the advertised hash is computed from the
+# bytes this site republishes -- cannot be proven without one. Those fetches
+# are answered by serve-origin.mjs on 127.0.0.1, started below and stopped
+# afterwards, so nothing outside this repository can change what the fixture
+# fetches or turn a pull request red. See that file for why serving the bytes
+# ourselves also buys the response headers and the pathological cases.
+#
+# NETWORK: the widgets build still fetches the widget modules' remote APIs
+# (GitHub, the Hugging Face Hub, arXiv, YouTube posters); those fetches degrade
+# with WARN lines when tokenless or rate-limited, which the log gates below
 # deliberately tolerate -- they hard-fail on deprecations and errors only.
 set -euo pipefail
 
@@ -125,10 +136,16 @@ LOG_FILE_LLMSINDEXOFF="$HERE/hugo-build-llmsindexoff.log"
 LOG_FILE_UNWIRED="$HERE/hugo-build-unwired.log"
 LOG_FILE_NOLINKINDEXES="$HERE/hugo-build-nolinkindexes.log"
 LOG_FILE_NOCOMPACT="$HERE/hugo-build-nocompact.log"
+LOG_FILE_STRICTSKILLS="$HERE/hugo-build-strictskills.log"
 LOG_FILE_SHADOW="$HERE/hugo-build-shadow.log"
 LOG_FILE_PAGINATED="$HERE/hugo-build-paginated.log"
 LOG_FILE_WIDGETS="$HERE/hugo-build-widgets.log"
 LOG_FILE_EXTRA="$HERE/hugo-build-extra.log"
+ORIGIN_LOG="$HERE/fixture-origin.log"
+# Fixed, because a Hugo configuration file cannot learn a port at run time and
+# the fixture's `source` URLs name this one. Kept in step with the value in
+# serve-origin.mjs and in fixture/config/_default/hugo.toml.
+ORIGIN_PORT=51313
 
 # The logs are retained after a successful run so the documented re-run recipe
 # can read them; they are gitignored at the repo root. Only an interrupt
@@ -145,12 +162,20 @@ kill_stray_hugo() {
     taskkill //F //IM hugo.exe >/dev/null 2>&1 || true
   fi
 }
+stop_origin() {
+  node "$HERE/serve-origin.mjs" stop >/dev/null 2>&1 || true
+}
 cleanup_interrupted() {
   kill_stray_hugo
-  rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_NOTWINS"     "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_LLMSOFF" "$LOG_FILE_EDGE" "$LOG_FILE_OFF"     "$LOG_FILE_BADTABLES" "$LOG_FILE_NSOFF" "$LOG_FILE_NOSECTIONPAGES" "$LOG_FILE_NOLINKMD"     "$LOG_FILE_NOBUILDTIME" "$LOG_FILE_LLMSINDEXOFF" "$LOG_FILE_UNWIRED" "$LOG_FILE_NOLINKINDEXES" "$LOG_FILE_NOCOMPACT" "$LOG_FILE_SHADOW" "$LOG_FILE_PAGINATED" "$LOG_FILE_WIDGETS" "$LOG_FILE_EXTRA"
+  stop_origin
+  rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_NOTWINS"     "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_LLMSOFF" "$LOG_FILE_EDGE" "$LOG_FILE_OFF"     "$LOG_FILE_BADTABLES" "$LOG_FILE_NSOFF" "$LOG_FILE_NOSECTIONPAGES" "$LOG_FILE_NOLINKMD"     "$LOG_FILE_NOBUILDTIME" "$LOG_FILE_LLMSINDEXOFF" "$LOG_FILE_UNWIRED" "$LOG_FILE_NOLINKINDEXES" "$LOG_FILE_NOCOMPACT" "$LOG_FILE_STRICTSKILLS" "$LOG_FILE_SHADOW" "$LOG_FILE_PAGINATED" "$LOG_FILE_WIDGETS" "$LOG_FILE_EXTRA" "$ORIGIN_LOG"
+}
+cleanup_exit() {
+  kill_stray_hugo
+  stop_origin
 }
 trap cleanup_interrupted INT TERM
-trap kill_stray_hugo EXIT
+trap cleanup_exit EXIT
 
 cd "$HERE"
 
@@ -173,6 +198,19 @@ elif command -v tasklist >/dev/null 2>&1; then
     echo "A hugo process is already running; stop it first: taskkill /F /IM hugo.exe" >&2
     exit 1
   fi
+fi
+
+# ---- The fixture origin ----
+# Started before any build, stopped by the EXIT trap. The stop first clears an
+# origin left behind by an aborted run; a port held by anything else makes the
+# listen fail, which `wait` reports with the server's own message rather than
+# letting the builds fetch from whatever is actually there.
+stop_origin
+node "$HERE/serve-origin.mjs" serve "$ORIGIN_PORT" > "$ORIGIN_LOG" 2>&1 &
+if ! node "$HERE/serve-origin.mjs" wait "$ORIGIN_PORT"; then
+  echo "The fixture origin did not start on 127.0.0.1:${ORIGIN_PORT}:" >&2
+  cat "$ORIGIN_LOG" >&2
+  exit 1
 fi
 
 build() {
@@ -228,6 +266,7 @@ build "$FIXTURE_DIR" llmsindexoff public/llmsindexoff "$LOG_FILE_LLMSINDEXOFF"
 build "$FIXTURE_DIR" unwired public/unwired "$LOG_FILE_UNWIRED"
 build "$FIXTURE_DIR" nolinkindexes public/nolinkindexes "$LOG_FILE_NOLINKINDEXES"
 build "$FIXTURE_DIR" nocompact public/nocompact "$LOG_FILE_NOCOMPACT"
+build "$FIXTURE_DIR" strictskills public/strictskills "$LOG_FILE_STRICTSKILLS"
 build "$SHADOW_DIR" "" public "$LOG_FILE_SHADOW"
 build "$PAGINATED_DIR" "" public "$LOG_FILE_PAGINATED"
 build "$WIDGETS_DIR" "" public "$LOG_FILE_WIDGETS"
@@ -250,6 +289,7 @@ export FIXTURE_PUBLIC_LLMSINDEXOFF="$FIXTURE_DIR/public/llmsindexoff"
 export FIXTURE_PUBLIC_UNWIRED="$FIXTURE_DIR/public/unwired"
 export FIXTURE_PUBLIC_NOLINKINDEXES="$FIXTURE_DIR/public/nolinkindexes"
 export FIXTURE_PUBLIC_NOCOMPACT="$FIXTURE_DIR/public/nocompact"
+export FIXTURE_PUBLIC_STRICTSKILLS="$FIXTURE_DIR/public/strictskills"
 export FIXTURE_PUBLIC_SHADOW="$SHADOW_DIR/public"
 export FIXTURE_PUBLIC_PAGINATED="$PAGINATED_DIR/public"
 export FIXTURE_PUBLIC_WIDGETS="$WIDGETS_DIR/public"
@@ -271,6 +311,7 @@ export HUGO_BUILD_LOG_LLMSINDEXOFF="$LOG_FILE_LLMSINDEXOFF"
 export HUGO_BUILD_LOG_UNWIRED="$LOG_FILE_UNWIRED"
 export HUGO_BUILD_LOG_NOLINKINDEXES="$LOG_FILE_NOLINKINDEXES"
 export HUGO_BUILD_LOG_NOCOMPACT="$LOG_FILE_NOCOMPACT"
+export HUGO_BUILD_LOG_STRICTSKILLS="$LOG_FILE_STRICTSKILLS"
 export HUGO_BUILD_LOG_SHADOW="$LOG_FILE_SHADOW"
 export HUGO_BUILD_LOG_PAGINATED="$LOG_FILE_PAGINATED"
 export HUGO_BUILD_LOG_WIDGETS="$LOG_FILE_WIDGETS"

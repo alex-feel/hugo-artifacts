@@ -181,6 +181,11 @@ sitemap_section = true
 # --- /.well-known/agent-skills/ ---
 [skills_index]
 enable = true   # SITE-SCOPED (see the header note on surface switches)
+# The index's own `$schema` identifier, emitted verbatim. Clients match it
+# against the schema URIs they know and refuse to process an index whose
+# identifier they do not recognize, so point it at a newer draft only when you
+# mean to. It must carry a URI scheme; the convention treats the value as
+# opaque and does not require it to resolve.
 schema = "https://schemas.agentskills.io/discovery/0.2.0/schema.json"
 # Emit the top-level "generated" key: the build's RFC 3339 timestamp. Same
 # value and same trade-off as [markdown] build_time above. It answers what the
@@ -188,8 +193,20 @@ schema = "https://schemas.agentskills.io/discovery/0.2.0/schema.json"
 # one is newer" -- and the discovery convention explicitly requires clients to
 # ignore fields they do not recognize.
 build_time = true
+# What to do with a skill indexed as a single SKILL.md that turns out to ship
+# supporting files -- proven, by resolving a reference out of its own body
+# against its source URL and finding the file really there. "warn" publishes it
+# and says so; "omit" refuses it. The default warns because the detection is
+# best-effort by construction and an empty index publishes NO file at all, so a
+# missed guess must not be able to delete the whole surface.
+on_supporting_files = "warn"
 # Consumer-declared array of tables; empty emits NO file at all. Shape:
-#   [[params.agent.skills]] name = "…" description = "…" source = "<pinned raw URL>"
+#   [[params.agent.skills]] name = "…" description = "…" source = "<pinned URL>"
+# `type` is optional and defaults to "skill-md"; set it to "archive" for a
+# skill distributed as a .tar.gz or .zip whose ROOT is the skill directory.
+# `description` may be omitted for a "skill-md" entry, in which case the value
+# is taken verbatim from the fetched SKILL.md front matter; an "archive" entry
+# must declare one, because the module cannot read inside an archive.
 
 # --- Content license (SITE-SCOPED) ---
 # Identity of the license covering the site's editorial content. Empty

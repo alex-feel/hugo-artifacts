@@ -1,0 +1,90 @@
+{{/*
+  agent-readiness/lib/skill-frontmatter.html -- INTERNAL (lib tier).
+
+  Purpose: read the YAML front matter of a fetched SKILL.md, or report WHY it
+  could not be read. The discovery convention requires that file to "contain
+  YAML frontmatter with `name` and `description` fields", and the format
+  specification makes both of them required fields of its own, so an
+  artifact carrying none is not a SKILL.md at all, and the caller refuses to
+  republish it as one rather than advertising a document no client can use.
+
+  NOTHING HERE MAY STOP THE BUILD, and every guard below exists because a
+  measured input reached it. The bytes belong to a third party and arrive over
+  the network, so:
+
+    - `format` is pinned to yaml because Hugo otherwise GUESSES the format
+      from the content: a block whose first line opens with `<` is decoded as
+      XML, one opening with `{` as JSON, one carrying an early `=` as TOML,
+      and each of those fails on perfectly good front matter;
+    - `try` catches what remains, genuinely malformed YAML, which aborts the
+      whole build with a parse error otherwise;
+    - an empty block parses to nil rather than to a map, and a body that is a
+      bare scalar or a list parses to neither, so the result is gated on
+      reflect.IsMap before it is indexed;
+    - `name` and `description` are not necessarily strings -- `name: 123`
+      arrives as a number and `description: [a, b]` as a slice -- so a
+      non-scalar is rejected outright and a scalar is stringified once.
+
+  TOML front matter is reported separately from absent front matter. `+++` is
+  what a Hugo author reaches for by habit, and the format specification allows
+  YAML only, so the two deserve different sentences.
+
+  Expected context (dict):
+  - .body (string) - The fetched SKILL.md, verbatim.
+
+  Return value: a dict carrying
+    .ok          (bool)   - true when both fields were read;
+    .reason      (string) - "" when ok, else one of "toml", "absent",
+                            "unparseable", "not-a-map", "no-name",
+                            "no-description";
+    .name        (string) - the front-matter name, trimmed;
+    .description (string) - the front-matter description, trimmed.
+  ONE terminal return.
+*/}}
+
+{{/* The BOM is written as an escape, never as a literal: an invisible
+     character inside a string literal is unreadable in review and a stray
+     editor normalization would delete it without changing anything a reader
+     can see. */}}
+{{- $body := strings.TrimPrefix "\ufeff" (.body | default "") -}}
+{{- $ok := false -}}
+{{- $reason := "absent" -}}
+{{- $name := "" -}}
+{{- $description := "" -}}
+
+{{- if hasPrefix $body "+++" -}}
+  {{- $reason = "toml" -}}
+{{- else -}}
+  {{/* The BOM is stripped above rather than matched here, so this pattern
+       stays the one shape the format defines: an opening fence on the first
+       line, the block, and a closing fence on its own line. CRLF is admitted
+       because a skill authored on Windows is still a valid skill. */}}
+  {{- with findRESubmatch `(?s)\A---\r?\n(.*?)\r?\n---[ \t]*(\r?\n|\z)` $body 1 -}}
+    {{- $parsed := try (transform.Unmarshal (dict "format" "yaml") (index (index . 0) 1)) -}}
+    {{- with $parsed.Err -}}
+      {{- $reason = "unparseable" -}}
+    {{- else -}}
+      {{- $fm := $parsed.Value -}}
+      {{- if not (reflect.IsMap $fm) -}}
+        {{- $reason = "not-a-map" -}}
+      {{- else -}}
+        {{- $rawName := index $fm "name" -}}
+        {{- $rawDescription := index $fm "description" -}}
+        {{- if or (reflect.IsMap $rawName) (reflect.IsSlice $rawName) -}}{{- $rawName = "" -}}{{- end -}}
+        {{- if or (reflect.IsMap $rawDescription) (reflect.IsSlice $rawDescription) -}}{{- $rawDescription = "" -}}{{- end -}}
+        {{- if ne $rawName nil -}}{{- $name = trim (printf "%v" $rawName) " \t\r\n" -}}{{- end -}}
+        {{- if ne $rawDescription nil -}}{{- $description = trim (printf "%v" $rawDescription) " \t\r\n" -}}{{- end -}}
+        {{- if eq $name "" -}}
+          {{- $reason = "no-name" -}}
+        {{- else if eq $description "" -}}
+          {{- $reason = "no-description" -}}
+        {{- else -}}
+          {{- $ok = true -}}
+          {{- $reason = "" -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return (dict "ok" $ok "reason" $reason "name" $name "description" $description) -}}

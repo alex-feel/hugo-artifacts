@@ -1,0 +1,99 @@
+{{/*
+  agent-readiness/lib/skill-archive.html -- INTERNAL (lib tier).
+
+  Purpose: decide from the BYTES what a fetched skill artifact actually is,
+  because nothing else in the chain can be trusted to say so.
+
+  WHY THE BYTES AND NOT THE URL OR THE HEADER. resources.Copy retains the
+  SOURCE resource's media type and accepts any target extension, so copying a
+  gzip stream to a `.zip` path publishes a file whose name lies and whose
+  media type still says gzip (measured on Hugo v0.164.0). The response header
+  is no better: the same archive arrives as `application/gzip` from one host
+  and `application/x-gzip` or `application/octet-stream` from another, and the
+  discovery draft tells CLIENTS to fall back to the URL extension for exactly
+  that reason. The magic number is the one signal that cannot disagree with
+  the file, so it -- and only it -- picks the published extension.
+
+  The two formats are the two the draft requires clients to support: "Archives
+  SHOULD be in `.tar.gz` (gzip-compressed tar) or `.zip` format. Clients MUST
+  support at least `.tar.gz` and `.zip`."
+
+  ROOTEDNESS, FOR ZIP ONLY, AND ONLY AS FAR AS COUNTING GOES. The draft
+  requires that "The archive MUST contain a `SKILL.md` file at the root". A
+  zip stores its member NAMES uncompressed, so a root-level member leaves a
+  trace in the raw bytes: an occurrence of `SKILL.md` that no separator
+  precedes. Each name is written twice, in the local header and in the central
+  directory, so a genuine root member contributes a SURPLUS OF TWO over the
+  separator-preceded occurrences. `./` and `.\` prefixes are counted back in,
+  because a member stored as `./SKILL.md` IS at the root and refusing it would
+  be a false refusal.
+
+  What this cannot do, stated so no reader mistakes it for a guarantee: a
+  member named `MYSKILL.md` or `SUBSKILL.md` contributes the same two
+  occurrences as a root member and cannot be told apart by counting; a STORED
+  (uncompressed) member whose text mentions the name, or an archive comment
+  that does, inflates the count the same way. Hugo has no byte indexing with
+  which to parse a central directory -- substr and slicestr walk runes, and a
+  lone 0x8b becomes U+FFFD -- so no template can do better than counting. A
+  surplus of exactly one is therefore reported as UNCLEAR rather than passed
+  in silence: it cannot come from a well-formed member table, so something in
+  the archive is not what it appears to be. A .tar.gz stores its names
+  COMPRESSED, so the same question is unanswerable there and the publisher
+  owns it entirely.
+
+  Expected context (dict):
+  - .content (string) - The fetched artifact's raw bytes.
+
+  Return value: a dict carrying
+    .format (string) - "gzip", "zip", or "" when the bytes are neither;
+    .ext    (string) - the published extension for that format, or "";
+    .note   (string) - "" when unremarkable, else "empty-zip", "spanned-zip"
+                       or "text", each naming what the bytes look like instead;
+    .rooted (string) - "yes", "no" or "unclear" for a zip; "unknowable" for a
+                       gzip stream and for anything that is not an archive,
+                       where the question cannot be asked at all.
+  ONE terminal return.
+*/}}
+
+{{- $content := .content | default "" -}}
+{{- $format := "" -}}
+{{- $ext := "" -}}
+{{- $note := "" -}}
+{{- $rooted := "unknowable" -}}
+
+{{/* hasPrefix compares bytes and is safe on content that is not valid UTF-8;
+     substr and slicestr are NOT -- they walk runes, and a lone 0x8b becomes
+     U+FFFD -- so no byte inspection here ever indexes. */}}
+{{- if hasPrefix $content "\x1f\x8b" -}}
+  {{- $format = "gzip" -}}
+  {{- $ext = ".tar.gz" -}}
+{{- else if hasPrefix $content "PK\x03\x04" -}}
+  {{- $format = "zip" -}}
+  {{- $ext = ".zip" -}}
+  {{/* Occurrences no separator precedes, with `./` and `.\` counted back in
+       because such a member is at the root. A well-formed root member scores
+       two; see the header for what this cannot see. */}}
+  {{- $surplus := sub
+      (add
+        (strings.Count "SKILL.md" $content)
+        (add (strings.Count "./SKILL.md" $content) (strings.Count ".\\SKILL.md" $content)))
+      (add (strings.Count "/SKILL.md" $content) (strings.Count "\\SKILL.md" $content)) -}}
+  {{- if ge $surplus 2 -}}
+    {{- $rooted = "yes" -}}
+  {{- else if eq $surplus 1 -}}
+    {{- $rooted = "unclear" -}}
+  {{- else -}}
+    {{- $rooted = "no" -}}
+  {{- end -}}
+{{- else if hasPrefix $content "PK\x05\x06" -}}
+  {{/* End-of-central-directory as the FIRST record: a zip with no members. */}}
+  {{- $note = "empty-zip" -}}
+{{- else if hasPrefix $content "PK\x07\x08" -}}
+  {{/* The spanned/split-archive marker: the rest of this archive is in
+       another file, so what was fetched is not a complete artifact. */}}
+  {{- $note = "spanned-zip" -}}
+{{- else if hasPrefix $content "---" -}}
+  {{- $note = "text" -}}
+{{- end -}}
+
+{{- return (dict "format" $format "ext" $ext "note" $note "rooted" $rooted) -}}

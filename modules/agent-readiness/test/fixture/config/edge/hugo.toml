@@ -47,6 +47,15 @@ baseURL = 'https://example.org/docs/'
   [params.agent]
     sections = ['/blog', 'projects/', '/dupes']
 
+    # A `$schema` that is not an absolute URI. The convention makes this field
+    # the one thing a client keys its whole decision on -- an index whose
+    # `$schema` it does not recognize is one it "SHOULD NOT process" -- so a
+    # relative or empty value publishes a document conforming clients discard
+    # wholesale, silently, with every other gate green. The shipped default
+    # stands in for it and the substitution is named.
+    [params.agent.skills_index]
+      schema = 'agent-skills/0.2.0'
+
     [params.agent.license]
       # Deliberately no `name`. The llms.txt line is composed as [name](url),
       # so emitting it would publish a link with an empty label.

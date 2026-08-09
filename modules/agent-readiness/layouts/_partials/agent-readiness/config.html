@@ -344,6 +344,53 @@
   {{- $cascade = merge $cascade (dict "skills" slice) -}}
 {{- end -}}
 
+{{/* ---- Agent Skills index scalars ---- Two string-valued keys that decide
+     what the published index SAYS and what the resolver DOES with a skill it
+     finds fault with, so both are normalized once here rather than read raw
+     by the emitter.
+
+     `schema` is emitted verbatim as the index's `$schema` member, and the
+     discovery convention makes it the one field a client keys its whole
+     decision on: an index whose `$schema` a client does not recognize is one
+     it "SHOULD NOT process". An empty or relative value therefore publishes a
+     document that conforming clients discard wholesale, silently, with every
+     other gate green -- so a value carrying no URI scheme at all is refused
+     and the shipped default stands in for it. Only the scheme is required:
+     the convention calls this field an "opaque identifier" that "does not
+     need to be resolvable", so which scheme, and whether anything answers
+     at that URI, are the publisher's business and not this module's.
+
+     `on_supporting_files` decides whether a skill PROVEN to have supporting
+     files is warned about or omitted; an unrecognized value falls back to the
+     safer of the two rather than to whichever the comparison happens to
+     miss. */}}
+{{- $skillsIndex := index $maps "skills_index" -}}
+{{- if reflect.IsMap $skillsIndex -}}
+  {{- $shippedSchema := "" -}}
+  {{- with index $defaults "skills_index" -}}
+    {{- if reflect.IsMap . -}}
+      {{- $shippedSchema = trim (printf "%v" (index . "schema" | default "")) " \t\n\r" -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $schema := trim (printf "%v" (index $skillsIndex "schema" | default "")) " \t\n\r" -}}
+  {{- if not (findRE `^[A-Za-z][A-Za-z0-9+.-]*:` $schema 1) -}}
+    {{- partial "agent-readiness/lib/warn.html" (dict
+        "key" (printf "agent-readiness:warn:skills-index-schema:%s" $schema)
+        "message" (printf "[agent-readiness] Ignoring [params.agent.skills_index] schema %q and publishing %q instead: the value is emitted as the index's own $schema identifier, which clients match against the schema URIs they know and refuse to process the index when they cannot. It must be an absolute URI -- the convention treats it as an opaque identifier, so any scheme will do, but a relative or empty value identifies nothing." $schema $shippedSchema)) -}}
+    {{- $schema = $shippedSchema -}}
+  {{- end -}}
+  {{- $onSupportingFiles := lower (trim (printf "%v" (index $skillsIndex "on_supporting_files" | default "warn")) " \t\n\r") -}}
+  {{- if not (in (slice "warn" "omit") $onSupportingFiles) -}}
+    {{- partial "agent-readiness/lib/warn.html" (dict
+        "key" (printf "agent-readiness:warn:skills-index-on-supporting-files:%s" $onSupportingFiles)
+        "message" (printf "[agent-readiness] Ignoring [params.agent.skills_index] on_supporting_files %q and keeping \"warn\": the key takes \"warn\", which publishes a skill whose supporting files this site cannot serve and says so, or \"omit\", which refuses it." $onSupportingFiles)) -}}
+    {{- $onSupportingFiles = "warn" -}}
+  {{- end -}}
+  {{- $maps = merge $maps (dict "skills_index" (merge $skillsIndex (dict
+      "schema" $schema
+      "on_supporting_files" $onSupportingFiles))) -}}
+{{- end -}}
+
 {{/* ---- Section allow-list ---- Slice or comma-separated string; each entry
      is normalized through lib/section.html. The sentinel "mainSections" (any
      case) expands to site.MainSections, which is why that branch sits here

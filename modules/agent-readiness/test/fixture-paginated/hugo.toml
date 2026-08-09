@@ -35,6 +35,22 @@ locale = 'en-us'
   [[module.imports]]
     path = "github.com/alex-feel/hugo-artifacts/modules/agent-readiness"
 
+# The fixture ORIGIN, as in fixture/config/_default/hugo.toml: the one skill
+# below is fetched from test/serve-origin.mjs rather than from anybody else's
+# endpoint, and Hugo's shipped policy refuses a loopback host until it is
+# allowed here. Caching is off for the same reason it is off there -- a fetched
+# body is otherwise cached forever and outlives every edit to the corpus.
+[security]
+
+  [security.http]
+    mediaTypes = ['^application/gzip$', '^application/x-gzip$', '^application/zip$']
+    urls = ['^https?://127\.0\.0\.1:51313/']
+
+[caches]
+
+  [caches.getresource]
+    maxAge = 0
+
 [params]
 
   [params.agent]
@@ -57,8 +73,13 @@ locale = 'en-us'
         section = 'posts'
 
     # One valid, fetchable skill, so the skills index is actually emitted and
-    # the assertion that it names no pager URL reads a real document.
+    # the assertion that it names no pager URL reads a real document. The name
+    # matches the front matter of the file the origin serves, because the
+    # specification requires a skill's declared name to match the directory it
+    # is published under.
+    # No description key: the value comes from the fetched front matter, which
+    # keeps this build silent -- a paraphrase here would warn, and this fixture
+    # exists to assert something else entirely.
     [[params.agent.skills]]
-      name = 'paginated-fixture-skill'
-      description = 'A fixture skill, present so the paginated build emits a real Agent Skills index to assert against.'
-      source = 'https://raw.githubusercontent.com/gohugoio/hugo/v0.160.1/SECURITY.md'
+      name = 'fixture-single'
+      source = 'http://127.0.0.1:51313/fixture-single/SKILL.md'

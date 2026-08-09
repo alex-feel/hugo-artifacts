@@ -8,6 +8,13 @@ resources/
 .hugo_build.lock
 hugo-build*.log
 
+# The agent-readiness fixture ORIGIN's captured log and its pid file. The
+# runners start that server before the builds and stop it afterwards, and both
+# artifacts are removed on an interrupt; tracked here so a hard-killed run
+# cannot leave untracked files behind.
+fixture-origin.log
+origin.pid
+
 # Go
 vendor/
 
