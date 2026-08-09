@@ -85,6 +85,16 @@ async function handle(req, res) {
     return;
   }
 
+  // A media type Hugo can resolve from neither the URL extension nor the
+  // header, which is the only way to reach the fetch-error branch and the
+  // remediation hint it prints. Both are otherwise dead code under test: every
+  // other failure in this suite is an absent resource, not an error.
+  //
+  // The path under /weird/ is ignored and one body is always returned,
+  // because the URL must carry NO extension Hugo recognizes: a .md suffix
+  // resolves the media type on its own and the header never gets a say.
+  const unresolvable = path.startsWith('/weird/');
+
   // The transport-decompression trap: the bytes are a valid .tar.gz, but the
   // response claims them as gzip CONTENT-ENCODING, so any conforming client --
   // Hugo included -- hands the caller a bare tar. Publishing that under a
@@ -103,7 +113,7 @@ async function handle(req, res) {
 
   let body;
   try {
-    body = await readFile(file);
+    body = await readFile(unresolvable ? join(ROOT, 'fixture-single', 'SKILL.md') : file);
   } catch {
     res.writeHead(404, {'content-type': 'text/plain'});
     res.end('not found');
@@ -111,6 +121,7 @@ async function handle(req, res) {
   }
 
   const headers = {'content-type': contentType(file), 'content-length': String(body.length)};
+  if (unresolvable) headers['content-type'] = 'application/vnd.acme.weird';
   if (encoded) headers['content-encoding'] = 'gzip';
   res.writeHead(200, headers);
   res.end(body);

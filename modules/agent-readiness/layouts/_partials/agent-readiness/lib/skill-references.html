@@ -26,7 +26,12 @@
        on requiring capitals.
 
   WHAT IS STRIPPED, AND WHAT IS NOT. Fenced code blocks are removed for every
-  class: a fenced example demonstrating a skill's layout is not that skill's
+  class -- as far as one regular expression reaches, which is not all the way:
+  a fence indented inside a list item is not matched, and a stray ``` line
+  inside a ~~~ block pairs with the wrong opener. Both failures only move
+  candidates between classes or add one, and the probe decides either way, so
+  the cost is a request rather than a wrong verdict. The rest of the rule is
+  that a fenced example demonstrating a skill's layout is not that skill's
   own reference. Code SPANS are removed for classes A and C only, because a
   link inside backticks is an example while class B's natural habitat is
   exactly a span -- the discovery draft writes its own supporting-file

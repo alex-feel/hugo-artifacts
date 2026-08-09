@@ -18,17 +18,28 @@
   SHOULD be in `.tar.gz` (gzip-compressed tar) or `.zip` format. Clients MUST
   support at least `.tar.gz` and `.zip`."
 
-  ROOTEDNESS, FOR ZIP ONLY. The draft requires that "The archive MUST contain
-  a `SKILL.md` file at the root". A zip stores its member names UNCOMPRESSED,
-  so the question is answerable from the raw bytes without unpacking: every
-  occurrence of `SKILL.md` that is preceded by a slash belongs to a nested
-  member, so an archive whose `SKILL.md` count equals its `/SKILL.md` count
-  carries no root-level one. That test cannot produce a false refusal -- a
-  root member's name is not preceded by a slash, so the counts cannot be
-  equal -- while it can miss a nested archive whose compressed payload happens
-  to contain those eight bytes, which costs nothing beyond the refusal not
-  firing. A .tar.gz stores its names COMPRESSED and Hugo cannot decompress, so
-  the same question is unanswerable there and the publisher owns it.
+  ROOTEDNESS, FOR ZIP ONLY, AND ONLY AS FAR AS COUNTING GOES. The draft
+  requires that "The archive MUST contain a `SKILL.md` file at the root". A
+  zip stores its member NAMES uncompressed, so a root-level member leaves a
+  trace in the raw bytes: an occurrence of `SKILL.md` that no separator
+  precedes. Each name is written twice, in the local header and in the central
+  directory, so a genuine root member contributes a SURPLUS OF TWO over the
+  separator-preceded occurrences. `./` and `.\` prefixes are counted back in,
+  because a member stored as `./SKILL.md` IS at the root and refusing it would
+  be a false refusal.
+
+  What this cannot do, stated so no reader mistakes it for a guarantee: a
+  member named `MYSKILL.md` or `SUBSKILL.md` contributes the same two
+  occurrences as a root member and cannot be told apart by counting; a STORED
+  (uncompressed) member whose text mentions the name, or an archive comment
+  that does, inflates the count the same way. Hugo has no byte indexing with
+  which to parse a central directory -- substr and slicestr walk runes, and a
+  lone 0x8b becomes U+FFFD -- so no template can do better than counting. A
+  surplus of exactly one is therefore reported as UNCLEAR rather than passed
+  in silence: it cannot come from a well-formed member table, so something in
+  the archive is not what it appears to be. A .tar.gz stores its names
+  COMPRESSED, so the same question is unanswerable there and the publisher
+  owns it entirely.
 
   Expected context (dict):
   - .content (string) - The fetched artifact's raw bytes.
@@ -38,9 +49,9 @@
     .ext    (string) - the published extension for that format, or "";
     .note   (string) - "" when unremarkable, else "empty-zip", "spanned-zip"
                        or "text", each naming what the bytes look like instead;
-    .rooted (bool)   - false only when a zip provably carries no root-level
-                       SKILL.md; true for every other input, including every
-                       gzip stream, where the question cannot be answered.
+    .rooted (string) - "yes", "no" or "unclear" for a zip; "unknowable" for a
+                       gzip stream and for anything that is not an archive,
+                       where the question cannot be asked at all.
   ONE terminal return.
 */}}
 
@@ -48,7 +59,7 @@
 {{- $format := "" -}}
 {{- $ext := "" -}}
 {{- $note := "" -}}
-{{- $rooted := true -}}
+{{- $rooted := "unknowable" -}}
 
 {{/* hasPrefix compares bytes and is safe on content that is not valid UTF-8;
      substr and slicestr are NOT -- they walk runes, and a lone 0x8b becomes
@@ -59,7 +70,21 @@
 {{- else if hasPrefix $content "PK\x03\x04" -}}
   {{- $format = "zip" -}}
   {{- $ext = ".zip" -}}
-  {{- $rooted = gt (strings.Count "SKILL.md" $content) (strings.Count "/SKILL.md" $content) -}}
+  {{/* Occurrences no separator precedes, with `./` and `.\` counted back in
+       because such a member is at the root. A well-formed root member scores
+       two; see the header for what this cannot see. */}}
+  {{- $surplus := sub
+      (add
+        (strings.Count "SKILL.md" $content)
+        (add (strings.Count "./SKILL.md" $content) (strings.Count ".\\SKILL.md" $content)))
+      (add (strings.Count "/SKILL.md" $content) (strings.Count "\\SKILL.md" $content)) -}}
+  {{- if ge $surplus 2 -}}
+    {{- $rooted = "yes" -}}
+  {{- else if eq $surplus 1 -}}
+    {{- $rooted = "unclear" -}}
+  {{- else -}}
+    {{- $rooted = "no" -}}
+  {{- end -}}
 {{- else if hasPrefix $content "PK\x05\x06" -}}
   {{/* End-of-central-directory as the FIRST record: a zip with no members. */}}
   {{- $note = "empty-zip" -}}

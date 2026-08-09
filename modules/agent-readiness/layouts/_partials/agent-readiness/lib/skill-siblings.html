@@ -27,6 +27,12 @@
     - a source that is not directory-shaped -- no directory segment, or a last
       segment with no extension -- because candidates would then resolve
       against the ORIGIN ROOT and hit unrelated documents;
+    - a source URL that does not parse at all, which the caller has already
+      established is http(s)-prefixed but which Go may still reject;
+    - a candidate that resolves back to the SOURCE ITSELF, such as a body
+      linking `./SKILL.md`: that probe always succeeds, because it is the
+      artifact just fetched, and would declare the skill multi-file on
+      evidence about nothing;
     - a candidate that resolves outside the skill's own directory, whether by
       a leading slash or by `..`. Those are reported separately: they cannot
       live inside an archive either, since the draft forbids an archive from
@@ -68,11 +74,19 @@
 {{- $truncated := false -}}
 {{- $outside := slice -}}
 
-{{- $u := urls.Parse $source -}}
-{{- $dir := path.Dir $u.Path -}}
-{{- $base := path.Base $u.Path -}}
+{{/* try, because an unparseable-but-http(s) source aborts the build otherwise,
+     and this module never fails a build over consumer configuration. An
+     unparseable URL is unverifiable by definition. */}}
+{{- $parsed := try (urls.Parse $source) -}}
+{{- $u := $parsed.Value -}}
+{{- $dir := "" -}}
+{{- $base := "" -}}
+{{- with $u -}}
+  {{- $dir = path.Dir .Path -}}
+  {{- $base = path.Base .Path -}}
+{{- end -}}
 
-{{- if or (ne $u.RawQuery "") (eq $dir ".") (eq $dir "/") (not (strings.Contains $base ".")) -}}
+{{- if or (not $u) (ne $u.RawQuery "") (eq $dir ".") (eq $dir "/") (not (strings.Contains $base ".")) -}}
   {{- $verdict = "unverifiable" -}}
 {{- else -}}
   {{/* An INDETERMINATE probe never stops the search: a later candidate may
@@ -90,6 +104,13 @@
         {{- $resolved = path.Join $dir $candidate -}}
         {{- if not (hasPrefix $resolved (printf "%s/" $dir)) -}}
           {{- $outside = $outside | append $candidate -}}
+          {{- $resolved = "" -}}
+        {{- else if eq $resolved $u.Path -}}
+          {{/* The body referring to ITSELF -- `./SKILL.md`, or anything that
+               normalizes back to the source. Probing it always succeeds,
+               because it is the artifact that was just fetched, so it would
+               declare every self-referencing skill multi-file on evidence
+               about nothing. */}}
           {{- $resolved = "" -}}
         {{- else if not (strings.Contains (path.Base $resolved) ".") -}}
           {{- $resolved = "" -}}

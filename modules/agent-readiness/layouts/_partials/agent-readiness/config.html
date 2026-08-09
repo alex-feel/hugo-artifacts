@@ -354,8 +354,11 @@
      decision on: an index whose `$schema` a client does not recognize is one
      it "SHOULD NOT process". An empty or relative value therefore publishes a
      document that conforming clients discard wholesale, silently, with every
-     other gate green -- so a value that is not an absolute http(s) URI is
-     refused and the shipped default stands in for it.
+     other gate green -- so a value carrying no URI scheme at all is refused
+     and the shipped default stands in for it. Only the scheme is required:
+     the convention calls this field an "opaque identifier" that "does not
+     need to be resolvable", so which scheme, and whether anything answers
+     at that URI, are the publisher's business and not this module's.
 
      `on_supporting_files` decides whether a skill PROVEN to have supporting
      files is warned about or omitted; an unrecognized value falls back to the
@@ -370,10 +373,10 @@
     {{- end -}}
   {{- end -}}
   {{- $schema := trim (printf "%v" (index $skillsIndex "schema" | default "")) " \t\n\r" -}}
-  {{- if not (or (hasPrefix $schema "https://") (hasPrefix $schema "http://")) -}}
+  {{- if not (findRE `^[A-Za-z][A-Za-z0-9+.-]*:` $schema 1) -}}
     {{- partial "agent-readiness/lib/warn.html" (dict
         "key" (printf "agent-readiness:warn:skills-index-schema:%s" $schema)
-        "message" (printf "[agent-readiness] Ignoring [params.agent.skills_index] schema %q and publishing %q instead: the value is emitted as the index's own $schema identifier, which clients match against the schema URIs they know and refuse to process the index when they cannot. It must be an absolute http(s) URI." $schema $shippedSchema)) -}}
+        "message" (printf "[agent-readiness] Ignoring [params.agent.skills_index] schema %q and publishing %q instead: the value is emitted as the index's own $schema identifier, which clients match against the schema URIs they know and refuse to process the index when they cannot. It must be an absolute URI -- the convention treats it as an opaque identifier, so any scheme will do, but a relative or empty value identifies nothing." $schema $shippedSchema)) -}}
     {{- $schema = $shippedSchema -}}
   {{- end -}}
   {{- $onSupportingFiles := lower (trim (printf "%v" (index $skillsIndex "on_supporting_files" | default "warn")) " \t\n\r") -}}

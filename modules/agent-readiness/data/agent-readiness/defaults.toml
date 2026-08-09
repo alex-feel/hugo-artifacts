@@ -181,6 +181,11 @@ sitemap_section = true
 # --- /.well-known/agent-skills/ ---
 [skills_index]
 enable = true   # SITE-SCOPED (see the header note on surface switches)
+# The index's own `$schema` identifier, emitted verbatim. Clients match it
+# against the schema URIs they know and refuse to process an index whose
+# identifier they do not recognize, so point it at a newer draft only when you
+# mean to. It must carry a URI scheme; the convention treats the value as
+# opaque and does not require it to resolve.
 schema = "https://schemas.agentskills.io/discovery/0.2.0/schema.json"
 # Emit the top-level "generated" key: the build's RFC 3339 timestamp. Same
 # value and same trade-off as [markdown] build_time above. It answers what the

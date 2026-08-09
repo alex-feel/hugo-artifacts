@@ -21,6 +21,7 @@ import {
   edgeDir,
   publicDir,
   publishedPath,
+  buildLog,
   sha256File,
   strictskillsDir,
   warnCount,
@@ -29,9 +30,9 @@ import {
 const INDEX = '.well-known/agent-skills/index.json';
 const index = (dir = publicDir) => JSON.parse(read(INDEX, dir));
 
-// The nine entries that must publish, in configuration order, and what each
-// one is there to prove. An entry that starts or stops publishing changes this
-// list, which is the point: the resolver's verdicts are the contract.
+// The entries that must publish, in configuration order. An entry that starts
+// or stops publishing changes this list, which is the point: the resolver's
+// verdicts are the contract.
 const PUBLISHED = [
   ['fixture-single', 'skill-md'],
   ['fixture-multi', 'skill-md'],
@@ -42,6 +43,9 @@ const PUBLISHED = [
   ['fixture-manyrefs', 'skill-md'],
   ['fixture-flaky', 'skill-md'],
   ['fixture-outside', 'skill-md'],
+  ['fixture-selfref', 'skill-md'],
+  ['fixture-unverifiable', 'skill-md'],
+  ['fixture-cdn-archive', 'archive'],
 ];
 
 // Every configured entry that must be refused, with the warning that must name
@@ -67,6 +71,18 @@ const REFUSED = [
   ['fixture-bad-type', /Skipping the agent skill "fixture-bad-type".*two distribution types/],
   ['unreachable-skill', /Omitting the agent skill "unreachable-skill".*returned no resource/],
   ['Invalid--Name', /Skipping the agent skill "Invalid--Name".*lowercase alphanumerics/],
+  [
+    'fixture-malformed-url',
+    /Omitting the agent skill "fixture-malformed-url" from the index: fetching/,
+  ],
+  [
+    'fixture-weird-archive',
+    /Omitting the agent skill "fixture-weird-archive" from the index: fetching/,
+  ],
+  [
+    'fixture-weird-skill',
+    /Omitting the agent skill "fixture-weird-skill" from the index: fetching/,
+  ],
 ];
 
 test('with no skills declared, NO file is emitted at all', () => {
@@ -105,7 +121,7 @@ test('the index parses and declares its schema', () => {
 
 // The metadata block is a fixed size no matter how many skills the index
 // carries, so this budget holds for a site publishing fifty of them exactly
-// as it does for the fixture's nine. It is generous enough for a longer
+// as it does for the fixture's twelve. It is generous enough for a longer
 // configured `$schema` URI, which is the only member here that can grow.
 const HEAD_BUDGET = 300;
 
@@ -367,6 +383,86 @@ test('references climbing out of the skill directory are reported, not probed', 
     1,
   );
   assert.ok(index().skills.some((s) => s.name === 'fixture-outside'));
+});
+
+test('a source URL that does not parse is refused, and the build survives', () => {
+  // The build completing at all is half of this assertion: an unguarded
+  // urls.Parse on `http://127.0.0.1:port/...` -- which passes the
+  // absolute-http(s) test the module applies before it -- aborts the whole
+  // site render, in a module whose stated contract is that it never fails a
+  // build over its own configuration.
+  assert.ok(!index().skills.some((s) => s.name === 'fixture-malformed-url'));
+  assert.equal(warnCount(/agent skill "fixture-malformed-url" from the index: fetching/), 1);
+});
+
+test('an ordinary CDN path containing an archive segment is fetched, not refused', () => {
+  // The forge refusal is anchored to a host because `/<a>/<b>/archive/<file>`
+  // is an ordinary three-segment path that any CDN or object store can serve.
+  // A path-only pattern refused this entry BEFORE the fetch, deleting a valid
+  // skill on the shape of somebody else's URL.
+  const entry = index().skills.find((s) => s.name === 'fixture-cdn-archive');
+  assert.ok(entry, 'the entry must publish');
+  assert.equal(entry.url, '/.well-known/agent-skills/fixture-cdn-archive.zip');
+  assert.equal(warnCount(/fixture-cdn-archive/), 0, 'and say nothing about it');
+
+  // The origin serves this from a byte-identical copy of the rooted zip, so
+  // the copy cannot drift from its original unnoticed.
+  assert.deepEqual(
+    readFileSync(resolve(moduleRoot, 'test/fixture-origin/cdn/skills/archive/skill.zip')),
+    readFileSync(resolve(moduleRoot, 'test/fixture-origin/archives/rooted.zip')),
+  );
+});
+
+test('a body that links back to itself is not a multi-file skill', () => {
+  // `./SKILL.md` resolves to the artifact just fetched, so the probe always
+  // succeeds. Counting that as a supporting file declares the skill
+  // multi-file on evidence about nothing -- and deletes it outright under
+  // on_supporting_files = 'omit'.
+  assert.ok(index().skills.some((s) => s.name === 'fixture-selfref'));
+  assert.equal(warnCount(/fixture-selfref/), 0);
+  assert.ok(
+    index(strictskillsDir).skills.some((s) => s.name === 'fixture-selfref'),
+    'including under the strict disposition',
+  );
+});
+
+test('a source shape that blocks the sibling check says so, and still publishes', () => {
+  // A query string means a sibling would be requested without it, so nothing
+  // is requested at all. This skill's references/GUIDE.md really exists at the
+  // origin, so silence here would be a build reporting a clean result it never
+  // earned -- the same wrongness as reading a 500 as "absent".
+  assert.equal(warnCount(/Could not check whether the agent skill "fixture-unverifiable"/), 1);
+  assert.ok(index().skills.some((s) => s.name === 'fixture-unverifiable'));
+  assert.ok(
+    index(strictskillsDir).skills.some((s) => s.name === 'fixture-unverifiable'),
+    '"could not check" is not evidence against an entry, so the strict disposition publishes it too',
+  );
+});
+
+test('a failed fetch prints the remedy that fits the entry type', () => {
+  // Hugo raises ONE message for two different consumer problems: an archive
+  // whose media type the site never allowed, and a source URL Hugo can read no
+  // media type from. Printing the archive security block for a Markdown source
+  // sends the consumer to a setting that would not have helped.
+  // Split into WARNING BLOCKS rather than lines: a hint is several lines of
+  // configuration to paste, so a line-wise search finds the first line of the
+  // warning and none of the remedy under it.
+  const blocks = buildLog().split(/^WARN\s+/m);
+  const archiveWarning = blocks.find((block) =>
+    block.includes('"fixture-weird-archive" from the index'),
+  );
+  const skillWarning = blocks.find((block) =>
+    block.includes('"fixture-weird-skill" from the index'),
+  );
+
+  assert.ok(archiveWarning && skillWarning, 'both entries must have failed their fetch');
+  assert.match(archiveWarning, /\[security\.http\]/);
+  assert.match(archiveWarning, /application\/octet-stream/);
+  assert.ok(
+    !skillWarning.includes('[security.http]'),
+    'a Markdown source failure must not prescribe the archive allow-list',
+  );
+  assert.match(skillWarning, /resolve no media type/);
 });
 
 test('every refused entry is refused, once, with a warning that names it', () => {

@@ -2,8 +2,9 @@
   agent-readiness/lib/skill-frontmatter.html -- INTERNAL (lib tier).
 
   Purpose: read the YAML front matter of a fetched SKILL.md, or report WHY it
-  could not be read. The Agent Skills format specification requires that file
-  to "contain YAML frontmatter with `name` and `description` fields", so an
+  could not be read. The discovery convention requires that file to "contain
+  YAML frontmatter with `name` and `description` fields", and the format
+  specification makes both of them required fields of its own, so an
   artifact carrying none is not a SKILL.md at all, and the caller refuses to
   republish it as one rather than advertising a document no client can use.
 

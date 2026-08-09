@@ -360,7 +360,61 @@ enableRobotsTXT = true
       description = 'A fixture skill referencing files that lie outside its own directory.'
       source = 'http://127.0.0.1:51313/fixture-outside/SKILL.md'
 
+    # A body linking back to itself. That probe always succeeds -- it is the
+    # artifact just fetched -- so without the self-reference guard every
+    # skill written this way is declared multi-file on evidence about nothing,
+    # and deleted outright under on_supporting_files = 'omit'.
+    [[params.agent.skills]]
+      name = 'fixture-selfref'
+      description = 'A single-file fixture skill whose body links back to itself, which must not be read as a supporting file.'
+      source = 'http://127.0.0.1:51313/fixture-selfref/SKILL.md'
+
+    # A query string makes the sibling check impossible: a sibling would be
+    # requested WITHOUT it, and against a signed URL that 404s for the wrong
+    # reason. Its `references/GUIDE.md` really exists, so a build that says
+    # nothing here has not checked rather than checked and found nothing --
+    # which is why this entry must warn.
+    [[params.agent.skills]]
+      name = 'fixture-unverifiable'
+      description = 'A fixture skill whose source URL carries a query string, so no sibling can be requested and the build knows nothing about its supporting files.'
+      source = 'http://127.0.0.1:51313/fixture-unverifiable/SKILL.md?token=abc'
+
+    # An ordinary three-segment CDN path that happens to contain an `archive`
+    # segment. It must be FETCHED and published: the forge refusal is anchored
+    # to a host precisely because this shape is somebody's real archive, and a
+    # path-only pattern deleted it before it was ever requested.
+    [[params.agent.skills]]
+      name = 'fixture-cdn-archive'
+      type = 'archive'
+      description = 'An archive whose ordinary CDN path contains an archive segment, which is not a forge endpoint.'
+      source = 'http://127.0.0.1:51313/cdn/skills/archive/skill.zip'
+
     # ---- Refused ----
+
+    # A URL that passes the absolute-http(s) test and then fails to parse.
+    # Unguarded, this ABORTS THE BUILD -- the one thing this module promises
+    # never to do over consumer configuration -- so the whole suite running at
+    # all is half the assertion.
+    [[params.agent.skills]]
+      name = 'fixture-malformed-url'
+      type = 'archive'
+      description = 'A URL with an invalid port, which parses nowhere and must not stop the build.'
+      source = 'http://127.0.0.1:port/archives/rooted.tar.gz'
+
+    # The origin answers these two with a media type Hugo can resolve from
+    # neither the URL nor the header, which is the only way to reach the
+    # fetch-error branch at all. One of each type, because the remediation
+    # they need is different and Hugo's message for both is identical.
+    [[params.agent.skills]]
+      name = 'fixture-weird-archive'
+      type = 'archive'
+      description = 'An archive served with a media type Hugo cannot resolve, whose remedy is the site security allow-list.'
+      source = 'http://127.0.0.1:51313/weird/archive'
+
+    [[params.agent.skills]]
+      name = 'fixture-weird-skill'
+      description = 'A SKILL.md served with a media type Hugo cannot resolve, whose remedy is a URL Hugo can read one from.'
+      source = 'http://127.0.0.1:51313/weird/skill'
 
     # The front-matter name disagrees with the configured one. The published
     # parent directory IS the configured name, and the specification requires
@@ -429,11 +483,19 @@ enableRobotsTXT = true
     # the browser-facing spellings redirect to the generator, so the
     # configured URL is the last place the shape is still visible. The path
     # need not exist for the refusal to be correct, and it does not.
+    #
+    # GitLab's spelling, because it is the one pattern the check matches
+    # WITHOUT a host: `/-/archive/` is distinctive enough to stand alone,
+    # while `/<owner>/<repo>/archive/` is an ordinary three-segment path that
+    # any CDN can serve and is therefore anchored to github.com. That anchor
+    # is why this entry cannot be written against a loopback origin in the
+    # GitHub spelling, and it is the point rather than a limitation: a bare
+    # path pattern deleted valid entries before they were ever fetched.
     [[params.agent.skills]]
       name = 'fixture-repo-archive'
       type = 'archive'
       description = 'A whole-repository source archive, which is always wrapper-nested.'
-      source = 'http://127.0.0.1:51313/octocat/hello-world/archive/0123456789.tar.gz'
+      source = 'http://127.0.0.1:51313/group/project/-/archive/main/project-main.zip'
 
     [[params.agent.skills]]
       name = 'fixture-bad-type'
