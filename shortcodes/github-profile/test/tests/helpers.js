@@ -44,6 +44,11 @@ export function page(dir, rel = 'index.html') {
 // The fixture's second page: the same widget under language-scope="worked-in".
 export const WORKED_IN_PAGE = 'languages-worked-in/index.html';
 
+// The fixture's fourth page: the worked-in widget after a FAILED authorship
+// request (a front-matter flag the canned-data seam reads), publishing the
+// row derive.html computes from its fallback numerators.
+export const AUTHORSHIP_DEGRADED_PAGE = 'languages-worked-in-degraded/index.html';
+
 const VOID_ELEMENTS = new Set([
   'area',
   'base',
@@ -262,6 +267,37 @@ export function allElements(fragment) {
 
 export function elementsByClass(fragment, classToken) {
   return allElements(fragment).filter((n) => n.classes.includes(classToken));
+}
+
+// A single attribute value off an opening tag, tolerating the minifier's
+// unquoted single-token form; null when the attribute is absent, so a spec
+// asserts presence with its own message.
+export function attrValue(openTag, name) {
+  const match = new RegExp(`${name}="?([^"\\s>]+)"?`).exec(openTag);
+  return match ? match[1] : null;
+}
+
+// The language row of a published page: the list, the visible title beside
+// it, and the three per-item surfaces. Null at the first missing piece.
+//
+// Both lookups run INSIDE the languages section rather than from the top of
+// the document. The home page renders org-rollup first and it carries a
+// section title of its own, so a page-wide lookup finds that one and
+// compares the wrong heading.
+export function languageRow(dir, rel) {
+  const section = element(page(dir, rel), 'github-profile__section--languages');
+  if (!section) return null;
+  const list = element(section.inner, 'github-profile__languages');
+  if (!list) return null;
+  return {
+    list,
+    title: element(section.inner, 'github-profile__section-title'),
+    items: elementsByClass(list.inner, 'github-profile__lang').map((li) => ({
+      name: attrValue(li.openTag, 'data-lang'),
+      pct: attrValue(li.openTag, 'data-pct'),
+      text: textOf(element(li.inner, 'github-profile__lang-pct').inner),
+    })),
+  };
 }
 
 // The UTF-8 bytes of a string, as an array, so an assertion failure prints the

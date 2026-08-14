@@ -22,6 +22,15 @@
   3. REST Search -- only when mergedPrs=true: GET /search/issues reading
      total_count only, for the lifetime merged-PR count. Lives in the Search
      API's own stricter 30-requests/minute bucket and degrades independently.
+  4. GraphQL authorship counts -- only when languageScope="worked-in" and the
+     snapshot's codeContributedTo list is non-empty: a POST with one aliased
+     repository() block per contributed repository, asking for the person's
+     own default-branch commit count (the authorship ratio's numerator; the
+     denominator travels in the snapshot). The repository list is only known
+     from the snapshot, which is why this cannot be folded into request 1.
+     Degrades independently: derive.html then weights the contributed
+     repositories by the snapshot's contribution-window commit counts
+     instead, so a failure here never publishes an unweighted row.
 
   Retry machinery: identical to the sibling shortcodes/github-repo module
   (see its fetch.html for the full rationale) -- 5 attempts, 30s per-attempt
@@ -49,6 +58,8 @@
   - .user (string)       GitHub login to fetch.
   - .history (string)    "year" or "all".
   - .mergedPrs (bool)    Whether to fetch the lifetime merged-PR count.
+  - .languageScope (string) "owned" or "worked-in". Optional; only
+                         "worked-in" triggers the authorship request.
   - .position (text.Position) Shortcode call position (used in warnings).
 
   Returns (dict):
@@ -64,11 +75,20 @@
                            or when that request degraded.
   - .mergedPrCount (int)   Lifetime merged-PR total_count; -1 when not
                            requested or degraded.
+  - .authorshipOk (bool)   Whether the authorship request resolved at least
+                           one repository. false when not requested or
+                           degraded.
+  - .authorship (map)      When authorshipOk: nameWithOwner -> the person's
+                           own default-branch commit count, one entry per
+                           contributed repository that resolved. A
+                           repository the response nulled is absent, and
+                           derive.html falls back per repository.
 */}}
 
 {{- $user := .user -}}
 {{- $history := .history -}}
 {{- $wantMergedPrs := .mergedPrs -}}
+{{- $languageScope := .languageScope | default "" -}}
 {{- $position := .position -}}
 
 {{- $result := dict
@@ -77,6 +97,8 @@
   "user" nil
   "yearTotals" nil
   "mergedPrCount" -1
+  "authorshipOk" false
+  "authorship" (dict)
 -}}
 
 {{/* Resolve the token once. Hugo's default security policy only exposes
@@ -128,7 +150,7 @@
 
 {{- $graphqlUrl := "https://api.github.com/graphql" -}}
 
-{{/* ---------- Endpoint 1 of up to 3: GraphQL snapshot ---------- */}}
+{{/* ---------- Endpoint 1 of up to 4: GraphQL snapshot ---------- */}}
 {{- $hostDown := hugo.Store.Get $hostDownKey -}}
 {{- $startMs := now.UnixMilli -}}
 {{- $snapBody := partial "github-profile/build-query.html" (dict "kind" "snapshot" "login" $user) -}}
@@ -421,6 +443,123 @@
     {{- warnf "[github-profile] Skipping the merged-PR count fetch for user %q: api.github.com was marked unreachable earlier in this build. Hiding that metric. See %s" $user $position -}}
   {{- else -}}
     {{- warnf "[github-profile] Failed to fetch the merged-PR count for user %q after %d attempt(s) (errorClass=%s, statusCode=%d, message=%q). Hiding that metric; note the Search API has its own 30-requests/minute limit. See %s" $user $searchAttemptsUsed $searchResult.errorClass $searchResult.statusCode $searchResult.errorMessage $position -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---------- Endpoint 4: default-branch authorship counts (languageScope=worked-in only) ---------- */}}
+{{- if and (eq $languageScope "worked-in") $result.apiOk -}}
+  {{- $uid := printf "%v" (or (index $result.user "id") "") -}}
+  {{- $authorshipRepos := slice -}}
+  {{- with index $result.user "codeContributedTo" -}}
+    {{- range index . "nodes" | default (slice) -}}
+      {{- if reflect.IsMap . -}}
+        {{- with index . "nameWithOwner" -}}
+          {{- $authorshipRepos = $authorshipRepos | append (printf "%v" .) -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if and $uid (gt (len $authorshipRepos) 0) -}}
+    {{- $authHostDown := hugo.Store.Get $hostDownKey -}}
+    {{- $authBody := partial "github-profile/build-query.html" (dict "kind" "authorship" "uid" $uid "repos" $authorshipRepos) -}}
+    {{- $authStartMs := now.UnixMilli -}}
+    {{- $authResult := dict
+      "ok" false
+      "value" nil
+      "statusCode" 0
+      "headers" (dict)
+      "errorClass" "network"
+      "errorMessage" ""
+      "waitHintSeconds" 0
+    -}}
+    {{- $authAttemptsUsed := 0 -}}
+    {{- $authSawResponse := false -}}
+    {{- range $attempt := seq 1 $attempts -}}
+      {{- if $authResult.ok -}}
+        {{/* Already succeeded; skip remaining attempts. */}}
+      {{- else if $authHostDown -}}
+        {{/* Circuit breaker open; degrade immediately. */}}
+      {{- else -}}
+        {{- $remainingMs := sub $overallBudgetMs (sub now.UnixMilli $authStartMs) -}}
+        {{- if lt $remainingMs $attemptReserveMs -}}
+          {{/* The remaining budget cannot fit a full attempt including the
+               deadline-blind backoff slack. */}}
+        {{- else if and (gt $attempt 1) (in $earlyBreakClasses $authResult.errorClass) -}}
+          {{/* Provably-useless class. */}}
+        {{- else if and (gt $attempt 1) (eq $authResult.errorClass "secondary-rate-limit") (gt (mul $authResult.waitHintSeconds 1000) $remainingMs) -}}
+          {{/* Reset window exceeds remaining budget. */}}
+        {{- else -}}
+          {{- $cacheKey := printf "github-profile:%s:authorship:%s:%s:attempt%d" $user $tokenFp (substr (md5 $authBody) 0 8) $attempt -}}
+          {{- $authResult = partial "github-profile/fetch-once.html" (dict
+            "url" $graphqlUrl
+            "method" "post"
+            "body" $authBody
+            "cacheKey" $cacheKey
+            "token" $token
+            "timeout" $perAttemptTimeout
+          ) -}}
+          {{- $authAttemptsUsed = $attempt -}}
+          {{- if ne $authResult.statusCode 0 -}}
+            {{- $authSawResponse = true -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{- if and (not $authHostDown) (not $authResult.ok) (eq $authResult.errorClass "network") (eq $authResult.statusCode 0) (not $authSawResponse) -}}
+      {{- hugo.Store.Set $hostDownKey true -}}
+    {{- end -}}
+
+    {{- if $authResult.ok -}}
+      {{/* Decode the aliased blocks back to repositories by index: alias r<i>
+           names $authorshipRepos position i, which build-query.html preserves
+           even across a skipped invalid entry. A nulled block (renamed or
+           restricted repository) leaves its repository out of the map, and a
+           count that fails the int cast does the same -- absence means "no
+           usable numerator here", which derive.html answers with its
+           per-repository fallback, while a resolved count of 0 is a real
+           measurement and MUST survive the decode.
+
+           Success is at least ONE resolved repository, not the presence of a
+           data object: a token allowed to read none of the repositories gets
+           a 200 whose blocks are ALL null with no errors entry, and blessing
+           that as authorshipOk would degrade every numerator to the window
+           fallback with nothing in the log saying so. */}}
+      {{- $env := $authResult.value -}}
+      {{- $authorship := dict -}}
+      {{- with index $env "data" -}}
+        {{- $data := . -}}
+        {{- range $i, $repoName := $authorshipRepos -}}
+          {{- with index $data (printf "r%d" $i) -}}
+            {{- with index . "defaultBranchRef" -}}
+              {{- with index . "target" -}}
+                {{- with index . "mine" -}}
+                  {{- $t := try (int (index . "totalCount")) -}}
+                  {{- if not $t.Err -}}
+                    {{- $authorship = merge $authorship (dict $repoName $t.Value) -}}
+                  {{- end -}}
+                {{- end -}}
+              {{- end -}}
+            {{- end -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+      {{- if gt (len $authorship) 0 -}}
+        {{- $result = merge $result (dict "authorshipOk" true "authorship" $authorship) -}}
+      {{- else -}}
+        {{- warnf "[github-profile] The authorship query for user %q resolved none of its %d repositories; weighting the worked-in language row by contribution-window commit counts instead. See %s" $user (len $authorshipRepos) $position -}}
+      {{- end -}}
+    {{- else if $authHostDown -}}
+      {{- warnf "[github-profile] Skipping the authorship fetch for user %q: api.github.com was marked unreachable earlier in this build. Weighting the worked-in language row by contribution-window commit counts instead. See %s" $user $position -}}
+    {{- else -}}
+      {{- warnf "[github-profile] Failed to fetch the authorship counts for user %q after %d attempt(s) (errorClass=%s, statusCode=%d, message=%q). Weighting the worked-in language row by contribution-window commit counts instead. See %s" $user $authAttemptsUsed $authResult.errorClass $authResult.statusCode $authResult.errorMessage $position -}}
+    {{- end -}}
+  {{- else if gt (len $authorshipRepos) 0 -}}
+    {{/* Repositories to weight but no id to weight them by: the snapshot
+         requests the global node id unconditionally, so its absence is a
+         degradation, and a silent one would be indistinguishable from the
+         request never having been needed. */}}
+    {{- warnf "[github-profile] The snapshot for user %q carried no global node id, so the authorship counts cannot be requested; weighting the worked-in language row by contribution-window commit counts instead. See %s" $user $position -}}
   {{- end -}}
 {{- end -}}
 

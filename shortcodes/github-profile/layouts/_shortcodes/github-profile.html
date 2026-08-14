@@ -18,8 +18,11 @@
     measures. "owned" (the person's own non-fork repositories, where
     repository byte counts approximate what they wrote) or "worked-in"
     (those plus repositories they have committed to or opened a pull request
-    in, attributed whole). The section relabels itself under "worked-in", so
-    the claim always matches the set. Default: "owned"
+    in, each scaled by the person's share of its default-branch commits so
+    one large external repository cannot dominate the row). The section
+    relabels itself under "worked-in", so the claim always matches the set,
+    and the list's data-language-attribution attribute says how bytes were
+    attributed. Default: "owned"
   - show-streak (bool, optional): Compute and expose current/longest
     contribution streaks on the calendar. Default: false
   - show-rank (bool, optional): Compute the transparent activity score
@@ -118,6 +121,7 @@
   "user" $user
   "history" $history
   "mergedPrs" $mergedPrs
+  "languageScope" $languageScope
   "position" .Position
 ) -}}
 {{- $data := partial "github-profile/derive.html" (dict
