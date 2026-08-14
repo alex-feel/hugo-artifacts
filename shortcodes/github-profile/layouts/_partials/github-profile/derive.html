@@ -48,17 +48,29 @@
   {{- $languageScope = "owned" -}}
 {{- end -}}
 
+{{/* How a repository's bytes are attributed to the person, derived from the
+     scope: "repository" (whole-repository byte counts, the owned set's
+     documented basis) or "authorship-weighted" (each contributed
+     repository's bytes scaled by the person's share of its default-branch
+     commits). One value per scope, so a consumer reading the row can tell
+     which attribution produced it without dating the module. */}}
+{{- $languageAttribution := "repository" -}}
+{{- if eq $languageScope "worked-in" -}}
+  {{- $languageAttribution = "authorship-weighted" -}}
+{{- end -}}
+
 {{- $user := $raw.user -}}
 
-{{/* languageScope is echoed even on the degraded path so the field is always
-     present: a renderer reading it does not have to distinguish "no scope"
-     from "no data". */}}
+{{/* languageScope and languageAttribution are echoed even on the degraded
+     path so the fields are always present: a renderer reading them does not
+     have to distinguish "no scope" from "no data". */}}
 {{- $data := dict
   "apiOk" $raw.apiOk
   "degradedReason" $raw.degradedReason
   "mergedPrCount" $raw.mergedPrCount
   "historyEffective" "year"
   "languageScope" $languageScope
+  "languageAttribution" $languageAttribution
 -}}
 
 {{- if $raw.apiOk -}}
@@ -241,21 +253,39 @@
      it.
 
      So "owned" is the default, and it is what the section's "by code volume"
-     label claims. "worked-in" widens the set to repositories the person has
-     actually written code in -- codeContributedTo, which the query narrows
-     to COMMIT and PULL_REQUEST, so an issue-only or review-only repository
-     is absent from it entirely -- and the section relabels itself to say the
-     unit is the repository worked in rather than the code written, because
-     whole-repository attribution still applies there: one merged typo fix in
-     a 22 MB project still contributes 22 MB.
+     label claims: whole-repository bytes, whole weight, over the person's
+     own non-fork repositories. "worked-in" widens the set to repositories
+     the person has actually written code in -- codeContributedTo, which the
+     query narrows to COMMIT and PULL_REQUEST, so an issue-only or
+     review-only repository is absent from it entirely -- and the section
+     relabels itself to say which set is in play.
 
-     Weighting an external repository by actual authorship is the answer
-     neither scope gives, and it is not purchasable: GraphQL exposes no
-     per-language authorship, and the REST contributor-statistics endpoint
-     gives per-contributor line counts with no language split, one request
-     per repository. Scoping is available today; weighting is not, and a
-     label that says which set is in play is worth more than a number that
-     silently mixes them. */}}
+     Narrowing WHICH repositories enter the sum does not bound their WEIGHT,
+     and repository-sized weight is the distortion: a 23 MB Go project
+     entered by three unmerged pull requests once published a 64% Go row for
+     someone who had never written Go. So every contributed repository's
+     bytes are scaled by an authorship ratio f = min(mine/all, 1), where
+     "all" is the default branch's total commit count (fetched in the
+     snapshot) and "mine" is the person's own commits on it (the authorship
+     query, matched by the account's global node ID). GraphQL still exposes
+     no per-LANGUAGE authorship -- this is a per-REPOSITORY ratio, the
+     closest purchasable stand-in -- and it measures the default branch, so
+     an unmerged pull request enrolls a repository but weighs zero until it
+     lands, exactly as the byte counts it scales describe only landed code.
+
+     Two caveats are part of the design rather than discovered later. The
+     history author filter matches only commits whose author email is linked
+     to the account, so squash reattribution or an unlinked email undercounts
+     "mine"; and when the authorship query degrades, the numerator falls
+     back to the snapshot's contribution-window commit count for that
+     repository (the same unit, a rolling year instead of all time). A
+     repository with no usable ratio at all -- no denominator, or no
+     numerator from either source -- is EXCLUDED from the row, the same
+     skip-not-guess treatment restricted repositories get, because summing it
+     unweighted would republish the distortion this ratio exists to remove.
+     Owned repositories keep weight 1: ownership is the documented basis of
+     the "by code volume" claim, and scaling it would change every consumer's
+     default row on an undercount-prone signal. */}}
 {{- $langBytes := dict -}}
 {{- $ownedNodes := slice -}}
 {{- $ownedStars := 0 -}}
@@ -272,10 +302,6 @@
 {{- with index $user "codeContributedTo" -}}
   {{- $codeNodes = index . "nodes" | default (slice) -}}
 {{- end -}}
-{{- $langRepoSets := slice $ownedNodes -}}
-{{- if eq $languageScope "worked-in" -}}
-  {{- $langRepoSets = $langRepoSets | append $codeNodes -}}
-{{- end -}}
 {{/* Connection node lists ([Repository], [Organization], [PinnableItem],
      [SocialAccount]) have NULLABLE items in the schema, and GitHub nulls
      individual nodes the token cannot see (organization policy or SAML
@@ -287,9 +313,8 @@
      therefore skips non-map items. The languages EDGE list needs no such
      guard: a null edge yields size 0 and an empty name, which the
      existing name-and-size filter below already drops. */}}
-{{- range $repoSet := $langRepoSets -}}
-  {{- range $repoSet -}}
-    {{- if reflect.IsMap . -}}
+{{- range $ownedNodes -}}
+  {{- if reflect.IsMap . -}}
     {{- with index . "languages" -}}
       {{- range index . "edges" | default (slice) -}}
         {{- $size := partial "github-profile/to-int.html" (index . "size") -}}
@@ -302,6 +327,92 @@
         {{- end -}}
       {{- end -}}
     {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- if eq $languageScope "worked-in" -}}
+  {{/* Contribution-window commit counts, keyed by repository: the fallback
+       numerator when the authorship query degraded or nulled a repository.
+       The list itself can be absent -- an organization policy withholds the
+       whole byRepo block -- and absence is not an empty measurement: with no
+       list there is no fallback numerator, and a repository the authorship
+       map also misses is excluded below rather than guessed at. A repository
+       missing FROM a present list measurably had zero commit contributions
+       in the window -- a usable zero -- UNLESS the list sits at the API's
+       100-repository ceiling, where absence can mean truncation instead of
+       zero; a repository missing from a full list is therefore excluded
+       rather than zeroed, because a truncated-out repository is exactly the
+       kind whose genuine authorship a guessed zero would erase. */}}
+  {{- $windowCommitList := index $cc "commitContributionsByRepository" -}}
+  {{- $hasWindowCommits := reflect.IsSlice $windowCommitList -}}
+  {{- $windowCommits := dict -}}
+  {{- if $hasWindowCommits -}}
+    {{- range $windowCommitList -}}
+      {{- if reflect.IsMap . -}}
+        {{- $repoName := "" -}}
+        {{- with index . "repository" -}}
+          {{- $repoName = printf "%v" (or (index . "nameWithOwner") "") -}}
+        {{- end -}}
+        {{- $count := 0 -}}
+        {{- with index . "contributions" -}}
+          {{- $count = partial "github-profile/to-int.html" (index . "totalCount") -}}
+        {{- end -}}
+        {{- if $repoName -}}
+          {{- $windowCommits = merge $windowCommits (dict $repoName $count) -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $authorship := dict -}}
+  {{- with index $raw "authorship" -}}
+    {{- $authorship = . -}}
+  {{- end -}}
+  {{- $authorshipOk := eq (printf "%v" (index $raw "authorshipOk")) "true" -}}
+  {{- range $codeNodes -}}
+    {{- if reflect.IsMap . -}}
+      {{- $repoName := printf "%v" (or (index . "nameWithOwner") "") -}}
+      {{- $allCommits := 0 -}}
+      {{- with index . "defaultBranchRef" -}}
+        {{- with index . "target" -}}
+          {{- with index . "all" -}}
+            {{- $allCommits = partial "github-profile/to-int.html" (index . "totalCount") -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+      {{/* isset rather than with, because a resolved "mine" of 0 is a real
+           measurement (unmerged pull requests enroll a repository whose
+           default branch carries none of the person's commits) and with
+           would misread it as absent. */}}
+      {{- $mine := -1 -}}
+      {{- if and $authorshipOk (isset $authorship $repoName) -}}
+        {{- $mine = partial "github-profile/to-int.html" (index $authorship $repoName) -}}
+      {{- else if and $repoName $hasWindowCommits -}}
+        {{- if isset $windowCommits $repoName -}}
+          {{- $mine = index $windowCommits $repoName -}}
+        {{- else if lt (len $windowCommitList) 100 -}}
+          {{- $mine = 0 -}}
+        {{- end -}}
+      {{- end -}}
+      {{- if and (gt $allCommits 0) (ge $mine 0) -}}
+        {{/* min caps the ratio at 1: the numerator and denominator are
+             measured by different mechanisms over different windows, so a
+             default-branch change, rewritten history, or squash-merge
+             reattribution can leave a window count above the branch's
+             current total without either number being wrong. */}}
+        {{- $f := math.Min 1.0 (math.Div (float $mine) (float $allCommits)) -}}
+        {{- with index . "languages" -}}
+          {{- range index . "edges" | default (slice) -}}
+            {{- $size := partial "github-profile/to-int.html" (index . "size") -}}
+            {{- $langName := "" -}}
+            {{- with index . "node" -}}
+              {{- $langName = printf "%v" (or (index . "name") "") -}}
+            {{- end -}}
+            {{- $weighted := int (math.Round (math.Mul (float $size) $f)) -}}
+            {{- if and $langName (gt $weighted 0) -}}
+              {{- $langBytes = merge $langBytes (dict $langName (add (index $langBytes $langName | default 0) $weighted)) -}}
+            {{- end -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}

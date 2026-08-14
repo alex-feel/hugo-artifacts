@@ -25,6 +25,10 @@
   - .user (string)       GitHub login to fetch.
   - .history (string)    "year" or "all".
   - .mergedPrs (bool)    Whether to fetch the lifetime merged-PR count.
+  - .languageScope (string) "owned" or "worked-in"; only "worked-in" makes
+                         the module partial issue its authorship request, so
+                         only "worked-in" makes this seam serve the canned
+                         authorship map.
   - .position (text.Position) Shortcode call position (used in warnings).
 
   Returns (identical to the module partial):
@@ -33,6 +37,17 @@
   - .user (map, or a falsy placeholder when apiOk is false)
   - .yearTotals (map; empty when history is "year")
   - .mergedPrCount (int; -1 when not requested)
+  - .authorshipOk (bool)
+  - .authorship (map; empty when authorshipOk is false)
+
+  The one degradation the module can hit that a login cannot select is a
+  FAILED authorship request on an otherwise healthy profile, so the seam
+  reads one escape hatch from the calling page's front matter:
+  github_profile_fixture_authorship_fail = true makes it report
+  authorshipOk false with an empty map, which is exactly the shape the
+  module partial returns after its authorship retries are exhausted. That
+  lets a dedicated fixture page prove derive.html's fallback to the
+  contribution-window commit counts without a second canned snapshot.
 
   Go templates have no nil literal, so the two "or nil" fields of the real
   contract are represented by falsy values of the right shape: derive.html
@@ -47,6 +62,7 @@
 {{- $requestedLogin := .user -}}
 {{- $history := .history -}}
 {{- $wantMergedPrs := .mergedPrs -}}
+{{- $languageScope := .languageScope | default "" -}}
 {{- $position := .position -}}
 
 {{- $result := dict
@@ -55,6 +71,8 @@
   "user" false
   "yearTotals" (dict)
   "mergedPrCount" -1
+  "authorshipOk" false
+  "authorship" (dict)
 -}}
 
 {{- $fixture := index hugo.Data "github-profile-fetch" -}}
@@ -73,6 +91,9 @@
     {{- end -}}
     {{- if $wantMergedPrs -}}
       {{- $result = merge $result (dict "mergedPrCount" (int (index $fixture "mergedPrCount"))) -}}
+    {{- end -}}
+    {{- if and (eq $languageScope "worked-in") (not page.Params.github_profile_fixture_authorship_fail) -}}
+      {{- $result = merge $result (dict "authorshipOk" true "authorship" (index $fixture "authorship" | default (dict))) -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}

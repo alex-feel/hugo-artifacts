@@ -22,10 +22,16 @@
 */}}
 {{ define "main" }}
   {{- $login := "fixture-dev" -}}
+  {{/* The authorship repos deliberately include one entry that fails the
+       repository-name validation (a path traversal shape), so a spec can
+       assert both that it is dropped from the query and that the aliases
+       keep their positions in the caller's slice across the skip. */}}
+  {{- $authorshipRepos := slice "mega-org/monolith" "bad owner/quote\"break" "fixture-labs/toolkit" -}}
   <div
     id="fixture-query"
     data-snapshot-query="{{ partial "github-profile/build-query.html" (dict "kind" "snapshot" "login" $login "years" (slice)) | base64Encode }}"
     data-years-query="{{ partial "github-profile/build-query.html" (dict "kind" "years" "login" $login "years" (slice 2019 2020 2021)) | base64Encode }}"
+    data-authorship-query="{{ partial "github-profile/build-query.html" (dict "kind" "authorship" "uid" "MDQ6VXNlcjQyNDI=" "repos" $authorshipRepos) | base64Encode }}"
     data-login="{{ $login }}"
   ></div>
 {{ end }}

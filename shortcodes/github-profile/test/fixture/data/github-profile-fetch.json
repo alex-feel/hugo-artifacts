@@ -6,10 +6,12 @@
       "Values are chosen so every branch of section-headline.html renders at once: a non-negative mergedPrCount, externalRepos and externalOrgs above zero, a non-zero 90-day recency, a rank level, and a non-zero restrictedContributionsCount so the floor note and its github-profile__sep--note separator (the minifier defect site) render.",
       "The calendar spans 14 weeks (98 days), deliberately more than the 90-day recency window, so derive.html truncates it: 63 of the 98 days are active but only 55 fall inside the window. The trailing 12 days are active (current streak 12) and the longest run is 21 days.",
       "repositoriesContributedTo.totalCount (20) deliberately exceeds its node count (8): the external-repositories metric must read totalCount, not the length of the node list, and GitHub genuinely returns fewer nodes than totalCount when a policy nulls individual entries.",
-      "The two blocks carrying repositories the person does not own answer different questions, exactly as the query asks them. repositoriesContributedTo keeps all four contribution types and carries NO language counts: it feeds the contributed list and the external-footprint metrics. codeContributedTo narrows to COMMIT and PULL_REQUEST and carries nothing but language counts. issue-only-org/tracker appears in the first and not the second, which is what an issue-only contribution looks like in a real response.",
-      "issue-only-org/tracker is 4,000,000 bytes of Kotlin, and Kotlin appears in no other repository here. Under the old aggregation it would have been the second-largest language in the row on the strength of one filed issue, so its absence under BOTH scopes is one exact assertion rather than a judgement about a share that moved.",
+      "The two blocks carrying repositories the person does not own answer different questions, exactly as the query asks them. repositoriesContributedTo keeps all four contribution types and carries NO language counts: it feeds the contributed list and the external-footprint metrics. codeContributedTo narrows to COMMIT and PULL_REQUEST and carries the language counts plus each repository's default-branch total commit count (defaultBranchRef.target.all), the denominator of the authorship ratio. issue-only-org/tracker appears in the first and not the second, which is what an issue-only contribution looks like in a real response.",
+      "issue-only-org/tracker is 4,000,000 bytes of Kotlin, and Kotlin appears in no other repository here. Under an aggregation that admitted issue-only repositories it would have been the second-largest language in the row on the strength of one filed issue, so its absence under BOTH scopes is one exact assertion rather than a judgement about a share that moved.",
       "The owned repositories -- the DEFAULT language set -- sum to exactly 1,000,000 bytes so the rendered shares are exact, and they cover every shape a share can take: values landing ON a whole number (Python 40.0%, TypeScript 25.0%, Go 15.0%, Shell 5.0%), values ROUNDING onto one (HTML 9.58 and Lua 2.17), ordinary one-decimal values, and a language under 0.05% of the total that renders 0.0% and keeps its entry (HCL, inside the top eight, with Ruby smaller still and cut by the cap at nine distinct languages).",
-      "Adding codeContributedTo brings the worked-in set to exactly 12,000,000 bytes, of which mega-org/monolith alone is 10,489,000. That one external repository takes the row from 15.0% Go to 82.8% Go, which is the distortion this fixture exists to pin: the default must not admit it and the opt-in must, or neither assertion means anything.",
+      "The worked-in row weights each codeContributedTo repository by f = min(mine/all, 1): 'all' from the node's defaultBranchRef and 'mine' from the top-level authorship map (the person's own default-branch commits, served only under language-scope=worked-in). mega-org/monolith is 10,489,000 bytes -- more than ten times everything owned -- at mine 0 of 4143, the unmerged-pull-request shape: it must contribute NOTHING, which is the distortion this fixture exists to pin. fixture-labs/toolkit weighs 1200/2000 = 0.6 (proportional partial authorship), solo-maintainer/gadget 10/20 = 0.5, another-org/pipeline 30/30 = 1 (full authorship).",
+      "open-fixture/rebase-lab pins the present-zero-versus-missing distinction: its authorship entry IS PRESENT with value 0 while its window commit count is 25 of branch total 50 (a default-branch replacement leaves exactly that shape), so on the primary page a resolved zero must win and its 40,000 bytes of Zig -- a language in no other repository -- must not appear, while the degraded page weights it 25/50 and Zig legitimately enters that row. An implementation that read the authorship map with a truthiness test instead of an existence test would route the present zero into the window fallback and publish Zig on the primary page.",
+      "Each degradation path has one dedicated repository. fixture-labs/docs-site is deliberately ABSENT from the authorship map, so the primary worked-in page exercises the per-repository numerator fallback: its window commit count (40) over its default-branch total (100) gives f 0.4. quiet-user/snippets carries defaultBranchRef null and 500,000 bytes of Nix, a language in no other repository, so 'no usable denominator excludes the repository' is one exact absence assertion -- summed unweighted, Nix would top half the row. The languages-worked-in-degraded page sets github_profile_fixture_authorship_fail in front matter, the seam then reports authorshipOk false, and every numerator comes from the window commit counts: toolkit falls from 0.6 to 214/2000, monolith and gadget (absent from the commit list) measure zero, rebase-lab enters at 25/50, and pipeline's window count (50) EXCEEDS its default-branch total (30), proving the ratio clamps at 1 instead of inflating Python beyond the repository's bytes.",
       "No share here lands on an exact half at the rounding step. Hugo's math.Round rounds a half AWAY from zero while several other languages round it to even, so a fixture value sitting on x.x5 would encode one implementation's tie-break as an expected string; every value is placed off the boundary instead.",
       "Every value here is static. The only build-varying field the module derives from it is tenureYears, which grows with the wall clock because it is measured from createdAt to now."
     ]
@@ -35,6 +37,7 @@
   },
   "user": {
     "login": "fixture-dev",
+    "id": "MDQ6VXNlcjQyNDI=",
     "databaseId": 4242,
     "name": "Fixture Dev",
     "bio": "Builds test fixtures so other people can trust their builds.",
@@ -912,6 +915,42 @@
         },
         {
           "repository": {
+            "nameWithOwner": "fixture-labs/docs-site",
+            "owner": {
+              "login": "fixture-labs",
+              "__typename": "Organization"
+            }
+          },
+          "contributions": {
+            "totalCount": 40
+          }
+        },
+        {
+          "repository": {
+            "nameWithOwner": "another-org/pipeline",
+            "owner": {
+              "login": "another-org",
+              "__typename": "Organization"
+            }
+          },
+          "contributions": {
+            "totalCount": 50
+          }
+        },
+        {
+          "repository": {
+            "nameWithOwner": "open-fixture/rebase-lab",
+            "owner": {
+              "login": "open-fixture",
+              "__typename": "Organization"
+            }
+          },
+          "contributions": {
+            "totalCount": 25
+          }
+        },
+        {
+          "repository": {
             "nameWithOwner": "fixture-dev/toolbelt",
             "owner": {
               "login": "fixture-dev",
@@ -1112,8 +1151,22 @@
           }
         },
         {
+          "nameWithOwner": "open-fixture/rebase-lab",
+          "description": "A repository whose default branch was replaced after the fixture person's commits landed: their window contributions are nonzero while their authorship count on the current branch is zero.",
+          "url": "https://github.com/open-fixture/rebase-lab",
+          "stargazerCount": 12,
+          "forkCount": 1,
+          "primaryLanguage": {
+            "name": "Zig"
+          },
+          "owner": {
+            "login": "open-fixture",
+            "__typename": "Organization"
+          }
+        },
+        {
           "nameWithOwner": "mega-org/monolith",
-          "description": "An external monolith an order of magnitude larger than everything the fixture person owns; they landed one merged pull request in it.",
+          "description": "An external monolith an order of magnitude larger than everything the fixture person owns; their only contributions are open, unmerged pull requests.",
           "url": "https://github.com/mega-org/monolith",
           "stargazerCount": 5200,
           "forkCount": 640,
@@ -1160,6 +1213,13 @@
                 }
               }
             ]
+          },
+          "defaultBranchRef": {
+            "target": {
+              "all": {
+                "totalCount": 4143
+              }
+            }
           }
         },
         {
@@ -1179,6 +1239,13 @@
                 }
               }
             ]
+          },
+          "defaultBranchRef": {
+            "target": {
+              "all": {
+                "totalCount": 2000
+              }
+            }
           }
         },
         {
@@ -1192,6 +1259,13 @@
                 }
               }
             ]
+          },
+          "defaultBranchRef": {
+            "target": {
+              "all": {
+                "totalCount": 20
+              }
+            }
           }
         },
         {
@@ -1211,6 +1285,13 @@
                 }
               }
             ]
+          },
+          "defaultBranchRef": {
+            "target": {
+              "all": {
+                "totalCount": 100
+              }
+            }
           }
         },
         {
@@ -1224,6 +1305,13 @@
                 }
               }
             ]
+          },
+          "defaultBranchRef": {
+            "target": {
+              "all": {
+                "totalCount": 30
+              }
+            }
           }
         },
         {
@@ -1231,15 +1319,43 @@
           "languages": {
             "edges": [
               {
-                "size": 1000,
+                "size": 500000,
                 "node": {
-                  "name": "Lua"
+                  "name": "Nix"
                 }
               }
             ]
+          },
+          "defaultBranchRef": null
+        },
+        {
+          "nameWithOwner": "open-fixture/rebase-lab",
+          "languages": {
+            "edges": [
+              {
+                "size": 40000,
+                "node": {
+                  "name": "Zig"
+                }
+              }
+            ]
+          },
+          "defaultBranchRef": {
+            "target": {
+              "all": {
+                "totalCount": 50
+              }
+            }
           }
         }
       ]
     }
+  },
+  "authorship": {
+    "mega-org/monolith": 0,
+    "fixture-labs/toolkit": 1200,
+    "solo-maintainer/gadget": 10,
+    "another-org/pipeline": 30,
+    "open-fixture/rebase-lab": 0
   }
 }

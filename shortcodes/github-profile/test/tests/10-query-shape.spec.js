@@ -123,6 +123,55 @@ for (const build of BUILDS) {
     assert.ok(owned.includes('languages('), 'owned repositories carry the default row');
   });
 
+  test(`[${build.name}] the snapshot carries both halves of the authorship ratio's wiring`, () => {
+    const {query} = JSON.parse(published(build.dir, 'data-snapshot-query'));
+
+    // The global node ID is what the authorship query's author filter takes
+    // (CommitAuthor has an id and emails, no login), so the snapshot must
+    // fetch it or the follow-up request can never be built.
+    const core = blockAfter(query, 'core: user(login: $login)');
+    assert.match(core, /\bid\b/, 'the core user block must request the global node id');
+
+    // The denominator rides in the snapshot: each code-contributed node's
+    // default branch reports its total commit count under the `all` alias.
+    const codeOnly = blockAfter(query, CODE_ONLY);
+    assert.ok(
+      codeOnly.includes(
+        'defaultBranchRef { target { ... on Commit { all: history(first: 1) { totalCount } } } }',
+      ),
+      'the code connection must request each default branch total commit count',
+    );
+  });
+
+  test(`[${build.name}] the authorship request names repositories safely and the person by node id`, () => {
+    const body = JSON.parse(published(build.dir, 'data-authorship-query'));
+    assert.deepEqual(body.variables, {uid: 'MDQ6VXNlcjQyNDI='});
+    assert.match(body.query, /^query\(\$uid: ID!\)/);
+
+    // One aliased block per repository, numbered by the caller's slice.
+    assert.ok(
+      body.query.includes('r0: repository(owner: "mega-org", name: "monolith")'),
+      'the first repository keeps alias r0',
+    );
+    const r0 = blockAfter(body.query, 'r0: repository(owner: "mega-org", name: "monolith")');
+    assert.ok(
+      r0.includes('mine: history(first: 1, author: {id: $uid}) { totalCount }'),
+      'each block asks for the person own default-branch commit count',
+    );
+
+    // The layout feeds one deliberately invalid nameWithOwner in position 1.
+    // It must be dropped -- its owner fails the login shape and its name
+    // carries a quote, and both are remote-derived text headed into the
+    // query string -- while the entry AFTER it keeps its original alias, so
+    // the caller's index-based decode survives the skip.
+    assert.ok(!body.query.includes('r1:'), 'the invalid entry must be dropped');
+    assert.ok(!body.query.includes('bad owner'), 'and none of its text may reach the query');
+    assert.ok(
+      body.query.includes('r2: repository(owner: "fixture-labs", name: "toolkit")'),
+      'the entry after the skip keeps its position-based alias',
+    );
+  });
+
   test(`[${build.name}] the canned fixture data mirrors the request`, () => {
     // The seam serves a hand-maintained response. When the query gains or
     // loses a block the response has to follow, and nothing else notices:
@@ -141,6 +190,13 @@ for (const build of BUILDS) {
       fixture.user.codeContributedTo.nodes.every((n) => n.languages),
       'and every canned code node must carry them, because it does',
     );
+    assert.equal(typeof fixture.user.id, 'string', 'the canned user must carry the node id');
+    assert.ok(fixture.user.id.length > 0, 'and it must be non-empty');
+    assert.ok(
+      fixture.user.codeContributedTo.nodes.every((n) => Object.hasOwn(n, 'defaultBranchRef')),
+      'every canned code node must carry the defaultBranchRef key (null included: an empty repository has no branch)',
+    );
+    assert.ok(fixture.authorship, 'and the canned response must carry the authorship map');
   });
 
   test(`[${build.name}] the years request emits one bounded block per year`, () => {
