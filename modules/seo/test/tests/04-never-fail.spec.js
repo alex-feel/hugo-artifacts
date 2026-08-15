@@ -17,12 +17,16 @@ import {join} from 'node:path';
 import {
   badtypesDir,
   configuredDir,
+  generatedDir,
   graph,
+  graphDir,
   linkRels,
   multilingualDir,
   offswitchDir,
+  paginationDir,
   publicDir,
   rawHtml,
+  sitenameDir,
   subpathDir,
   warnCount,
   PAGES,
@@ -287,7 +291,9 @@ test('the JSON-LD keywords skip map items in BOTH consumer lists', () => {
 test('no emitted file in any build tree contains a Go map debug string', () => {
   // The whole-class net: whichever surface a stringification of a map-shaped
   // consumer value leaks through, the debug form always carries the
-  // substring "map[".
+  // substring "map[". Every tree the suite builds is in the net, because a
+  // net that skips a tree is a net whichever environment introduces the next
+  // stringification can slip through.
   let scanned = 0;
   for (const dir of [
     publicDir,
@@ -296,6 +302,10 @@ test('no emitted file in any build tree contains a Go map debug string', () => {
     badtypesDir,
     offswitchDir,
     multilingualDir,
+    paginationDir,
+    graphDir,
+    sitenameDir,
+    generatedDir,
   ]) {
     for (const entry of readdirSync(dir, {recursive: true, withFileTypes: true})) {
       if (!entry.isFile() || !/\.(html|xml|json|txt)$/.test(entry.name)) continue;

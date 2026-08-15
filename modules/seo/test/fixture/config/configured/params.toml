@@ -19,6 +19,15 @@
   # trees must publish the identical comma-joined string.
   keywords = ['alpha', 'beta']
 
+  # A generated-image hook pointed at a partial that does not exist -- the
+  # typo a consumer makes once. Without the templates.Exists guard the lookup
+  # aborts the build on the first page rendered, so this environment carrying
+  # it means every assertion made against this tree is also proof the build
+  # survived it. It lives here rather than in `generated`, where the key is
+  # spelled correctly, and the tree stays byte-identical to what it published
+  # before the hook existed.
+  image_partial = 'nowhere/no-such-card.html'
+
   [seo.alternates]
     formats = ['markdown']
 

@@ -76,6 +76,7 @@ The full annotated surface:
   default_image       = "images/og-default.png"  # Global resource path (assets/) OR site-root path for a static/ file (e.g. /img/og.png) OR absolute URL; site-wide image fallback, applied only when no page-level image resolves. Site-root paths keep the baseURL path on a subpath deployment.
   image_alt           = "Acme logo on dark"      # Default og:image:alt when a page image resolves no alt of its own.
   image_params        = ["tile_image"]     # Extra top-level front-matter params whose values (string or list per key) join the page-image candidates.
+  image_partial       = "og-image/card.html"     # Generated-image hook: a partial that composes an image for the page at build time. Consulted only when no declared or bundled image resolves, and ranked ABOVE default_image.
   keywords            = ["hugo", "seo", "static site"]  # JSON-LD keywords fallback ONLY; NO <meta name=keywords> is ever emitted.
 
   # --- Robots ---
@@ -209,6 +210,7 @@ The full annotated surface:
 | `default_image` | string | `""` | Site-wide image fallback. Resource path under `assets/`, site-root path for a `static/` file (e.g. `/img/og.png`), or absolute URL. Applied only when no page-level image resolves; a site-root path keeps the `baseURL` path on a subpath deployment. |
 | `image_alt` | string | `""` | Default `og:image:alt` when a page image resolves no alt of its own. |
 | `image_params` | array | `[]` | Names of extra top-level front-matter params (e.g. `["tile_image"]`) whose values (string or list per key) join the page-image candidates -- after `seo.images`/`seo.image`/`meta_image`, before native `images`. |
+| `image_partial` | string | `""` | **Generated-image hook.** The path of a partial that composes an image for the page at build time, written exactly as you would pass it to `partial` (e.g. `og-image/card.html`) -- your own, or a sibling module's. See Extension Hooks for the contract and the degradation rules. |
 | `keywords` | array | `[]` | JSON-LD `keywords` fallback ONLY. No `<meta name="keywords">` is ever emitted. |
 | `robots` | string | `"max-image-preview:large"` (shipped baseline) | Site baseline robots directive; token-unioned with page `seo.robots`, most-restrictive per axis wins. |
 | `jsonld_container` | string | `"separate"` | `"separate"` (one `<script>` per node) or `"graph"` (one `@graph` block). Node dicts are identical either way. |
@@ -563,7 +565,7 @@ One limit worth naming: the pager suffix is applied to every translation, so whe
 
 ## Extension Hooks
 
-Three documented override tiers plus a config-level suppression switch, so you can add, replace, and remove without forking the module.
+Four documented override tiers plus a config-level suppression switch, so you can add, replace, and remove without forking the module.
 
 1. **Same-name override of any module partial** (no guard needed): Hugo's template precedence makes your `layouts/_partials/seo/<same path>.html` win over the module's. The partials form three tiers so the target is obvious -- override a RENDERER (`seo/head-meta.html`, `seo/head-jsonld.html`) to change what is output, a RESOLVER (`seo/resolve/images.html`, `seo/resolve/robots.html`) to change how a value is chosen, or a NODE BUILDER (`seo/jsonld/product.html`) to reshape exactly one schema type. Each file has one responsibility, so an override never forces reimplementing anything else. Internal partial names are stable within a major version.
 2. **Additive head hook:** author `layouts/_partials/seo/head-extra.html`. The module calls it behind a `templates.Exists` guard and passes the full `$ctx` (`{page, seo}`), so extra `<meta>`/`<link>` tags (app-store cards, additional verification, alternate feeds) can reuse the already-resolved title, description, images, and `@id`s. Purely additive, runs last, zero cost until you create the file.
@@ -572,6 +574,14 @@ Three documented override tiers plus a config-level suppression switch, so you c
    `$ctx.seo.ids` carries six keys: `website`, `organization`, `webpage`, `breadcrumb`, `content`, and `person`. `person` is the site-owner Person anchor, resolved from the author page located by `[seo.author] path_prefix` plus the urlized `[seo.author] name`. Its value is CONSTANT across the site -- byte-identical on the author page and on an unrelated blog post -- so a hook can reference it without hand-building the string and watching it desynchronize when the author slug or the fragment convention changes. It is the empty string when no author page resolves, so guard with `with`.
 
    **`person` and `organization` are DIFFERENT anchors, even when `[seo.organization] type = 'Person'`.** The publisher node keeps the `#organization` anchor while the author's `ProfilePage` `mainEntity` keeps `#person`. Conflating them would describe one human as two entities in the graph.
+
+4. **Generated-image hook:** set `[params.seo] image_partial` to the path of a partial, written exactly as you would pass it to `partial` (`og-image/card.html`, resolved under `layouts/_partials/`). The image cascade calls it when a page has no image of its own, and whatever it returns -- a Resource, a slice of Resources, a string path or URL, or nothing -- is normalized like any declared candidate, so a composed card gets the same `og:image` 1200x630 crop, the same dimensions and media type, the same natural-aspect variant for JSON-LD, and the same alt chain a page-bundle image gets.
+
+   **Precedence:** `seo.images`/`seo.image`/`meta_image`, then `image_params` keys, then native `images`, then `*feature*`/`*cover*`/`*thumbnail*` bundle resources, THEN this hook, THEN `default_image`. So a page that names or bundles its own image keeps it and never carries a generated card in its structured data, while a page that names none gets a card of its own rather than the one banner the whole site shares. The hook is invoked only on pages that reach that tier, so composing an image is never paid for on a page that would discard it.
+
+   It receives `{page, title, description}`, where `title` and `description` are the RESOLVED strings the head publishes as `og:title` and `og:description` -- draw those rather than re-deriving from front matter, or the card and the tags it accompanies can disagree. Because the key reads through `.Param`, a section cascade can point different sections at different generators, and `image_partial = ''` on a page opts that page out.
+
+   Degradation follows the module's usual contract: a value that is not a single string, and a path naming no existing template, each warn once and leave `default_image` to answer. A partial that returns nothing is silent -- that is how a generator says it has no template for this page kind. Errors INSIDE your partial are yours, and surface as build errors exactly as they do for the two hooks above. Author pages are exempt by design: `Person.image` is resolved without this hook, because a social card is a picture of a page and never a photograph of a human.
 
 Plus the config switch `params.seo.disable[]` (a slice of node-type names, e.g. `["VideoObject", "BreadcrumbList"]`): the zero-code way to say "emit everything except X".
 
@@ -625,7 +635,7 @@ Sites carrying legacy `meta_*`-style front matter (`meta_title`, `meta_descripti
 
 The module ships `layouts/` plus the two identity files, this README, and a `test/` directory carrying its validation suite; it needs no `assets/`, `static/`, `data/`, `i18n/`, `content/`, or `archetypes/` (SEO metadata is fully derived from consumer front matter and site params).
 
-`test/` holds a Hugo fixture site and Node build-output assertions, run with `bash modules/seo/test/run-tests.sh` (or `run-tests.cmd` on Windows). It builds the fixture nine times -- with `[seo.alternates]`, `[seo.links]` and `content_license` unset and then set, under a `baseURL` that carries a path, with those namespaces written as bare scalars, with the kill switch off, with a second language whose params set a noindex baseline, with a two-language paginated section, with `jsonld_container` switched to `"graph"`, and with the site's name and its publisher's name set to different strings -- because a surface that is always on is indistinguishable from one that works unless both are checked, a URL that drops the baseURL path is indistinguishable from a correct one at a domain root, a URL pinned to the first pager is indistinguishable from a correct one until a document is served from a pager, the `@graph` serialization site is reached by no other build, and the two ends of the site-name chain are indistinguishable until they resolve to different strings. See [`test/README.md`](test/README.md). All partials live under `layouts/_partials/seo/` in three override tiers: RENDERERS at the `seo/` root change WHAT is output, RESOLVERS under `seo/resolve/` change HOW a value is chosen, NODE BUILDERS under `seo/jsonld/` change ONE schema type's shape; `seo/lib/` holds internal cross-cutting utilities.
+`test/` holds a Hugo fixture site and Node build-output assertions, run with `bash modules/seo/test/run-tests.sh` (or `run-tests.cmd` on Windows). It builds the fixture ten times -- with `[seo.alternates]`, `[seo.links]` and `content_license` unset and then set, under a `baseURL` that carries a path, with those namespaces written as bare scalars, with the kill switch off, with a second language whose params set a noindex baseline, with a two-language paginated section, with `jsonld_container` switched to `"graph"`, with the site's name and its publisher's name set to different strings, and with the generated-image hook wired alongside a site default image -- because a surface that is always on is indistinguishable from one that works unless both are checked, a URL that drops the baseURL path is indistinguishable from a correct one at a domain root, a URL pinned to the first pager is indistinguishable from a correct one until a document is served from a pager, the `@graph` serialization site is reached by no other build, the two ends of the site-name chain are indistinguishable until they resolve to different strings, and a hook ranked below the site fallback is indistinguishable from one ranked above it until both are configured at once. See [`test/README.md`](test/README.md). All partials live under `layouts/_partials/seo/` in three override tiers: RENDERERS at the `seo/` root change WHAT is output, RESOLVERS under `seo/resolve/` change HOW a value is chosen, NODE BUILDERS under `seo/jsonld/` change ONE schema type's shape; `seo/lib/` holds internal cross-cutting utilities.
 
 ```text
 modules/seo/
@@ -645,7 +655,7 @@ modules/seo/
           site-name.html                   # Returns the site's name (website name -> organization name -> site.Title) for og:site_name, WebSite.name, the OpenSearch title and the feed title. Takes the Site, not a Page; called via partialCached.
           description.html                 # Returns the unified description string shared by meta, OG, Twitter, and JSON-LD.
           canonical.html                   # Returns the absolute canonical URL.
-          images.html                      # Returns the ordered slice of normalized image dicts.
+          images.html                      # Returns the ordered slice of normalized image dicts. Takes {page, generated}: the optional `generated` payload both enables the seo.image_partial hook and is what that hook receives.
           image.html                       # Returns one normalized image dict {url,width,height,type,alt,natural} from a candidate (og crop or natural variant).
           author.html                      # Returns the ordered slice of author descriptor dicts.
           dates.html                       # Returns {published, modified, created} RFC 3339 strings.
@@ -677,7 +687,7 @@ modules/seo/
           softwareapplication.html         # Returns the SoftwareApplication node dict (co-typing, enum-validated applicationCategory; self-gates).
           videoobject.html                 # Returns the VideoObject node dict (self-gates to name + thumbnailUrl + uploadDate).
           image-object.html                # Returns an ImageObject dict (or bare URL string) from a normalized image dict; reused by every image-carrying node.
-  test/                                    # Validation suite: a Hugo fixture site built nine times (baseline, configured, subpath, badtypes, offswitch, multilingual, pagination, graph, sitename) plus Node build-output assertions. See test/README.md.
+  test/                                    # Validation suite: a Hugo fixture site built ten times (baseline, configured, subpath, badtypes, offswitch, multilingual, pagination, graph, sitename, generated) plus Node build-output assertions. See test/README.md.
 ```
 
-Two consumer-authored hook files (`layouts/_partials/seo/head-extra.html` and `layouts/_partials/seo/jsonld-extra.html`) are intentionally NOT shipped; the module calls them only behind `templates.Exists` guards, so both are zero-cost until you opt in.
+Two consumer-authored hook files (`layouts/_partials/seo/head-extra.html` and `layouts/_partials/seo/jsonld-extra.html`) are intentionally NOT shipped; the module calls them only behind `templates.Exists` guards, so both are zero-cost until you opt in. The generated-image hook is guarded the same way but named by `[params.seo] image_partial` rather than by convention, so the partial it points at can live in a sibling module's own namespace without that module having to write into this one's.

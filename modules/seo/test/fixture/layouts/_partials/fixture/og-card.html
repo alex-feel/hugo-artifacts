@@ -1,0 +1,58 @@
+{{/*
+  Fixture stand-in for a generated-image module: the partial that
+  params.seo.image_partial names in the `generated` environment.
+
+  It does what a real card generator does -- compose a per-page raster at
+  build time and return it as a Resource -- with the smallest machinery that
+  still exercises the whole contract: draw the RESOLVED title onto a template
+  raster and publish the result under a path derived from the page.
+  images.Text needs no font resource; its default is Go Regular.
+
+  It also publishes a JSON sidecar recording the two strings it was handed,
+  because drawn text lives in pixels no assertion can read and a file name
+  would have to be urlized -- and a spec that reimplemented urlize would be
+  asserting its own copy of Hugo rather than the module. The sidecar carries
+  the strings VERBATIM, so a spec compares them to the og:title and
+  og:description the same page emits with no transformation in between: a
+  hook handed the page's raw .Title rather than the resolved one records a
+  different string, and the `generated` environment cascades an seo.title onto
+  one page precisely so those two differ there. The jsonld-extra fixture hook
+  publishes its probe the same way.
+
+  Returning nothing for the `promo` section stands in for the ordinary case of
+  a generator that has no template for some page kind or section: the module
+  must fall through to params.seo.default_image rather than publishing a
+  half-made card or dropping the image entirely.
+
+  Context (dict): .page, .title, .description -- as passed by
+  seo/resolve/images.html.
+
+  Returns: an image Resource, or "" when this page gets no card.
+*/}}
+
+{{- $page := .page -}}
+{{- $title := .title -}}
+{{- $description := .description -}}
+{{- $card := "" -}}
+
+{{- if ne $page.Section "promo" -}}
+  {{- with resources.Get "img/card-base.png" -}}
+    {{- $drawn := . | images.Filter (images.Text $title (dict
+      "size" 48
+      "x" 60
+      "y" 260
+      "color" "#ffffff"
+    )) -}}
+    {{- $card = resources.Copy (printf "/cards%sog.png" $page.RelPermalink) $drawn -}}
+  {{- end -}}
+
+  {{/* Reading .RelPermalink is what publishes a resource, so the assignment
+       is the publish and the value is deliberately unused. */}}
+  {{- $sidecar := resources.FromString
+    (printf "cards%spayload.json" $page.RelPermalink)
+    (jsonify (dict "title" $title "description" $description))
+  -}}
+  {{- $published := $sidecar.RelPermalink -}}
+{{- end -}}
+
+{{- return $card -}}

@@ -48,6 +48,13 @@ export const graphDir = resolve(process.env.FIXTURE_PUBLIC_GRAPH ?? 'fixture/pub
 export const sitenameDir = resolve(
   process.env.FIXTURE_PUBLIC_SITENAME ?? 'fixture/public/sitename',
 );
+// The generated-image hook wired to a fixture partial, alongside a site
+// default image: the only build in which a per-page composed card and the
+// site-wide banner both exist, so the one that actually reached og:image
+// says which tier of the cascade answered.
+export const generatedDir = resolve(
+  process.env.FIXTURE_PUBLIC_GENERATED ?? 'fixture/public/generated',
+);
 
 export function rawHtml(rel, dir = publicDir) {
   return readFileSync(join(dir, rel), 'utf8');
@@ -106,6 +113,7 @@ export function buildLog(which = 'baseline') {
     pagination: 'HUGO_BUILD_LOG_PAGINATION',
     graph: 'HUGO_BUILD_LOG_GRAPH',
     sitename: 'HUGO_BUILD_LOG_SITENAME',
+    generated: 'HUGO_BUILD_LOG_GENERATED',
   };
   // A key map that throws, rather than a two-state boolean: the boolean form
   // had no path to the third log at all, so a warning assertion against the

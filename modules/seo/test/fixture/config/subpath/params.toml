@@ -18,6 +18,14 @@
   # og:image:secure_url, twitter:image and every JSON-LD image node.
   default_image = '/img/og-default.png'
 
+  # The generated-image hook written as a LIST. A partial path is one string,
+  # and a list of them names no template at all; `with` treats a populated
+  # list as present, so the value really does reach the lookup rather than
+  # being skipped upstream. Degrading to unset here leaves default_image above
+  # to answer, so the tree is byte-identical either way and only the warning
+  # tells the consumer their key did nothing.
+  image_partial = ['fixture/og-card.html']
+
   # A consumer-authored canonical override. rel="canonical" is the one tag
   # whose entire job is to be exactly right, so a dropped path prefix here is
   # the most damaging instance of the whole class.

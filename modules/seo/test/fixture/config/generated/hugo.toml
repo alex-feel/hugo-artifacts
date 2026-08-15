@@ -1,0 +1,15 @@
+# A site-level cascade that gives ONE page an seo.title different from its own
+# .Title, so the resolved title and the raw one are distinguishable strings in
+# this environment. Without it every fixture page resolves a title equal to
+# .Title, and a hook handed the wrong one of the two would publish exactly the
+# file name the right one does.
+#
+# Cascade tables must live in a ROOT configuration file, never in a dedicated
+# config/<env>/cascade.toml, which Hugo silently ignores.
+[cascade]
+
+  [cascade.params.seo]
+    title = 'Cascaded Card Headline'
+
+  [cascade.target]
+    path = '/page'
