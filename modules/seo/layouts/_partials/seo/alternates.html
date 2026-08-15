@@ -82,7 +82,11 @@
 {{- with $page.Param "seo.links" -}}
 {{- $links := . -}}
 {{- if reflect.IsMap $links -}}
-  {{- $ogSiteName := $page.Param "seo.organization.name" | default ($page.Param "seo.website.name") | default site.Title -}}
+  {{/* The OpenSearch title names the SITE, so it reads the one resolved site
+       name off $seo rather than re-deriving it. An inline copy here once held
+       the OPPOSITE fallback order to the JSON-LD builder's, so a site that set
+       [seo.website] name got it in WebSite.name and not in this title. */}}
+  {{- $siteName := $seo.siteName -}}
   {{- range $key, $value := $links -}}
     {{- $k := lower (trim (printf "%v" $key) " \t\n\r") -}}
     {{/* Absolutized through the shared routine rather than by piping into
@@ -100,7 +104,7 @@
       {{- else if eq $k "license" }}
 <link rel="license" href="{{ $v }}">
       {{- else if eq $k "search" }}
-<link rel="search" type="application/opensearchdescription+xml" title="{{ $ogSiteName }}" href="{{ $v }}">
+<link rel="search" type="application/opensearchdescription+xml" title="{{ $siteName }}" href="{{ $v }}">
       {{- else -}}
         {{- partial "seo/lib/warn.html" (dict
             "key" (printf "seo:warn:unknown-link-rel:%s" $k)

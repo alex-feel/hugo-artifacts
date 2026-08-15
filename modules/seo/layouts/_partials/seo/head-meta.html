@@ -86,18 +86,20 @@
   {{- end -}}
 {{- end }}
 
-{{/* ---- Open Graph ---- og:site_name from organization name -> website name
-     -> site.Title. og:image carries real width/height from resolve/image.html;
+{{/* ---- Open Graph ---- og:site_name is the resolved site name (see
+     resolve/site-name.html), the same string the JSON-LD WebSite.name and the
+     OpenSearch title carry, so no configuration can make them disagree.
+     og:image carries real width/height from resolve/image.html;
      og:image:alt is ALWAYS present when an image is (ogp.me requires it, and
      many implementations omit it). The first image is the primary card. */}}
-{{- $ogSiteName := $page.Param "seo.organization.name" | default ($page.Param "seo.website.name") | default site.Title -}}
+{{- $siteName := $seo.siteName -}}
 <meta property="og:type" content="{{ $seo.ogType }}">
 <meta property="og:title" content="{{ $seo.title }}">
 {{- with $seo.description }}
 <meta property="og:description" content="{{ . }}">
 {{- end }}
 <meta property="og:url" content="{{ $seo.canonical }}">
-{{- with $ogSiteName }}
+{{- with $siteName }}
 <meta property="og:site_name" content="{{ . }}">
 {{- end }}
 {{- with $seo.locale }}
@@ -273,7 +275,7 @@
      other alternates are never mislabeled as feeds. When the page itself has
      no RSS format (a leaf page), fall back to the page's section RSS. */}}
 {{- if ne ($page.Param "seo.feed.enable") false -}}
-  {{- $feedTitle := $ogSiteName -}}
+  {{- $feedTitle := $siteName -}}
   {{- $rss := $page.AlternativeOutputFormats.Get "rss" -}}
   {{- with $rss }}
 <link rel="alternate" type="{{ .MediaType.Type }}" title="{{ $feedTitle }}" href="{{ .Permalink }}">

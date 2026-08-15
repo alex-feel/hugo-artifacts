@@ -1,0 +1,27 @@
+# The `sitename` environment: the site's name and its publisher's name are
+# DIFFERENT strings, which is the shape the site-name chain exists for and the
+# only one that can tell the chain's two ends apart.
+#
+# The baseline `[params.seo.organization]` this inherits is `name = 'Jane Doe'`
+# with `type = 'Person'` -- a person publishing a site that is not named after
+# them. og:site_name, the JSON-LD WebSite.name, the OpenSearch title and the
+# feed title must all carry the WEBSITE name, while the publisher node keeps
+# the person's. Before one shared resolver owned that chain, the classic head
+# read organization-first and the JSON-LD builder website-first, so this exact
+# configuration published two different site names on one page.
+#
+# It cannot live in either environment that already declares one of the two
+# tables: `configured` writes `website` as a bare SCALAR on purpose (the shape
+# that used to stop the home-page build) and `subpath` writes `organization`
+# the same way, so in both of them one end of the chain is deliberately
+# unreadable and the divergence is invisible.
+[seo]
+
+  [seo.website]
+    name = 'Acme Docs Portal'
+
+  # The OpenSearch title is the third consumer of the chain and the one that
+  # lived furthest from the other two, in alternates.html rather than in the
+  # head renderer, so it is the copy a fix is most likely to miss.
+  [seo.links]
+    search = '/opensearch.xml'

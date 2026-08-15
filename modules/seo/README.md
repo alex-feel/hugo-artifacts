@@ -94,9 +94,9 @@ The full annotated surface:
   # --- Content license ---
   content_license     = "https://creativecommons.org/licenses/by/4.0/"  # Absolute URL of the license covering the site's editorial content. Emits "license" on the WebPage, CollectionPage and article-class JSON-LD nodes. Unset emits nothing. Pair with [params.seo.links] license below for the matching <link rel="license">.
 
-  # --- WebSite node (home page only) ---
+  # --- WebSite node (home page only, except `name`, which is sitewide) ---
   [params.seo.website]
-    name                = "Acme Documentation"   # WebSite.name override; else params.seo.organization.name; else site.Title.
+    name                = "Acme Documentation"   # The site's name. Drives og:site_name, JSON-LD WebSite.name, the OpenSearch <link rel="search"> title and the feed-discovery title. Falls back to params.seo.organization.name, then site.Title. Set it when the publisher is not the site (an organization type = "Person" publishing a product site).
     alternate_name      = "acme.example"   # WebSite.alternateName (Google suggests the lowercase domain as a backup site name).
     search_url_template = "https://acme.example/search/?q={search_term_string}"  # Emits a schema.org SearchAction naming your search endpoint; buys no Google feature (read its row in the WebSite table below). MUST contain the literal {search_term_string}, which is published verbatim; a site-root or relative value is absolutized against the full baseURL, path included.
 
@@ -218,11 +218,11 @@ The full annotated surface:
 | `twitter_site` | string | `""` | `twitter:site` handle. Leading `@` optional. Deprecated alias: `params.twitter`. |
 | `twitter_creator` | string | `""` | Default `twitter:creator` when neither the page nor its first author supplies one. |
 
-### WebSite (`params.seo.website.*`, home page only)
+### WebSite (`params.seo.website.*`, home page only -- except `name`, which reaches every page)
 
 | Key | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `name` | string | `params.seo.organization.name` -> `site.Title` | `WebSite.name` override. |
+| `name` | string | `params.seo.organization.name` -> `site.Title` | **The site's name**, and the only key that sets it. One resolver feeds all four surfaces that name the site: `og:site_name`, the JSON-LD `WebSite.name`, the OpenSearch `<link rel="search">` title, and the feed-discovery `<link rel="alternate">` title. Reach for it whenever the publisher is not the site -- an `[params.seo.organization]` with `type = "Person"` publishing a product site is the ordinary case, and overriding the organization name instead would falsify the `Person` entity in the graph. Site-scoped by design: page front matter and section cascades do NOT override it, because a per-page site name is a name the four surfaces could disagree about. |
 | `alternate_name` | string | `""` | `WebSite.alternateName`. Google suggests the lowercase domain as a backup site name. |
 | `search_url_template` | string | `""` | Emits `WebSite.potentialAction` as a schema.org `SearchAction` naming your site's search endpoint. It fed Google's Sitelinks Search Box, which Google removed from Search results on 2024-11-21; no current consumer of the property is known, and Google states that leaving unsupported structured data in place causes no issues. Leave the key unset unless you want the declaration for its own sake. MUST contain the literal `{search_term_string}`, which is published verbatim in the emitted URL, so give your search endpoint a `noindex` directive if you do not want that URL indexed. A site-root or relative value is absolutized against the full `baseURL`, path included. Missing the placeholder emits a site-wide warn and no SearchAction. |
 
@@ -625,7 +625,7 @@ Sites carrying legacy `meta_*`-style front matter (`meta_title`, `meta_descripti
 
 The module ships `layouts/` plus the two identity files, this README, and a `test/` directory carrying its validation suite; it needs no `assets/`, `static/`, `data/`, `i18n/`, `content/`, or `archetypes/` (SEO metadata is fully derived from consumer front matter and site params).
 
-`test/` holds a Hugo fixture site and Node build-output assertions, run with `bash modules/seo/test/run-tests.sh` (or `run-tests.cmd` on Windows). It builds the fixture eight times -- with `[seo.alternates]`, `[seo.links]` and `content_license` unset and then set, under a `baseURL` that carries a path, with those namespaces written as bare scalars, with the kill switch off, with a second language whose params set a noindex baseline, with a two-language paginated section, and with `jsonld_container` switched to `"graph"` -- because a surface that is always on is indistinguishable from one that works unless both are checked, a URL that drops the baseURL path is indistinguishable from a correct one at a domain root, a URL pinned to the first pager is indistinguishable from a correct one until a document is served from a pager, and the `@graph` serialization site is reached by no other build. See [`test/README.md`](test/README.md). All partials live under `layouts/_partials/seo/` in three override tiers: RENDERERS at the `seo/` root change WHAT is output, RESOLVERS under `seo/resolve/` change HOW a value is chosen, NODE BUILDERS under `seo/jsonld/` change ONE schema type's shape; `seo/lib/` holds internal cross-cutting utilities.
+`test/` holds a Hugo fixture site and Node build-output assertions, run with `bash modules/seo/test/run-tests.sh` (or `run-tests.cmd` on Windows). It builds the fixture nine times -- with `[seo.alternates]`, `[seo.links]` and `content_license` unset and then set, under a `baseURL` that carries a path, with those namespaces written as bare scalars, with the kill switch off, with a second language whose params set a noindex baseline, with a two-language paginated section, with `jsonld_container` switched to `"graph"`, and with the site's name and its publisher's name set to different strings -- because a surface that is always on is indistinguishable from one that works unless both are checked, a URL that drops the baseURL path is indistinguishable from a correct one at a domain root, a URL pinned to the first pager is indistinguishable from a correct one until a document is served from a pager, the `@graph` serialization site is reached by no other build, and the two ends of the site-name chain are indistinguishable until they resolve to different strings. See [`test/README.md`](test/README.md). All partials live under `layouts/_partials/seo/` in three override tiers: RENDERERS at the `seo/` root change WHAT is output, RESOLVERS under `seo/resolve/` change HOW a value is chosen, NODE BUILDERS under `seo/jsonld/` change ONE schema type's shape; `seo/lib/` holds internal cross-cutting utilities.
 
 ```text
 modules/seo/
@@ -642,6 +642,7 @@ modules/seo/
         head-jsonld.html                   # Renderer/dispatcher. Collects node dicts from jsonld/* + the jsonld-extra hook, emits separate <script> blocks (default) or one @graph block.
         resolve/
           title.html                       # Returns {title, titleFull} via the title fallback chain.
+          site-name.html                   # Returns the site's name (website name -> organization name -> site.Title) for og:site_name, WebSite.name, the OpenSearch title and the feed title. Takes the Site, not a Page; called via partialCached.
           description.html                 # Returns the unified description string shared by meta, OG, Twitter, and JSON-LD.
           canonical.html                   # Returns the absolute canonical URL.
           images.html                      # Returns the ordered slice of normalized image dicts.
@@ -676,7 +677,7 @@ modules/seo/
           softwareapplication.html         # Returns the SoftwareApplication node dict (co-typing, enum-validated applicationCategory; self-gates).
           videoobject.html                 # Returns the VideoObject node dict (self-gates to name + thumbnailUrl + uploadDate).
           image-object.html                # Returns an ImageObject dict (or bare URL string) from a normalized image dict; reused by every image-carrying node.
-  test/                                    # Validation suite: a Hugo fixture site built eight times (baseline, configured, subpath, badtypes, offswitch, multilingual, pagination, graph) plus Node build-output assertions. See test/README.md.
+  test/                                    # Validation suite: a Hugo fixture site built nine times (baseline, configured, subpath, badtypes, offswitch, multilingual, pagination, graph, sitename) plus Node build-output assertions. See test/README.md.
 ```
 
 Two consumer-authored hook files (`layouts/_partials/seo/head-extra.html` and `layouts/_partials/seo/jsonld-extra.html`) are intentionally NOT shipped; the module calls them only behind `templates.Exists` guards, so both are zero-cost until you opt in.

@@ -41,6 +41,13 @@ export const paginationDir = resolve(
 // <script> holding a @graph array, which is a serialization site no other
 // build reaches.
 export const graphDir = resolve(process.env.FIXTURE_PUBLIC_GRAPH ?? 'fixture/public/graph');
+// The site's name and its publisher's name set to DIFFERENT strings: the only
+// build in which the two ends of the site-name chain are distinguishable, and
+// therefore the only one that can tell og:site_name, WebSite.name and the
+// OpenSearch title apart if they ever stop agreeing again.
+export const sitenameDir = resolve(
+  process.env.FIXTURE_PUBLIC_SITENAME ?? 'fixture/public/sitename',
+);
 
 export function rawHtml(rel, dir = publicDir) {
   return readFileSync(join(dir, rel), 'utf8');
@@ -98,6 +105,7 @@ export function buildLog(which = 'baseline') {
     multilingual: 'HUGO_BUILD_LOG_MULTILINGUAL',
     pagination: 'HUGO_BUILD_LOG_PAGINATION',
     graph: 'HUGO_BUILD_LOG_GRAPH',
+    sitename: 'HUGO_BUILD_LOG_SITENAME',
   };
   // A key map that throws, rather than a two-state boolean: the boolean form
   // had no path to the third log at all, so a warning assertion against the
