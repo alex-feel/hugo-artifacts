@@ -677,7 +677,7 @@ modules/seo/
           softwareapplication.html         # Returns the SoftwareApplication node dict (co-typing, enum-validated applicationCategory; self-gates).
           videoobject.html                 # Returns the VideoObject node dict (self-gates to name + thumbnailUrl + uploadDate).
           image-object.html                # Returns an ImageObject dict (or bare URL string) from a normalized image dict; reused by every image-carrying node.
-  test/                                    # Validation suite: a Hugo fixture site built eight times (baseline, configured, subpath, badtypes, offswitch, multilingual, pagination, graph) plus Node build-output assertions. See test/README.md.
+  test/                                    # Validation suite: a Hugo fixture site built nine times (baseline, configured, subpath, badtypes, offswitch, multilingual, pagination, graph, sitename) plus Node build-output assertions. See test/README.md.
 ```
 
 Two consumer-authored hook files (`layouts/_partials/seo/head-extra.html` and `layouts/_partials/seo/jsonld-extra.html`) are intentionally NOT shipped; the module calls them only behind `templates.Exists` guards, so both are zero-cost until you opt in.

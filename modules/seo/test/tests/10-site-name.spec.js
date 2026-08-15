@@ -123,26 +123,42 @@ test('no consumer re-derives the site name inline', () => {
   // the partial's own path in prose and reports a delegation that the code no
   // longer performs -- which is exactly how this assertion first passed against
   // a build whose WebSite node had gone back to deriving the chain itself.
+  //
+  // Both delimiters carry an OPTIONAL whitespace-trim marker, independently:
+  // one comment in these three files opens `{{/*` and closes `*/ -}}`, and
+  // another opens `{{- /*` and closes `*/ -}}`. A pattern anchored on the bare
+  // `{{/*`...`*/}}` pair therefore misses the second entirely AND, on the
+  // first, runs past the real close to the next one -- swallowing the emission
+  // block in between. Both failures are silent, and each breaks this lock in a
+  // different direction: leaked prose fails it on a comment, deleted code
+  // passes it on a template that no longer delegates at all.
   const layouts = resolve(process.env.MODULE_LAYOUTS ?? '../layouts/_partials/seo');
   const code = (rel) =>
-    readFileSync(join(layouts, rel), 'utf8').replace(/\{\{\/\*[\s\S]*?\*\/\}\}/g, '');
+    readFileSync(join(layouts, rel), 'utf8').replace(/\{\{-?\s*\/\*[\s\S]*?\*\/\s*-?\}\}/g, '');
 
-  // The stripper is load-bearing, so it is proven rather than trusted: an
-  // over-broad pattern that swallowed the template body would leave every
-  // negative assertion below passing on an empty string.
-  const headMeta = code('head-meta.html');
-  assert.ok(headMeta.includes('og:site_name'), 'stripping comments must leave the code behind');
-  assert.ok(!headMeta.includes('Open Graph ----'), 'and must actually remove the comments');
+  // The stripper is load-bearing, so it is proven per FILE rather than
+  // trusted, and in BOTH directions: one witness that must survive, one that
+  // must not. A guard covering only some of the scanned files is how the
+  // swallowed-emission-block defect above stayed green -- head-meta.html
+  // stripped cleanly while alternates.html lost 88 lines of template.
+  const WITNESSES = {
+    'head-meta.html': {keeps: 'og:site_name', drops: 'Open Graph ----'},
+    'alternates.html': {keeps: 'rel="alternate"', drops: 'Surface one'},
+    'jsonld/website.html': {keeps: '"@type" "WebSite"', drops: 'Cache-safety invariant'},
+  };
 
-  for (const rel of ['head-meta.html', 'alternates.html', 'jsonld/website.html']) {
+  for (const [rel, witness] of Object.entries(WITNESSES)) {
+    const body = code(rel);
+    assert.ok(body.includes(witness.keeps), `${rel}: stripping must leave the template behind`);
+    assert.ok(!body.includes(witness.drops), `${rel}: stripping must remove the comments`);
     assert.ok(
-      !code(rel).includes('seo.website.name'),
+      !body.includes('seo.website.name'),
       `${rel} must not re-derive the site name from the raw parameter path`,
     );
   }
 
   assert.ok(
-    headMeta.includes('$seo.siteName'),
+    code('head-meta.html').includes('$seo.siteName'),
     'head-meta.html reads the resolved site name off the shared context',
   );
   assert.ok(
