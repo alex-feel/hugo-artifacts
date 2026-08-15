@@ -14,12 +14,13 @@
   keyed on language alone, it reads ONLY site.Params.seo.*, site.Title,
   site.Home.Permalink, and site.Language -- never anything page-derived -- so
   caching on language alone is provably safe. Do not introduce any page-scoped
-  read here.
+  read here. seo/resolve/site-name.html, the one partial this builder
+  delegates to, holds the same invariant for the same reason.
 
   Return value: the WebSite node dict WITHOUT @context (the dispatcher
-  injects it), or an EMPTY dict (dict) when neither an organization name nor
-  site.Title resolves (site-name features disabled; warn emitted by the
-  Organization builder / head path, not duplicated here). One terminal return.
+  injects it), or an EMPTY dict (dict) when no site name resolves at all
+  (site-name features disabled; warn emitted by the Organization builder /
+  head path, not duplicated here). One terminal return.
 */}}
 
 {{- $site := . -}}
@@ -32,20 +33,12 @@
 {{- $siteSeo := partial "seo/lib/as-map.html" (dict "value" (index $site.Params "seo") "key" "params.seo" "warn_falsy" true) -}}
 {{- $website := partial "seo/lib/as-map.html" (dict "value" ($siteSeo.website) "key" "seo.website") -}}
 {{- $url := $site.Home.Permalink -}}
-{{- $name := "" -}}
-{{- with $website.name -}}
-  {{- $name = . -}}
-{{- end -}}
-{{- if not $name -}}
-  {{- with (partial "seo/lib/as-map.html" (dict "value" ($siteSeo.organization) "key" "seo.organization")).name -}}
-    {{- $name = . -}}
-  {{- end -}}
-{{- end -}}
-{{- if not $name -}}
-  {{- with $site.Title -}}
-    {{- $name = . -}}
-  {{- end -}}
-{{- end -}}
+
+{{/* WebSite.name is the SITE name, resolved by the one partial that owns that
+     chain (website name -> organization name -> site.Title). The classic head
+     resolves the identical string for og:site_name off the same cache entry,
+     which is what makes the two surfaces incapable of disagreeing. */}}
+{{- $name := partialCached "seo/resolve/site-name.html" $site $site.Language.Name -}}
 
 {{/* Self-gate: with no url or no name the site-name feature is impossible;
      return an empty dict so head-jsonld.html emits nothing. */}}

@@ -13,7 +13,7 @@
   Expected context: the current Page (the dot).
 
   Return value: the $seo dict with exactly these keys:
-    title, titleFull, description, canonical, pageUrl, pagerSuffix,
+    title, titleFull, siteName, description, canonical, pageUrl, pagerSuffix,
     pagerNumber, images, datePublished, dateModified, dateCreated, locale,
     lang, robots, robotsBots, ogType, typeSet, authors, ids, isHome, is404,
     emitJsonld.
@@ -44,6 +44,14 @@
      resolve/title.html): title feeds og:title/headline; titleFull adds the
      site title suffix and is used for <title> only. */}}
 {{- $titleDict := partial "seo/resolve/title.html" $page -}}
+
+{{/* The site's own name, shared by og:site_name, the feed-discovery title, the
+     OpenSearch title and the JSON-LD WebSite.name (see resolve/site-name.html).
+     Site-scoped, so it is resolved through partialCached keyed on language and
+     the JSON-LD builder that needs the same string hits the same cache entry.
+     $page.Site rather than the global `site`: the global one is the RENDERING
+     language, and this key must always describe the page's own. */}}
+{{- $siteName := partialCached "seo/resolve/site-name.html" $page.Site $page.Site.Language.Name -}}
 
 {{/* Unified description string shared by meta/OG/Twitter/JSON-LD, so those
      surfaces can never diverge (see resolve/description.html). */}}
@@ -158,6 +166,7 @@
 {{- $seo := dict
   "title" $titleDict.title
   "titleFull" $titleDict.titleFull
+  "siteName" $siteName
   "description" $description
   "canonical" $canonical
   "pageUrl" $pageUrl

@@ -1,7 +1,7 @@
 @echo off
-rem Builds the fixture site EIGHT TIMES with hugo (a BUILD, not a server: no port
+rem Builds the fixture site NINE TIMES with hugo (a BUILD, not a server: no port
 rem binding, and a finite build exits by itself) and runs the Node
-rem build-output assertion suite against all eight trees. Windows mirror of
+rem build-output assertion suite against all nine trees. Windows mirror of
 rem run-tests.sh: pre-launch process check, then a hard fail on any
 rem deprecation or error output in any build log.
 rem
@@ -19,7 +19,9 @@ rem is a two-language site whose `posts` section is split across pagers, the
 rem only build in which a document is served from a URL that is not the page's
 rem own .Permalink; the `graph` environment republishes the baseline content
 rem with `seo.jsonld_container = 'graph'`, the only build that reaches the
-rem @graph serialization site.
+rem @graph serialization site; the `sitename` environment gives the site and
+rem its publisher DIFFERENT names, the only shape that can tell the two ends
+rem of the site-name chain apart.
 setlocal
 
 tasklist /FI "IMAGENAME eq hugo.exe" | find /I "hugo.exe" >nul
@@ -36,6 +38,7 @@ set LOG_FILE_OFFSWITCH=%~dp0hugo-build-offswitch.log
 set LOG_FILE_MULTILINGUAL=%~dp0hugo-build-multilingual.log
 set LOG_FILE_PAGINATION=%~dp0hugo-build-pagination.log
 set LOG_FILE_GRAPH=%~dp0hugo-build-graph.log
+set LOG_FILE_SITENAME=%~dp0hugo-build-sitename.log
 
 pushd "%~dp0fixture"
 hugo --logLevel info --cleanDestinationDir --destination public\baseline > "%LOG_FILE%" 2>&1
@@ -94,9 +97,16 @@ if errorlevel 1 (
   popd
   exit /b 1
 )
+hugo -e sitename --logLevel info --cleanDestinationDir --destination public\sitename > "%LOG_FILE_SITENAME%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(sitename^):
+  type "%LOG_FILE_SITENAME%"
+  popd
+  exit /b 1
+)
 popd
 
-for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_SUBPATH%" "%LOG_FILE_BADTYPES%" "%LOG_FILE_OFFSWITCH%" "%LOG_FILE_MULTILINGUAL%" "%LOG_FILE_PAGINATION%" "%LOG_FILE_GRAPH%") do (
+for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_SUBPATH%" "%LOG_FILE_BADTYPES%" "%LOG_FILE_OFFSWITCH%" "%LOG_FILE_MULTILINGUAL%" "%LOG_FILE_PAGINATION%" "%LOG_FILE_GRAPH%" "%LOG_FILE_SITENAME%") do (
   findstr /I "deprecat" %%L >nul 2>&1
   if not errorlevel 1 (
     echo Hugo reported deprecations in %%L:
@@ -119,6 +129,7 @@ set FIXTURE_PUBLIC_OFFSWITCH=%~dp0fixture\public\offswitch
 set FIXTURE_PUBLIC_MULTILINGUAL=%~dp0fixture\public\multilingual
 set FIXTURE_PUBLIC_PAGINATION=%~dp0fixture\public\pagination
 set FIXTURE_PUBLIC_GRAPH=%~dp0fixture\public\graph
+set FIXTURE_PUBLIC_SITENAME=%~dp0fixture\public\sitename
 set HUGO_BUILD_LOG=%LOG_FILE%
 set HUGO_BUILD_LOG_CONFIGURED=%LOG_FILE_CONFIGURED%
 set HUGO_BUILD_LOG_SUBPATH=%LOG_FILE_SUBPATH%
@@ -127,6 +138,7 @@ set HUGO_BUILD_LOG_OFFSWITCH=%LOG_FILE_OFFSWITCH%
 set HUGO_BUILD_LOG_MULTILINGUAL=%LOG_FILE_MULTILINGUAL%
 set HUGO_BUILD_LOG_PAGINATION=%LOG_FILE_PAGINATION%
 set HUGO_BUILD_LOG_GRAPH=%LOG_FILE_GRAPH%
+set HUGO_BUILD_LOG_SITENAME=%LOG_FILE_SITENAME%
 for /f "tokens=2 delims=v " %%v in ('hugo version') do (
   set HUGO_VERSION_RAW=%%v
   goto gotversion

@@ -1,0 +1,59 @@
+{{/*
+  seo/resolve/site-name.html -- the site's own name, for every surface that
+  names the SITE rather than the page or the publisher.
+
+  Purpose: one authority for the string that answers "what is this site
+  called". Four surfaces ask that question -- og:site_name, the JSON-LD
+  WebSite.name, the OpenSearch <link rel="search" title=...>, and the feed
+  discovery <link rel="alternate" title=...> -- and before this partial two of
+  them derived it inline, in the OPPOSITE order, so one configuration produced
+  two different names on one page.
+
+  Chain: params.seo.website.name -> params.seo.organization.name ->
+  site.Title. The website table wins because [seo.organization] is the
+  PUBLISHER and the module explicitly supports type = 'Person' there: when a
+  person publishes a product site the two names are simply different strings,
+  and the site name is the one every surface here is asking for.
+
+  Expected context: the SITE (NOT a Page), the same convention the two
+  partialCached JSON-LD builders use. Invoked as
+    {{ partialCached "seo/resolve/site-name.html" $site $site.Language.Name }}
+
+  SITE-SCOPED BY DESIGN, not by omission. The value deliberately does NOT run
+  through the .Param page cascade: a name that a page or a section cascade
+  could override is a name og:site_name and WebSite.name can disagree about on
+  that page, which is the exact defect this partial exists to remove. It also
+  keeps the value constant per language, so callers may cache it on language
+  alone -- the cache-safety invariant jsonld/website.html documents.
+
+  Falsy/scalar handling is delegated to seo/lib/as-map.html, with .warn_falsy
+  DELIBERATELY UNSET: the params.seo NAMESPACE diagnostic belongs to
+  jsonld/website.html and jsonld/organization.html, which already emit it once
+  per build, and re-reporting it from a per-page path would say nothing new.
+  A scalar written into the leaf tables themselves still warns there, once,
+  under the key those builders already use.
+
+  Return value: the site name string, or "" when nothing resolves (callers
+  guard with `with`; an empty site name disables the site-name features, which
+  jsonld/organization.html already warns about). ONE terminal return.
+*/}}
+
+{{- $site := . -}}
+{{- $siteSeo := partial "seo/lib/as-map.html" (dict "value" (index $site.Params "seo") "key" "params.seo") -}}
+
+{{- $name := "" -}}
+{{- with (partial "seo/lib/as-map.html" (dict "value" $siteSeo.website "key" "seo.website")).name -}}
+  {{- $name = . -}}
+{{- end -}}
+{{- if not $name -}}
+  {{- with (partial "seo/lib/as-map.html" (dict "value" $siteSeo.organization "key" "seo.organization")).name -}}
+    {{- $name = . -}}
+  {{- end -}}
+{{- end -}}
+{{- if not $name -}}
+  {{- with $site.Title -}}
+    {{- $name = . -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $name -}}

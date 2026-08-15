@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Builds the fixture site EIGHT TIMES with hugo (a BUILD, not a server: no port
+# Builds the fixture site NINE TIMES with hugo (a BUILD, not a server: no port
 # binding, and a finite build exits by itself) and runs the Node
-# build-output assertion suite against all eight trees.
+# build-output assertion suite against all nine trees.
 #
 # The environments are the point of this suite. The default environment omits
 # [seo.alternates], [seo.links] and [seo] content_license entirely, so it
@@ -18,7 +18,10 @@
 # tell a per-language params read from a rendering-language one. The `graph`
 # environment republishes the baseline content with
 # `seo.jsonld_container = 'graph'`, the only build that reaches the @graph
-# serialization site.
+# serialization site. The `sitename` environment gives the site and its
+# publisher DIFFERENT names, the only shape that can tell the two ends of the
+# site-name chain apart, because the other two environments that declare one of
+# those tables write it as a bare scalar on purpose.
 #
 # Follows the repository's hugo process lifecycle rule with a pre-launch
 # process check, and hard-fails on any deprecation or error output in any
@@ -35,11 +38,12 @@ LOG_FILE_OFFSWITCH="$HERE/hugo-build-offswitch.log"
 LOG_FILE_MULTILINGUAL="$HERE/hugo-build-multilingual.log"
 LOG_FILE_PAGINATION="$HERE/hugo-build-pagination.log"
 LOG_FILE_GRAPH="$HERE/hugo-build-graph.log"
+LOG_FILE_SITENAME="$HERE/hugo-build-sitename.log"
 
 # The logs are retained after a successful run so the documented re-run recipe
 # can read them; they are gitignored at the repo root. Only an interrupt
 # discards them mid-run.
-trap 'rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_SUBPATH" "$LOG_FILE_BADTYPES" "$LOG_FILE_OFFSWITCH" "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_PAGINATION" "$LOG_FILE_GRAPH"' INT TERM
+trap 'rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_SUBPATH" "$LOG_FILE_BADTYPES" "$LOG_FILE_OFFSWITCH" "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_PAGINATION" "$LOG_FILE_GRAPH" "$LOG_FILE_SITENAME"' INT TERM
 
 # `pgrep -x` matches the process NAME, the semantic twin of the tasklist
 # IMAGENAME filter below. `-f` would match the whole command line, and this
@@ -89,6 +93,7 @@ build offswitch public/offswitch "$LOG_FILE_OFFSWITCH"
 build multilingual public/multilingual "$LOG_FILE_MULTILINGUAL"
 build pagination public/pagination "$LOG_FILE_PAGINATION"
 build graph public/graph "$LOG_FILE_GRAPH"
+build sitename public/sitename "$LOG_FILE_SITENAME"
 
 export FIXTURE_PUBLIC="$FIXTURE_DIR/public/baseline"
 export FIXTURE_PUBLIC_CONFIGURED="$FIXTURE_DIR/public/configured"
@@ -98,6 +103,7 @@ export FIXTURE_PUBLIC_OFFSWITCH="$FIXTURE_DIR/public/offswitch"
 export FIXTURE_PUBLIC_MULTILINGUAL="$FIXTURE_DIR/public/multilingual"
 export FIXTURE_PUBLIC_PAGINATION="$FIXTURE_DIR/public/pagination"
 export FIXTURE_PUBLIC_GRAPH="$FIXTURE_DIR/public/graph"
+export FIXTURE_PUBLIC_SITENAME="$FIXTURE_DIR/public/sitename"
 export HUGO_BUILD_LOG="$LOG_FILE"
 export HUGO_BUILD_LOG_CONFIGURED="$LOG_FILE_CONFIGURED"
 export HUGO_BUILD_LOG_SUBPATH="$LOG_FILE_SUBPATH"
@@ -106,6 +112,7 @@ export HUGO_BUILD_LOG_OFFSWITCH="$LOG_FILE_OFFSWITCH"
 export HUGO_BUILD_LOG_MULTILINGUAL="$LOG_FILE_MULTILINGUAL"
 export HUGO_BUILD_LOG_PAGINATION="$LOG_FILE_PAGINATION"
 export HUGO_BUILD_LOG_GRAPH="$LOG_FILE_GRAPH"
+export HUGO_BUILD_LOG_SITENAME="$LOG_FILE_SITENAME"
 HUGO_VERSION="$(hugo version | sed -E 's/^hugo v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
 export HUGO_VERSION
 
