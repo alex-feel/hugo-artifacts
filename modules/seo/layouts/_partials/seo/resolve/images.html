@@ -125,8 +125,13 @@
          path, and `with` treats only `false` as absent, so `true` would
          otherwise be looked up as a template named "true". */}}
     {{- if or (reflect.IsMap .) (reflect.IsSlice .) (eq (printf "%T" .) "bool") -}}
+      {{/* Keyed by the VALUE, not by the class alone: a section cascade can
+           point different sections at different generators, so two sections
+           can misspell the key two different ways in one build and a
+           class-only key would report whichever page rendered first and
+           leave the other silently answered by default_image. */}}
       {{- partial "seo/lib/warn.html" (dict
-        "key" "seo:warn:image-partial-shape"
+        "key" (printf "seo:warn:image-partial-shape:%v" .)
         "message" (printf "[seo] Ignoring seo.image_partial: it expects a partial path written as a single value but was given %q. No image is generated." (printf "%v" .))
       ) -}}
     {{- else -}}
@@ -136,9 +141,17 @@
   {{- if $name -}}
     {{/* templates.Exists takes a path under layouts/, so a partial name needs
          the _partials/ prefix; without this guard a typo would abort the
-         consuming site's build on its first page. */}}
+         consuming site's build on its first page. `partial` resolves a name
+         with or without the .html suffix, and this key documents itself as
+         taking whatever `partial` takes, so both spellings are probed --
+         otherwise the suffix-less form, which `partial` would have resolved,
+         is rejected by advice describing exactly what the consumer wrote. */}}
     {{- $lookup := printf "_partials/%s" $name -}}
-    {{- if templates.Exists $lookup -}}
+    {{- $found := templates.Exists $lookup -}}
+    {{- if not $found -}}
+      {{- $found = templates.Exists (printf "%s.html" $lookup) -}}
+    {{- end -}}
+    {{- if $found -}}
       {{- $returned := partial $name (merge $generated (dict "page" $page)) -}}
       {{/* A resource is neither slice nor map, so seo/lib/as-list.html cannot
            carry it: that helper wraps a non-slice through printf "%v", which
@@ -152,18 +165,35 @@
         {{- end -}}
       {{- end -}}
       {{- range $items -}}
-        {{- $img := partial "seo/resolve/image.html" (dict "candidate" . "page" $page) -}}
-        {{- with $img.url -}}
-          {{- if not (in $seen .) -}}
-            {{- $seen = $seen | append . -}}
-            {{- $images = $images | append $img -}}
+        {{/* A partial with no `return` hands back template.HTML: whatever it
+             RENDERED. That is markup, not a path, and it resolves as neither
+             a page resource nor a global one, so without this guard it would
+             be absolutized and published -- an escaped fragment of HTML in
+             og:image, twitter:image and every JSON-LD image node, with no
+             diagnostic anywhere. A partial that returns inside a conditional
+             renders whitespace on the branch that declines, so only a
+             non-blank render is the mistake worth naming. */}}
+        {{- if eq (printf "%T" .) "template.HTML" -}}
+          {{- if trim (printf "%v" .) " \t\n\r" -}}
+            {{- partial "seo/lib/warn.html" (dict
+              "key" (printf "seo:warn:image-partial-rendered:%s" $name)
+              "message" (printf "[seo] Ignoring what seo.image_partial %q handed back: the partial RENDERED markup instead of returning a value, so it names no image. End it with a return statement." $name)
+            ) -}}
+          {{- end -}}
+        {{- else -}}
+          {{- $img := partial "seo/resolve/image.html" (dict "candidate" . "page" $page) -}}
+          {{- with $img.url -}}
+            {{- if not (in $seen .) -}}
+              {{- $seen = $seen | append . -}}
+              {{- $images = $images | append $img -}}
+            {{- end -}}
           {{- end -}}
         {{- end -}}
       {{- end -}}
     {{- else -}}
       {{- partial "seo/lib/warn.html" (dict
         "key" (printf "seo:warn:image-partial-missing:%s" $name)
-        "message" (printf "[seo] Ignoring seo.image_partial %q: no template exists at %q. Give the path exactly as you would pass it to `partial`, relative to layouts/_partials/." $name $lookup)
+        "message" (printf "[seo] Ignoring seo.image_partial %q: no template exists at %q, with or without a .html suffix. Give the path exactly as you would pass it to `partial`, relative to layouts/_partials/." $name $lookup)
       ) -}}
     {{- end -}}
   {{- end -}}

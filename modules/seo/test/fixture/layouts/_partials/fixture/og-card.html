@@ -19,15 +19,24 @@
   one page precisely so those two differ there. The jsonld-extra fixture hook
   publishes its probe the same way.
 
-  Returning nothing for the `promo` section stands in for the ordinary case of
-  a generator that has no template for some page kind or section: the module
-  must fall through to params.seo.default_image rather than publishing a
-  half-made card or dropping the image entirely.
+  For the blog section it returns TWO cards as a slice -- the light and dark
+  variants a real generator would produce -- because the hook contract promises
+  a slice is accepted and a single-Resource fixture cannot tell the branch that
+  honors that promise from one that ignores it.
+
+  Returning nothing for a page it has no template for stands in for the
+  ordinary case of a generator that covers only some page kinds or sections:
+  the module must fall through to params.seo.default_image rather than
+  publishing a half-made card or dropping the image entirely. Here that page is
+  any promo one, and the `generated` environment deliberately cascades no
+  image_partial onto that section, so the hook really is called and really does
+  decline rather than being rejected before it runs.
 
   Context (dict): .page, .title, .description -- as passed by
   seo/resolve/images.html.
 
-  Returns: an image Resource, or "" when this page gets no card.
+  Returns: an image Resource, a slice of them, or "" when this page gets no
+  card.
 */}}
 
 {{- $page := .page -}}
@@ -37,13 +46,24 @@
 
 {{- if ne $page.Section "promo" -}}
   {{- with resources.Get "img/card-base.png" -}}
-    {{- $drawn := . | images.Filter (images.Text $title (dict
+    {{- $base := . -}}
+    {{- $drawn := $base | images.Filter (images.Text $title (dict
       "size" 48
       "x" 60
       "y" 260
       "color" "#ffffff"
     )) -}}
     {{- $card = resources.Copy (printf "/cards%sog.png" $page.RelPermalink) $drawn -}}
+
+    {{/* The blog section gets the light and dark pair a real generator would
+         produce, returned as a slice. */}}
+    {{- if eq $page.Section "blog" -}}
+      {{- $dark := $base | images.Filter
+        (images.Brightness -40)
+        (images.Text $title (dict "size" 48 "x" 60 "y" 260 "color" "#eeeeee"))
+      -}}
+      {{- $card = slice $card (resources.Copy (printf "/cards%sog-dark.png" $page.RelPermalink) $dark) -}}
+    {{- end -}}
   {{- end -}}
 
   {{/* Reading .RelPermalink is what publishes a resource, so the assignment

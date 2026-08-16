@@ -129,12 +129,17 @@ test('every card in the tree was composed from the exact strings its page publis
   // The whole-tree form: a hook handed some other string -- the site title, the
   // summary, an untruncated or differently-resolved description -- records a
   // payload that stops matching the page the card ended up on.
-  let cards = 0;
+  //
+  // The count is asserted EXACTLY, not as a floor. A floor lets a regression
+  // that stops serving whole classes of page pass as long as enough remain:
+  // gating the tier to `eq $page.Kind "page"` costs the home page and the blog
+  // section index and nothing else, which a floor of ten would wave through.
+  const cards = [];
   for (const file of htmlFiles(generatedDir)) {
     const html = readFileSync(file, 'utf8');
     const image = meta(html, 'og:image');
     if (!image || !image.includes('/cards/')) continue;
-    cards += 1;
+    cards.push(relative(generatedDir, file).split('\\').join('/'));
     const sidecar = payloadFor(file);
     assert.ok(existsSync(sidecar), `${file}: the hook ran but left no payload at ${sidecar}`);
     const payload = JSON.parse(readFileSync(sidecar, 'utf8'));
@@ -145,7 +150,90 @@ test('every card in the tree was composed from the exact strings its page publis
       `${file}: description handed to the hook`,
     );
   }
-  assert.ok(cards >= 10, `the sweep actually visited card-bearing pages (saw ${cards})`);
+  assert.equal(cards.length, 14, `card-bearing pages changed: ${cards.sort().join(', ')}`);
+});
+
+test('the hook serves list and home pages, not only regular ones', () => {
+  // Named separately from the count above so the failure says WHICH kind was
+  // lost. These two are the only non-"page" kinds still carrying cards in this
+  // fixture, and they are what a Kind-gated regression takes first.
+  for (const [kind, rel] of [
+    ['home', 'index.html'],
+    ['section', 'blog/index.html'],
+  ]) {
+    const image = meta(readFileSync(join(generatedDir, rel), 'utf8'), 'og:image');
+    assert.ok(image.includes('/cards/'), `the ${kind} page carries a generated card, not ${image}`);
+  }
+});
+
+test('a hook returning a SLICE contributes every resource, in order', () => {
+  // The blog section's generator returns the light and dark pair a real one
+  // would. Collapsing the slice branch to a one-item wrap is otherwise a no-op
+  // on a fixture that only ever returns a single Resource, so without this the
+  // documented slice contract is asserted by nothing.
+  const html = rawHtml(PAGES.blogPost, generatedDir);
+  const primary = meta(html, 'og:image');
+  assert.ok(primary.endsWith('.png') && primary.includes('/cards/blog/post/og_hu'));
+  const article = jsonldNodes(html).find((n) => n['@type'] === 'BlogPosting');
+  assert.ok(Array.isArray(article.image), 'the article node carries an image LIST');
+  assert.equal(article.image.length, 2);
+  assert.equal(article.image[0].url, primary, 'the first returned resource is the primary one');
+  assert.match(article.image[1].url, /\/cards\/blog\/post\/og-dark_hu[^"]*\.png$/);
+  for (const img of article.image) {
+    assert.equal(img.width, 1200);
+    assert.equal(img.height, 630);
+  }
+});
+
+test('a partial named without the .html suffix resolves, exactly as `partial` resolves it', () => {
+  // The blog section names the generator as `fixture/og-card`. `partial`
+  // resolves that; a guard probing only the literal string would reject it and
+  // advise the consumer to write what they already wrote.
+  assert.equal(
+    warnCount(/Ignoring seo\.image_partial "fixture\/og-card"/, 'generated'),
+    0,
+    'the suffix-less spelling is not reported as missing',
+  );
+  const image = meta(rawHtml(PAGES.blogPost, generatedDir), 'og:image');
+  assert.ok(image.includes('/cards/blog/post/'), `and it produced a card: ${image}`);
+});
+
+test('a partial that RENDERS instead of returning is caught, never published', () => {
+  // Hugo hands a return-less partial's caller the template.HTML it rendered.
+  // That is markup, not a path: it resolves to no resource, so it would be
+  // absolutized into og:image, twitter:image and every JSON-LD image node as an
+  // escaped fragment of HTML, on every page of the section, with no diagnostic.
+  assert.equal(
+    warnCount(/seo\.image_partial "fixture\/og-render\.html" handed back/, 'generated'),
+    1,
+    'exactly one warning naming the offending partial',
+  );
+  const html = rawHtml('categories/index.html', generatedDir);
+  assert.equal(meta(html, 'og:image'), DEFAULT_IMAGE, 'and the site default answers instead');
+  for (const file of htmlFiles(generatedDir)) {
+    const image = meta(readFileSync(file, 'utf8'), 'og:image');
+    if (!image) continue;
+    assert.ok(!image.includes('%3C'), `${file}: escaped markup reached og:image as ${image}`);
+  }
+});
+
+test('two differently-shaped values in one build produce two warnings', () => {
+  // The tag taxonomy cascades a boolean and the author section a table. Keyed
+  // by class alone the two would collide in the hugo.Store sentinel, whichever
+  // page rendered first would be the only one reported, and the other section's
+  // mistake would stay masked by default_image with nothing said about it.
+  assert.equal(warnCount(/but was given "true"/, 'generated'), 1, 'the boolean is named');
+  assert.equal(
+    warnCount(/but was given "map\[path:fixture\/og-card\.html\]"/, 'generated'),
+    1,
+    'and the table is named too',
+  );
+  assert.equal(
+    meta(rawHtml('tags/index.html', generatedDir), 'og:image'),
+    DEFAULT_IMAGE,
+    'both sections fall through to the site default',
+  );
+  assert.equal(meta(rawHtml('authors/index.html', generatedDir), 'og:image'), DEFAULT_IMAGE);
 });
 
 test('a page carrying its own image gets no card anywhere on it', () => {
