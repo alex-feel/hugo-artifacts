@@ -1,0 +1,41 @@
+{{/*
+  url-retirement/lib/extra-url.html -- INTERNAL (lib tier).
+
+  Purpose: validates ONE entry of url_retirement.manifest.extra before it
+  reaches the manifest.
+
+  The container's shape is checked by config.html; this checks each ELEMENT,
+  which is the half that matters downstream. An element is handed to
+  lib/prefix-url.html, whose documented precondition is a server-relative path
+  beginning with "/" -- it prepends the baseURL's path segment with no
+  separator, because a path that starts with "/" already carries one. An entry
+  that is a nested table, or a bare word, or an absolute URL therefore does not
+  merely look wrong: it is published as `map[...]`, as `/docsno-slash.html`, or
+  as `/docshttps://elsewhere.example/`, in a document whose whole job is to be
+  diffed byte for byte against production.
+
+  So the rejection is at the edge, once, with a diagnostic, rather than in the
+  three places the value is later used.
+
+  Context: the raw element, of any type at all.
+
+  Return value: the trimmed URL when it is usable, "" when it is not. The caller
+  skips the empty string. One terminal return.
+*/}}
+
+{{- $out := "" -}}
+{{- if or (reflect.IsMap .) (reflect.IsSlice .) (eq (printf "%T" .) "bool") -}}
+  {{- partial "url-retirement/lib/warn.html" (dict
+      "key" (printf "url-retirement:warn:extra-element-shape:%v" .)
+      "message" (printf "[url-retirement] Ignoring the url_retirement.manifest.extra entry %q: an entry is one URL written as a single value. It is left out of /url-manifest.txt." (printf "%v" .))) -}}
+{{- else -}}
+  {{- $candidate := trim (printf "%v" .) " \t\n\r" -}}
+  {{- if and $candidate (not (hasPrefix $candidate "/")) -}}
+    {{- partial "url-retirement/lib/warn.html" (dict
+        "key" (printf "url-retirement:warn:extra-element-path:%s" $candidate)
+        "message" (printf "[url-retirement] Ignoring the url_retirement.manifest.extra entry %q: entries are server-relative paths and must start with \"/\". It is left out of /url-manifest.txt." $candidate)) -}}
+  {{- else -}}
+    {{- $out = $candidate -}}
+  {{- end -}}
+{{- end -}}
+{{- return $out -}}

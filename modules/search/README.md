@@ -48,11 +48,11 @@ Troubleshooting: if surfaces warn that the index is not wired even though you co
 
 Path A above edits a table you may already own: your site configuration holds exactly ONE `[outputs]` table, and its lists are the union of every module's needs. A second `[outputs]` table in the same file fails the configuration load outright (`unmarshal failed: toml: table outputs already exists`); pasting one module README's `[outputs]` block over another's leaves a single table that loads cleanly, exits 0, warns about nothing -- and silently stops publishing every document the replaced list asked for, this module's search corpus included. So do not copy the block above into a site that already has one: MERGE `searchindex` into the list already there.
 
-A site importing this module together with [`agent-readiness`](../agent-readiness/README.md), [`seo`](../seo/README.md) and [`pwa`](../pwa/README.md) wires all of them at once:
+A site importing this module together with [`agent-readiness`](../agent-readiness/README.md), [`seo`](../seo/README.md), [`pwa`](../pwa/README.md) and [`url-retirement`](../url-retirement/README.md) wires all of them at once:
 
 ```toml
 [outputs]
-  home = ['html', 'rss', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills', 'searchindex', 'opensearch', 'webappmanifest']
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills', 'searchindex', 'opensearch', 'webappmanifest', 'redirects', 'urlmanifest']
   section = ['html', 'rss', 'markdown']
   page = ['html', 'markdown']
 ```

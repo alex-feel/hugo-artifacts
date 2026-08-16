@@ -1,0 +1,16 @@
+{{- /*
+  /url-manifest.txt -- every URL this build publishes for one language.
+
+  Published per language rather than once at the site root: each language's
+  manifest is complete at the moment that language renders it, while a single
+  shared file could only ever be complete for whichever language rendered last.
+  The header of each manifest names its siblings, so a checker that starts at
+  the site root can discover the rest.
+
+  As with /_redirects, this template does the printing and manifest/lines.html
+  does the deciding, because an HTML partial's emitted text would arrive here
+  HTML-escaped while a returned value does not.
+*/ -}}
+{{- $lines := partial "url-retirement/manifest/lines.html" (dict "page" .) -}}
+{{- with $lines -}}{{ delimit . "\n" }}
+{{ end -}}

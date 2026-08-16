@@ -1,0 +1,8 @@
+<!DOCTYPE html>
+<html lang="{{ site.Language.Lang }}"><head><title>{{ .Title }}</title></head>
+<body>
+<h1>{{ .Title }}</h1>
+{{ $paginator := .Paginate .RegularPages }}
+{{ partial "url-retirement/register-pagers.html" (dict "page" . "paginator" $paginator) }}
+<ul>{{ range $paginator.Pages }}<li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>{{ end }}</ul>
+</body></html>

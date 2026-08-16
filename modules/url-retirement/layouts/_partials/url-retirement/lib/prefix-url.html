@@ -1,0 +1,38 @@
+{{/*
+  url-retirement/lib/prefix-url.html -- INTERNAL (lib tier).
+
+  Purpose: puts one server-relative path into the same frame of reference as
+  every other URL these two documents publish -- the one .RelPermalink uses,
+  which carries the baseURL's path segment.
+
+  Two Hugo behaviors make this necessary, and a root-baseURL build can see
+  neither, which is why the suite builds a subpath site and a canonified one:
+
+  - PAGE.Aliases returns a path with NO baseURL segment (/old-name), while the
+    page it redirects to reports /docs/new-name/. Emitted as they come, the two
+    sides of a rule would describe different origins.
+  - Under canonifyURLs, .RelPermalink STOPS carrying the baseURL path segment
+    altogether, so the same site published two ways would emit two different
+    files. The segment is therefore derived here from the baseURL itself rather
+    than trusted from whatever Hugo happened to return.
+
+  A site whose baseURL has no path -- which is every site on a host that serves
+  the publish directory at the domain root, the hosts this file is written for
+  -- gets its paths back unchanged.
+
+  Expected context (dict):
+  - .base (string) The baseURL path segment, without a trailing slash, as
+    `strings.TrimSuffix "/" (urls.Parse SITE.BaseURL).Path` yields it. Resolved
+    once per document by the caller rather than per URL.
+  - .url  (string) A server-relative path beginning with "/".
+
+  Return value: string. One terminal return.
+*/}}
+
+{{- $out := .url -}}
+{{- with .base -}}
+  {{- if not (or (eq $out .) (hasPrefix $out (printf "%s/" .))) -}}
+    {{- $out = printf "%s%s" . $out -}}
+  {{- end -}}
+{{- end -}}
+{{- return $out -}}

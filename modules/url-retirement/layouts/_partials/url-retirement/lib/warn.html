@@ -1,0 +1,24 @@
+{{/*
+  url-retirement/lib/warn.html -- INTERNAL (lib tier).
+
+  Purpose: single funnel for every module warning, deduplicated per build so a
+  misconfiguration read by every language surfaces exactly once.
+
+  The deduplication is a partialCached WRAPPING the sentinel rather than a bare
+  hugo.Store check-then-set. A bare get-then-set is two operations under
+  concurrent rendering, so two callers can both pass the check and both warn;
+  partialCached admits exactly one caller per key, and the sentinel inside it
+  keeps the guarantee across the cache's own per-language partitioning.
+
+  Expected context (dict):
+  - .key     (string) - Deduplication key, unique per warning class and
+    offending value, e.g. "url-retirement:warn:bad-status:499".
+  - .message (string) - Complete, actionable warning text, already formatted
+    and "[url-retirement]"-prefixed by the caller.
+
+  Return value: none. Side effect: at most one warnf per key per build.
+*/}}
+
+{{- with .key -}}
+  {{- partialCached "url-retirement/lib/warn-emit.html" (dict "key" . "message" $.message) . -}}
+{{- end -}}

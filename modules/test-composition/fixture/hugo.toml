@@ -1,5 +1,5 @@
-# A consuming site that imports seo, agent-readiness, search, pwa AND og-image
-# at once.
+# A consuming site that imports seo, agent-readiness, search, pwa, og-image AND
+# url-retirement at once.
 #
 # Two surfaces here can only exist in a site that holds more than one module.
 # The first is the [outputs] table below. The second is the pair of [params.seo]
@@ -20,8 +20,10 @@
 #
 # [outputFormats] and [mediaTypes] DO merge additively from module
 # configuration, which is why `llmstxt`, `llmsindex`, `agentfacts`, `agentskills`,
-# `searchindex` and `opensearch` are usable here by name although this file
-# defines none of them.
+# `searchindex`, `opensearch`, `redirects` and `urlmanifest` are usable here by
+# name although this file defines none of them -- and `redirects` proves the
+# [mediaTypes] half of that claim too, because its suffix-less media type is
+# declared in a module and nothing here restates it.
 baseURL = 'https://composition.example/'
 title = 'Composition Fixture'
 locale = 'en-us'
@@ -29,6 +31,15 @@ locale = 'en-us'
 # robots.txt comes from the agent-readiness module; this fixture deliberately
 # ships no layouts/robots.txt of its own, which would shadow it silently.
 enableRobotsTXT = true
+
+# The two switches the url-retirement module cannot set for a consumer: a
+# module's hugo.toml reaches the site's [mediaTypes] and [outputFormats] and
+# nothing else, so an alias would otherwise still publish the meta-refresh stub
+# that beats the generated 301.
+disableAliases = true
+
+[pagination]
+  disableAliases = true
 
 [build]
   # This fixture holds assets/ (the card background) and, through the pwa and
@@ -40,7 +51,7 @@ enableRobotsTXT = true
   noJSConfigInAssets = true
 
 [outputs]
-  home = ['html', 'rss', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills', 'searchindex', 'opensearch', 'webappmanifest']
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills', 'searchindex', 'opensearch', 'webappmanifest', 'redirects', 'urlmanifest']
   section = ['html', 'rss', 'markdown']
   page = ['html', 'markdown']
 
@@ -64,10 +75,13 @@ enableRobotsTXT = true
   [[module.imports]]
     path = "github.com/alex-feel/hugo-artifacts/modules/og-image"
 
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/url-retirement"
+
 [params]
 
   [params.seo]
-    description = 'A fixture site that imports the seo, agent-readiness, search, pwa and og-image modules together.'
+    description = 'A fixture site that imports the seo, agent-readiness, search, pwa, og-image and url-retirement modules together.'
 
     # The generated-image hook, wired across a real module boundary: seo calls
     # og-image for a page that has no image of its own, and publishes whatever

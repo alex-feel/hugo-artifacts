@@ -1,0 +1,11 @@
+defaultContentLanguage = 'en'
+
+[languages]
+  [languages.en]
+    weight = 1
+    title = 'URL Retirement Fixture'
+    contentDir = 'content'
+  [languages.de]
+    weight = 2
+    title = 'URL-Stilllegung'
+    contentDir = 'content-de'

@@ -1,0 +1,26 @@
+baseURL = 'https://url-retirement.example/'
+title = 'URL Retirement Fixture'
+
+# Both switches, deliberately. The site-level one stops Hugo publishing a
+# meta-refresh stub for a front-matter alias; the pagination one stops it
+# publishing the first-pager alias at /<section>/page/1/. They are separate
+# settings and each leaves a different stub behind when it is the one forgotten.
+disableAliases = true
+
+[pagination]
+  pagerSize = 2
+  disableAliases = true
+
+[taxonomies]
+  tag = 'tags'
+
+[outputs]
+  home = ['html', 'redirects', 'urlmanifest']
+
+[module]
+
+  [module.hugoVersion]
+    min = "0.160.0"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/url-retirement"

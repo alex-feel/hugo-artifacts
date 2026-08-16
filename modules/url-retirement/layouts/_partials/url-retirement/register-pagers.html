@@ -1,0 +1,57 @@
+{{/*
+  url-retirement/register-pagers.html -- PUBLIC.
+
+  Purpose: records the URLs of a list page's pagers so /url-manifest.txt can
+  carry them. Call it from your own list template, passing the paginator you
+  have ALREADY built:
+
+    {{ $paginator := .Paginate $pages }}
+    {{ partial "url-retirement/register-pagers.html" (dict "page" . "paginator" $paginator) }}
+
+  Why the site has to make this call. Pager pages are not Page objects: they are
+  absent from site.Pages, from .OutputFormats and from every sitemap, which is
+  the whole reason an indexed /blog/page/4/ can 404 after a post is deleted with
+  nothing reporting it. They are reachable only through a Pager, and a Pager is
+  reachable only from the page that owns it, in the html pass -- asking another
+  page for its paginator inside a non-html output format raises `pagination not
+  supported for this page`, and asking for it inside the html pass CREATES one,
+  publishing pager pages the site never asked for. So the module cannot collect
+  them on its own, and does not try.
+
+  This partial takes the paginator you built and never calls .Paginate or
+  .Paginator itself, so it cannot decide your pagination for you: Hugo caches
+  the first call per page and output format, and a module that made that call
+  would silently replace your filtered, sized collection with the default one.
+
+  Ordering is safe by construction. Hugo renders one output format at a time
+  across the whole site, and /url-manifest.txt is declared with a weight above
+  the html format's, so every registration made during the html pass is already
+  recorded when the manifest renders.
+
+  Expected context (dict):
+  - .page      (Page)  The list page being rendered; names the language.
+  - .paginator (Pager) The paginator that page already built.
+
+  Return value: none. Side effect: the pager URLs are recorded for this build.
+*/}}
+
+{{- $page := .page -}}
+{{- if not (reflect.IsPage $page) -}}
+  {{- partial "url-retirement/lib/warn.html" (dict
+      "key" "url-retirement:warn:register-no-page"
+      "message" "[url-retirement] register-pagers.html was called without a page: pass (dict \"page\" . \"paginator\" $paginator). No pager URLs were recorded.") -}}
+{{- else -}}
+  {{- $attempt := try (.paginator.Pagers) -}}
+  {{- with $attempt.Err -}}
+    {{- partial "url-retirement/lib/warn.html" (dict
+        "key" (printf "url-retirement:warn:register-no-paginator:%v" $page.Path)
+        "message" (printf "[url-retirement] register-pagers.html was called on %s without a usable paginator (%s). Pass the value returned by .Paginate or .Paginator; no pager URLs were recorded for this page." $page.Path $attempt.Err)) -}}
+  {{- else -}}
+    {{- $key := printf "url-retirement:pagers:%s" $page.Language.Lang -}}
+    {{- range $pager := $attempt.Value -}}
+      {{- with $pager.URL -}}
+        {{- hugo.Store.SetInMap $key . . -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}

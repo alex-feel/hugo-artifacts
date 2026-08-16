@@ -1,0 +1,4 @@
+[url_retirement]
+
+  [url_retirement.redirects]
+    rules = 'url-retirement/_redirects'

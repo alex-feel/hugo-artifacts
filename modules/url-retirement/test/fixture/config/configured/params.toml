@@ -1,0 +1,9 @@
+[url_retirement]
+
+  [url_retirement.redirects]
+    rules = 'url-retirement/_redirects'
+    status = 308
+    trailing_slash = 'slash'
+
+  [url_retirement.manifest]
+    extra = ['/sitemap.xml', '/legacy/hand-copied.html']

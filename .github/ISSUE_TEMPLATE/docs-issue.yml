@@ -26,6 +26,7 @@ body:
         - modules/pwa/README.md
         - modules/workbox/README.md
         - modules/idb/README.md
+        - modules/url-retirement/README.md
         - shortcodes/github-repo/README.md
         - shortcodes/github-profile/README.md
         - shortcodes/hf-space/README.md
