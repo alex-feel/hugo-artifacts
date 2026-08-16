@@ -144,11 +144,13 @@ Every key lives under `[params.url_retirement]` and is overridable there; the sh
 | `redirects.trailing_slash` | `'both'` | Which spelling of an alias to emit: `both`, `slash` or `bare`. |
 | `manifest.enable` | `true` | The manifest alone. |
 | `manifest.output_formats` | `true` | Whether to list a page's secondary output formats beside its primary URL. |
-| `manifest.extra` | `[]` | Extra URLs to list, for what Hugo publishes but exposes to no template. |
+| `manifest.extra` | `[]` | Extra URLs to list, for what Hugo publishes but exposes to no template. Each entry is a server-relative path beginning with `/`; anything else is reported and dropped. |
 
 ### Validation
 
-Every value is checked, and every rejected value warns once and leaves the shipped default standing: an unknown status, an unknown trailing-slash mode, a table given to a key that expects a list, a rules path that names no file, and a path the operating system rejects outright. The module never breaks a consuming build over its own configuration.
+Every value is checked, and every rejected value warns once and leaves the shipped default standing: an unknown status, an unknown trailing-slash mode, a boolean written as anything other than a true or false spelling, a table given to a key that expects a list or a path, an `extra` entry that is not a server-relative path, a rules path that names no file, and a path the operating system rejects outright. The module never breaks a consuming build over its own configuration.
+
+The boolean check is two-sided on purpose. Matching only the true spellings would make `enable = 'yse'` resolve to false and switch a document off with no diagnostic at all, which is the loudest thing this module can do reached in the quietest possible way.
 
 The one exception is deliberate. An alias containing whitespace is a build ERROR naming both the alias and the page, because whitespace ends a field in this file format: Hugo neither sanitizes nor rejects such an alias, and the alternative to failing is publishing a rule that redirects somewhere nobody asked for.
 
@@ -175,6 +177,7 @@ modules/url-retirement/
 │   │   └── url-retirement/
 │   │       ├── config.html
 │   │       ├── lib/
+│   │       │   ├── extra-url.html
 │   │       │   ├── prefix-url.html
 │   │       │   ├── warn-emit.html
 │   │       │   └── warn.html

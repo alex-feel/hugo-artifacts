@@ -1,7 +1,7 @@
 @echo off
-rem Builds the fixture site EIGHT TIMES with hugo (a BUILD, not a server: no
+rem Builds the fixture site TWELVE TIMES with hugo (a BUILD, not a server: no
 rem port binding, and a finite build exits by itself) and runs the Node
-rem build-output assertion suite against the seven trees that succeed. Windows
+rem build-output assertion suite against the eleven trees that succeed. Windows
 rem mirror of run-tests.sh: pre-launch process check, then a hard fail on any
 rem deprecation or error output in any build log.
 rem
@@ -9,10 +9,14 @@ rem The default environment omits [params.url_retirement] entirely, so it is
 rem the only build that shows what a site that configured nothing gets; the
 rem `configured` environment turns on every knob at once; the `degraded`
 rem environment holds every fault class at once, so N distinct faults must
-rem produce N distinct diagnostics; the `off` environment proves the documented
-rem difference between an unwired format and a disabled module, which is an
-rem empty file rather than no file; the `multilingual` environment is the only
-rem shape in which one _redirects file is written by two languages; `subpath`
+rem produce N distinct diagnostics; `degraded-shapes` holds the faults that
+rem cannot share a key with those; the `off` environment shows a disabled
+rem module writing nothing at all while the site around it builds normally and
+rem `partial` switches one document off while the other keeps publishing; the
+rem `conflict` environment is the only one whose content claims one retired URL
+rem twice; the `multilingual` environment is the only shape in which one
+rem _redirects file is written by two languages, and `multilingual-partial` the
+rem only one where a sibling exists but publishes nothing; `subpath`
 rem and `canonify` are a PAIR that must agree byte for byte, which a
 rem root-baseURL build cannot check; and the `hostile` environment is the only
 rem build that MUST FAIL, because its content carries an alias containing
@@ -28,6 +32,10 @@ if not errorlevel 1 (
 set LOG_BASELINE=%~dp0hugo-build-baseline.log
 set LOG_CONFIGURED=%~dp0hugo-build-configured.log
 set LOG_DEGRADED=%~dp0hugo-build-degraded.log
+set LOG_SHAPES=%~dp0hugo-build-degraded-shapes.log
+set LOG_PARTIAL=%~dp0hugo-build-partial.log
+set LOG_CONFLICT=%~dp0hugo-build-conflict.log
+set LOG_MULTIPARTIAL=%~dp0hugo-build-multilingual-partial.log
 set LOG_OFF=%~dp0hugo-build-off.log
 set LOG_MULTILINGUAL=%~dp0hugo-build-multilingual.log
 set LOG_SUBPATH=%~dp0hugo-build-subpath.log
@@ -38,7 +46,7 @@ rem The destination is REMOVED, not merely cleaned: --cleanDestinationDir only
 rem drops files absent from the static directories, so a document a previous
 rem build published and this one does not would survive into the tree the specs
 rem read, and one of this suite's assertions is that a disabled module
-rem publishes an EMPTY file.
+rem publishes NOTHING.
 if exist "%~dp0fixture\public" rmdir /S /Q "%~dp0fixture\public"
 
 pushd "%~dp0fixture"
@@ -60,6 +68,34 @@ hugo -e degraded --logLevel info --cleanDestinationDir --destination public\degr
 if errorlevel 1 (
   echo hugo build failed ^(degraded^):
   type "%LOG_DEGRADED%"
+  popd
+  exit /b 1
+)
+hugo -e degraded-shapes --logLevel info --cleanDestinationDir --destination public\degraded-shapes > "%LOG_SHAPES%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(degraded-shapes^):
+  type "%LOG_SHAPES%"
+  popd
+  exit /b 1
+)
+hugo -e conflict --logLevel info --cleanDestinationDir --destination public\conflict > "%LOG_CONFLICT%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(conflict^):
+  type "%LOG_CONFLICT%"
+  popd
+  exit /b 1
+)
+hugo -e partial --logLevel info --cleanDestinationDir --destination public\partial > "%LOG_PARTIAL%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(partial^):
+  type "%LOG_PARTIAL%"
+  popd
+  exit /b 1
+)
+hugo -e multilingual-partial --logLevel info --cleanDestinationDir --destination public\multilingual-partial > "%LOG_MULTIPARTIAL%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(multilingual-partial^):
+  type "%LOG_MULTIPARTIAL%"
   popd
   exit /b 1
 )
@@ -102,7 +138,7 @@ if not errorlevel 1 (
 )
 popd
 
-for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_DEGRADED%" "%LOG_OFF%" "%LOG_MULTILINGUAL%" "%LOG_SUBPATH%" "%LOG_CANONIFY%") do (
+for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_DEGRADED%" "%LOG_SHAPES%" "%LOG_PARTIAL%" "%LOG_CONFLICT%" "%LOG_OFF%" "%LOG_MULTILINGUAL%" "%LOG_MULTIPARTIAL%" "%LOG_SUBPATH%" "%LOG_CANONIFY%") do (
   findstr /I "deprecat" %%L >nul 2>&1
   if not errorlevel 1 (
     echo Hugo reported deprecations in %%L:
@@ -120,7 +156,7 @@ for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_DEGRADED%" "%LOG_OFF%" "%L
 rem Every build except `degraded` is gated on warnings: the happy path is
 rem silent, and producing one diagnostic per fault is the only thing the
 rem degraded build exists to demonstrate.
-for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_OFF%" "%LOG_MULTILINGUAL%" "%LOG_SUBPATH%" "%LOG_CANONIFY%") do (
+for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_PARTIAL%" "%LOG_OFF%" "%LOG_MULTILINGUAL%" "%LOG_MULTIPARTIAL%" "%LOG_SUBPATH%" "%LOG_CANONIFY%") do (
   findstr /C:"WARN" %%L >nul 2>&1
   if not errorlevel 1 (
     echo A build that must warn about nothing did: %%L
@@ -134,6 +170,10 @@ for %%I in ("%~dp0..") do set MODULE_ROOT=%%~fI
 set FIXTURE_PUBLIC_BASELINE=%~dp0fixture\public\baseline
 set FIXTURE_PUBLIC_CONFIGURED=%~dp0fixture\public\configured
 set FIXTURE_PUBLIC_DEGRADED=%~dp0fixture\public\degraded
+set FIXTURE_PUBLIC_SHAPES=%~dp0fixture\public\degraded-shapes
+set FIXTURE_PUBLIC_PARTIAL=%~dp0fixture\public\partial
+set FIXTURE_PUBLIC_CONFLICT=%~dp0fixture\public\conflict
+set FIXTURE_PUBLIC_MULTIPARTIAL=%~dp0fixture\public\multilingual-partial
 set FIXTURE_PUBLIC_OFF=%~dp0fixture\public\off
 set FIXTURE_PUBLIC_MULTILINGUAL=%~dp0fixture\public\multilingual
 set FIXTURE_PUBLIC_SUBPATH=%~dp0fixture\public\subpath
@@ -141,6 +181,10 @@ set FIXTURE_PUBLIC_CANONIFY=%~dp0fixture\public\canonify
 set HUGO_BUILD_LOG_BASELINE=%LOG_BASELINE%
 set HUGO_BUILD_LOG_CONFIGURED=%LOG_CONFIGURED%
 set HUGO_BUILD_LOG_DEGRADED=%LOG_DEGRADED%
+set HUGO_BUILD_LOG_SHAPES=%LOG_SHAPES%
+set HUGO_BUILD_LOG_PARTIAL=%LOG_PARTIAL%
+set HUGO_BUILD_LOG_CONFLICT=%LOG_CONFLICT%
+set HUGO_BUILD_LOG_MULTIPARTIAL=%LOG_MULTIPARTIAL%
 set HUGO_BUILD_LOG_OFF=%LOG_OFF%
 set HUGO_BUILD_LOG_MULTILINGUAL=%LOG_MULTILINGUAL%
 set HUGO_BUILD_LOG_SUBPATH=%LOG_SUBPATH%

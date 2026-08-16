@@ -73,11 +73,21 @@
     {{- $sorted = uniq (sort .) -}}
   {{- end -}}
 
+  {{/* A sibling is named only when that language will actually publish one.
+       Two independent things decide that: the format has to be wired onto that
+       language's home page, and that language's own configuration has to leave
+       the manifest switched on -- a per-language `manifest.enable = false` is
+       invisible in the format wiring. Naming a file that was never written
+       breaks the one discovery mechanism this header exists to provide, so both
+       are checked rather than the cheaper one. */}}
   {{- $siblings := slice -}}
   {{- range $s := hugo.Sites -}}
     {{- if ne $s.Language.Lang $cfg.lang -}}
       {{- with $s.Home.OutputFormats.Get "urlmanifest" -}}
-        {{- $siblings = $siblings | append (partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" .RelPermalink)) -}}
+        {{- $scfg := partial "url-retirement/config.html" (dict "page" $s.Home) -}}
+        {{- if and $scfg.enable $scfg.manifest.enable -}}
+          {{- $siblings = $siblings | append (partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" .RelPermalink)) -}}
+        {{- end -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}

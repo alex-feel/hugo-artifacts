@@ -26,7 +26,7 @@
   - .page (Page) The page carrying the document being rendered.
 
   Return value: dict with enable, redirects (enable, rules, status,
-  trailing_slash), manifest (enable, output_formats) and lang.
+  trailing_slash), manifest (enable, output_formats, extra) and lang.
 
   One terminal return.
 */}}
@@ -72,14 +72,32 @@
      by the home page, so a page path would accuse the same innocent page of
      every misconfiguration a site can make. */}}
 
+{{/* A boolean is a two-sided vocabulary, not a truthiness test. Matching only
+     the true spellings would make every unrecognized value -- a typo, a
+     mis-typed quote, a trailing space -- resolve to FALSE and switch a document
+     off with no diagnostic at all, which is the loudest thing this module can
+     do and the quietest way to arrive there. Anything in neither list warns and
+     leaves the tier below standing, exactly as an unknown status or an unknown
+     trailing-slash mode does. */}}
 {{- $truthy := slice "true" "1" "yes" "on" -}}
+{{- $falsy := slice "false" "0" "no" "off" -}}
 {{- $opts := dict "lang" $lang -}}
 
 {{/* ---- The master switch, at the top level of the namespace ---- */}}
 {{- $enable := true -}}
-{{- range $tier := $tiers -}}
+{{- range $i, $tier := $tiers -}}
   {{- if isset $tier "enable" -}}
-    {{- $enable = in $truthy (lower (printf "%v" (index $tier "enable"))) -}}
+    {{- $raw := index $tier "enable" -}}
+    {{- $cand := lower (trim (printf "%v" $raw) " \t\n\r") -}}
+    {{- if in $truthy $cand -}}
+      {{- $enable = true -}}
+    {{- else if in $falsy $cand -}}
+      {{- $enable = false -}}
+    {{- else -}}
+      {{- partial "url-retirement/lib/warn.html" (dict
+          "key" (printf "url-retirement:warn:bad-bool:enable:%s:%d" $cand $i)
+          "message" (printf "[url-retirement] Ignoring url_retirement.enable value %q set in %s (expected true or false); leaving it %v." $cand (index $origins $i) $enable)) -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 {{- $opts = merge $opts (dict "enable" $enable) -}}
@@ -113,7 +131,16 @@
   {{- $raw := index (index $sub $spec.table) $spec.key -}}
   {{- $v := $spec.fallback -}}
   {{- if ne $raw nil -}}
-    {{- $v = in $truthy (lower (printf "%v" $raw)) -}}
+    {{- $cand := lower (trim (printf "%v" $raw) " \t\n\r") -}}
+    {{- if in $truthy $cand -}}
+      {{- $v = true -}}
+    {{- else if in $falsy $cand -}}
+      {{- $v = false -}}
+    {{- else -}}
+      {{- partial "url-retirement/lib/warn.html" (dict
+          "key" (printf "url-retirement:warn:bad-bool:%s.%s:%s" $spec.table $spec.key $cand)
+          "message" (printf "[url-retirement] Ignoring url_retirement.%s.%s value %q (expected true or false); using %v instead." $spec.table $spec.key $cand $spec.fallback)) -}}
+    {{- end -}}
   {{- end -}}
   {{- if eq $spec.table "redirects" -}}
     {{- $redirects = merge $redirects (dict $spec.key $v) -}}
@@ -180,13 +207,13 @@
 {{- $rawExtra := index (index $sub "manifest") "extra" -}}
 {{- if reflect.IsSlice $rawExtra -}}
   {{- range $rawExtra -}}
-    {{- with trim (printf "%v" .) " \t\n\r" -}}
+    {{- with partial "url-retirement/lib/extra-url.html" . -}}
       {{- $extra = $extra | append . -}}
     {{- end -}}
   {{- end -}}
 {{- else if and (ne $rawExtra nil) (not (reflect.IsMap $rawExtra)) (ne (printf "%T" $rawExtra) "bool") -}}
-  {{- with trim (printf "%v" $rawExtra) " \t\n\r" -}}
-    {{- $extra = slice . -}}
+  {{- with partial "url-retirement/lib/extra-url.html" $rawExtra -}}
+    {{- $extra = $extra | append . -}}
   {{- end -}}
 {{- else if ne $rawExtra nil -}}
   {{- partial "url-retirement/lib/warn.html" (dict

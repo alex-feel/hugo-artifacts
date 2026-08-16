@@ -8,9 +8,10 @@
   (`&#34;` for a quote, `&amp;` for an ampersand in a query string), while a
   value it RETURNS crosses untouched.
 
-  The file is published whether or not the module is switched on, because an
-  unwired output format and an empty file mean different things to a deployment
-  and only one of them is a state that can be built against.
+  When the module is switched off the partial returns nothing and Hugo writes no
+  file at all, which is the state a deployment wants: on the hosts that read this
+  document a deployment is a complete upload rather than a patch, so an absent
+  file leaves nothing stale behind.
 */ -}}
 {{- $lines := partial "url-retirement/redirects/lines.html" (dict "page" .) -}}
 {{- with $lines -}}{{ delimit . "\n" }}

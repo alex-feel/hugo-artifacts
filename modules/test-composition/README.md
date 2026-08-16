@@ -1,6 +1,6 @@
 # Cross-module composition test suite
 
-Node build-output assertions for the surfaces that `modules/seo`, `modules/agent-readiness`, `modules/search`, `modules/pwa` and `modules/og-image` share: the consuming site's single `[outputs]` table, and the generated-image hook that lets one module compose the image another module publishes. This directory is a test suite, not a Hugo module -- it ships no `layouts/`, no `assets/` and no `go.mod` of its own, and nothing imports it. Only [`fixture/`](fixture/) carries a `go.mod`, because a Hugo consumer site needs one.
+Node build-output assertions for the surfaces that `modules/seo`, `modules/agent-readiness`, `modules/search`, `modules/pwa`, `modules/og-image` and `modules/url-retirement` share: the consuming site's single `[outputs]` table, and the generated-image hook that lets one module compose the image another module publishes. This directory is a test suite, not a Hugo module -- it ships no `layouts/`, no `assets/` and no `go.mod` of its own, and nothing imports it. Only [`fixture/`](fixture/) carries a `go.mod`, because a Hugo consumer site needs one.
 
 ## Why this suite exists
 
@@ -20,7 +20,7 @@ The second shared surface is the generated social card. `[params.seo] image_part
 | Assertion | What it holds |
 | --- | --- |
 | every module document is published side by side | `/llms.txt`, `/llms-index.txt`, `/about.md`, `/index.md`, `/searchindex.json`, `/opensearch.xml`, `/robots.txt`, `/manifest.webmanifest`, `/_redirects`, `/url-manifest.txt` and `/index.html` all exist, non-empty, out of ONE build |
-| the merged home list carries every format the modules define | the list is checked against the `[outputFormats.*]` names read out of `modules/agent-readiness/hugo.toml` and `modules/search/hugo.toml`, plus the built-in names a replacing list drops (`html`, `rss`, `markdown`, and `webappmanifest` for `pwa`), so a module that adds a format a consumer must wire fails here until the fixture wires it |
+| the merged home list carries every format the modules define | the list is checked against the `[outputFormats.*]` names read out of `modules/agent-readiness/hugo.toml`, `modules/search/hugo.toml` and `modules/url-retirement/hugo.toml`, plus the built-in names a replacing list drops (`html`, `rss`, `markdown`, and `webappmanifest` for `pwa`), so a module that adds a format a consumer must wire fails here until the fixture wires it |
 | exactly one `[outputs]` table | the merged single table is the only shape that can hold every module the fixture imports |
 | the twins describe the page the index holds | the agent-readiness `llms.txt` / `about.md` entries and the search index record name the same page |
 | the seo head surface and the search body markup coexist | the seo module contributes head markup only, so its composition evidence is that its markup renders on the same page through the same `baseof.html` |

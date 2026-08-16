@@ -22,7 +22,20 @@ export const baselineDir = dir('FIXTURE_PUBLIC_BASELINE', 'fixture/public/baseli
 export const configuredDir = dir('FIXTURE_PUBLIC_CONFIGURED', 'fixture/public/configured');
 // Every fault class at once, each on its own key.
 export const degradedDir = dir('FIXTURE_PUBLIC_DEGRADED', 'fixture/public/degraded');
-// enable = false: both documents are still published, and both are empty.
+// The faults that cannot share a key with those: a key holds one value, so an
+// unknown status and a table-shaped status are two builds.
+export const shapesDir = dir('FIXTURE_PUBLIC_SHAPES', 'fixture/public/degraded-shapes');
+// One document switched off while the other keeps publishing.
+export const partialDir = dir('FIXTURE_PUBLIC_PARTIAL', 'fixture/public/partial');
+// Three pages claiming one retired URL.
+export const conflictDir = dir('FIXTURE_PUBLIC_CONFLICT', 'fixture/public/conflict');
+// Two languages where the second wires the format and switches its manifest
+// off, so the file the first language's header would name is never written.
+export const multiPartialDir = dir(
+  'FIXTURE_PUBLIC_MULTIPARTIAL',
+  'fixture/public/multilingual-partial',
+);
+// enable = false: neither document is written at all.
 export const offDir = dir('FIXTURE_PUBLIC_OFF', 'fixture/public/off');
 // Two languages writing one _redirects file and two manifests.
 export const multilingualDir = dir('FIXTURE_PUBLIC_MULTILINGUAL', 'fixture/public/multilingual');
@@ -37,6 +50,10 @@ const LOG_KEYS = {
   baseline: 'HUGO_BUILD_LOG_BASELINE',
   configured: 'HUGO_BUILD_LOG_CONFIGURED',
   degraded: 'HUGO_BUILD_LOG_DEGRADED',
+  shapes: 'HUGO_BUILD_LOG_SHAPES',
+  partial: 'HUGO_BUILD_LOG_PARTIAL',
+  conflict: 'HUGO_BUILD_LOG_CONFLICT',
+  multiPartial: 'HUGO_BUILD_LOG_MULTIPARTIAL',
   off: 'HUGO_BUILD_LOG_OFF',
   multilingual: 'HUGO_BUILD_LOG_MULTILINGUAL',
   subpath: 'HUGO_BUILD_LOG_SUBPATH',

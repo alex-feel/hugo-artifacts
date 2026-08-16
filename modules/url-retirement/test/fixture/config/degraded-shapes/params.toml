@@ -1,0 +1,16 @@
+# The faults that cannot share a key with the ones in `degraded`: a key holds
+# one value, so an unknown status and a table-shaped status are two builds.
+# Every value here is a shape or vocabulary mistake, and each must warn once and
+# leave the shipped default standing.
+[url_retirement]
+  enable = 'yse'
+
+  [url_retirement.redirects]
+    enable = 'nope'
+
+    [url_retirement.redirects.rules]
+      not = 'a path'
+
+  [url_retirement.manifest]
+    output_formats = 'maybe'
+    extra = ['/kept.html', 'no-leading-slash.html', 'https://elsewhere.example/x']

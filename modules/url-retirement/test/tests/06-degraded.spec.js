@@ -3,7 +3,7 @@
 // fault has to produce its own diagnostic rather than one masking another.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {degradedDir, moduleWarnings, redirectRules, manifest} from './helpers.js';
+import {baselineDir, degradedDir, moduleWarnings, readDoc} from './helpers.js';
 
 const FAULTS = [
   {
@@ -24,9 +24,14 @@ const FAULTS = [
   },
 ];
 
-test('the build survives every fault at once', () => {
-  assert.ok(redirectRules(degradedDir).length > 0, 'the document is still published');
-  assert.ok(manifest(degradedDir).urls.length > 0);
+// Every fault here is rejected in favor of the shipped default, and the
+// baseline build configures nothing at all, so the two builds must publish
+// IDENTICAL bytes. That is the whole claim -- "the default stood" -- stated as
+// something a diff can settle rather than as a floor that a half-broken
+// document would also clear.
+test('every document is byte-identical to the build that configured nothing', () => {
+  assert.equal(readDoc(degradedDir, '_redirects'), readDoc(baselineDir, '_redirects'));
+  assert.equal(readDoc(degradedDir, 'url-manifest.txt'), readDoc(baselineDir, 'url-manifest.txt'));
 });
 
 for (const fault of FAULTS) {
@@ -52,14 +57,8 @@ test('no fault produces a diagnostic nobody asked for, and none is reported twic
   );
 });
 
-test('every rejected value leaves the shipped default standing', () => {
-  const rules = redirectRules(degradedDir);
-  for (const rule of rules) assert.equal(rule.status, '301', 'status fell back');
-  const bare = rules.filter((r) => !r.from.endsWith('/')).length;
-  const slashed = rules.filter((r) => r.from.endsWith('/')).length;
-  assert.equal(bare, slashed, 'trailing_slash fell back to both spellings');
-});
-
 test('a rules path that names no file leaves the generated rules in place', () => {
-  assert.ok(redirectRules(degradedDir).length > 0);
+  const body = readDoc(degradedDir, '_redirects');
+  assert.ok(body.includes('/old-post-one/ /posts/post-1/ 301'), 'the generated rules went missing');
+  assert.ok(!body.includes('hand-written'), 'rules appeared from a file that does not exist');
 });

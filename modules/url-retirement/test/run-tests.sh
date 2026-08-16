@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Builds the fixture site EIGHT TIMES with hugo (a BUILD, not a server: no port
+# Builds the fixture site TWELVE TIMES with hugo (a BUILD, not a server: no port
 # binding, and a finite build exits by itself) and runs the Node build-output
-# assertion suite against the seven trees that succeed.
+# assertion suite against the eleven trees that succeed.
 #
 # Each environment earns its place by a distinction no other one can make. The
 # default environment omits [params.url_retirement] entirely, so it is the only
@@ -15,10 +15,16 @@
 # distinct faults produce N distinct diagnostics and none masks another" is
 # provable only when they are present together -- and it cannot be merged into
 # `configured`, which has to stay quiet. The `off` environment is the only one
-# that proves the documented difference between an unwired output format and a
-# disabled module: both files are still published, and both are empty. The
-# `multilingual` environment is the only shape in which one _redirects file is
-# written by two languages and the per-language manifests have siblings to name.
+# that shows a disabled module writing nothing at all while the site around it
+# builds normally, and `partial` is its counterpart, switching ONE document off
+# and leaving the other publishing. The `conflict` environment is the only one
+# whose content has two pages claiming the same retired URL, which is a
+# diagnostic no other build can produce, and `degraded-shapes` holds the faults
+# that cannot share a key with the ones in `degraded`. The `multilingual`
+# environment is the only shape in which one _redirects file is written by two
+# languages and the per-language manifests have siblings to name, and
+# `multilingual-partial` is the only one where a sibling exists but publishes
+# nothing, so the header must not name it.
 # The `subpath` and `canonify` environments are a PAIR and neither is redundant:
 # a baseURL carrying a path is the only shape in which a rule that keeps the
 # base segment and one that drops it are different bytes, and canonifyURLs is
@@ -37,6 +43,10 @@ FIXTURE_DIR="$HERE/fixture"
 LOG_BASELINE="$HERE/hugo-build-baseline.log"
 LOG_CONFIGURED="$HERE/hugo-build-configured.log"
 LOG_DEGRADED="$HERE/hugo-build-degraded.log"
+LOG_SHAPES="$HERE/hugo-build-degraded-shapes.log"
+LOG_PARTIAL="$HERE/hugo-build-partial.log"
+LOG_CONFLICT="$HERE/hugo-build-conflict.log"
+LOG_MULTIPARTIAL="$HERE/hugo-build-multilingual-partial.log"
 LOG_OFF="$HERE/hugo-build-off.log"
 LOG_MULTILINGUAL="$HERE/hugo-build-multilingual.log"
 LOG_SUBPATH="$HERE/hugo-build-subpath.log"
@@ -46,7 +56,7 @@ LOG_HOSTILE="$HERE/hugo-build-hostile.log"
 # The logs are retained after a successful run so the documented re-run recipe
 # can read them; they are gitignored at the repo root. Only an interrupt
 # discards them mid-run.
-trap 'rm -f "$LOG_BASELINE" "$LOG_CONFIGURED" "$LOG_DEGRADED" "$LOG_OFF" "$LOG_MULTILINGUAL" "$LOG_SUBPATH" "$LOG_CANONIFY" "$LOG_HOSTILE"' INT TERM
+trap 'rm -f "$LOG_BASELINE" "$LOG_CONFIGURED" "$LOG_DEGRADED" "$LOG_SHAPES" "$LOG_PARTIAL" "$LOG_CONFLICT" "$LOG_OFF" "$LOG_MULTILINGUAL" "$LOG_MULTIPARTIAL" "$LOG_SUBPATH" "$LOG_CANONIFY" "$LOG_HOSTILE"' INT TERM
 
 # `pgrep -x` matches the process NAME, the semantic twin of the tasklist
 # IMAGENAME filter below. `-f` would match the whole command line, and this
@@ -69,7 +79,7 @@ fi
 # drops files absent from the STATIC directories, so a document a previous build
 # published and this one does not would survive into the tree the specs read --
 # and one of this suite's central assertions is that a disabled module publishes
-# an EMPTY file, which stale bytes satisfy silently.
+# NOTHING, which a stale file from an earlier build satisfies silently.
 rm -rf "$FIXTURE_DIR/public"
 
 build() { # build <environment> <destination> <log> [strict]
@@ -114,8 +124,12 @@ build_must_fail() { # build_must_fail <environment> <destination> <log>
 build "" public/baseline "$LOG_BASELINE" strict
 build configured public/configured "$LOG_CONFIGURED" strict
 build degraded public/degraded "$LOG_DEGRADED"
+build degraded-shapes public/degraded-shapes "$LOG_SHAPES"
+build conflict public/conflict "$LOG_CONFLICT"
+build partial public/partial "$LOG_PARTIAL" strict
 build off public/off "$LOG_OFF" strict
 build multilingual public/multilingual "$LOG_MULTILINGUAL" strict
+build multilingual-partial public/multilingual-partial "$LOG_MULTIPARTIAL" strict
 build subpath public/subpath "$LOG_SUBPATH" strict
 build canonify public/canonify "$LOG_CANONIFY" strict
 build_must_fail hostile public/hostile "$LOG_HOSTILE"
@@ -126,6 +140,10 @@ export MODULE_ROOT
 export FIXTURE_PUBLIC_BASELINE="$FIXTURE_DIR/public/baseline"
 export FIXTURE_PUBLIC_CONFIGURED="$FIXTURE_DIR/public/configured"
 export FIXTURE_PUBLIC_DEGRADED="$FIXTURE_DIR/public/degraded"
+export FIXTURE_PUBLIC_SHAPES="$FIXTURE_DIR/public/degraded-shapes"
+export FIXTURE_PUBLIC_PARTIAL="$FIXTURE_DIR/public/partial"
+export FIXTURE_PUBLIC_CONFLICT="$FIXTURE_DIR/public/conflict"
+export FIXTURE_PUBLIC_MULTIPARTIAL="$FIXTURE_DIR/public/multilingual-partial"
 export FIXTURE_PUBLIC_OFF="$FIXTURE_DIR/public/off"
 export FIXTURE_PUBLIC_MULTILINGUAL="$FIXTURE_DIR/public/multilingual"
 export FIXTURE_PUBLIC_SUBPATH="$FIXTURE_DIR/public/subpath"
@@ -133,6 +151,10 @@ export FIXTURE_PUBLIC_CANONIFY="$FIXTURE_DIR/public/canonify"
 export HUGO_BUILD_LOG_BASELINE="$LOG_BASELINE"
 export HUGO_BUILD_LOG_CONFIGURED="$LOG_CONFIGURED"
 export HUGO_BUILD_LOG_DEGRADED="$LOG_DEGRADED"
+export HUGO_BUILD_LOG_SHAPES="$LOG_SHAPES"
+export HUGO_BUILD_LOG_PARTIAL="$LOG_PARTIAL"
+export HUGO_BUILD_LOG_CONFLICT="$LOG_CONFLICT"
+export HUGO_BUILD_LOG_MULTIPARTIAL="$LOG_MULTIPARTIAL"
 export HUGO_BUILD_LOG_OFF="$LOG_OFF"
 export HUGO_BUILD_LOG_MULTILINGUAL="$LOG_MULTILINGUAL"
 export HUGO_BUILD_LOG_SUBPATH="$LOG_SUBPATH"

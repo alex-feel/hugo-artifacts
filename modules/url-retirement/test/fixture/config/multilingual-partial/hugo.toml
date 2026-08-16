@@ -1,0 +1,20 @@
+defaultContentLanguage = 'en'
+
+[languages]
+
+  [languages.en]
+    weight = 1
+    title = 'URL Retirement Fixture'
+    contentDir = 'content'
+
+  [languages.de]
+    weight = 2
+    title = 'URL-Stilllegung'
+    contentDir = 'content-de'
+
+    # The second language wires the format but switches its manifest off, so
+    # the file the first language's header would otherwise name is never
+    # written. Only a per-language read of the configuration can see this;
+    # the format wiring looks identical in both languages.
+    [languages.de.params.url_retirement.manifest]
+      enable = false

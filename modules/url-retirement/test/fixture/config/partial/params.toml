@@ -1,0 +1,6 @@
+# One document off, the other on. Nothing else in the suite can tell the
+# per-document switches from the master switch, which turns both off together.
+[url_retirement]
+
+  [url_retirement.redirects]
+    enable = false
