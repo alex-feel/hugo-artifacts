@@ -4,6 +4,8 @@ Universal build-time Open Graph card generator for Hugo. Hand it a page and it r
 
 The module ships LOGIC ONLY. It carries no fonts, no background rasters, no card templates, no colors and no coordinates: the consuming site supplies the artwork and the type, and this module composes them. What it does ship is mechanics -- a canvas size, an encoder default, a nominal glyph-width table for line breaking -- so that no design decision is ever made on your behalf, and a slot key you did not set is omitted from the drawing call entirely, leaving Hugo's own documented default in force. A wrapping slot is the one exception, because the fit engine cannot compute lines out of absent numbers: there the defaults in the parameter table below apply, and each row says so.
 
+The type is yours the same way the artwork is: a face, a line height and the seven other keys that describe how text is rendered are set ONCE at the module level for every card the site publishes, and overridden on a card template or on a single text slot where one of them needs to differ. See [Typography](#typography).
+
 It never breaks a build over an image. One wiring guard aside, every problem below it is a deduplicated warning plus a card that still draws, or a silent decline that leaves the page with whatever image it would have had without this module.
 
 ## Installation
@@ -116,6 +118,20 @@ Every key is OPTIONAL, and a site that configures nothing composes nothing: the 
   # variant: a CALL-TIER-ONLY key inside the `opts` dict, never read from config or front matter.
   # It distinguishes a second card for one page and is part of a card's identity. Default ''.
 
+  # --- Typography: HOW text is rendered, as opposed to where one slot sits or what it says.
+  #     Written here, each applies to every card the site publishes; a card template overrides
+  #     it for its own slots, and a text slot overrides it again. See Typography cascade below.
+  font         = 'regular'  # a NAME from [fonts]. Unset draws in Hugo's built-in Go Regular.
+  metrics      = 'default'  # width-table name; travels with `font`, since a table models ONE face.
+  line_height  = 1.4        # Line pitch = round(size * line_height) (0 < v <= 100).
+  overflow     = 'shrink'   # shrink | truncate.
+  ellipsis     = '…'        # Appended to a truncated last line. Set it to '' for none.
+  min_scale    = 0.7        # Ladder floor as a fraction of size (0 < v <= 1).
+  shrink_step  = 4          # Ladder step in px (>= 1).
+  safety       = 0.98       # Budget multiplier absorbing width-estimate error (0 < v <= 1).
+  width_factor = 1.0        # Coarse correction for a font wider or narrower than its metrics table
+                            # (0 < v <= 100).
+
   # --- Routing: page -> template NAME, most specific first:
   #     front matter ogcard.template > [sections] > [kinds] > default_template.
   [params.ogcard.sections]     # keyed by the page's section
@@ -138,6 +154,12 @@ Every key is OPTIONAL, and a site that configures nothing composes nothing: the 
                                     # with .Fill plus `anchor`, so a raster of any size drops in and
                                     # every coordinate below stays valid. An SVG is rejected.
 
+    # Any of the nine typography keys, written here to override the module level for every slot
+    # of THIS card template. All nine are optional; a card template that names none draws in the
+    # site's type.
+    font        = 'bold'
+    line_height = 1.2
+
     # Text slots, drawn in declaration order, ON TOP of the overlays.
     [[params.ogcard.templates.post.text]]
       source      = 'title'     # title | description | section | section_title | kind | site_title
@@ -148,6 +170,8 @@ Every key is OPTIONAL, and a site that configures nothing composes nothing: the 
       prefix      = ''          # glued in front of a resolved value, and dropped with it when the
       suffix      = ''          # value resolves empty, so a lone separator never draws.
       case        = 'none'      # none | upper | lower | title
+      # The nine typography keys again, each overriding this card template and the module level
+      # for THIS slot alone. A slot that names none draws in the card template's type.
       font        = 'bold'      # a NAME from [fonts]. Unset draws in Hugo's built-in Go Regular.
       metrics     = 'default'   # width-table name from data/og-image/metrics.toml (or your own
                                 # metrics-local.toml). Lower case.
@@ -164,15 +188,15 @@ Every key is OPTIONAL, and a site that configures nothing composes nothing: the 
       max_lines   = 3           # Hard bound on drawn lines. 0 or unset means unlimited -- and an
                                 # unlimited slot never shrinks and never truncates.
       ellipsis    = '…'         # Appended to a truncated last line. Set it to '' for none.
-      overflow    = 'shrink'    # shrink | truncate. shrink walks the size ladder and truncates only
-                                # at its floor; truncate truncates at the base size.
-      min_scale   = 0.7         # Ladder floor as a fraction of size (0 < v <= 1).
-      shrink_step = 4           # Ladder step in px (>= 1). The ladder holds at most 25 sizes; a step
-                                # too fine to reach the floor within them is widened.
-      safety      = 0.98        # Budget multiplier absorbing width-estimate error (0 < v <= 1).
+      overflow    = 'shrink'    # shrink walks the size ladder and truncates only at its floor;
+                                # truncate truncates at the base size.
+      min_scale   = 0.7         # Ladder floor as a fraction of size.
+      shrink_step = 4           # Ladder step in px. The ladder holds at most 25 sizes; a step too
+                                # fine to reach the floor within them is widened.
+      safety      = 0.98        # Budget multiplier absorbing width-estimate error.
       width_factor = 1.0        # Coarse correction for a font systematically wider or narrower than
-                                # its metrics table (0 < v <= 100).
-      line_height = 1.4         # Line pitch = round(size * line_height) (0 < v <= 100).
+                                # its metrics table.
+      line_height = 1.4         # Line pitch = round(size * line_height).
 
     # Overlays, composited in declaration order, UNDER the text.
     [[params.ogcard.templates.post.overlay]]
@@ -194,6 +218,7 @@ Per-page front matter uses the same key names under an `ogcard` map, which is al
 ogcard:
   enable: false # opt this page out, silently
   template: launch # force a template; a Hugo cascade sets this for a whole section
+  line_height: 1.2 # any module-level key for this page alone, the typography ones included
 ```
 
 ## Parameters
@@ -213,6 +238,7 @@ Module-level keys, all four tiers:
 | `sections`, `kinds` | table | -- | Routing maps, merged per NAME across tiers |
 | `fonts` | table | -- | Font registry, merged per NAME across tiers |
 | `templates` | table | -- | Card templates, merged per NAME across tiers |
+| the nine typography keys | -- | -- | The site's type, for every card it publishes; see [Typography](#typography) |
 
 Card template keys (`[params.ogcard.templates.<name>]`):
 
@@ -221,8 +247,9 @@ Card template keys (`[params.ogcard.templates.<name>]`):
 | `background` | string | yes | A path under `assets/`. Everything else is composed onto it |
 | `text` | array of tables | no | Text slots, drawn in declaration order, above the overlays |
 | `overlay` | array of tables | no | Overlays, composited in declaration order, below the text |
+| the nine typography keys | -- | no | This card's type, overriding the module level for every slot it owns; see [Typography](#typography) |
 
-Text slot keys (`[[params.ogcard.templates.<name>.text]]`):
+Text slot keys (`[[params.ogcard.templates.<name>.text]]`) -- everything that describes THIS element rather than the site's type. The nine typography keys are accepted here too and override both levels below them:
 
 | Key | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -231,21 +258,12 @@ Text slot keys (`[[params.ogcard.templates.<name>.text]]`):
 | `value` | string | -- | The string drawn for `source='literal'` |
 | `prefix`, `suffix` | string | -- | Glued around a non-empty value only |
 | `case` | string | `none` | `none`, `upper`, `lower`, `title` |
-| `font` | string | -- | A name from `[fonts]`; unset draws in Hugo's built-in Go Regular |
-| `metrics` | string | `default` | A width-table name; see [Text layout](#text-layout) |
 | `size` | int | `20` | 1-100000. Omitted from the drawing call when unset on a single-line slot |
 | `color` | string | -- | `#rgb` or `#rrggbb`; unset leaves Hugo's `#ffffff` |
 | `x`, `y` | int | `0` in a wrapping slot | -100000 to 100000. Omitted when unset on a single-line slot, where Hugo's own `10` applies |
 | `align` | string | `left` | `left`, `center`, `right`. Omitted when unset on a single-line slot |
 | `width` | int | -- | 1-100000. PRESENCE turns on wrapping |
 | `max_lines` | int | `0` | 0-100000. 0 means unlimited; nothing shrinks or truncates without it |
-| `ellipsis` | string | `…` | An explicitly empty value means no ellipsis |
-| `overflow` | string | `shrink` | `shrink`, `truncate` |
-| `min_scale` | float | `0.7` | 0 < v <= 1 |
-| `shrink_step` | int | `4` | 1-100000 |
-| `safety` | float | `0.98` | 0 < v <= 1 |
-| `width_factor` | float | `1.0` | 0 < v <= 100 |
-| `line_height` | float | `1.4` | 0 < v <= 100 |
 
 Overlay keys (`[[params.ogcard.templates.<name>.overlay]]`):
 
@@ -260,9 +278,37 @@ Overlay keys (`[[params.ogcard.templates.<name>.overlay]]`):
 | `anchor` | string | `topleft` | The nine Hugo-style anchors |
 | `x`, `y` | int | `0` | Offset inward from the anchor |
 
+### Typography
+
+Nine keys describe HOW text is rendered rather than where one slot sits or what it says, and every one of them is the consuming site's to decide at THREE levels, most specific winning: **a text slot > the card template that slot belongs to > the module level** (`[params.ogcard]`, and the four tiers around it). So a site names one face and one line height ONCE, in `[params.ogcard]`, and every card it publishes draws with them -- no repeating the font on each slot of each template, and no editing this module to change a pitch.
+
+| Key | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `font` | string | -- | A name from `[fonts]`; unset, or explicitly empty, draws in Hugo's built-in Go Regular |
+| `metrics` | string | `default` | A width-table name; see [Text layout](#text-layout) |
+| `line_height` | float | `1.4` | 0 < v <= 100. Line pitch = `round(size * line_height)` |
+| `overflow` | string | `shrink` | `shrink`, `truncate` |
+| `ellipsis` | string | `…` | Appended to a truncated last line; an explicitly empty value means none |
+| `min_scale` | float | `0.7` | 0 < v <= 1 |
+| `shrink_step` | int | `4` | 1-100000 |
+| `safety` | float | `0.98` | 0 < v <= 1 |
+| `width_factor` | float | `1.0` | 0 < v <= 100 |
+
+The split falls where it does because of what a key DESCRIBES. A key describing how text is rendered is site typography and cascades: a face, the width table that models that face, a pitch, and the six knobs the fit engine reads. A key describing where THIS slot sits or what it says -- `source`, `key`, `value`, `prefix`, `suffix`, `case`, `size`, `color`, `x`, `y`, `align`, `width`, `max_lines` -- is per-element design and stays in the slot, because there is no site-wide answer to where a subtitle goes.
+
+`metrics` cascades WITH `font` deliberately. A width table models one particular face, so a level that sets a face and leaves the table behind would have its lines measured against the previous face's advances, and the only symptom is line breaking at the wrong words -- see [What the width estimate is, and is not](#what-the-width-estimate-is-and-is-not).
+
+`line_height` is the single number this module ships in `data/og-image/defaults.toml`, and it is there because the engine draws each line as its own filter and computes its `y` itself: there is no such thing as placing a line without a pitch. The number is not the module's choice either -- `1.4` is the line height Hugo's own `images.Text` documentation names when it explains its `linespacing` option. It sits in the data file with every other resolved default, so a site sees it and overrides it at any tier, on a card template, or on one slot. `font` has NO shipped default and must not have one: the module carries no fonts, and an unset face means Hugo's built-in one, which is Hugo's decision rather than this module's.
+
+A card template is the MORE SPECIFIC level, so its value outranks the module level at every one of the module's four tiers -- a page's front matter included. A page that needs to move a value its card template sets writes that template's key in its own `ogcard.templates.<name>` map, which merges per name; a page overriding a value the module level sets writes the key directly, as the front-matter example above does.
+
+A bad value at any of the three levels warns once, naming the level that carries it, and that level alone is dropped -- the level below it applies, and the card still draws. A `font` naming no registry entry likewise warns once and draws in Hugo's built-in face.
+
 ### Validation
 
 Integers are read as DECIMAL and bounded: a leading zero never turns a value octal, at most nine digits are accepted, and a value that does not parse or falls outside its documented range warns once and leaves that ONE key at its default while the rest of the card draws. Floats must be written as a plain unsigned decimal (`0.5`, not `.5`), and a value outside its range warns once and falls back the same way -- including a digit string too long to be a number at all, which is out of range by definition rather than a reason to stop the build. Enum values are matched case-insensitively against their allow-list; an unknown value warns once and takes the documented fallback. Colors accept `#rgb` and `#rrggbb` only -- and that warning is the only diagnostic that exists, because Hugo accepts an unreadable color silently and draws white.
+
+A [typography](#typography) key is the one class whose fallback is a LEVEL rather than a fixed value: the bad value is dropped from the level that wrote it, so the card template's value applies where a slot's failed, the module's where a card template's failed, and the shipped default where the module level's failed. The warning names the level either way, and the same parse and the same bounds apply at all three.
 
 Template, font, section, kind and metrics-table names are matched in LOWER CASE, because Hugo folds configuration and front-matter keys to lower case. That also applies to the tables you write in `data/og-image/metrics-local.toml`, whose keys Hugo does NOT fold: name those tables in lower case or they will not be found.
 
@@ -278,6 +324,8 @@ Configuration resolves through four tiers, lowest precedence first:
 4. Call site: the `opts` dict passed to `og-image/card.html`.
 
 PRESENCE wins at every tier, not truthiness: an explicit `false`, `0` or `''` overrides the tier below it. The named tables (`templates`, `fonts`, `sections`, `kinds`) merge per NAME across tiers, so a page can override one card template's `background` without restating the rest of the site's templates.
+
+Those four tiers resolve the MODULE level. The nine [typography](#typography) keys then take two more levels above it -- a card template, and a text slot -- so a font or a line height written in `[params.ogcard]` reaches every slot of every template, a card template overrides it for its own slots, and a slot overrides it once more. Nothing about the four tiers changes: they are how the module level itself is decided, which is why a page's front matter or a call site can still move a site-wide face for one page or one card.
 
 Two replacement rules are worth reading twice, because both can silently discard configuration you thought was still in force. The `text` and `overlay` ARRAYS inside a card template are REPLACED wholesale by a higher tier, never merged entry by entry -- so a page that overrides one slot's color by restating `[[ogcard.templates.post.text]]` discards every other slot of that template. And a page that writes its OWN `ogcard:` map replaces a cascaded one wholesale; that is Hugo's front-matter semantic rather than this module's, so a section that cascades `ogcard.template` and a page inside it that sets `ogcard: {enable: false}` loses the cascaded template on that page.
 
@@ -333,13 +381,15 @@ Each line is drawn as its own text filter at `y + line_index * round(size * line
 
 Line breaks the author wrote survive: every newline in the resolved text is a hard break the wrapper honors. A single word wider than the whole budget is split across lines without inserting a hyphen or any other marker -- the author's text is not the module's to edit.
 
+Of the knobs named above, `width`, `size` and `max_lines` are the slot's own; `min_scale`, `shrink_step`, `safety`, `width_factor`, `line_height`, `overflow` and `ellipsis` are [typography](#typography) keys, so each can be written on the slot, on its card template, or once for the whole site.
+
 ### What the width estimate is, and is not
 
 Hugo exposes no way to measure rendered text -- nothing in its image namespace reports the width a string will draw at -- so THE ENGINE ESTIMATES. It sums per-glyph advance widths from a table in `data/og-image/metrics.toml`, expressed in thousandths of an em, which is why one measurement can be re-wrapped at every rung of the ladder without re-measuring anything.
 
 The shipped `default` table is a NOMINAL model of a generic proportional Latin sans. It is not a measurement of any particular font, and it models neither side bearings nor kerning, so the estimate and the ink your font actually draws differ by a small amount that accumulates over a long line. Three knobs correct that, in increasing exactness: `safety` shrinks the budget so a mild under-estimate still lands inside the box; `width_factor` scales the budget for a font that is systematically wider or narrower than the model; and a per-glyph table extracted from the font itself removes the estimate altogether.
 
-The cost of the estimate is what it cannot do: because the module never sees the drawn pixels, a line that overflows its box by a few pixels is invisible to it and produces no warning. **A font change silently invalidates a tuned table.** Swap `Inter-Bold` for a wider face at the same registry name and every card keeps building, keeps looking plausible, and starts breaking lines at the wrong words -- nothing in the build says so. Re-check your cards when you change a font.
+The cost of the estimate is what it cannot do: because the module never sees the drawn pixels, a line that overflows its box by a few pixels is invisible to it and produces no warning. **A font change silently invalidates a tuned table.** Swap `Inter-Bold` for a wider face at the same registry name and every card keeps building, keeps looking plausible, and starts breaking lines at the wrong words -- nothing in the build says so. Re-check your cards when you change a font. That is also why `metrics` cascades alongside `font`: a level that names a face is the level that should name the table modeling it, and a site that sets one face for every card sets one table with it.
 
 ### Calibrating for your own font
 
@@ -410,11 +460,13 @@ The module NEVER breaks a build over an image. `errorf` is reserved for the sing
 | Registered font path names nothing under `assets/`, including one the operating system refuses to look up | Warn + Go Regular | path |
 | Registered font is not `.ttf` or `.otf` | Warn + Go Regular | path |
 | Font passes that guard but cannot be read as a font | Warn + the card is redrawn with every font dropped, in Go Regular. A failing redraw warns and declines | template + fonts, then page + template |
-| Int that does not parse or is out of range (module `width`/`height`/`quality`; slot `size`/`x`/`y`/`width`/`max_lines`/`shrink_step`; overlay `width`) | Warn + that ONE key falls back to its default; everything else still draws | key + value, plus the tier for a module key and the template and index for a slot or overlay |
+| Int that does not parse or is out of range (module `width`/`height`/`quality`; slot `size`/`x`/`y`/`width`/`max_lines`; overlay `width`) | Warn + that ONE key falls back to its default; everything else still draws | key + value, plus the tier for a module key and the template and index for a slot or overlay |
 | Overlay `x` or `y` that does not parse | Silently taken as 0 | -- |
-| Float that does not parse or is out of range (`safety`, `min_scale`, `width_factor`, `line_height`, overlay `opacity`) | Warn + that key falls back to its default | template + index + key + value |
+| A typography key (`font`, `metrics`, `line_height`, `safety`, `width_factor`, `min_scale`, `shrink_step`, `overflow`, `ellipsis`) that does not parse, is out of range, or is not in its allow-list, at ANY of its three levels | Warn naming the level + that level's value dropped, so the level below it applies; the card still draws | key + value + level |
+| A typography key given a table or a list where a single value is expected (`font`, `metrics`, `ellipsis`) | Warn naming the level + that level's value dropped, so the level below it applies | key + value + level |
+| Float that does not parse or is out of range (overlay `opacity`) | Warn + that key falls back to its default | template + index + key + value |
 | `color` is not `#rgb` or `#rrggbb` | Warn + the key is dropped, so Hugo's own `#ffffff` applies. Hugo accepts an unreadable color silently and draws white, so this is the only signal | template + value |
-| Unknown enum (`format`, `anchor`, slot `align`, `case`, `overflow`, overlay `anchor`, overlay `source`) | Warn + the documented fallback (`png`, `Center`, `left`, text as written, `shrink`, `topleft`; an unknown overlay `source` drops that overlay) | key + value, plus the tier for `format` and `anchor` |
+| Unknown enum (`format`, `anchor`, slot `align`, `case`, overlay `anchor`, overlay `source`) | Warn + the documented fallback (`png`, `Center`, `left`, text as written, `topleft`; an unknown overlay `source` drops that overlay) | key + value, plus the tier for `format` and `anchor` |
 | Unknown slot `source` token | Warn naming the whole vocabulary + that slot dropped; the rest of the card draws | token |
 | `source='param'` naming a key the page does not carry | Silent skip -- optional per-page fields are a design, not a mistake | -- |
 | `source='param'` resolving to a table or a list | Warn + that slot skipped | key |
@@ -474,6 +526,7 @@ modules/og-image/
 │           │   ├── template.html           Chooses the card template; decides decline versus warn
 │           │   ├── background.html         Turns `background` into the normalized base raster
 │           │   ├── slots.html              Turns the `text` array into one text filter per line
+│           │   ├── typography.html         Normalizes the nine type keys at any of their three levels
 │           │   ├── source.html             Resolves ONE slot's source, case, prefix and suffix
 │           │   ├── overlays.html           Turns the `overlay` array into positioned overlay filters
 │           │   └── font.html               Turns one registered font path into a usable font resource

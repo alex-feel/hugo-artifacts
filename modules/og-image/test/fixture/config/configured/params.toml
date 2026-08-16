@@ -11,6 +11,13 @@
 # The two text slots carry DIFFERENT colors on purpose: one color cannot tell
 # a slot that took its own configured value from a slot that took the other
 # slot's, and Hugo draws an unreadable color as white without saying so.
+#
+# This environment's MODULE level names none of the nine typography keys, and
+# that absence is load-bearing: it is what makes the `unstyled` template at
+# the bottom a statement about the SHIPPED defaults rather than about a value
+# some level of this file supplied. The `typography` environment states the
+# opposite half, where the module level names a face, a width table and a
+# line height that no slot repeats.
 
 [ogcard]
   width = 1200
@@ -30,6 +37,7 @@
     aligned = 'aligned'
     overlays = 'overlaid'
     fitting = 'fitting'
+    unstyled = 'unstyled'
 
   [ogcard.kinds]
     home = 'home'
@@ -485,3 +493,58 @@
       max_lines = 1
       overflow = 'truncate'
       ellipsis = 'MMMM'
+
+  # ---- unstyled: the other end of the typography cascade, and the only
+  #      template in this suite whose slots name NONE of the nine keys at any
+  #      level -- not the slot, not the template, and not this environment's
+  #      module level. What they draw with is therefore what the module ships
+  #      and nothing else: Hugo's built-in face, because the module carries no
+  #      font and never invents one, and the 1.4 line height that is the one
+  #      number data/og-image/defaults.toml states.
+  #
+  #      Rows 0 to 2 are the same eight glyphs at the same size, drawn by a
+  #      slot naming the monospace face, by a slot naming no face at all, and
+  #      by a slot naming the empty face. The last two must ink identically
+  #      and both must differ from the first, which is what says an unset font
+  #      means Hugo's own rather than some fallback of the module's.
+  #
+  #      Row 3 wraps. Its 240-pixel box takes one word a line under the
+  #      shipped nominal table (M is 940 per mille there), so it draws three
+  #      lines whose pitch is round(size * line_height) -- the shipped 1.4 on
+  #      the section page, and 2.0 on unstyled/a.md, which overrides the
+  #      module level from front matter and is the only place in this suite
+  #      where a typography key travels Hugo's own four tiers.
+  [ogcard.templates.unstyled]
+    background = 'og/post-bg.png'
+
+    [[ogcard.templates.unstyled.text]]
+      source = 'literal'
+      value = 'MMMMMMMM'
+      font = 'mono'
+      size = 48
+      x = 72
+      y = 40
+
+    [[ogcard.templates.unstyled.text]]
+      source = 'literal'
+      value = 'MMMMMMMM'
+      size = 48
+      x = 72
+      y = 140
+
+    [[ogcard.templates.unstyled.text]]
+      source = 'literal'
+      value = 'MMMMMMMM'
+      font = ''
+      size = 48
+      x = 72
+      y = 240
+
+    [[ogcard.templates.unstyled.text]]
+      source = 'literal'
+      value = 'MMMM MMMM MMMM'
+      size = 40
+      x = 72
+      y = 420
+      width = 240
+      max_lines = 0

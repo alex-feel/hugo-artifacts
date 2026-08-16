@@ -34,6 +34,11 @@ export const subpathDir = dir('FIXTURE_PUBLIC_SUBPATH', 'fixture/public/subpath'
 // The only build that sets default_template, the tier `configured` proves the
 // opposite statement about.
 export const routingDir = dir('FIXTURE_PUBLIC_ROUTING', 'fixture/public/routing');
+// The only build whose MODULE level names a face, a width table and a line
+// height, so a slot naming none of the nine typography keys still draws with
+// them. In `configured` every slot names its own face, which is why the
+// cascade is invisible there.
+export const typographyDir = dir('FIXTURE_PUBLIC_TYPOGRAPHY', 'fixture/public/typography');
 
 const LOG_KEYS = {
   baseline: 'HUGO_BUILD_LOG_BASELINE',
@@ -42,6 +47,7 @@ const LOG_KEYS = {
   multilingual: 'HUGO_BUILD_LOG_MULTILINGUAL',
   subpath: 'HUGO_BUILD_LOG_SUBPATH',
   routing: 'HUGO_BUILD_LOG_ROUTING',
+  typography: 'HUGO_BUILD_LOG_TYPOGRAPHY',
 };
 
 export function buildLog(which) {
@@ -147,3 +153,15 @@ export function bandPitch(bands) {
 
 export const expectedPitch = (size, lineHeight = TITLE_BOX.lineHeight) =>
   Math.round(size * lineHeight);
+
+// The one number data/og-image/defaults.toml ships, and therefore the pitch a
+// slot draws at when NO level named a line height. tests/13-readme.spec.js
+// locks the data file to this value, so the two cannot drift apart quietly.
+export const SHIPPED_LINE_HEIGHT = 1.4;
+
+// The horizontal run of ink on a band. The same string at the same size draws
+// the same extent in the same face and a different one in another face, so an
+// extent is which FACE drew a line -- without depending on a font table, and
+// without the side-bearing error that divides a short line's extent into a
+// per-glyph advance.
+export const lineExtent = (band) => band.right - band.left + 1;

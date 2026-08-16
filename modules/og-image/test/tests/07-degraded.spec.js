@@ -30,6 +30,14 @@ const FAULTS = [
   ['module format', /^Unknown ogcard\.format value "gif"/],
   ['module quality', /^Ignoring ogcard\.quality value "400"/],
   ['module anchor', /^Unknown ogcard\.anchor value "middle"/],
+  // A typography key is the one class whose fallback is a LEVEL rather than a
+  // fixed value, and the module level is the only one whose level below is the
+  // shipped data file. tests/17-typography.spec.js reads the pitch it fell
+  // back to; this is the diagnostic beside it.
+  [
+    'module typography: unusable line height',
+    /^Ignoring the line_height value "wobbly" set in params\.ogcard for language "en"/,
+  ],
 
   [
     'route: unknown template from a section',
@@ -70,10 +78,16 @@ const FAULTS = [
   ['slot: unreadable color', /^Ignoring the color value "rebeccapurple" on text slot 0/],
   ['slot: unparseable size', /^Ignoring the size value "abc" on text slot 1/],
   ['slot: unparseable x', /^Ignoring the x value "left" on text slot 2/],
-  ['slot: unparseable safety', /^Ignoring the safety value "lots" on text slot 3/],
+  [
+    'slot: unparseable safety',
+    /^Ignoring the safety value "lots" set in text slot 3 of card template "badslots"/,
+  ],
   ['slot: unknown align', /^Unknown align value "middle" on text slot 4/],
   ['slot: unknown case', /^Unknown card text case "camel"/],
-  ['slot: unknown overflow', /^Unknown overflow value "clip" on text slot 6/],
+  [
+    'slot: unknown overflow',
+    /^Unknown overflow value "clip" set in text slot 6 of card template "badslots"/,
+  ],
   ['slot: unknown source token', /^Unknown card text source "autor"/],
   [
     'slot: parameter holding a list',
@@ -82,7 +96,7 @@ const FAULTS = [
   ['slot: unknown metrics table', /^No metrics table named "nosuch"/],
   [
     'slot: float knob too large for a float64',
-    /^Ignoring the width_factor value "9{300,}" on text slot 14/,
+    /^Ignoring the width_factor value "9{300,}" set in text slot 14 of card template "badslots"/,
   ],
 
   // Every level of a hand-written width table. A wrong shape at any of them

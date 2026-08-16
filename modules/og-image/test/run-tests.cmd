@@ -1,7 +1,7 @@
 @echo off
-rem Builds the fixture site SIX TIMES with hugo (a BUILD, not a server: no
+rem Builds the fixture site SEVEN TIMES with hugo (a BUILD, not a server: no
 rem port binding, and a finite build exits by itself) and runs the Node
-rem build-output assertion suite against all six trees. Windows mirror of
+rem build-output assertion suite against all seven trees. Windows mirror of
 rem run-tests.sh: pre-launch process check, then a hard fail on any
 rem deprecation or error output in any build log.
 rem
@@ -18,7 +18,11 @@ rem the card set under a baseURL carrying a PATH, the only shape in which a
 rem card URL that keeps the base path and one that drops it are different
 rem bytes; and the `routing` environment is the only one that sets
 rem default_template, which `configured` cannot hold because its decline set
-rem is the proof of the opposite statement.
+rem is the proof of the opposite statement; and the `typography` environment
+rem is the only one whose MODULE level names a face, a width table and a line
+rem height, which is what makes the three-level typography cascade measurable,
+rem while `configured` keeps naming none of them so that its `unstyled` card
+rem states what the module SHIPS.
 setlocal
 
 tasklist /FI "IMAGENAME eq hugo.exe" | find /I "hugo.exe" >nul
@@ -33,6 +37,7 @@ set LOG_DEGRADED=%~dp0hugo-build-degraded.log
 set LOG_MULTILINGUAL=%~dp0hugo-build-multilingual.log
 set LOG_SUBPATH=%~dp0hugo-build-subpath.log
 set LOG_ROUTING=%~dp0hugo-build-routing.log
+set LOG_TYPOGRAPHY=%~dp0hugo-build-typography.log
 
 rem The destination is REMOVED, not merely cleaned: --cleanDestinationDir only
 rem drops files absent from the static directories, so a card a previous build
@@ -84,9 +89,16 @@ if errorlevel 1 (
   popd
   exit /b 1
 )
+hugo -e typography --logLevel info --cleanDestinationDir --destination public\typography > "%LOG_TYPOGRAPHY%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(typography^):
+  type "%LOG_TYPOGRAPHY%"
+  popd
+  exit /b 1
+)
 popd
 
-for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_DEGRADED%" "%LOG_MULTILINGUAL%" "%LOG_SUBPATH%" "%LOG_ROUTING%") do (
+for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_DEGRADED%" "%LOG_MULTILINGUAL%" "%LOG_SUBPATH%" "%LOG_ROUTING%" "%LOG_TYPOGRAPHY%") do (
   findstr /I "deprecat" %%L >nul 2>&1
   if not errorlevel 1 (
     echo Hugo reported deprecations in %%L:
@@ -102,7 +114,7 @@ for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_DEGRADED%" "%LOG_MULTILING
 )
 
 rem Only the configured and routing builds are gated on warnings: the happy
-rem path is silent, and the other four builds carry the diagnostics they exist
+rem path is silent, and the other five builds carry the diagnostics they exist
 rem to produce.
 for %%L in ("%LOG_CONFIGURED%" "%LOG_ROUTING%") do (
   findstr /C:"WARN" %%L >nul 2>&1
@@ -121,12 +133,14 @@ set FIXTURE_PUBLIC_DEGRADED=%~dp0fixture\public\degraded
 set FIXTURE_PUBLIC_MULTILINGUAL=%~dp0fixture\public\multilingual
 set FIXTURE_PUBLIC_SUBPATH=%~dp0fixture\public\subpath
 set FIXTURE_PUBLIC_ROUTING=%~dp0fixture\public\routing
+set FIXTURE_PUBLIC_TYPOGRAPHY=%~dp0fixture\public\typography
 set HUGO_BUILD_LOG_BASELINE=%LOG_BASELINE%
 set HUGO_BUILD_LOG_CONFIGURED=%LOG_CONFIGURED%
 set HUGO_BUILD_LOG_DEGRADED=%LOG_DEGRADED%
 set HUGO_BUILD_LOG_MULTILINGUAL=%LOG_MULTILINGUAL%
 set HUGO_BUILD_LOG_SUBPATH=%LOG_SUBPATH%
 set HUGO_BUILD_LOG_ROUTING=%LOG_ROUTING%
+set HUGO_BUILD_LOG_TYPOGRAPHY=%LOG_TYPOGRAPHY%
 for /f "tokens=2 delims=v " %%v in ('hugo version') do (
   set HUGO_VERSION_RAW=%%v
   goto gotversion

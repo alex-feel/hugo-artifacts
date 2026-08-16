@@ -12,6 +12,12 @@
 # The shipped [fonts.default] table stays untouched, so the merge-per-name
 # path is exercised without shadowing anything the module ships.
 #
+# The `wide` table models nothing real. It exists so that two slots drawn in
+# the SAME face and the same box can still break their lines in different
+# places: at twice the monospace width, a box that takes two words under
+# `mono` takes one under `wide`, and a band count is then the width table a
+# slot resolved rather than an opinion about the picture.
+#
 # The four tables after the monospace one are of the wrong shape, one per
 # level of this file a consumer can get wrong. Nothing reads them except the
 # degraded environment's diagnostic card, because a width table is resolved
@@ -26,6 +32,11 @@ scalartable = 'not a table at all'
 em = 1000
 space = 600
 fallback = 600
+
+[fonts.wide]
+em = 1000
+space = 600
+fallback = 1200
 
 # classes is an array of tables; a bare string is not one.
 [fonts.badclasses]

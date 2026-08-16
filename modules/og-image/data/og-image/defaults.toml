@@ -16,6 +16,14 @@
 # the site did not set is omitted from the images.Text option dict entirely,
 # so Hugo's own documented default applies and no module-invented number ever
 # enters a fallback path.
+#
+# The typography keys are the same bargain read the other way round. font,
+# metrics, line_height, safety, width_factor, min_scale, shrink_step, overflow
+# and ellipsis describe HOW text is rendered rather than where one slot sits,
+# so they belong to the site: each is settable here and at the three tiers
+# above, on a card template, and on a single text slot, most specific winning.
+# Only line_height needs a number in this file -- see its comment below --
+# and that number is Hugo's, not one this module chose.
 
 # Master switch. false makes card.html decline everywhere, silently.
 enable = true
@@ -44,3 +52,14 @@ anchor = 'Center'
 # gets NO card, silently -- that is how this generator says it has nothing for
 # the page. Set it to a template name to card every page.
 default_template = ''
+
+# Line pitch as a multiple of the drawn size: a wrapping slot places each line
+# at round(size * line_height) below the one above it. This is the one
+# typography key that cannot be left out, because the module computes every
+# line's y itself and there is no such thing as placing a line without a pitch.
+# 1.4 is Hugo's OWN figure, not one this module picked: Hugo's images.Text
+# documentation explains its linespacing option in terms of "a line height of
+# 1.4", for which it says to set linespacing to 0.4 times the size. It sits
+# here, with every other resolved default, so a site can see it and override it
+# at any tier, on a card template, or on a single text slot.
+line_height = 1.4
