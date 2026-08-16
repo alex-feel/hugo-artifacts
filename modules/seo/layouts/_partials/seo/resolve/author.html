@@ -91,8 +91,11 @@
         {{- $descriptor = merge $descriptor (dict "twitter" .) -}}
       {{- end -}}
       {{/* image: the author page's primary bundle image URL, native aspect
-           (Person.image never carries the 1.91:1 og crop). */}}
-      {{- $imgs := partial "seo/resolve/images.html" $ap -}}
+           (Person.image never carries the 1.91:1 og crop). No `generated`
+           payload, so the params.seo.image_partial hook does not fire here:
+           a generated social card is a page's share image, never a
+           photograph of the person the node describes. */}}
+      {{- $imgs := partial "seo/resolve/images.html" (dict "page" $ap) -}}
       {{- with $imgs -}}
         {{- $primary := index . 0 -}}
         {{- $imgURL := $primary.url -}}

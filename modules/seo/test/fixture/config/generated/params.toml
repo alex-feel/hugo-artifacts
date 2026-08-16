@@ -1,0 +1,12 @@
+# The `generated` environment: the only build in which the generated-image
+# hook is wired, and therefore the only one that can tell a per-page composed
+# card from the one banner a whole site shares.
+#
+# Both keys are needed together. `image_partial` alone could not prove the
+# hook is ranked ABOVE the site fallback, and `default_image` alone is what
+# every other environment already has; set together, one page shows the card
+# winning and another -- the promo section, for which the fixture partial
+# deliberately returns nothing -- shows the fallback still arriving.
+[seo]
+  default_image = '/img/og-default.png'
+  image_partial = 'fixture/og-card.html'

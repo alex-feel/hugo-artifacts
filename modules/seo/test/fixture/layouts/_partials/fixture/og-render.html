@@ -1,0 +1,15 @@
+{{/*
+  The generated-image hook written the WRONG way: a renderer with no `return`.
+
+  This is the mistake the module has to survive, not a pattern to copy. Hugo
+  hands a caller of a return-less partial the template.HTML it rendered, which
+  is truthy, is not a resource, and resolves as neither a page resource nor a
+  global one -- so an unguarded cascade absolutizes it and publishes an escaped
+  fragment of markup as og:image, twitter:image and every JSON-LD image node,
+  on every page of the section, silently.
+
+  The `generated` environment cascades this partial onto the taxonomy category
+  pages so the guard has something to catch.
+*/}}
+
+<img src="/cards/rendered-not-returned.png" alt="rendered rather than returned">

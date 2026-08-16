@@ -1,0 +1,69 @@
+# Site-level cascades that make the `generated` environment cover the shapes a
+# single site-wide key cannot reach. `image_partial` is read through `.Param`,
+# so a section cascade is exactly how a real site points different sections at
+# different generators -- and it is the only way one build can exercise several
+# spellings and several mistakes at once.
+#
+# Cascade tables must live in a ROOT configuration file, never in a dedicated
+# config/<env>/cascade.toml, which Hugo silently ignores.
+
+# One page whose seo.title differs from its own .Title, so the resolved title
+# and the raw one are distinguishable strings. Without it every fixture page
+# resolves a title equal to .Title and a hook handed the wrong one of the two
+# would publish exactly what the right one publishes.
+[[cascade]]
+
+  [cascade.params.seo]
+    title = 'Cascaded Card Headline'
+
+  [cascade.target]
+    path = '/page'
+
+# The blog section names the generator WITHOUT the .html suffix. `partial`
+# resolves both spellings, and this key documents itself as taking whatever
+# `partial` takes, so the suffix-less form must resolve too rather than being
+# rejected by a guard that only probes the literal string.
+[[cascade]]
+
+  [cascade.params.seo]
+    image_partial = 'fixture/og-card'
+
+  [cascade.target]
+    path = '{/blog,/blog/**}'
+
+# A BOOLEAN value. `with` treats only `false` as absent, so `true` reaches the
+# lookup and would be resolved as a template literally named "true". It lands
+# on the tag taxonomy rather than on promo, because promo is the section whose
+# generator DECLINES, and a value rejected before the hook is ever called
+# would take that path's coverage away with it.
+[[cascade]]
+
+  [cascade.params.seo]
+    image_partial = true
+
+  [cascade.target]
+    path = '{/tags,/tags/**}'
+
+# A TABLE value, the third arm of the shape guard. Together with the boolean
+# above it also proves the shape warning is keyed by the offending value: two
+# sections misconfigured two different ways in ONE build must produce TWO
+# diagnostics, not one, or whichever page renders first silences the other.
+[[cascade]]
+
+  [cascade.params.seo.image_partial]
+    path = 'fixture/og-card.html'
+
+  [cascade.target]
+    path = '{/authors,/authors/**}'
+
+# A generator written as a RENDERER -- markup emitted, nothing returned. Hugo
+# hands back template.HTML of whatever it rendered, which is not a path and
+# resolves to no resource, so unguarded it is absolutized and published as an
+# escaped fragment of HTML in og:image and every JSON-LD image node.
+[[cascade]]
+
+  [cascade.params.seo]
+    image_partial = 'fixture/og-render.html'
+
+  [cascade.target]
+    path = '{/categories,/categories/**}'

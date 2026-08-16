@@ -3,7 +3,18 @@
   page. images[0] is the primary OG/Twitter image; the full slice feeds
   JSON-LD image[]/thumbnailUrl[]. Pure value chooser: no HTML, no side effects.
 
-  Context: the current Page, passed as the dot.
+  Context (dict):
+  - .page (page)       The current Page.
+  - .generated (dict)  Optional. When present, the params.seo.image_partial
+                       generated-image hook may be consulted (step 5), and
+                       this dict is what the hook receives, with the page
+                       merged in: {page, title, description}, where title and
+                       description are the RESOLVED strings the head publishes
+                       as og:title and og:description, so a card generator
+                       never becomes a second authority for either. When
+                       ABSENT the hook never fires -- resolve/author.html
+                       omits it, because a generated social card is not a
+                       person's portrait.
 
   Candidate order (explicit declarations outrank filename-convention detection):
   1. seo.images (list) or seo.image (single) or meta_image (alias) -- explicit.
@@ -14,9 +25,19 @@
   3. Native .Params.images ([]string), in order.
   4. Page-bundle convention match, DETERMINISTIC priority: GetMatch "*feature*",
      then "*cover*", then "*thumbnail*" (feature beats cover beats thumbnail).
-  5. params.seo.default_image (alias params.metadata.image) as the site
-     fallback -- applied ONLY when steps 1-4 RESOLVED no image, so a page
+  5. params.seo.image_partial -- the generated-image hook: a partial named by
+     config composes an image for THIS page at build time (see below).
+  6. params.seo.default_image (alias params.metadata.image) as the site
+     fallback -- applied ONLY when steps 1-5 RESOLVED no image, so a page
      whose declared candidates all fail to resolve still gets the default.
+
+  The generated-image hook (step 5) is named by params.seo.image_partial as
+  the same path one would pass to `partial` (e.g. "og-image/card.html"). It
+  may return a resource, a slice of resources, a string path or URL, or
+  nothing; every returned item is normalized exactly like a declared
+  candidate, so a generated resource gets the same og crop, dimensions, type
+  and alt chain a bundle image gets. It is invoked ONLY on a page that
+  reached this tier, so no page pays for composing an image it would discard.
 
   Each candidate is normalized through resolve/image.html (which itself
   resolves bundle-relative paths, global resources, and bare URLs) and
@@ -26,7 +47,8 @@
   (possibly empty). ONE terminal return.
 */}}
 
-{{- $page := . -}}
+{{- $page := .page -}}
+{{- $generated := .generated -}}
 {{- $candidates := slice -}}
 
 {{/* 1. Explicit SEO override: seo.images / seo.image / meta_image. */}}
@@ -87,7 +109,97 @@
   {{- end -}}
 {{- end -}}
 
-{{/* 5. Site-wide default image (alias params.metadata.image) -- a TRUE
+{{/* 5. Generated-image hook: params.seo.image_partial names a partial that
+     composes an image for THIS page at build time -- a consuming site's own,
+     or a sibling module's. Consulted only when nothing resolved above, so a
+     page that declares or bundles its own image never carries a synthetic
+     card, and the hook is never invoked on a page whose answer is already
+     known -- which matters, because composing an image is expensive and a
+     discarded one would be paid for on every page of the site. Ranked above
+     default_image: a per-page card beats the one banner a whole site shares.
+     Skipped entirely when the caller passed no `generated` payload. */}}
+{{- if and (not $images) $generated -}}
+  {{- $name := "" -}}
+  {{- with $page.Param "seo.image_partial" -}}
+    {{/* A partial path is one string. A table, a list, or a boolean holds no
+         path, and `with` treats only `false` as absent, so `true` would
+         otherwise be looked up as a template named "true". */}}
+    {{- if or (reflect.IsMap .) (reflect.IsSlice .) (eq (printf "%T" .) "bool") -}}
+      {{/* Keyed by the VALUE, not by the class alone: a section cascade can
+           point different sections at different generators, so two sections
+           can misspell the key two different ways in one build and a
+           class-only key would report whichever page rendered first and
+           leave the other silently answered by default_image. */}}
+      {{- partial "seo/lib/warn.html" (dict
+        "key" (printf "seo:warn:image-partial-shape:%v" .)
+        "message" (printf "[seo] Ignoring seo.image_partial: it expects a partial path written as a single value but was given %q. No image is generated." (printf "%v" .))
+      ) -}}
+    {{- else -}}
+      {{- $name = trim (printf "%v" .) " \t\n\r" -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if $name -}}
+    {{/* templates.Exists takes a path under layouts/, so a partial name needs
+         the _partials/ prefix; without this guard a typo would abort the
+         consuming site's build on its first page. `partial` resolves a name
+         with or without the .html suffix, and this key documents itself as
+         taking whatever `partial` takes, so both spellings are probed --
+         otherwise the suffix-less form, which `partial` would have resolved,
+         is rejected by advice describing exactly what the consumer wrote. */}}
+    {{- $lookup := printf "_partials/%s" $name -}}
+    {{- $found := templates.Exists $lookup -}}
+    {{- if not $found -}}
+      {{- $found = templates.Exists (printf "%s.html" $lookup) -}}
+    {{- end -}}
+    {{- if $found -}}
+      {{- $returned := partial $name (merge $generated (dict "page" $page)) -}}
+      {{/* A resource is neither slice nor map, so seo/lib/as-list.html cannot
+           carry it: that helper wraps a non-slice through printf "%v", which
+           renders a resource as Go's debug form. */}}
+      {{- $items := slice -}}
+      {{- with $returned -}}
+        {{- if reflect.IsSlice . -}}
+          {{- $items = . -}}
+        {{- else -}}
+          {{- $items = slice . -}}
+        {{- end -}}
+      {{- end -}}
+      {{- range $items -}}
+        {{/* A partial with no `return` hands back template.HTML: whatever it
+             RENDERED. That is markup, not a path, and it resolves as neither
+             a page resource nor a global one, so without this guard it would
+             be absolutized and published -- an escaped fragment of HTML in
+             og:image, twitter:image and every JSON-LD image node, with no
+             diagnostic anywhere. A partial that returns inside a conditional
+             renders whitespace on the branch that declines, so only a
+             non-blank render is the mistake worth naming. */}}
+        {{- if eq (printf "%T" .) "template.HTML" -}}
+          {{- if trim (printf "%v" .) " \t\n\r" -}}
+            {{- partial "seo/lib/warn.html" (dict
+              "key" (printf "seo:warn:image-partial-rendered:%s" $name)
+              "message" (printf "[seo] Ignoring what seo.image_partial %q handed back: the partial RENDERED markup instead of returning a value, so it names no image. End it with a return statement." $name)
+            ) -}}
+          {{- end -}}
+        {{- else -}}
+          {{- $img := partial "seo/resolve/image.html" (dict "candidate" . "page" $page) -}}
+          {{- with $img.url -}}
+            {{- if not (in $seen .) -}}
+              {{- $seen = $seen | append . -}}
+              {{- $images = $images | append $img -}}
+            {{- end -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- else -}}
+      {{- partial "seo/lib/warn.html" (dict
+        "key" (printf "seo:warn:image-partial-missing:%s" $name)
+        "message" (printf "[seo] Ignoring seo.image_partial %q: no template exists at %q, with or without a .html suffix. Give the path exactly as you would pass it to `partial`, relative to layouts/_partials/." $name $lookup)
+      ) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* 6. Site-wide default image (alias params.metadata.image) -- a TRUE
      fallback: applied when nothing RESOLVED above, so pages with their own
      representative images never carry the site default in JSON-LD image[],
      while a page whose declared candidates all failed to resolve still gets

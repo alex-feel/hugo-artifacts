@@ -75,8 +75,15 @@
 
 {{/* Ordered normalized image dicts {url,width,height,type,alt} (see
      resolve/images.html); images[0] is the primary OG/Twitter image, full
-     slice feeds JSON-LD. */}}
-{{- $images := partial "seo/resolve/images.html" $page -}}
+     slice feeds JSON-LD. The `generated` payload both ENABLES the
+     params.seo.image_partial hook and is what that hook receives: the
+     already-resolved title and description, so a card composed for this page
+     draws the exact strings the head publishes rather than deriving its own
+     and disagreeing with og:title. */}}
+{{- $images := partial "seo/resolve/images.html" (dict
+  "page" $page
+  "generated" (dict "title" $titleDict.title "description" $description)
+) -}}
 
 {{/* Ordered author descriptor slice (see resolve/author.html). */}}
 {{- $authors := partial "seo/resolve/author.html" $page -}}
