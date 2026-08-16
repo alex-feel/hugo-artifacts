@@ -1,0 +1,188 @@
+{{/*
+  og-image/resolve/typography.html -- INTERNAL (resolver tier).
+
+  Purpose: reads and normalizes the nine typography keys -- font, metrics,
+  line_height, safety, width_factor, min_scale, shrink_step, overflow and
+  ellipsis -- out of one ordered run of tiers, so that ONE parse, one set of
+  bounds and one diagnostic serve all three levels a consumer may set them at:
+  the module (through config.html's four tiers), a card template, and a single
+  text slot. Most specific wins, so a slot overrides its card template, which
+  overrides the module level.
+
+  Typography describes HOW text is rendered rather than where one slot sits or
+  what it says, so it belongs to the site rather than to the element: a site
+  names one face and one line height once and every card it publishes draws
+  with them. The keys that describe a particular element -- source, key,
+  value, prefix, suffix, case, size, color, x, y, align, width, max_lines --
+  stay per-slot and are resolved in resolve/slots.html.
+
+  `metrics` travels with `font` deliberately. A width table models ONE face,
+  so a level that sets a face and leaves the table behind would be measured
+  against the previous face's advances, and the only symptom would be lines
+  breaking at the wrong words.
+
+  Every value is validated at the tier that carries it, and a value that fails
+  its check is dropped with one warning naming that level, so the level below
+  it applies. font and metrics are folded to lower case, because the registries
+  they name are looked up folded; ellipsis is taken exactly as written, an
+  explicitly empty value included, because an empty ellipsis is how a site asks
+  for none. A table or a list names none of the three and is reported rather
+  than stringified into "map[]", which no registry defines and which would draw
+  as literal ink at the end of a truncated line.
+
+  Context (dict):
+  - .tiers (slice of maps) The levels to read, LOWEST precedence first.
+  - .origins (slice)       Labels parallel to .tiers, naming each level in a
+                           warning (`card template "post"`).
+  - .defaults (dict)       Optional. The value each key takes when no tier sets
+                           it. Supplied at the module level, where every key
+                           must come out with a value behind it; omitted at the
+                           template and slot levels, where an unset key stays
+                           ABSENT so the level below shows through.
+
+  Return value: dict carrying the keys that resolved -- all nine at the module
+  level, and only the ones actually set at the levels above it. One terminal
+  return.
+*/}}
+
+{{- $tiers := .tiers -}}
+{{- $origins := .origins -}}
+{{- $defaults := .defaults -}}
+{{- if not (reflect.IsMap $defaults) -}}{{- $defaults = dict -}}{{- end -}}
+{{- $out := dict -}}
+
+{{/* ---- String keys. A table or a list is a shape no name can be read out
+     of, so it is reported and that level is skipped. ---- */}}
+{{- range $sp := slice
+    (dict "k" "font" "fold" true)
+    (dict "k" "metrics" "fold" true)
+    (dict "k" "ellipsis" "fold" false) -}}
+  {{- $v := "" -}}
+  {{- $set := false -}}
+  {{- range $i, $tier := $tiers -}}
+    {{- if isset $tier $sp.k -}}
+      {{- $raw := index $tier $sp.k -}}
+      {{- if or (reflect.IsMap $raw) (reflect.IsSlice $raw) -}}
+        {{- partial "og-image/lib/warn.html" (dict
+            "key" (printf "og-image:warn:bad-typography-shape:%s:%v:%s" $sp.k $raw (index $origins $i))
+            "message" (printf "[og-image] Ignoring the %s value set in %s: it expects a single value but was given %q. That level's value is dropped, so the level below it applies." $sp.k (index $origins $i) (printf "%v" $raw))) -}}
+      {{- else if ne $raw nil -}}
+        {{- $s := printf "%v" $raw -}}
+        {{- if $sp.fold -}}{{- $s = lower (trim $s " \t\n\r") -}}{{- end -}}
+        {{- $v = $s -}}
+        {{- $set = true -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if $set -}}
+    {{- $out = merge $out (dict $sp.k $v) -}}
+  {{- else if isset $defaults $sp.k -}}
+    {{- $out = merge $out (dict $sp.k (index $defaults $sp.k)) -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---- Int keys, parsed through the module's guarded decimal reader so a
+     leading zero never turns a value octal and no digit string can overflow
+     into a template error. ---- */}}
+{{- range $sp := slice
+    (dict "k" "shrink_step" "lo" 1 "hi" 100000) -}}
+  {{- $v := 0 -}}
+  {{- $set := false -}}
+  {{- range $i, $tier := $tiers -}}
+    {{- if isset $tier $sp.k -}}
+      {{- $raw := index $tier $sp.k -}}
+      {{- if ne $raw nil -}}
+        {{- $n := partial "og-image/lib/int.html" $raw -}}
+        {{- if and $n.ok (ge $n.value $sp.lo) (le $n.value $sp.hi) -}}
+          {{- $v = $n.value -}}
+          {{- $set = true -}}
+        {{- else -}}
+          {{- partial "og-image/lib/warn.html" (dict
+              "key" (printf "og-image:warn:bad-typography-int:%s:%v:%s" $sp.k $raw (index $origins $i))
+              "message" (printf "[og-image] Ignoring the %s value %q set in %s (expected a whole number from %d to %d). That level's value is dropped, so the level below it applies." $sp.k (printf "%v" $raw) (index $origins $i) $sp.lo $sp.hi)) -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if $set -}}
+    {{- $out = merge $out (dict $sp.k $v) -}}
+  {{- else if isset $defaults $sp.k -}}
+    {{- $out = merge $out (dict $sp.k (index $defaults $sp.k)) -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---- Float keys. The digit count is unbounded in the pattern on purpose --
+     a cap would report a value of three hundred digits as "not a number" when
+     it is one, merely far out of range -- so the cast itself runs inside `try`:
+     Hugo's `float` RAISES on a value too large for a float64 rather than
+     returning one, and an unguarded raise here would stop the consuming site's
+     build. A value that cannot be represented is out of range by definition,
+     so it takes the out-of-range branch and reports the range it missed. ---- */}}
+{{- range $sp := slice
+    (dict "k" "line_height" "hi" 100.0)
+    (dict "k" "safety" "hi" 1.0)
+    (dict "k" "min_scale" "hi" 1.0)
+    (dict "k" "width_factor" "hi" 100.0) -}}
+  {{- $v := 0.0 -}}
+  {{- $set := false -}}
+  {{- range $i, $tier := $tiers -}}
+    {{- if isset $tier $sp.k -}}
+      {{- $rawv := index $tier $sp.k -}}
+      {{- if ne $rawv nil -}}
+        {{- $raw := trim (printf "%v" $rawv) " \t\n\r" -}}
+        {{- if findRE `^\d+(\.\d+)?$` $raw -}}
+          {{- $cast := try (float $raw) -}}
+          {{- $f := 0.0 -}}
+          {{- if not $cast.Err -}}{{- $f = $cast.Value -}}{{- end -}}
+          {{- if and (gt $f 0.0) (le $f $sp.hi) -}}
+            {{- $v = $f -}}
+            {{- $set = true -}}
+          {{- else -}}
+            {{- partial "og-image/lib/warn.html" (dict
+                "key" (printf "og-image:warn:bad-typography-float:%s:%s:%s" $sp.k $raw (index $origins $i))
+                "message" (printf "[og-image] Ignoring the %s value %q set in %s (expected a number greater than 0 and at most %v). That level's value is dropped, so the level below it applies." $sp.k $raw (index $origins $i) $sp.hi)) -}}
+          {{- end -}}
+        {{- else -}}
+          {{- partial "og-image/lib/warn.html" (dict
+              "key" (printf "og-image:warn:bad-typography-float:%s:%s:%s" $sp.k $raw (index $origins $i))
+              "message" (printf "[og-image] Ignoring the %s value %q set in %s (expected a number written as a plain decimal). That level's value is dropped, so the level below it applies." $sp.k $raw (index $origins $i))) -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if $set -}}
+    {{- $out = merge $out (dict $sp.k $v) -}}
+  {{- else if isset $defaults $sp.k -}}
+    {{- $out = merge $out (dict $sp.k (index $defaults $sp.k)) -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---- Enum keys, matched case-insensitively against their allow-list. ---- */}}
+{{- range $sp := slice
+    (dict "k" "overflow" "allowed" (slice "shrink" "truncate")) -}}
+  {{- $v := "" -}}
+  {{- $set := false -}}
+  {{- range $i, $tier := $tiers -}}
+    {{- if isset $tier $sp.k -}}
+      {{- $rawv := index $tier $sp.k -}}
+      {{- if ne $rawv nil -}}
+        {{- $raw := lower (trim (printf "%v" $rawv) " \t\n\r") -}}
+        {{- if in $sp.allowed $raw -}}
+          {{- $v = $raw -}}
+          {{- $set = true -}}
+        {{- else -}}
+          {{- partial "og-image/lib/warn.html" (dict
+              "key" (printf "og-image:warn:bad-typography-enum:%s:%s:%s" $sp.k $raw (index $origins $i))
+              "message" (printf "[og-image] Unknown %s value %q set in %s (allowed: %s). That level's value is dropped, so the level below it applies." $sp.k $raw (index $origins $i) (delimit $sp.allowed ", "))) -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if $set -}}
+    {{- $out = merge $out (dict $sp.k $v) -}}
+  {{- else if isset $defaults $sp.k -}}
+    {{- $out = merge $out (dict $sp.k (index $defaults $sp.k)) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $out -}}

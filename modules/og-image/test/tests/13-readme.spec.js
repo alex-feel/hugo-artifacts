@@ -39,6 +39,12 @@ const SHIPPED_DEFAULTS = [
   ['quality', '75', '`75`'],
   ['anchor', "'Center'", '`Center`'],
   ['default_template', "''", '--'],
+  // The one typography key that cannot be left out, because the module places
+  // every line itself and there is no such thing as a line without a pitch.
+  // It ships as a NUMBER rather than as a template fallback so a site can see
+  // it and move it, and 1.4 is the figure Hugo's own images.Text
+  // documentation names rather than one this module chose.
+  ['line_height', '1.4', '`1.4`'],
 ];
 
 // The documentation sections the locks below are scoped to. A key or a token
@@ -52,6 +58,16 @@ function section(heading) {
   assert.notEqual(start, -1, `the README has a "${heading}" section`);
   const rest = readme.slice(start + 1);
   const end = rest.indexOf('\n## ', 1);
+  return end === -1 ? rest : rest.slice(0, end);
+}
+
+// The same, one heading level down, for a reference table that documents a
+// class of keys inside a section rather than a section of its own.
+function subsection(heading) {
+  const start = readme.indexOf(`\n### ${heading}\n`);
+  assert.notEqual(start, -1, `the README has a "${heading}" subsection`);
+  const rest = readme.slice(start + 1);
+  const end = rest.search(/\n##+ /);
   return end === -1 ? rest : rest.slice(0, end);
 }
 
@@ -82,6 +98,9 @@ const MODULE_KEYS = [
   'kinds',
 ];
 
+// Everything that describes THIS element rather than the site's type: where
+// the slot sits, what it says, and what color it says it in. These stay
+// per-slot, and resolve/slots.html is where they are read.
 const SLOT_KEYS = [
   'source',
   'key',
@@ -89,8 +108,6 @@ const SLOT_KEYS = [
   'prefix',
   'suffix',
   'case',
-  'font',
-  'metrics',
   'size',
   'color',
   'x',
@@ -98,13 +115,24 @@ const SLOT_KEYS = [
   'align',
   'width',
   'max_lines',
-  'ellipsis',
-  'overflow',
-  'min_scale',
-  'shrink_step',
+];
+
+// Everything that describes HOW text is rendered. Each of these is settable at
+// THREE levels -- a text slot, that slot's card template, and the module level
+// -- so one parse, one set of bounds and one diagnostic serve all three, which
+// is why resolve/typography.html owns them and resolve/slots.html no longer
+// does. A key that drifted back into the slot resolver would be a key a card
+// template and a site could no longer set.
+const TYPOGRAPHY_KEYS = [
+  'font',
+  'metrics',
+  'line_height',
   'safety',
   'width_factor',
-  'line_height',
+  'min_scale',
+  'shrink_step',
+  'overflow',
+  'ellipsis',
 ];
 
 const OVERLAY_KEYS = ['source', 'src', 'key', 'match', 'width', 'opacity', 'anchor', 'x', 'y'];
@@ -132,8 +160,11 @@ test('the shipped defaults file states exactly the mechanical values, and no des
   }
   // A default color, size or position would be a design decision, and the
   // module ships none: a slot key the site did not set is left out of the
-  // option dict entirely so Hugo's own default applies.
-  for (const key of ['color', 'size', 'x', 'y', 'font', 'line_height']) {
+  // option dict entirely so Hugo's own default applies. `font` is on this
+  // list rather than beside line_height for the same reason: the module ships
+  // no fonts, so an unset face is Hugo's own built-in one, which is Hugo's
+  // decision rather than this module's.
+  for (const key of ['color', 'size', 'x', 'y', 'font']) {
     assert.ok(
       !new RegExp(`^${key} =`, 'm').test(defaults),
       `data/og-image/defaults.toml must not ship a ${key}`,
@@ -157,9 +188,23 @@ test('every option the module reads is read by the template that owns it', () =>
   for (const key of MODULE_KEYS) {
     assert.ok(new RegExp(`"${key}"`).test(config), `config.html reads ogcard.${key}`);
   }
+  // The nine are resolved for the whole site HERE, through the same four
+  // tiers as everything above, and published for the two levels over the
+  // module to override. A module level that stopped resolving them would
+  // leave a site with no way to name its type once.
+  assert.ok(/"typography"/.test(config), 'config.html resolves the module level typography');
   const slots = partial('resolve/slots.html') + partial('resolve/source.html');
   for (const key of SLOT_KEYS) {
     assert.ok(new RegExp(`"${key}"`).test(slots), `the slot resolver reads ${key}`);
+  }
+  // The nine that are NOT slot keys alone. They are read out of one ordered
+  // run of tiers, so the template that owns them is the typography resolver
+  // and no other: a key parsed anywhere else would be a key whose bounds and
+  // whose diagnostic differ between the level a site wrote it at and the
+  // level below.
+  const typography = partial('resolve/typography.html');
+  for (const key of TYPOGRAPHY_KEYS) {
+    assert.ok(new RegExp(`"${key}"`).test(typography), `the typography resolver reads ${key}`);
   }
   const overlays = partial('resolve/overlays.html');
   for (const key of OVERLAY_KEYS) {
@@ -221,10 +266,34 @@ test('the README documents every option a consumer can set', () => {
     `the Parameters section is still a reference: ${parameters.length} bytes`,
   );
   const missing = [];
-  for (const key of [...new Set([...MODULE_KEYS, ...SLOT_KEYS, ...OVERLAY_KEYS])]) {
+  for (const key of [
+    ...new Set([...MODULE_KEYS, ...SLOT_KEYS, ...TYPOGRAPHY_KEYS, ...OVERLAY_KEYS]),
+  ]) {
     if (!parameters.includes(`\`${key}\``)) missing.push(key);
   }
   assert.deepEqual(missing, [], 'configuration keys the Parameters section does not name');
+});
+
+test('the README documents typography as three levels rather than as slot keys', () => {
+  // The nine are the only keys a consumer can set in three different places,
+  // and a reference that documented them as slot keys would leave a site
+  // repeating a face on every slot of every template -- which is exactly the
+  // shape this cascade replaced. The section is scoped, so naming the levels
+  // in prose elsewhere does not satisfy it.
+  const typography = subsection('Typography');
+  assert.ok(
+    typography.length > 1000,
+    `the Typography section is a reference: ${typography.length}`,
+  );
+  const missing = TYPOGRAPHY_KEYS.filter((key) => !typography.includes(`\`${key}\``));
+  assert.deepEqual(missing, [], 'typography keys the Typography section does not name');
+  for (const level of ['text slot', 'card template', '`[params.ogcard]`']) {
+    assert.ok(typography.includes(level), `the Typography section names the ${level} level`);
+  }
+  // And the other half of the split: the keys that stay per-slot because they
+  // describe where one element sits rather than the site's type.
+  const perSlot = SLOT_KEYS.filter((key) => !typography.includes(`\`${key}\``));
+  assert.deepEqual(perSlot, [], 'per-slot keys the Typography section does not tell apart');
 });
 
 test('the README documents the whole text source vocabulary', () => {

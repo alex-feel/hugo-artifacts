@@ -38,8 +38,10 @@
                  exists at this tier only.
 
   Return value: dict with enable, width, height, format, quality, anchor,
-  template, default_template, variant, templates, fonts, sections, kinds, and
-  where (the diagnostics origin: the page path).
+  template, default_template, variant, templates, fonts, sections, kinds,
+  typography (the nine module-level type keys, resolved by
+  og-image/resolve/typography.html and overridable per card template and per
+  text slot), and where (the diagnostics origin: the page path).
 
   One terminal return.
 */}}
@@ -222,6 +224,34 @@
   {{- $variant = trim (printf "%v" (index $callp "variant")) " \t\n\r" -}}
 {{- end -}}
 {{- $opts = merge $opts (dict "variant" $variant) -}}
+
+{{/* ---- Typography: the nine keys that describe HOW text is rendered rather
+     than where one slot sits, resolved ONCE here for the whole site. A card
+     template overrides what it sets, and a text slot overrides that again --
+     the same normalization and the same diagnostics at all three levels,
+     which is why resolve/typography.html owns the parsing for every one of
+     them. Setting a face and a line height here is how a site says it once
+     for every card it publishes.
+
+     The values below are the module's fallbacks for a key no tier carries,
+     and they duplicate the shipped data file the way the int and enum
+     fallbacks above do: a site that replaces data/og-image/defaults.* still
+     gets a card. `font` is deliberately absent from that data file and empty
+     here, because the module ships no fonts and an unset face means Hugo's
+     built-in one, which is Hugo's decision rather than this module's. ---- */}}
+{{- $opts = merge $opts (dict "typography" (partial "og-image/resolve/typography.html" (dict
+    "tiers" $tiers
+    "origins" $tierNames
+    "defaults" (dict
+      "font" ""
+      "metrics" "default"
+      "ellipsis" "…"
+      "overflow" "shrink"
+      "shrink_step" 4
+      "line_height" 1.4
+      "safety" 0.98
+      "min_scale" 0.7
+      "width_factor" 1.0)))) -}}
 
 {{/* ---- Tables: merged per NAME across tiers ---- */}}
 {{- range $name := slice "templates" "fonts" "sections" "kinds" -}}

@@ -2,7 +2,7 @@
   "name": "og-image-module-tests",
   "private": true,
   "type": "module",
-  "description": "Build-output assertion suite for the og-image Hugo module, run against the five hugo builds of ./fixture -- the baseline, configured, degraded, multilingual and subpath environments. The module's output is a raster, so the specs decode the published PNG and JPEG bytes and assert what was drawn: dimensions from the file header, which background was composited from a corner pixel, how many lines of text were laid down from contiguous ink bands, what those lines say from a calibrated monospace advance, and where the overlay landed from its exact bounding box. It carries no dependencies -- node --test, node:assert and node:zlib are enough -- so it needs no npm install of its own.",
+  "description": "Build-output assertion suite for the og-image Hugo module, run against the seven hugo builds of ./fixture -- the baseline, configured, degraded, multilingual, subpath, routing and typography environments. The module's output is a raster, so the specs decode the published PNG and JPEG bytes and assert what was drawn: dimensions from the file header, which background was composited from a corner pixel, how many lines of text were laid down from contiguous ink bands, the line height and the fitted size from the pitch between those bands, which face drew a line from the extent of its ink, what those lines say from a calibrated monospace advance, and where the overlay landed from its exact bounding box. It carries no dependencies -- node --test, node:assert and node:zlib are enough -- so it needs no npm install of its own.",
   "scripts": {
     "test": "node --test \"tests/*.spec.js\""
   }

@@ -1,0 +1,251 @@
+# The only build whose MODULE level sets typography, which is what makes the
+# three-level cascade measurable at all.
+#
+# font, metrics, line_height, safety, width_factor, min_scale, shrink_step,
+# overflow and ellipsis resolve as text slot > card template > module level.
+# In `configured` every slot names its own face, so nothing there can tell a
+# value a slot supplied from one the site supplied; here the module level
+# names a face, a width table and a line height that NO slot repeats, so a
+# slot drawing in them proves they travelled.
+#
+# Everything is arithmetic, and every number below is chosen so that one
+# resolution is possible and no other:
+#
+#   pitch          = round(size * line_height), so 1.9, 1.1 and 1.5 at size 64
+#                    are 122, 70 and 96 pixels apart -- and the shipped 1.4
+#                    would be 90, which is none of them.
+#   advance        = the face's own. Go Mono advances every glyph by 1229/2048
+#                    of the em (38.4 pixels at size 64) and Source Sans 3 does
+#                    not, so which face drew a line is its ink extent divided
+#                    by the glyph count.
+#   line breaking  = the width TABLE, never the face. A budget of
+#                    floor(width * 1000 * 0.98 / size) against the 600-per-mille
+#                    `mono` table and the 1200-per-mille `wide` table in
+#                    data/og-image/metrics-local.toml puts two words on a line
+#                    in one and one word on a line in the other, so the metrics
+#                    key that travels with a font is a BAND COUNT.
+#
+# Content is shared across every build, so nothing here lives in front matter:
+# each probe is a card template of its own, and existing sections are routed
+# to them. The four templates the shared content set names by name are defined
+# at the bottom, so the only diagnostics this build carries are the two it
+# exists to produce.
+
+[ogcard]
+  width = 1200
+  height = 630
+  format = 'png'
+
+  # The site's type, said ONCE. No slot below repeats any of the three.
+  font = 'mono'
+  metrics = 'mono'
+  line_height = 1.9
+
+  [ogcard.sections]
+    twins = 'tmodule'
+    docs = 'tmoduletwo'
+    aligned = 'ttemplate'
+    fitting = 'tslot'
+    sources = 'tmetrics'
+    overlays = 'tbadslot'
+    oversize = 'tbadtpl'
+
+  [ogcard.fonts]
+    mono = 'fonts/Go-Mono.ttf'
+    sans = 'fonts/SourceSans3-Regular.otf'
+
+  # ---- tmodule: two slots naming NONE of the nine keys, in a template that
+  #      names none either. Everything they draw with came from the module
+  #      level. The first box takes one word a line under the mono table and
+  #      the second takes two, so the same three words are three lines and
+  #      then two -- which is the module-level width table reaching a slot.
+  [ogcard.templates.tmodule]
+    background = 'og/post-bg.png'
+
+    [[ogcard.templates.tmodule.text]]
+      source = 'literal'
+      value = 'MMMM MMMM MMMM'
+      size = 64
+      x = 72
+      y = 40
+      width = 300
+      max_lines = 0
+
+    [[ogcard.templates.tmodule.text]]
+      source = 'literal'
+      value = 'MMMM MMMM MMMM'
+      size = 64
+      x = 72
+      y = 380
+      width = 450
+      max_lines = 0
+
+  # ---- tmoduletwo: the same claim in a SECOND template at a second size, so
+  #      "the module level reached a slot" cannot be one template's accident.
+  #      Pitch is round(48 * 1.9) = 91 here rather than 122.
+  [ogcard.templates.tmoduletwo]
+    background = 'og/home-bg.png'
+
+    [[ogcard.templates.tmoduletwo.text]]
+      source = 'literal'
+      value = 'MMM MMM MMM'
+      size = 48
+      x = 72
+      y = 40
+      width = 150
+      max_lines = 0
+
+  # ---- ttemplate: a card template naming its own face and its own line
+  #      height, and a slot naming neither. Both differ from the module
+  #      level's, so the card says which level won twice over.
+  [ogcard.templates.ttemplate]
+    background = 'og/post-bg.png'
+    font = 'sans'
+    line_height = 1.1
+
+    [[ogcard.templates.ttemplate.text]]
+      source = 'literal'
+      value = 'MMMM MMMM MMMM'
+      size = 64
+      x = 72
+      y = 40
+      width = 300
+      max_lines = 0
+
+  # ---- tslot: the same card template, and one slot that overrides it. The
+  #      two slots sit on one card, so the level a value came from is the
+  #      difference between two boxes of the same picture rather than a
+  #      difference between two builds.
+  [ogcard.templates.tslot]
+    background = 'og/post-bg.png'
+    font = 'sans'
+    line_height = 1.1
+
+    [[ogcard.templates.tslot.text]]
+      source = 'literal'
+      value = 'MMMM MMMM MMMM'
+      size = 64
+      x = 72
+      y = 40
+      width = 300
+      max_lines = 0
+
+    [[ogcard.templates.tslot.text]]
+      source = 'literal'
+      value = 'MMMM MMMM MMMM'
+      font = 'mono'
+      line_height = 1.5
+      size = 64
+      x = 72
+      y = 300
+      width = 300
+      max_lines = 0
+
+  # ---- tmetrics: the width table, at the two levels above the module. Both
+  #      slots draw in the module's mono face and the same 450-pixel box, so
+  #      the ONLY thing that can change how many lines they take is the table
+  #      each of them was measured against -- which is the mistake this
+  #      cascade exists to prevent, made visible: a site that moves its face
+  #      and leaves the table behind breaks its lines in the wrong places and
+  #      nothing else says so.
+  [ogcard.templates.tmetrics]
+    background = 'og/post-bg.png'
+    metrics = 'wide'
+
+    [[ogcard.templates.tmetrics.text]]
+      source = 'literal'
+      value = 'MMMM MMMM MMMM'
+      size = 64
+      x = 72
+      y = 40
+      width = 450
+      max_lines = 0
+
+    [[ogcard.templates.tmetrics.text]]
+      source = 'literal'
+      value = 'MMMM MMMM MMMM'
+      metrics = 'mono'
+      size = 64
+      x = 72
+      y = 380
+      width = 450
+      max_lines = 0
+
+  # ---- tbadslot: a value the slot level cannot use. It is dropped from THAT
+  #      level alone, so the card template's 1.1 applies -- not the module's
+  #      1.9, and not the shipped 1.4.
+  [ogcard.templates.tbadslot]
+    background = 'og/post-bg.png'
+    line_height = 1.1
+
+    [[ogcard.templates.tbadslot.text]]
+      source = 'literal'
+      value = 'MMMM MMMM MMMM'
+      line_height = 'nope'
+      size = 64
+      x = 72
+      y = 40
+      width = 300
+      max_lines = 0
+
+  # ---- tbadtpl: the same, one level up. The card template's value is
+  #      dropped, so the module's 1.9 applies.
+  [ogcard.templates.tbadtpl]
+    background = 'og/post-bg.png'
+    line_height = 'wobbly'
+
+    [[ogcard.templates.tbadtpl.text]]
+      source = 'literal'
+      value = 'MMMM MMMM MMMM'
+      size = 64
+      x = 72
+      y = 40
+      width = 300
+      max_lines = 0
+
+  # ---- The templates the shared content set names from front matter and from
+  #      the call site. They are defined so this build's warning list stays
+  #      exactly the two faults above.
+  [ogcard.templates.plain]
+    background = 'og/post-bg.png'
+
+    [[ogcard.templates.plain.text]]
+      source = 'title'
+      size = 64
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+
+  [ogcard.templates.otf]
+    background = 'og/post-bg.png'
+
+    [[ogcard.templates.otf.text]]
+      source = 'title'
+      size = 64
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+
+  [ogcard.templates.wrongsize]
+    background = 'og/wrong-size.png'
+
+    [[ogcard.templates.wrongsize.text]]
+      source = 'title'
+      size = 64
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+
+  [ogcard.templates.home]
+    background = 'og/home-bg.png'
+
+    [[ogcard.templates.home.text]]
+      source = 'title'
+      size = 64
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3

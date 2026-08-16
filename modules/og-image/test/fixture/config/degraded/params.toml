@@ -20,6 +20,13 @@
   quality = 400
   anchor = 'middle'
 
+  # A typography key the module level cannot use, and the only build that can
+  # carry one: a typography value falls back to the LEVEL BELOW the one that
+  # wrote it, and below the module level there is nothing but the shipped
+  # data file. The `typography` environment holds the two faults above it,
+  # where the level below is a card template and the module level itself.
+  line_height = 'wobbly'
+
   [ogcard.sections]
     deg-slots = 'badslots'
     deg-badfont = 'badfont'
@@ -307,6 +314,24 @@
       y = 120
       width = 1040
       max_lines = 2
+
+    # The pixel side of the rejected module-level line height above. Neither
+    # this slot nor its card template names one, so the pitch between these
+    # two lines is whatever survived at the module level -- and what survived
+    # is the shipped 1.4, since the value this build wrote there was dropped.
+    # The box takes one word a line under the monospace table, so the two
+    # lines are the wrap rather than a coincidence.
+    [[ogcard.templates.badoverlay.text]]
+      source = 'literal'
+      value = 'MMMM MMMM'
+      font = 'mono'
+      metrics = 'mono'
+      color = '#ffd400'
+      size = 64
+      x = 72
+      y = 300
+      width = 300
+      max_lines = 0
 
     [[ogcard.templates.badoverlay.overlay]]
       source = 'asset'
