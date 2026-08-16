@@ -12,8 +12,9 @@ import assert from 'node:assert/strict';
 import {configuredDir, records, cardBytes, cardExists, moduleWarnings} from './helpers.js';
 import {sniff} from './lib/raster.js';
 
-const CARD_BEARING_PAGES = 27;
-const CARDS_PUBLISHED = 28;
+const CARD_BEARING_PAGES = 44;
+const CARDS_PUBLISHED = 45;
+const MEDIA_TYPES = {png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp'};
 
 test('every card the module returned is a real file of the configured size', () => {
   const all = records(configuredDir);
@@ -31,7 +32,7 @@ test('every card the module returned is a real file of the configured size', () 
       assert.equal(card.height, head.height, `${path}: the Resource's height matches the raster`);
       assert.equal(
         card.mediaType,
-        head.format === 'jpeg' ? 'image/jpeg' : 'image/png',
+        MEDIA_TYPES[head.format],
         `${path}: media type agrees with the encoded bytes`,
       );
     }

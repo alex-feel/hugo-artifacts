@@ -14,8 +14,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync, readdirSync} from 'node:fs';
-import {join} from 'node:path';
-import {baselineDir, records, moduleWarnings} from './helpers.js';
+import {join, relative} from 'node:path';
+import {baselineDir, fixtureDir, records, moduleWarnings} from './helpers.js';
 
 const strip = (line) => line.replace(/^\[og-image\] /, '');
 
@@ -27,15 +27,36 @@ test('no page anywhere received a card', () => {
   }
 });
 
+// The images the fixture COMMITS inside a page bundle. Hugo publishes a page
+// resource whatever this module does, so they are the one thing a tree with no
+// cards legitimately contains -- enumerated from the content directory rather
+// than listed by hand, so a bundle added later cannot quietly widen the
+// allowance.
+function bundledImages() {
+  const root = join(fixtureDir, 'content');
+  const out = new Set();
+  for (const entry of readdirSync(root, {recursive: true, withFileTypes: true})) {
+    if (!entry.isFile()) continue;
+    if (!/\.(png|jpe?g|webp|gif)$/i.test(entry.name)) continue;
+    out.add(relative(root, join(entry.parentPath, entry.name)).split('\\').join('/'));
+  }
+  return out;
+}
+
 test('and no card was published either, composed-then-discarded included', () => {
   // Reading the tree rather than the records: a card composed and dropped on
   // the way back still lands in public/, still costs the build, and would not
   // show up in a page's record at all.
   assert.ok(!existsSync(join(baselineDir, 'og')), 'no derivative directory was created');
+  const bundled = bundledImages();
+  assert.ok(bundled.size > 0, 'the fixture really does commit a page-bundle image');
   const stray = [];
   for (const entry of readdirSync(baselineDir, {recursive: true, withFileTypes: true})) {
     if (!entry.isFile()) continue;
-    if (/\.(png|jpe?g|webp|gif)$/i.test(entry.name)) stray.push(join(entry.parentPath, entry.name));
+    if (!/\.(png|jpe?g|webp|gif)$/i.test(entry.name)) continue;
+    const rel = relative(baselineDir, join(entry.parentPath, entry.name)).split('\\').join('/');
+    if (bundled.has(rel)) continue;
+    stray.push(rel);
   }
   assert.deepEqual(stray, [], 'image files in a tree that configured no cards');
 });

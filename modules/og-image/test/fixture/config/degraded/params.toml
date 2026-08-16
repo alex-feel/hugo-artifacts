@@ -36,6 +36,9 @@
 
   [ogcard.kinds]
     taxonomy = 'ghostkind'
+    # A background path the operating system refuses. Routed by kind so the
+    # fault needs no section of its own.
+    term = 'oddbg'
 
   [ogcard.fonts]
     mono = 'fonts/Go-Mono.ttf'
@@ -46,6 +49,10 @@
     # Correct extension, 32 bytes of text inside: the whole filter chain fails
     # at the images.Filter call, which is what the try net is for.
     broken = 'fonts/broken.ttf'
+    # The right extension on a path the operating system refuses to look up.
+    # resources.Get RAISES on it instead of returning nil, so it is the same
+    # mistake as a missing file only if the raise is caught.
+    odd = 'fonts/*.ttf'
 
   # ---- Slot-level faults, all on one card so the warnings must be told apart
   #      by slot index, key and value rather than by page.
@@ -175,6 +182,71 @@
       y = 600
       width = 500
 
+    # A registered font whose path the operating system refuses to look up.
+    [[ogcard.templates.badslots.text]]
+      source = 'literal'
+      value = 'font path the OS refuses'
+      font = 'odd'
+      size = 24
+      x = 600
+      y = 140
+
+    # A float knob whose digit string is a number no float64 can hold. The
+    # shape pattern accepts it and the cast raises, so only catching the cast
+    # keeps this from stopping a consuming site's build.
+    [[ogcard.templates.badslots.text]]
+      source = 'literal'
+      value = 'width_factor out of range'
+      font = 'mono'
+      size = 24
+      x = 600
+      y = 200
+      width = 500
+      width_factor = '9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999'
+
+    # Four width tables of the wrong shape, one per level a consumer can get
+    # wrong in data/og-image/metrics-local.toml. Each costs coarser line
+    # breaking and nothing else.
+    [[ogcard.templates.badslots.text]]
+      source = 'literal'
+      value = 'metrics table not a table'
+      font = 'mono'
+      metrics = 'scalartable'
+      size = 24
+      x = 600
+      y = 260
+      width = 500
+
+    [[ogcard.templates.badslots.text]]
+      source = 'literal'
+      value = 'metrics classes not a list'
+      font = 'mono'
+      metrics = 'badclasses'
+      size = 24
+      x = 600
+      y = 320
+      width = 500
+
+    [[ogcard.templates.badslots.text]]
+      source = 'literal'
+      value = 'metrics glyphs not a table'
+      font = 'mono'
+      metrics = 'badglyphs'
+      size = 24
+      x = 600
+      y = 380
+      width = 500
+
+    [[ogcard.templates.badslots.text]]
+      source = 'literal'
+      value = 'metrics class entry incomplete'
+      font = 'mono'
+      metrics = 'badclassentry'
+      size = 24
+      x = 600
+      y = 440
+      width = 500
+
   # ---- A font that passes the extension guard and carries no font inside.
   #      The whole filter chain fails, the try net catches it, and the card is
   #      redrawn in Hugo's built-in face.
@@ -272,6 +344,37 @@
       x = 20
       y = 20
 
+    # A src the operating system refuses to look up. resources.Get RAISES on
+    # it rather than returning nil, and the site that wrote it meant the same
+    # thing it means by a path that names no file.
+    [[ogcard.templates.badoverlay.overlay]]
+      source = 'asset'
+      src = 'og/*.png'
+
+    # A pattern that is not a glob Hugo can compile. It names no image on any
+    # page, so it is the card template's mistake rather than the page's.
+    [[ogcard.templates.badoverlay.overlay]]
+      source = 'resource'
+      match = 'cover-[1.png'
+
+    # An entry that reads from a page parameter and names none.
+    [[ogcard.templates.badoverlay.overlay]]
+      source = 'param'
+
+    # An entry that reads from the page's own resources and names no pattern.
+    [[ogcard.templates.badoverlay.overlay]]
+      source = 'resource'
+
+    # An opacity whose digit string is a number no float64 can hold: the same
+    # raise as the float knob above, on the overlay side.
+    [[ogcard.templates.badoverlay.overlay]]
+      source = 'asset'
+      src = 'og/badge.png'
+      opacity = '9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999'
+      anchor = 'bottomright'
+      x = 20
+      y = 20
+
   # ---- Templates the SHARED content set names from front matter and from the
   #      call site. They are defined here so that the only front-matter-origin
   #      routing fault in this build is the deliberate one: blog/otf.md names
@@ -330,3 +433,17 @@
   [ogcard.templates.badwhole]
     background = 'og/post-bg.png'
     text = 'oops'
+
+  # ---- A background path the operating system refuses to look up at all.
+  #      resources.Get RAISES on such a path rather than returning nil, so
+  #      without the catch this one entry would take a consuming site's whole
+  #      build down instead of costing one card. Routed by the term kind so it
+  #      needs no section of its own.
+  [ogcard.templates.oddbg]
+    background = 'og/*.png'
+
+    [[ogcard.templates.oddbg.text]]
+      source = 'title'
+      size = 48
+      x = 72
+      y = 120

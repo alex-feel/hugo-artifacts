@@ -22,6 +22,12 @@
   lower-cased throughout. Glyph width tables therefore cannot live in params
   at all (the folding would collapse "W" into "w"); they live in data files.
 
+  EVERY tier is a consumer surface, the data tier included: a site may ship its
+  own data/og-image/defaults.* and Hugo merges it into the same key. A tier
+  whose shape is wrong is therefore reported and replaced with an empty table
+  rather than indexed, because `index` on a scalar or a list raises and would
+  stop the consuming site's build.
+
   Every tier is read through $page.Site.Params, never the global `site`: the
   global names the RENDERING language, and a card composed for a translation
   must read that translation's configuration.
@@ -42,13 +48,21 @@
 {{- $lang := $page.Language.Lang -}}
 {{- $where := printf "%v" $page.Path -}}
 
-{{- $data := index hugo.Data "og-image" | default dict -}}
-{{- $defaults := index $data "defaults" | default dict -}}
-{{- if not $defaults -}}
+{{/* Tier 1: the data files, which a site can override with its own
+     data/og-image/defaults.* of any shape at all. */}}
+{{- $data := index hugo.Data "og-image" -}}
+{{- if not (reflect.IsMap $data) -}}{{- $data = dict -}}{{- end -}}
+{{- $defaults := index $data "defaults" -}}
+{{- if and (ne $defaults nil) (not (reflect.IsMap $defaults)) -}}
+  {{- partial "og-image/lib/warn.html" (dict
+      "key" "og-image:warn:nonmap-config:defaults"
+      "message" (printf "[og-image] Ignoring data/og-image/defaults.*: expected a table of keys, got %q. The shipped defaults do not apply, so only explicitly configured values do." (printf "%v" $defaults))) -}}
+{{- else if not $defaults -}}
   {{- partial "og-image/lib/warn.html" (dict
       "key" "og-image:warn:missing-defaults"
       "message" "[og-image] data/og-image/defaults.toml was not found; the module is not mounted correctly, so only explicitly configured values apply.") -}}
 {{- end -}}
+{{- if not (reflect.IsMap $defaults) -}}{{- $defaults = dict -}}{{- end -}}
 
 {{/* Tier 2: site params, read per language. */}}
 {{- $sitep := $page.Site.Params.ogcard -}}
@@ -144,10 +158,17 @@
   {{- $opts = merge $opts (dict $sp.k $v) -}}
 {{- end -}}
 
-{{/* ---- Enum keys ---- */}}
+{{/* ---- Enum keys. `canonical` says whether the ACCEPTED value is stored
+     lower-cased. format is: the composer decides whether to append the quality
+     token by testing the stored value against a lower-case list, so a site
+     writing "JPEG" would otherwise pass a case-insensitive check here and then
+     silently lose its quality setting downstream. anchor is not: it is only
+     ever handed to Hugo's Fill spec, which reads it case-insensitively, and
+     its shipped spelling is what the data file and the documentation name.
+     ---- */}}
 {{- range $sp := slice
-    (dict "k" "format" "allowed" (slice "png" "jpeg" "webp") "fallback" "png")
-    (dict "k" "anchor" "allowed" (slice "topleft" "top" "topright" "left" "center" "right" "bottomleft" "bottom" "bottomright" "smart") "fallback" "Center") -}}
+    (dict "k" "format" "allowed" (slice "png" "jpeg" "webp") "fallback" "png" "canonical" true)
+    (dict "k" "anchor" "allowed" (slice "topleft" "top" "topright" "left" "center" "right" "bottomleft" "bottom" "bottomright" "smart") "fallback" "Center" "canonical" false) -}}
   {{- $v := printf "%v" (index $defaults $sp.k | default $sp.fallback) -}}
   {{- $origin := index $tierNames 0 -}}
   {{- range $i, $tier := $tiers -}}
@@ -162,21 +183,30 @@
         "key" (printf "og-image:warn:unknown-enum:%s:%s:%s" $sp.k $v $origin)
         "message" (printf "[og-image] Unknown ogcard.%s value %q set in %s; using %q instead (allowed: %s)." $sp.k $v $origin $sp.fallback (delimit $sp.allowed ", "))) -}}
     {{- $v = $sp.fallback -}}
+  {{- else if $sp.canonical -}}
+    {{- $v = lower $v -}}
   {{- end -}}
   {{- $opts = merge $opts (dict $sp.k $v) -}}
 {{- end -}}
 
-{{/* ---- String keys ---- */}}
+{{/* ---- String keys. A table, list or boolean names no template, and a key
+     written with no value at all names none either: stringifying any of them
+     would hand the router the literal name "map[]", "false" or "<nil>", which
+     no [templates] table can define and which stops the routing walk at a name
+     that cannot exist. Each is ignored instead, so the tier below it stands
+     and the router still tries the section, kind and default_template
+     candidates. Only the shapes an author plausibly meant as a name speak; an
+     empty key is the same statement as an empty string and stays silent. ---- */}}
 {{- range $k := slice "template" "default_template" -}}
   {{- $v := printf "%v" (index $defaults $k | default "") -}}
   {{- range $tier := $tiers -}}
     {{- if isset $tier $k -}}
       {{- $tv := index $tier $k -}}
-      {{- if or (reflect.IsMap $tv) (reflect.IsSlice $tv) -}}
+      {{- if or (reflect.IsMap $tv) (reflect.IsSlice $tv) (eq (printf "%T" $tv) "bool") -}}
         {{- partial "og-image/lib/warn.html" (dict
             "key" (printf "og-image:warn:template-shape:ogcard.%s:%v" $k $tv)
-            "message" (printf "[og-image] Ignoring ogcard.%s: it expects a template name written as a single value but was given %q. No card is generated for the pages it covers." $k (printf "%v" $tv))) -}}
-      {{- else -}}
+            "message" (printf "[og-image] Ignoring ogcard.%s: it expects a template name written as a single value but was given %q. That tier's value is dropped, so a lower-priority tier's value stands and the card may be drawn from a different template." $k (printf "%v" $tv))) -}}
+      {{- else if ne $tv nil -}}
         {{- $v = printf "%v" $tv -}}
       {{- end -}}
     {{- end -}}
@@ -209,14 +239,37 @@
   {{- $opts = merge $opts (dict $name $m) -}}
 {{- end -}}
 
-{{/* A site that imported the module and configured nothing has no other
-     signal that it will never get a card: every per-page decline below is
-     silent by contract. The language is part of the key so a multilingual
-     site hears about each language that is missing the table. */}}
-{{- if and (not $siteSet) (not $pageSet) -}}
-  {{- partial "og-image/lib/warn.html" (dict
-      "key" (printf "og-image:warn:unconfigured:%s" $lang)
-      "message" (printf "[og-image] No params.ogcard configuration was found for language %q, so no page can be carded. Define at least one card template ([params.ogcard.templates.<name>] with a background) and route pages to it." $lang)) -}}
+{{/* A site that imported the module and can never draw anything has no other
+     signal: every per-page decline below is silent by contract. The module
+     ships no card template, so the question is whether ANY template table
+     exists -- not whether this one page carries configuration, which would
+     accuse a site that configures its cards entirely in front matter of being
+     unconfigured on every page that does not. The merged table answers for
+     this page and one pass over the language's pages answers for the rest,
+     memoized per language because the answer is a property of the build. Two
+     pages reaching that memo at once is harmless, unlike the check-then-set a
+     warning key needs: the scan is a pure function of the content, so a second
+     one computes the same answer, and the message it leads to is deduplicated
+     by lib/warn.html either way. The language is part of the key so a
+     multilingual site hears about each language that is missing the table. */}}
+{{- if not (index $opts "templates") -}}
+  {{- $seenKey := printf "og-image:templates-defined:%s" $lang -}}
+  {{- $seen := hugo.Store.Get $seenKey -}}
+  {{- if not $seen -}}
+    {{- $seen = "none" -}}
+    {{- range $p := $page.Site.Pages -}}
+      {{- $pm := $p.Params.ogcard -}}
+      {{- if reflect.IsMap $pm -}}
+        {{- if index $pm "templates" -}}{{- $seen = "some" -}}{{- end -}}
+      {{- end -}}
+    {{- end -}}
+    {{- hugo.Store.Set $seenKey $seen -}}
+  {{- end -}}
+  {{- if eq $seen "none" -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:unconfigured:%s" $lang)
+        "message" (printf "[og-image] No params.ogcard configuration was found for language %q that defines a card template, and no page's front matter defines one either, so no page can be carded. Define at least one card template ([params.ogcard.templates.<name>] with a background) and route pages to it." $lang)) -}}
+  {{- end -}}
 {{- end -}}
 
 {{- return $opts -}}

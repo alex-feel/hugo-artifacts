@@ -25,16 +25,46 @@ const defaults = read('data/og-image/defaults.toml');
 const metrics = read('data/og-image/metrics.toml');
 const partial = (rel) => read(join('layouts/_partials/og-image', rel));
 
-// The shipped mechanical defaults, as data/og-image/defaults.toml states them.
+// The shipped mechanical defaults: the key, the value data/og-image/defaults.toml
+// states, and the way the README's parameter table has to state the same value
+// in its Default column. The two are written separately because one of them
+// ships as the empty string, which no substring search can look for -- a
+// `readme.includes('')` is true of every document ever written, including one
+// with the whole parameter reference deleted.
 const SHIPPED_DEFAULTS = [
-  ['enable', 'true'],
-  ['width', '1200'],
-  ['height', '630'],
-  ['format', "'png'"],
-  ['quality', '75'],
-  ['anchor', "'Center'"],
-  ['default_template', "''"],
+  ['enable', 'true', '`true`'],
+  ['width', '1200', '`1200`'],
+  ['height', '630', '`630`'],
+  ['format', "'png'", '`png`'],
+  ['quality', '75', '`75`'],
+  ['anchor', "'Center'", '`Center`'],
+  ['default_template', "''", '--'],
 ];
+
+// The documentation sections the locks below are scoped to. A key or a token
+// has to be named in the section that DOCUMENTS it, not merely to occur
+// somewhere in forty kilobytes of English prose: `x`, `y`, `key`, `case`,
+// `date` and `param` are all ordinary words, so an unscoped substring search
+// is satisfied by the README being written in English at all, and stays green
+// with the entire parameter reference deleted.
+function section(heading) {
+  const start = readme.indexOf(`\n## ${heading}\n`);
+  assert.notEqual(start, -1, `the README has a "${heading}" section`);
+  const rest = readme.slice(start + 1);
+  const end = rest.indexOf('\n## ', 1);
+  return end === -1 ? rest : rest.slice(0, end);
+}
+
+// The Default cell of the parameter row that names a key, or undefined when no
+// row names it.
+function documentedDefault(text, key) {
+  for (const line of text.split('\n')) {
+    if (!line.startsWith('|')) continue;
+    const cells = line.split('|').map((cell) => cell.trim());
+    if (cells.length > 4 && cells[1].includes(`\`${key}\``)) return cells[3];
+  }
+  return undefined;
+}
 
 const MODULE_KEYS = [
   'enable',
@@ -161,27 +191,50 @@ test('the README names the Hugo version the module declares', () => {
 test('the README documents every shipped default with the value that ships', () => {
   // A documented default that disagrees with the data file is worse than no
   // documentation: a consumer reasons from it and never sees the difference
-  // until a card comes out the wrong size.
-  for (const [key, value] of SHIPPED_DEFAULTS) {
-    assert.ok(readme.includes(key), `the README names ${key}`);
+  // until a card comes out the wrong size. Read out of the parameter table's
+  // Default column rather than searched for in the document, so a value that
+  // moved rows -- or a row that vanished -- is a failure rather than a hit
+  // somewhere else in the prose.
+  const parameters = section('Parameters');
+  for (const [key, shipped, documented] of SHIPPED_DEFAULTS) {
+    assert.match(
+      defaults,
+      new RegExp(`^${key} = ${shipped.replace(/[$()*+.?[\\\]^{|}]/g, '\\$&')}$`, 'm'),
+      `the data file still ships ${key} = ${shipped}`,
+    );
+    const cell = documentedDefault(parameters, key);
+    assert.ok(cell !== undefined, `the parameter table has a row for ${key}`);
     assert.ok(
-      readme.includes(value.replace(/'/g, '')) || readme.includes(value),
-      `the README states the shipped ${key} default ${value}`,
+      cell.includes(documented),
+      `the README states the shipped ${key} default as ${documented}, not ${JSON.stringify(cell)}`,
     );
   }
 });
 
 test('the README documents every option a consumer can set', () => {
+  // Scoped to the Parameters section and wrapped in backticks, because that is
+  // the section whose only job is to name every key: a key documented anywhere
+  // else is a key a consumer looking at the reference cannot find.
+  const parameters = section('Parameters');
+  assert.ok(
+    parameters.length > 2000,
+    `the Parameters section is still a reference: ${parameters.length} bytes`,
+  );
   const missing = [];
   for (const key of [...new Set([...MODULE_KEYS, ...SLOT_KEYS, ...OVERLAY_KEYS])]) {
-    if (!readme.includes(key)) missing.push(key);
+    if (!parameters.includes(`\`${key}\``)) missing.push(key);
   }
-  assert.deepEqual(missing, [], 'configuration keys the README does not name');
+  assert.deepEqual(missing, [], 'configuration keys the Parameters section does not name');
 });
 
 test('the README documents the whole text source vocabulary', () => {
   // A source token nobody documents is a feature nobody can reach, and the
   // module warns and drops the slot for anything outside the list.
-  const missing = SOURCE_TOKENS.filter((token) => !readme.includes(token));
-  assert.deepEqual(missing, [], 'source tokens the README does not name');
+  const sources = section('Text sources');
+  assert.ok(
+    sources.length > 800,
+    `the Text sources section is still a table: ${sources.length} bytes`,
+  );
+  const missing = SOURCE_TOKENS.filter((token) => !sources.includes(`\`${token}\``));
+  assert.deepEqual(missing, [], 'source tokens the Text sources section does not name');
 });

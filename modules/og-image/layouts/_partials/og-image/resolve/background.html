@@ -9,11 +9,12 @@
 
   A card is composed ON a raster, so every failure here declines the whole
   card rather than publishing a half-made one: a template with no background,
-  a path that names nothing, an SVG (Hugo cannot raster-process one), and a
-  file that carries no decodable image all warn once and return not-ok. The
-  decode probe matters because a media type is inferred from the extension: a
-  text file named .png reads as an image resource and would otherwise take the
-  build down at the first pixel operation.
+  a path that names nothing (including one the operating system refuses to
+  look up at all), an SVG (Hugo cannot raster-process one), and a file that
+  carries no decodable image all warn once and return not-ok. The decode probe
+  matters because a media type is inferred from the extension: a text file
+  named .png reads as an image resource and would otherwise take the build
+  down at the first pixel operation.
 
   Context (dict):
   - .page (Page)     The current page (for diagnostics).
@@ -40,7 +41,13 @@
       "key" (printf "og-image:warn:no-background:%s" $name)
       "message" (printf "[og-image] Card template %q defines no background, so no card is composed for the pages it covers. Set [params.ogcard.templates.%s] background to an image under assets/." $name $name)) -}}
 {{- else -}}
-  {{- $res := resources.Get $path -}}
+  {{/* resources.Get returns nil for a path that names no file, but RAISES
+       when the operating system rejects the path itself -- one carrying `*`,
+       `?`, or the `:` of a pasted URL is such a path on Windows. Both mean
+       the same thing to the site that wrote it, so the caught error and the
+       plain nil take the one warn-and-decline branch below. */}}
+  {{- $got := try (resources.Get $path) -}}
+  {{- $res := $got.Value -}}
   {{- if not $res -}}
     {{- partial "og-image/lib/warn.html" (dict
         "key" (printf "og-image:warn:missing-background:%s" $path)

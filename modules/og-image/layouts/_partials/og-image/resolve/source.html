@@ -8,7 +8,7 @@
     title         the title the caller handed in (never re-derived here)
     description   the description the caller handed in
     section       the page's section (empty on the home page)
-    section_title the current section's link title
+    section_title the current section's link title, skipped on the home page
     kind          the page's kind
     site_title    the site title for THIS page's language
     domain        the host of the site's base URL
@@ -56,8 +56,14 @@
 {{- else if eq $source "section" -}}
   {{- $text = printf "%v" $page.Section -}}
 {{- else if eq $source "section_title" -}}
-  {{- with $page.CurrentSection -}}
-    {{- $text = printf "%v" .LinkTitle -}}
+  {{/* .CurrentSection is the page ITSELF on the home page, so reading it there
+       draws the home title under the name of a section the page is not in.
+       The home page has no section, which `section` above reports by being
+       empty, and this reports by skipping. */}}
+  {{- if not $page.IsHome -}}
+    {{- with $page.CurrentSection -}}
+      {{- $text = printf "%v" .LinkTitle -}}
+    {{- end -}}
   {{- end -}}
 {{- else if eq $source "kind" -}}
   {{- $text = printf "%v" $page.Kind -}}

@@ -42,20 +42,45 @@ test('one character of difference is a different card', () => {
   );
 });
 
+// Every set of pages in the configured tree that resolves to ONE file, and the
+// reason each set does. Naming them is what makes the sharing a statement
+// rather than an arithmetic coincidence: a module that started drawing one
+// card for the whole site would collapse every page into one group here, and a
+// module that stopped content-addressing would empty the list.
+const SHARED = [
+  // The aligned template draws a literal, so its two pages differ in nothing
+  // the card is a function of.
+  ['/aligned', '/aligned/a'],
+  // The same words at the same quality, with the format spelled two ways.
+  ['/jpeg-low/sample', '/jpeg-upper/sample'],
+  // The same words, and neither page's overlay parameter resolves to anything.
+  ['/overlays/odd-glob', '/overlays/odd-param'],
+  // The pair the fixture exists to state.
+  ['/twins/twin-a', '/twins/twin-b'],
+];
+
 test('a page rendered more than once in a build gets one card, not one per render', () => {
   // The fixture calls the entry twice on every page: once from the recorder
   // and once from the standalone renderer in the head. Both calls have to
   // resolve to the same card, or a site publishing several output formats
   // would compose the same picture again for each of them.
   const all = records(configuredDir);
-  const urls = new Set();
-  for (const [, rec] of all) for (const card of rec.cards) urls.add(card.url);
+  const byUrl = new Map();
+  for (const [path, rec] of all)
+    for (const card of rec.cards) byUrl.set(card.url, [...(byUrl.get(card.url) ?? []), path]);
   const totalCards = [...all.values()].reduce((n, rec) => n + rec.cards.length, 0);
-  // The twins deliberately share one file, and so do the pages whose titles
-  // match on the same template, so the distinct count is lower than the total
-  // by exactly the number of shared cards rather than by an arbitrary amount.
-  assert.ok(urls.size < totalCards, 'identical inputs really do share a file');
-  assert.equal(totalCards - urls.size, 1, 'and only the twins share one');
+  assert.ok(byUrl.size < totalCards, 'identical inputs really do share a file');
+
+  const shared = [...byUrl.values()]
+    .filter((paths) => paths.length > 1)
+    .map((paths) => [...paths].sort())
+    .sort((a, b) => a[0].localeCompare(b[0]));
+  assert.deepEqual(shared, SHARED, 'the pages that share a card, and only those');
+  assert.equal(
+    totalCards - byUrl.size,
+    SHARED.reduce((n, group) => n + group.length - 1, 0),
+    'and nothing else is shared with anything',
+  );
 });
 
 test('the same title on two different templates is two different cards', () => {

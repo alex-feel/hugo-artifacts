@@ -1,0 +1,123 @@
+# The fourth routing tier, and the only environment that can hold it.
+#
+# default_template is the card template for a page NO route names. The
+# configured environment proves the opposite statement -- that a page no route
+# names gets nothing at all, which is what its twenty-five-entry decline set
+# measures -- so setting default_template there would delete the proof rather
+# than add one. The two claims are contradictory by construction, and this is
+# the build that carries the second of them.
+#
+# Precedence is the point, so every tier above default_template is present and
+# each one is answered by a template with its own flat background: a corner
+# pixel names which candidate won. Front matter beats a section route, a
+# section route beats a kind route, a kind route beats default_template, and a
+# page that switched cards off in front matter still gets none of them.
+#
+# The templates the shared content set names from front matter are defined
+# here too, so the only diagnostics this build can carry are the ones the
+# content asks for by name.
+
+[ogcard]
+  width = 1200
+  height = 630
+  format = 'png'
+
+  default_template = 'fallback'
+
+  [ogcard.sections]
+    blog = 'post'
+
+  [ogcard.kinds]
+    home = 'home'
+
+  [ogcard.fonts]
+    mono = 'fonts/Go-Mono.ttf'
+
+  # The tier under test: reached only by a page that no front-matter key, no
+  # section route and no kind route names.
+  [ogcard.templates.fallback]
+    background = 'og/wrong-size.png'
+
+    [[ogcard.templates.fallback.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+
+  [ogcard.templates.post]
+    background = 'og/post-bg.png'
+
+    [[ogcard.templates.post.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+
+  [ogcard.templates.home]
+    background = 'og/home-bg.png'
+
+    [[ogcard.templates.home.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+
+  # Named from front matter by the shared content set. `plain` and `otf` sit
+  # on the post background and `wrongsize` on the fallback one, so a card's
+  # corner still says which template drew it.
+  [ogcard.templates.plain]
+    background = 'og/de-bg.png'
+
+    [[ogcard.templates.plain.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+
+  [ogcard.templates.wrongsize]
+    background = 'og/wrong-size.png'
+
+    [[ogcard.templates.wrongsize.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+
+  [ogcard.templates.otf]
+    background = 'og/post-bg.png'
+
+    [[ogcard.templates.otf.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3

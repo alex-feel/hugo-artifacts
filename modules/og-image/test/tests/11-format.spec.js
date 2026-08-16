@@ -47,6 +47,46 @@ test('the quality that was configured is the quality that was encoded', () => {
   );
 });
 
+test('an enum spelled in capitals is the same enum, quality and all', () => {
+  // The enum is matched case-insensitively, so 'JPEG' is accepted -- and the
+  // composer decides whether to append the quality token by testing the value
+  // it was given. A stored spelling that is not the canonical one passes the
+  // first test and fails the second, silently encoding at Hugo's own default
+  // quality instead of the site's. Two sections differing in nothing but the
+  // capitalization therefore have to resolve to the SAME file.
+  const all = records(configuredDir);
+  const lower = all.get('/jpeg-low/sample');
+  const upper = all.get('/jpeg-upper/sample');
+  assert.equal(upper.title, lower.title, 'the two pages draw the same words');
+  assert.equal(upper.opts.quality, 20, 'and ask for the same quality');
+  assert.equal(upper.opts.format, 'jpeg', 'the accepted value is stored canonically');
+  assert.equal(
+    upper.cards[0].url,
+    lower.cards[0].url,
+    'the same words at the same quality are the same card, however the format is spelled',
+  );
+  assert.ok(
+    cardBytes(configuredDir, upper.cards[0].url).length <
+      cardBytes(configuredDir, all.get('/jpeg/sample').cards[0].url).length,
+    'and it really is the low-quality encode, not the default one',
+  );
+});
+
+test('the third format in the enum is encoded as itself, not as a fallback', () => {
+  // webp is in the allow-list and named in the README, and it is the one
+  // format whose frame header shares nothing with the other two -- a fallback
+  // to png would still publish a card of the right size at a plausible URL.
+  const rec = records(configuredDir).get('/webp/sample');
+  assert.equal(rec.opts.format, 'webp', 'the cascade reached the resolver');
+  assert.equal(rec.opts.quality, 60);
+  assert.equal(rec.cards.length, 1);
+  assert.equal(rec.cards[0].mediaType, 'image/webp');
+  const head = sniff(cardBytes(configuredDir, rec.cards[0].url));
+  assert.equal(head.format, 'webp', 'and the bytes are a WebP frame');
+  assert.equal(head.width, 1200);
+  assert.equal(head.height, 630);
+});
+
 test('a page that configures no format gets the shipped lossless one', () => {
   // The mechanical default, and the reason the format assertions above are
   // about a cascade rather than about the module: everything else in the tree

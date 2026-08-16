@@ -92,7 +92,14 @@
       {{- $has = merge $has (dict $sp.k $present) -}}
     {{- end -}}
 
-    {{/* ---- Float engine knobs ---- */}}
+    {{/* ---- Float engine knobs. The digit count is unbounded in the pattern
+         on purpose -- a cap would report a value of three hundred digits as
+         "not a number" when it is one, merely far out of range -- so the cast
+         itself runs inside `try`: Hugo's `float` RAISES on a value too large
+         for a float64 rather than returning one, and an unguarded raise here
+         would stop the consuming site's build. A value that cannot be
+         represented is out of range by definition, so it takes the
+         out-of-range branch and reports the range it missed. ---- */}}
     {{- $floats := dict -}}
     {{- range $sp := slice
         (dict "k" "safety" "d" 0.98 "hi" 1.0)
@@ -103,7 +110,9 @@
       {{- if isset $slot $sp.k -}}
         {{- $raw := trim (printf "%v" (index $slot $sp.k)) " \t\n\r" -}}
         {{- if findRE `^\d+(\.\d+)?$` $raw -}}
-          {{- $f := float $raw -}}
+          {{- $cast := try (float $raw) -}}
+          {{- $f := 0.0 -}}
+          {{- if not $cast.Err -}}{{- $f = $cast.Value -}}{{- end -}}
           {{- if and (gt $f 0.0) (le $f $sp.hi) -}}
             {{- $v = $f -}}
           {{- else -}}
@@ -212,6 +221,15 @@
       {{- $metricsName := lower (trim (printf "%v" (index $slot "metrics" | default "default")) " \t\n\r") -}}
       {{- $metrics := partialCached "og-image/text/metrics.html" (dict "name" $metricsName) $metricsName -}}
       {{- $fit := partial "og-image/text/fit.html" (dict "text" $src.text "box" $box "metrics" $metrics) -}}
+      {{/* The engine reports a line it had to place wider than its budget,
+           which no size in the ladder could fix: the box is narrower than one
+           glyph. Nothing else would say so -- the card publishes, and the ink
+           simply runs past the box the slot declared. */}}
+      {{- if $fit.over_budget -}}
+        {{- partial "og-image/lib/warn.html" (dict
+            "key" (printf "og-image:warn:narrow-box:%s:%d" $name $i)
+            "message" (printf "[og-image] The %d-pixel box of text slot %d of card template %q is narrower than a single glyph at the sizes the slot allows, so its lines are drawn running past the box. Widen width, lower size, or lower min_scale." $ints.width $i $name)) -}}
+      {{- end -}}
       {{- $pitch := int (math.Round (mul (float $fit.size) $floats.line_height)) -}}
       {{- if lt $pitch 1 -}}{{- $pitch = 1 -}}{{- end -}}
       {{- $anchor := $ints.x -}}

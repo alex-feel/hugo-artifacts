@@ -16,6 +16,19 @@
   would need more rungs than that to reach the floor, the STEP is widened so
   the ladder still spans size down to floor instead of stopping short.
 
+  The floor is the ladder's LAST rung, always. Stepping down from size lands on
+  it only when the step divides the span exactly, so the floor is appended
+  whenever the stepped rungs stop above it -- the stepped rungs are all kept,
+  because a size that fits is preferable to the smaller one below it, and the
+  step budget is one rung shorter to hold the cap. Without that final rung the
+  smallest size the author allowed is never tried, and text that would have
+  fitted whole is truncated at a larger size instead.
+
+  A rung is accepted when the wrap neither dropped content NOR left a placed
+  line wider than the budget; a box narrower than a single glyph can only
+  produce the latter, and shrinking is exactly what widens the per-mille budget
+  that such a line overruns.
+
   The clamps below duplicate config normalization ON PURPOSE: the resolver
   warns for the author, and this partial stays total on its own so that no
   configuration -- including a size of 0, which would otherwise divide by zero
@@ -28,8 +41,8 @@
                     ellipsis.
   - .metrics (dict) A table from og-image/text/metrics.html.
 
-  Return value: dict{lines, widths, overflow, size, budget}. One terminal
-  return.
+  Return value: dict{lines, widths, overflow, over_budget, size, budget}. One
+  terminal return.
 */}}
 
 {{- $box := .box -}}
@@ -68,8 +81,8 @@
   {{- if gt $size $floor -}}
     {{- $steps = int (math.Floor (div (float (sub $size $floor)) (float $step))) -}}
   {{- end -}}
-  {{- if gt $steps 24 -}}
-    {{- $step = int (math.Ceil (div (float (sub $size $floor)) 24.0)) -}}
+  {{- if gt $steps 23 -}}
+    {{- $step = int (math.Ceil (div (float (sub $size $floor)) 23.0)) -}}
     {{- if lt $step 1 -}}{{- $step = 1 -}}{{- end -}}
     {{- $steps = int (math.Floor (div (float (sub $size $floor)) (float $step))) -}}
   {{- end -}}
@@ -77,6 +90,9 @@
     {{- range $i := seq 1 $steps -}}
       {{- $sizes = $sizes | append (sub $size (mul $i $step)) -}}
     {{- end -}}
+  {{- end -}}
+  {{- if and (gt $size $floor) (ne (index $sizes (sub (len $sizes) 1)) $floor) -}}
+    {{- $sizes = $sizes | append $floor -}}
   {{- end -}}
 {{- end -}}
 
@@ -95,7 +111,7 @@
         "glyphs" $m.glyphs
         "fallback" $m.fallback) -}}
     {{- $result = merge $w (dict "size" $s "budget" $budget) -}}
-    {{- if not $w.overflow -}}{{- $done = true -}}{{- end -}}
+    {{- if not (or $w.overflow $w.over_budget) -}}{{- $done = true -}}{{- end -}}
   {{- end -}}
 {{- end -}}
 

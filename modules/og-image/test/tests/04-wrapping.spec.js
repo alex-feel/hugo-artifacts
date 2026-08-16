@@ -64,13 +64,20 @@ test('a title that does not fit shrinks by one rung and then fits', () => {
 });
 
 test('a title too long for the whole ladder truncates at the floor instead of overflowing', () => {
-  // min_scale 0.7 of 64 puts the floor at 48 with a step of 4, so the ladder is
-  // 64, 60, 56, 52, 48. This title fits none of them, so the engine draws the
-  // floor rung's wrap with the last line truncated: exactly max_lines bands,
-  // never more, and never a line running past the box.
+  // min_scale 0.7 of 64 puts the floor at ceil(64 * 0.7) = 45, and a step of 4
+  // steps 64, 60, 56, 52, 48 and then lands on the floor, because a step that
+  // does not divide the distance would otherwise stop short of it. This title
+  // fits no rung, so the engine draws the FLOOR rung's wrap with the last line
+  // truncated: exactly max_lines bands, never more, and never a line running
+  // past the box. The distinction is not cosmetic -- a ladder stopping at 48
+  // truncates text that fits whole at 45.
   const bands = titleBands(records(configuredDir), '/blog/overflow');
   assert.equal(bands.length, TITLE_BOX.maxLines, 'capped at max_lines');
-  assert.equal(bandPitch(bands), expectedPitch(48), 'at the ladder floor');
+  assert.equal(
+    bandPitch(bands),
+    expectedPitch(Math.ceil(TITLE_BOX.size * 0.7)),
+    'at the ladder floor',
+  );
   for (const band of bands) {
     assert.ok(
       band.right < TITLE_BOX.x + TITLE_BOX.width,
@@ -126,6 +133,84 @@ test('no wrapped line anywhere in the tree runs past the box it was given', () =
     }
   }
   assert.ok(checked > 30, `every published card was measured: ${checked} lines`);
+});
+
+// The aligned template: the same ten glyphs in the same box at three
+// alignments, one row per alignment, all below the title box.
+const ALIGNED = {x: 72, width: 1000, region: {x: 0, y: 400, width: 1200, height: 230}};
+
+test('a wrapped slot anchors its lines on the edge its alignment names', () => {
+  // A wrapped slot draws one filter per LINE, so the module computes the
+  // alignment anchor itself -- x for left, x + width/2 for center, x + width
+  // for right -- and hands Hugo an absolute coordinate. Nothing else in a card
+  // reveals that arithmetic: a centered title anchored on the wrong edge is
+  // still a card with a centered-looking line on it, half a box out of place.
+  const bands = inkBands(
+    cardImage(configuredDir, records(configuredDir).get('/aligned/a').cards[0].url),
+    {region: ALIGNED.region},
+  );
+  assert.equal(bands.length, 3, 'one row per alignment');
+  const [left, center, right] = bands;
+
+  assert.equal(left.left, ALIGNED.x, 'the left row starts at the left edge of the box');
+  assert.ok(
+    right.right <= ALIGNED.x + ALIGNED.width && right.right > ALIGNED.x + ALIGNED.width - 8,
+    `the right row ends at the right edge of the box: ${right.right} against ${ALIGNED.x + ALIGNED.width}`,
+  );
+  const middle = (center.left + center.right) / 2;
+  assert.ok(
+    Math.abs(middle - (ALIGNED.x + ALIGNED.width / 2)) <= 2,
+    `the center row is centered in the box: ${middle} against ${ALIGNED.x + ALIGNED.width / 2}`,
+  );
+  // The same statement without reference to the glyphs' own side bearings: the
+  // three rows are the same run of ink at three positions, so the two steps
+  // between them are equal.
+  assert.ok(
+    Math.abs(center.left - left.left - (right.left - center.left)) <= 1,
+    `evenly stepped across the box: ${left.left}, ${center.left}, ${right.left}`,
+  );
+  for (const band of bands) assert.equal(band.pixels, left.pixels, 'the same ink, moved');
+});
+
+test("overflow='truncate' truncates at the base size instead of walking the ladder", () => {
+  // The same title that walks the ladder to its floor under `shrink` -- so the
+  // rung the engine drew at is the whole difference between the two policies,
+  // and a truncate slot quietly shrinking would be invisible in the words.
+  const all = records(configuredDir);
+  const region = {x: 60, y: 20, width: 1050, height: 260};
+  const bands = inkBands(cardImage(configuredDir, all.get('/fitting/a').cards[0].url), {region});
+  assert.equal(bands.length, 2, "capped at the slot's own max_lines");
+  const pitch = bandPitch(bands);
+  assert.ok(
+    Math.abs(pitch - expectedPitch(TITLE_BOX.size)) <= 2,
+    `drawn at the base size: pitch ${pitch} against ${expectedPitch(TITLE_BOX.size)}`,
+  );
+  // The shrink slot on the same title, for contrast: it lands on the floor.
+  assert.equal(bandPitch(titleBands(all, '/blog/overflow')), expectedPitch(45));
+});
+
+test('the ellipsis a truncating slot appends is the one it was given', () => {
+  // Two rows, one unbreakable sixty-character token each, identical but for
+  // the ellipsis: one explicitly empty, one four capital Ms. Both fill the
+  // same budget, so the WIDTH of the two rows says nothing -- the amount of
+  // ink does, because four Ms carry far more of it than the four characters
+  // they displaced. A hardcoded ellipsis draws the two rows identically.
+  const bands = inkBands(
+    cardImage(configuredDir, records(configuredDir).get('/fitting/a').cards[0].url),
+    {region: {x: 60, y: 290, width: 1050, height: 300}},
+  );
+  assert.equal(bands.length, 2, 'one row per ellipsis');
+  const [empty, wide] = bands;
+  assert.ok(
+    wide.pixels > empty.pixels * 1.05,
+    `the four-M ellipsis inks more than no ellipsis at all: ${wide.pixels} against ${empty.pixels}`,
+  );
+  for (const band of bands) {
+    assert.ok(
+      band.right < TITLE_BOX.x + TITLE_BOX.width,
+      `and the truncated line stayed inside the box: ${band.right}`,
+    );
+  }
 });
 
 test('the second slot wraps against its own narrower box and its own line bound', () => {

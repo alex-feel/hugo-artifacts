@@ -21,8 +21,12 @@
   A winning name that [templates] does not define warns once keyed by ORIGIN
   PLUS NAME, so two sections pointing at two differently misspelled templates
   in one build both report, rather than whichever page happened to render
-  first. Template, section and kind names are looked up lower-cased, because
-  Hugo lower-cases configuration keys.
+  first. That key covers every page reaching the same origin with the same
+  name, so the page in the message is named as an EXAMPLE: the one whose render
+  filled the cached message is arbitrary among them, and claiming it is the
+  only page without a card would be a claim the key cannot support. Template,
+  section and kind names are looked up lower-cased, because Hugo lower-cases
+  configuration keys.
 
   Context (dict):
   - .page (Page)  The current page.
@@ -51,7 +55,7 @@
     {{- if or (reflect.IsMap $v) (reflect.IsSlice $v) (eq (printf "%T" $v) "bool") -}}
       {{- partial "og-image/lib/warn.html" (dict
           "key" (printf "og-image:warn:template-shape:%s:%v" $c.o $v)
-          "message" (printf "[og-image] Ignoring %s: it expects a template name written as a single value but was given %q. No card is generated for the pages it routes." $c.o (printf "%v" $v))) -}}
+          "message" (printf "[og-image] Ignoring %s: it expects a template name written as a single value but was given %q. That route is skipped, so the next candidate decides and the card may be drawn from a different template." $c.o (printf "%v" $v))) -}}
     {{- else if ne $v nil -}}
       {{- $t := trim (printf "%v" $v) " \t\n\r" -}}
       {{- if $t -}}
@@ -70,7 +74,7 @@
   {{- else -}}
     {{- partial "og-image/lib/warn.html" (dict
         "key" (printf "og-image:warn:unknown-template:%s:%s" $origin $name)
-        "message" (printf "[og-image] %s names the card template %q, but no [params.ogcard.templates.%s] table defines it, so %s gets no card. Template names are lower-cased by Hugo." $origin $name (lower $name) $opts.where)) -}}
+        "message" (printf "[og-image] %s names the card template %q, but no [params.ogcard.templates.%s] table defines it, so the pages it names get no card (%s among them). Template names are lower-cased by Hugo." $origin $name (lower $name) $opts.where)) -}}
   {{- end -}}
 {{- end -}}
 

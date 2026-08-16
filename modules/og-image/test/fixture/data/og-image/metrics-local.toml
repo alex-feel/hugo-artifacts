@@ -11,8 +11,32 @@
 #
 # The shipped [fonts.default] table stays untouched, so the merge-per-name
 # path is exercised without shadowing anything the module ships.
+#
+# The four tables after the monospace one are of the wrong shape, one per
+# level of this file a consumer can get wrong. Nothing reads them except the
+# degraded environment's diagnostic card, because a width table is resolved
+# only when a slot names it by name -- which is what keeps a malformed table
+# out of every other build in this suite.
+
+[fonts]
+# A name whose value is not a table at all.
+scalartable = 'not a table at all'
 
 [fonts.mono]
 em = 1000
 space = 600
 fallback = 600
+
+# classes is an array of tables; a bare string is not one.
+[fonts.badclasses]
+em = 1000
+classes = 'abc'
+
+# glyphs maps one character to its width; a bare string is not a map.
+[fonts.badglyphs]
+em = 1000
+glyphs = 'ABC'
+
+# A classes entry needs both a chars string and a width.
+[[fonts.badclassentry.classes]]
+width = 900

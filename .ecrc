@@ -1,4 +1,5 @@
 {
+  "Exclude": ["/assets/fonts/[^/]*-terms\\.txt$"],
   "Disable": {
     "IndentSize": true
   }

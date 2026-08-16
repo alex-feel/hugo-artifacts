@@ -38,7 +38,13 @@
 {{- if $path -}}
   {{- $ext := lower (path.Ext $path) -}}
   {{- if in (slice ".ttf" ".otf") $ext -}}
-    {{- with resources.Get $path -}}
+    {{/* resources.Get returns nil for a path that names no file, but RAISES
+         when the operating system rejects the path itself -- one carrying
+         `*`, `?`, or the `:` of a pasted URL is such a path on Windows. Both
+         mean no font file, so the caught error and the plain nil take the one
+         warn-and-fall-back branch below. */}}
+    {{- $got := try (resources.Get $path) -}}
+    {{- with $got.Value -}}
       {{- $font = . -}}
     {{- else -}}
       {{- partial "og-image/lib/warn.html" (dict

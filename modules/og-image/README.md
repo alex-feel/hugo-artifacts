@@ -2,7 +2,7 @@
 
 Universal build-time Open Graph card generator for Hugo. Hand it a page and it returns ONE composed image resource -- a background raster normalized to the card canvas, any number of overlays, and any number of text slots wrapped and fitted to their boxes -- or nothing at all when the site has no card template for that page. It plugs into [`modules/seo`](../seo/README.md) through that module's generated-image hook with a single configuration line, and it works on its own through the `og-image/meta.html` head partial.
 
-The module ships LOGIC ONLY. It carries no fonts, no background rasters, no card templates, no colors and no coordinates: the consuming site supplies the artwork and the type, and this module composes them. What it does ship is mechanics -- a canvas size, an encoder default, a nominal glyph-width table for line breaking -- so that no design decision is ever made on your behalf, and a slot key you did not set is omitted from the drawing call entirely, leaving Hugo's own documented default in force.
+The module ships LOGIC ONLY. It carries no fonts, no background rasters, no card templates, no colors and no coordinates: the consuming site supplies the artwork and the type, and this module composes them. What it does ship is mechanics -- a canvas size, an encoder default, a nominal glyph-width table for line breaking -- so that no design decision is ever made on your behalf, and a slot key you did not set is omitted from the drawing call entirely, leaving Hugo's own documented default in force. A wrapping slot is the one exception, because the fit engine cannot compute lines out of absent numbers: there the defaults in the parameter table below apply, and each row says so.
 
 It never breaks a build over an image. One wiring guard aside, every problem below it is a deduplicated warning plus a card that still draws, or a silent decline that leaves the page with whatever image it would have had without this module.
 
@@ -28,7 +28,7 @@ For local development against a checkout of this repository, use `hugo.work` or 
 
 ## Requirements
 
-- [Hugo](https://gohugo.io/) v0.160.0+ (any edition -- nothing this module uses is edition-gated; WebP encoding works in every edition since v0.153.0, and the only extended-exclusive feature is the deprecated embedded LibSass, which this module does not touch). WebP output on a non-extended binary is untested here; PNG and JPEG are the safe defaults if that matters to you.
+- [Hugo](https://gohugo.io/) v0.160.0+. The module uses no feature Hugo documents as extended-edition-only, but everything here is built and tested on the extended edition alone, and WebP output on a non-extended binary is untested either way -- PNG or JPEG is the safe choice if you build with one.
 - [Go](https://go.dev/) 1.22+ (required by Hugo Modules).
 - Your own background raster under `assets/`, and -- unless Hugo's built-in Go Regular face suits the design -- your own font file under `assets/`. The registry accepts `.ttf` and `.otf`; Hugo's own documentation names TrueType, so `.ttf` is the safe choice, and a font that turns out to be unreadable costs one warning and the built-in face rather than the card.
 
@@ -90,7 +90,7 @@ The module returns at most ONE resource per call. A page that needs a second car
 
 ## Configuration
 
-Every key is OPTIONAL, and a site that configures nothing composes nothing: the module ships no card template, so with no `[params.ogcard.templates.<name>]` table there is nothing to draw and every page declines. That case warns once per language, because a site that imported the module and got nothing has no other signal.
+Every key is OPTIONAL, and a site that configures nothing composes nothing: the module ships no card template, so until one is defined -- as a `[params.ogcard.templates.<name>]` table, or as a `templates` map in some page's own `ogcard` front matter -- there is nothing to draw and every page declines. A language in which no card template is defined ANYWHERE warns once, because a site that imported the module and got nothing has no other signal.
 
 ```toml
 # hugo.toml (or config/_default/params.toml). Every key OPTIONAL.
@@ -126,8 +126,8 @@ Every key is OPTIONAL, and a site that configures nothing composes nothing: the 
     section = 'section'
 
   # --- Font registry: NAME -> a path under assets/. The module ships NO fonts.
-  #     TrueType (.ttf) and OpenType (.otf) files are accepted; .ttc, .woff and .woff2 are rejected
-  #     with one warning and those slots draw in Hugo's built-in Go Regular.
+  #     TrueType (.ttf) and OpenType (.otf) files are accepted; any other extension (.ttc, .woff,
+  #     .woff2, ...) is rejected with one warning and those slots draw in Hugo's built-in Go Regular.
   [params.ogcard.fonts]
     regular = 'fonts/Inter-Regular.ttf'
     bold    = 'fonts/Inter-Bold.ttf'
@@ -238,11 +238,11 @@ Text slot keys (`[[params.ogcard.templates.<name>.text]]`):
 | `x`, `y` | int | `0` in a wrapping slot | -100000 to 100000. Omitted when unset on a single-line slot, where Hugo's own `10` applies |
 | `align` | string | `left` | `left`, `center`, `right`. Omitted when unset on a single-line slot |
 | `width` | int | -- | 1-100000. PRESENCE turns on wrapping |
-| `max_lines` | int | `0` | 0 means unlimited; nothing shrinks or truncates without it |
+| `max_lines` | int | `0` | 0-100000. 0 means unlimited; nothing shrinks or truncates without it |
 | `ellipsis` | string | `…` | An explicitly empty value means no ellipsis |
 | `overflow` | string | `shrink` | `shrink`, `truncate` |
 | `min_scale` | float | `0.7` | 0 < v <= 1 |
-| `shrink_step` | int | `4` | >= 1 |
+| `shrink_step` | int | `4` | 1-100000 |
 | `safety` | float | `0.98` | 0 < v <= 1 |
 | `width_factor` | float | `1.0` | 0 < v <= 100 |
 | `line_height` | float | `1.4` | 0 < v <= 100 |
@@ -262,7 +262,7 @@ Overlay keys (`[[params.ogcard.templates.<name>.overlay]]`):
 
 ### Validation
 
-Integers are read as DECIMAL and bounded: a leading zero never turns a value octal, at most nine digits are accepted, and a value that does not parse or falls outside its documented range warns once and leaves that ONE key at its default while the rest of the card draws. Floats must be written as a plain unsigned decimal (`0.5`, not `.5`), and a value outside its range warns once and falls back the same way. Enum values are matched case-insensitively against their allow-list; an unknown value warns once and takes the documented fallback. Colors accept `#rgb` and `#rrggbb` only -- and that warning is the only diagnostic that exists, because Hugo accepts an unreadable color silently and draws white.
+Integers are read as DECIMAL and bounded: a leading zero never turns a value octal, at most nine digits are accepted, and a value that does not parse or falls outside its documented range warns once and leaves that ONE key at its default while the rest of the card draws. Floats must be written as a plain unsigned decimal (`0.5`, not `.5`), and a value outside its range warns once and falls back the same way -- including a digit string too long to be a number at all, which is out of range by definition rather than a reason to stop the build. Enum values are matched case-insensitively against their allow-list; an unknown value warns once and takes the documented fallback. Colors accept `#rgb` and `#rrggbb` only -- and that warning is the only diagnostic that exists, because Hugo accepts an unreadable color silently and draws white.
 
 Template, font, section, kind and metrics-table names are matched in LOWER CASE, because Hugo folds configuration and front-matter keys to lower case. That also applies to the tables you write in `data/og-image/metrics-local.toml`, whose keys Hugo does NOT fold: name those tables in lower case or they will not be found.
 
@@ -292,7 +292,7 @@ A page is routed to a card template by name, and the candidates are walked most 
 3. `[params.ogcard.kinds].<the page's kind>` -- `home`, `page`, `section`, `taxonomy`, `term`.
 4. `default_template`.
 
-Whether a page with no card is a silent decline or a reported mistake is decided by PROVENANCE, not by emptiness. A page that NO candidate named is a page this generator simply has no template for: it declines silently, and the caller falls through to whatever it uses otherwise. A name that a route, front matter or `default_template` ACTUALLY SUPPLIED but `[templates]` does not define is a typo whose only other symptom would be the site's default banner turning up where a card was expected: it warns once, keyed by origin AND name, so two sections pointing at two differently misspelled templates both report.
+Whether a page with no card is a silent decline or a reported mistake is decided by PROVENANCE, not by emptiness. A page that NO candidate named is a page this generator simply has no template for: it declines silently, and the caller falls through to whatever it uses otherwise. A name that a route, front matter or `default_template` ACTUALLY SUPPLIED but `[templates]` does not define is a typo whose only other symptom would be the site's default banner turning up where a card was expected: it warns once, keyed by origin AND name, so two sections pointing at two differently misspelled templates both report. That key covers every page the misspelled name routes, so the page the message names is one EXAMPLE of them rather than the only page left without a card.
 
 ## Text sources
 
@@ -303,7 +303,7 @@ Each text slot resolves its `source` to one string, then applies `case`, `prefix
 | `title` | The title handed to the partial, or the page's own when none was handed |
 | `description` | The description handed to the partial, or the page's own (`.Description`, else the plain-text summary) |
 | `section` | The page's section; empty on the home page |
-| `section_title` | The current section's link title |
+| `section_title` | The current section's link title; skipped on the home page, which is in no section |
 | `kind` | The page's kind |
 | `site_title` | The site title for THIS page's language |
 | `domain` | The host of the site's base URL |
@@ -323,9 +323,11 @@ A slot with `width` set runs through the fit engine; a slot without it draws on 
 budget = floor(width * em * safety * width_factor / size)
 ```
 
-and taking the first rung that fits within `max_lines`. If no rung fits, the smallest one is used and its last line is truncated with the `ellipsis`, so an over-long string is a visible loss the reader can see rather than a silent clip. With `overflow = 'truncate'` the ladder holds only the base size. The ladder is capped at 25 sizes; a `shrink_step` too fine to reach the floor within them is widened so the floor is still reached.
+and taking the first rung whose wrap neither dropped content nor left a line wider than the budget. The floor is the ladder's LAST rung ALWAYS: stepping down by `shrink_step` lands on it only when the step divides the span exactly, so the floor is appended whenever the stepped rungs stop above it, and the smallest size you allowed is always tried. If no rung fits, the smallest one is used and its last line is truncated with the `ellipsis`, so an over-long string is a visible loss the reader can see rather than a silent clip; the ellipsis itself is appended only when the truncated line still fits the budget with it, because a truncation wider than the text it replaced would be worse than none. With `overflow = 'truncate'` the ladder holds only the base size. The ladder is capped at 25 sizes (the base, at most 23 stepped rungs, and the floor); a `shrink_step` too fine to reach the floor within them is widened so the floor is still reached.
 
-`max_lines` is what makes any of that happen. Leave it unset (or `0`) and the slot has no line bound, nothing ever overflows, and the size never changes -- the text simply wraps to as many lines as it needs.
+One shape no rung can fix is a box narrower than a single glyph: the wrapper has to place that glyph anyway rather than drop a character, so the line is drawn running past the box. That much the engine can see in its own arithmetic -- unlike an estimate that came out a few pixels short, which it cannot -- so it warns once per slot.
+
+`max_lines` is what makes any of that happen. Leave it unset (or `0`) and the slot has no line bound, nothing ever overflows, and the size stays where you set it -- the text simply wraps to as many lines as it needs. The narrow-box case above is the one exception: a line the wrapper had to place over budget sends the fitter down the ladder even with no line bound, because a smaller size is what widens the per-mille budget such a line overruns.
 
 Each line is drawn as its own text filter at `y + line_index * round(size * line_height)`, with `x` naming the box's left edge and the alignment anchor derived from `align` (left edge, box center, or right edge). That makes horizontal placement exact and makes `y` mean the top of the first line under either alignment. Nothing checks VERTICAL fit: lines below the canvas are simply not visible, so `max_lines` times the pitch is your own arithmetic. Slots fit independently and their `y` values are fixed, so a title that wraps to three lines does not push the description down; leave room for the longest case you accept, or bound it with `max_lines`.
 
@@ -363,21 +365,28 @@ fallback = 560     # the width used for any glyph this table does not name
 "A" = 664
 "B" = 686
 # ... one line per codepoint
+
+# Optional: one width shared by a run of characters, the form the shipped table uses.
+[[fonts.myfont-bold.classes]]
+width = 660
+chars = "ABCDEFGHJKLNOPQRSTUVXYZ"
 ```
 
-A table of the same name in `metrics-local.toml` REPLACES the shipped table of that name wholesale rather than merging into it, so restate `em`, `space` and `fallback` if you override `default`; tables under other names are unaffected. `[fonts.<name>.classes]` (a width shared by a run of characters, as the shipped table uses) and `[fonts.<name>.glyphs]` (an exact width per character) can both be present, and the per-glyph value always wins. Two characters need escaping when written as TOML keys: `"` and `\`.
+A table of the same name in `metrics-local.toml` REPLACES the shipped table of that name wholesale rather than merging into it, so restate `em`, `space` and `fallback` if you override `default`; tables under other names are unaffected. `[[fonts.<name>.classes]]` and `[fonts.<name>.glyphs]` can both be present, and the per-glyph value always wins. Note the double brackets: `classes` is an ARRAY OF TABLES, as the shipped table writes it, and each entry carries exactly two keys -- `chars`, a string of the characters that share a width, and `width`, that width in per-mille em. A single `[fonts.<name>.classes]` table written without the double brackets is read as a one-entry list. Two characters need escaping when written as TOML keys: `"` and `\`.
+
+Both files are hand-written, so every level of them is shape-checked before it is read: a file, a `fonts` key, a named table, a `classes` list, a `classes` entry or a `glyphs` table written as something other than what the recipe above shows warns once and is treated as absent. The cost is coarser line breaking -- the glyphs that piece was meant to size fall back to the table's `fallback` width -- and never a broken build.
 
 ### Non-Latin text
 
-Any character the table does not name measures at `fallback` -- a single flat width. The shipped table names Latin letters, digits and common punctuation, so **Cyrillic, Greek and every other non-Latin script currently measure at one width per character, which makes line breaking a character count rather than a width estimate.** For an all-caps Cyrillic headline in a condensed face that is badly wrong in both directions. If your cards carry non-Latin text, extract a table for the font you actually use (the recipe above covers Latin, Greek, Cyrillic and punctuation in one pass) -- that is the difference between breaking at the right word and breaking wherever the character count lands.
+Any character the table does not name measures at `fallback` -- a single flat width. The shipped `default` table names only the characters whose advances differ most from that average: the capitals, a few conspicuously wide or narrow lowercase letters, and some punctuation. Everything else already measures at the one fallback width, digits and the rest of the lowercase alphabet included. For Latin that is the nominal model doing its job, but **for Cyrillic, Greek and every other non-Latin script it makes line breaking a character count rather than a width estimate** -- and for an all-caps Cyrillic headline in a condensed face that is badly wrong in both directions. If your cards carry non-Latin text, extract a table for the font you actually use (the recipe above covers Latin, Greek, Cyrillic and punctuation in one pass) -- that is the difference between breaking at the right word and breaking wherever the character count lands.
 
 Measurement is per RUNE, not per byte, so a multi-byte character counts once. That is the part that works without a table; the WIDTH is what needs one.
 
 ### Missing glyphs
 
-**A font that has no glyph for a character draws a hollow box, silently, and the module cannot detect it.** Hugo reports nothing about a font's coverage, so nothing here can warn you. Hugo's built-in Go Regular draws genuine glyphs for Cyrillic and accented Latin, and one hollow rectangle per character for CJK and emoji, with the build staying clean throughout. What a consumer-supplied font draws for a character it lacks is not knowable in advance and varies by font; whatever it draws, the module cannot see it. Look at a real card for every script your site publishes in, at least once.
+**A font draws whatever it draws for a character it has no glyph for, and the module cannot detect it.** Hugo reports nothing about a font's coverage, so nothing here can warn you, and what a given face substitutes -- a blank, a box, some other mark -- is that font's own business rather than anything predictable from here. Hugo's built-in Go Regular does draw genuine glyphs for Cyrillic and Greek, which this module's suite asserts as real ink; CJK and emoji are outside that face's coverage, and the build stays clean whatever it puts there instead. Look at a real card for every script your site publishes in, at least once.
 
-The same applies to the default ellipsis, U+2026: Go Regular draws it, and a font that lacks it draws whatever it draws for a missing glyph. Set `ellipsis` to `...` if you would rather not find out.
+The same applies to the default ellipsis, U+2026: a face that has no glyph for it substitutes whatever it substitutes, and the width estimate is a guess either way, because the shipped `default` table does not name that character and measures it at `fallback`. Set `ellipsis` to `...` if you would rather not depend on the face carrying it.
 
 ## Validation & Degradation
 
@@ -389,22 +398,23 @@ The module NEVER breaks a build over an image. `errorf` is reserved for the sing
 | `enable` false at any tier | Silent decline | -- |
 | No route named a template and `default_template` is unset | Silent decline -- the contract: this generator has no template for that page | -- |
 | A route, front matter or `default_template` names a card template `[templates]` does not define | Warn + decline | origin + name |
-| A route candidate holds a table, list or boolean | Warn + treated as unnamed, so the next route tier is tried | origin + value |
-| `template` or `default_template` holds a table or list | Warn + that tier's value ignored | key + value |
+| A `[sections]` or `[kinds]` route entry holds a table, list or boolean | Warn + treated as unnamed, so the next route tier is tried | origin + value |
+| `template` or `default_template` holds a table, list or boolean at some tier | Warn + that tier's value dropped, so a lower tier's value stands and the router still tries the remaining candidates | key + value |
+| `template`, `default_template` or a route entry written with no value at all | Silently ignored, so the tier or candidate below it stands -- unlike an explicit `''`, which is a value and does override the tier below | -- |
 | Card template defines no `background` | Warn + decline (a card is composed ON a raster) | template name |
-| `background` names nothing under `assets/` | Warn + decline | path |
+| `background` names nothing under `assets/`, including a path the operating system refuses to look up at all (a glob, a pasted URL) | Warn + decline | path |
 | `background` is an SVG, an unsupported format, or a file whose bytes are not the image its extension claims | Warn + decline | path |
 | `background` cannot be normalized to the canvas | Warn + decline | path |
 | `background` raster is not exactly the canvas size | Silently normalized with `.Fill` plus `anchor` | -- |
 | Slot names a font `[fonts]` does not register | Warn + that slot draws in Go Regular; **card still produced** | font name |
-| Registered font path names nothing under `assets/` | Warn + Go Regular | path |
+| Registered font path names nothing under `assets/`, including one the operating system refuses to look up | Warn + Go Regular | path |
 | Registered font is not `.ttf` or `.otf` | Warn + Go Regular | path |
 | Font passes that guard but cannot be read as a font | Warn + the card is redrawn with every font dropped, in Go Regular. A failing redraw warns and declines | template + fonts, then page + template |
-| Int that does not parse or is out of range (module `width`/`height`/`quality`; slot `size`/`x`/`y`/`width`/`max_lines`/`shrink_step`; overlay `width`) | Warn + that ONE key falls back to its default; everything else still draws | key + value, plus template and slot index for a slot |
+| Int that does not parse or is out of range (module `width`/`height`/`quality`; slot `size`/`x`/`y`/`width`/`max_lines`/`shrink_step`; overlay `width`) | Warn + that ONE key falls back to its default; everything else still draws | key + value, plus the tier for a module key and the template and index for a slot or overlay |
 | Overlay `x` or `y` that does not parse | Silently taken as 0 | -- |
 | Float that does not parse or is out of range (`safety`, `min_scale`, `width_factor`, `line_height`, overlay `opacity`) | Warn + that key falls back to its default | template + index + key + value |
 | `color` is not `#rgb` or `#rrggbb` | Warn + the key is dropped, so Hugo's own `#ffffff` applies. Hugo accepts an unreadable color silently and draws white, so this is the only signal | template + value |
-| Unknown enum (`format`, `anchor`, slot `align`, `case`, `overflow`, overlay `anchor`, overlay `source`) | Warn + the documented fallback (`png`, `Center`, `left`, text as written, `shrink`, `topleft`; an unknown overlay `source` drops that overlay) | key + value |
+| Unknown enum (`format`, `anchor`, slot `align`, `case`, `overflow`, overlay `anchor`, overlay `source`) | Warn + the documented fallback (`png`, `Center`, `left`, text as written, `shrink`, `topleft`; an unknown overlay `source` drops that overlay) | key + value, plus the tier for `format` and `anchor` |
 | Unknown slot `source` token | Warn naming the whole vocabulary + that slot dropped; the rest of the card draws | token |
 | `source='param'` naming a key the page does not carry | Silent skip -- optional per-page fields are a design, not a mistake | -- |
 | `source='param'` resolving to a table or a list | Warn + that slot skipped | key |
@@ -412,18 +422,25 @@ The module NEVER breaks a build over an image. `errorf` is reserved for the sing
 | `source='date'` whose `key` is not a layout Hugo understands | Warn + that slot skipped | layout |
 | `source='section'` or `'section_title'` on the home page | Silent skip | -- |
 | Any source resolving to empty or whitespace | Silent skip, together with its `prefix` and `suffix` | -- |
-| Overlay naming no image, naming a missing one, or naming an unusable one (SVG, unsupported format, bytes that are not the image the extension claims) | Warn + that overlay dropped; **card still produced** | path, or template + index |
-| Overlay that cannot be resized or faded | Warn + that overlay dropped | path |
-| Overlay `source='param'`/`'resource'` the page does not carry | Silent skip -- the per-page avatar case | -- |
+| Overlay entry naming no image at all: no `src` under `source='asset'`, no `key` under `'param'`, no `match` under `'resource'` | Warn + that overlay dropped; **card still produced** | template + index |
+| Overlay `src` naming nothing under `assets/`, including a path the operating system refuses to look up | Warn + that overlay dropped; **card still produced** | path |
+| Overlay `match` that is not a pattern Hugo can match against a page's resources (an unclosed `[`) | Warn + that overlay dropped -- a card-template pattern no page could satisfy | template + pattern |
+| Overlay naming an unusable image (SVG, unsupported format, bytes that are not the image the extension claims) | Warn + that overlay dropped; **card still produced** | path or pattern |
+| Overlay that cannot be resized or faded | Warn + that overlay dropped | path or pattern |
+| Overlay `source='param'`/`'resource'` the page does not carry, or whose page-supplied value names no image | Silent skip -- the per-page avatar case | -- |
 | Every slot resolved empty AND no overlay drew | Silent decline: a per-page copy of a shared background says nothing the site's default image does not | -- |
 | Text wider than the canvas in a slot with no `width` | Silent. Hugo word-wraps at the canvas edge on its own; the module cannot warn about a layout it did not perform | -- |
 | `max_lines` set on a slot with no `width` | Silent no-op | -- |
-| `metrics` names a table neither data file defines (including a missing or malformed `metrics.toml`) | Warn + every glyph measured at the nominal fallback width, so breaking is coarse; card produced | table name |
+| A wrapping slot whose box is narrower than one glyph at every size it allows | Warn + its lines drawn running past the box; card still produced | template + slot index |
+| `metrics` names a table neither data file defines | Warn + every glyph measured at the nominal fallback width, so breaking is coarse; card produced | table name |
+| A metrics data file, its `fonts` key, or a named width table inside it is not a table | Warn + no width table from that file (or under that name) applies | file, or file + table name |
+| A width table's `classes` is not one or more tables, a `classes` entry carries no `chars` string or no whole-number `width`, or `glyphs` is not a table | Warn + the glyphs that piece was meant to size fall back to that table's `fallback`; card produced | table name + value, or table name + entry index |
 | `data/og-image/defaults.toml` not found (the module is mounted wrongly) | Warn + only explicitly configured values apply | fixed |
-| `params.ogcard`, the front-matter `ogcard`, the call `opts`, or one of the named tables is not a table | Warn + that tier or section ignored. A single table written where an array of tables is expected is accepted as a one-entry list | tier or section + value |
-| An entry of `text` or `overlay` is not a table | Warn + that entry dropped; the rest of the card draws | array + index |
+| A site's own `data/og-image/defaults.*` overrides the shipped one with something that is not a table | Warn + the shipped defaults do not apply, so only explicitly configured values do | fixed |
+| `params.ogcard`, the front-matter `ogcard`, the `opts` handed to `og-image/card.html`, or one of the named tables (`templates`, `fonts`, `sections`, `kinds`) is not a table | Warn + that tier or section ignored | language for the site tier, page for the front-matter and call tiers, section + value for a named table |
+| An entry of `text` or `overlay` is not a table, or the key itself is a bare scalar | Warn + that entry (or the whole key) dropped; the rest of the card draws. A single table written where an array of tables is expected is accepted as a one-entry list | template + array + index, or template + array |
 | Anything else failing while composing, encoding or publishing | Warn + decline. This row exists so the completeness of the rest of the table is not load-bearing | page + template |
-| The module is imported but neither `[params.ogcard]` nor any page-level `ogcard` exists | One warn naming the missing configuration, per language | language |
+| No card template is defined anywhere in a language -- no `[params.ogcard.templates.<name>]` table at any tier, and no `ogcard.templates` map in any page's front matter | One warn naming the missing configuration, per language | language |
 
 ## Build cost and caching
 
@@ -468,6 +485,7 @@ modules/og-image/
 │           │   └── fit.html                Walks the size ladder and returns the fitted lines
 │           └── lib/
 │               ├── warn.html               Single deduplicated-warning helper
+│               ├── warn-emit.html          The emitting body warn.html wraps in partialCached
 │               ├── int.html                Guarded decimal-integer parser (never octal, never overflow)
 │               └── as-map-list.html        Reads an array-of-tables key as something safe to range over
 └── test/                                   Fixture site + build-output assertion suite

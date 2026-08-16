@@ -10,6 +10,18 @@
   first, then the per-glyph table overrides them, so an exact width always
   beats a class width.
 
+  Both files are hand-written by the consumer, so EVERY level of them is shape
+  checked before it is indexed or ranged over: `index` on a scalar or a list
+  and `range` on a string both raise, and a hand-edited width table must never
+  be able to stop a consuming site's build. A level whose shape is wrong is
+  treated as absent -- and warned about once wherever a site can author that
+  level -- which costs coarser line breaking and nothing else. The outermost
+  level is guarded without a warning because the mounted data directory always
+  supplies a table there, so a message about it could never be printed.
+  `classes` is documented as an array of tables and a single table is
+  accepted as a one-entry list, the same reading lib/as-map-list.html gives the
+  array-of-tables keys in params.
+
   The lookup is assembled with newScratch, NEVER with merge: Hugo's merge
   folds map keys to lower case, which collapses "W" into "w" and would
   silently measure every capital at the fallback width while still producing
@@ -25,18 +37,42 @@
 */}}
 
 {{- $name := printf "%v" (.name | default "default") -}}
-{{- $data := index hugo.Data "og-image" | default dict -}}
-{{- $shipped := index $data "metrics" | default dict -}}
-{{- $local := index $data "metrics-local" | default dict -}}
-{{- $table := index (index $shipped "fonts" | default dict) $name -}}
-{{- with index (index $local "fonts" | default dict) $name -}}
-  {{- $table = . -}}
+{{- $data := index hugo.Data "og-image" -}}
+{{- if not (reflect.IsMap $data) -}}{{- $data = dict -}}{{- end -}}
+
+{{/* The shipped file first, the site's own second, so a site's table of the
+     same name wins. Each level is checked before it is indexed. */}}
+{{- $table := dict -}}
+{{- $found := false -}}
+{{- range $file := slice "metrics" "metrics-local" -}}
+  {{- $doc := index $data $file -}}
+  {{- if reflect.IsMap $doc -}}
+    {{- $fonts := index $doc "fonts" -}}
+    {{- if reflect.IsMap $fonts -}}
+      {{- $t := index $fonts $name -}}
+      {{- if and (reflect.IsMap $t) $t -}}
+        {{- $table = $t -}}
+        {{- $found = true -}}
+      {{- else if and (ne $t nil) (not (reflect.IsMap $t)) -}}
+        {{- partial "og-image/lib/warn.html" (dict
+            "key" (printf "og-image:warn:nonmap-metrics:%s:%s" $file $name)
+            "message" (printf "[og-image] Ignoring the width table %q in data/og-image/%s.*: expected a table, got %q. The glyphs it was meant to size fall back to the nominal average width, so line breaking is coarse." $name $file (printf "%v" $t))) -}}
+      {{- end -}}
+    {{- else if ne $fonts nil -}}
+      {{- partial "og-image/lib/warn.html" (dict
+          "key" (printf "og-image:warn:nonmap-metrics-fonts:%s" $file)
+          "message" (printf "[og-image] Ignoring the fonts key of data/og-image/%s.*: expected a table of named width tables, got %q. No width table from that file applies." $file (printf "%v" $fonts))) -}}
+    {{- end -}}
+  {{- else if ne $doc nil -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:nonmap-metrics-file:%s" $file)
+        "message" (printf "[og-image] Ignoring data/og-image/%s.*: expected a table with a fonts key, got %q. No width table from that file applies." $file (printf "%v" $doc))) -}}
+  {{- end -}}
 {{- end -}}
-{{- if not (reflect.IsMap $table) -}}
+{{- if not $found -}}
   {{- partial "og-image/lib/warn.html" (dict
       "key" (printf "og-image:warn:unknown-metrics:%s" $name)
       "message" (printf "[og-image] No metrics table named %q in data/og-image/metrics.toml or data/og-image/metrics-local.toml; every glyph falls back to the nominal average width, so line breaking is coarse." $name)) -}}
-  {{- $table = dict -}}
 {{- end -}}
 
 {{- $em := 1000 -}}
@@ -52,18 +88,48 @@
   {{- if and .ok (ge .value 0) -}}{{- $space = .value -}}{{- end -}}
 {{- end -}}
 
+{{- $classes := index $table "classes" -}}
+{{- if reflect.IsMap $classes -}}
+  {{- $classes = slice $classes -}}
+{{- else if not (reflect.IsSlice $classes) -}}
+  {{- if ne $classes nil -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:nonlist-metrics-classes:%s:%v" $name $classes)
+        "message" (printf "[og-image] Ignoring the classes key of the width table %q: it expects one or more tables, each with a chars string and a whole-number width, but was given %q. Every glyph it was meant to size falls back to that table's fallback width." $name (printf "%v" $classes))) -}}
+  {{- end -}}
+  {{- $classes = slice -}}
+{{- end -}}
+
 {{- $s := newScratch -}}
-{{- range $c := (index $table "classes" | default slice) -}}
+{{- range $i, $c := $classes -}}
+  {{- $placed := false -}}
   {{- if reflect.IsMap $c -}}
     {{- $w := partial "og-image/lib/int.html" (index $c "width") -}}
-    {{- if and $w.ok (ge $w.value 0) -}}
-      {{- range $ch := split (printf "%v" (index $c "chars")) "" -}}
+    {{- $chars := index $c "chars" -}}
+    {{- if and $w.ok (ge $w.value 0) (ne $chars nil) (not (reflect.IsMap $chars)) (not (reflect.IsSlice $chars)) -}}
+      {{- $placed = true -}}
+      {{- range $ch := split (printf "%v" $chars) "" -}}
         {{- if ne $ch "" -}}{{- $s.Set $ch $w.value -}}{{- end -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}
+  {{- if not $placed -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:bad-metrics-class:%s:%d" $name $i)
+        "message" (printf "[og-image] Ignoring entry %d of the classes list in the width table %q: an entry needs a chars string and a whole-number width of zero or more. The glyphs it names fall back to that table's fallback width." $i $name)) -}}
+  {{- end -}}
 {{- end -}}
-{{- range $ch, $v := (index $table "glyphs" | default dict) -}}
+
+{{- $glyphs := index $table "glyphs" -}}
+{{- if not (reflect.IsMap $glyphs) -}}
+  {{- if ne $glyphs nil -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:nonmap-metrics-glyphs:%s:%v" $name $glyphs)
+        "message" (printf "[og-image] Ignoring the glyphs key of the width table %q: it expects a table mapping one character to its width, but was given %q. Every glyph it was meant to size falls back to that table's fallback width." $name (printf "%v" $glyphs))) -}}
+  {{- end -}}
+  {{- $glyphs = dict -}}
+{{- end -}}
+{{- range $ch, $v := $glyphs -}}
   {{- $w := partial "og-image/lib/int.html" $v -}}
   {{- if and $w.ok (ge $w.value 0) -}}{{- $s.Set $ch $w.value -}}{{- end -}}
 {{- end -}}

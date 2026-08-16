@@ -131,6 +131,46 @@ test('the description slot draws the description, and an absent one draws nothin
   assert.equal(inkBands(plain, {region: DESCRIPTION_REGION}).length, 0);
 });
 
+test('a caller handing an empty string is honored, not overruled by the page', () => {
+  // title and description are honored by PRESENCE, not by truthiness. This
+  // page carries a real title and a real description and the caller hands two
+  // empty strings, so a module reading them for truth draws the page's own
+  // words instead -- and the card then disagrees with the og:title and
+  // og:description tags published beside it, which is the exact failure the
+  // contract exists to prevent. Its card is the template's overlay and nothing
+  // else, so ANY ink in either box is that failure.
+  const rec = records(configuredDir).get('/blog/handed-empty');
+  assert.equal(rec.mode, 'handed', 'the caller used the dict form');
+  assert.equal(rec.handed_title, '', 'and handed an empty title');
+  assert.ok(rec.title.length > 0, 'while the page carries one of its own');
+  assert.ok(rec.description.length > 0, 'and a description of its own');
+  assert.equal(rec.cards.length, 1, 'the card is still composed, from its overlay');
+  const img = cardImage(configuredDir, rec.cards[0].url);
+  assert.deepEqual(inkBands(img, {region: TITLE_REGION}), [], 'no title was drawn');
+  assert.deepEqual(inkBands(img, {region: DESCRIPTION_REGION}), [], 'and no description');
+});
+
+test('a page with no description of its own draws the summary of its content', () => {
+  // The documented fallback, and the only description path no other page in
+  // the fixture takes: every other page carries its own. The expected string is
+  // the page's whole body, so the glyph count says the summary was plainified
+  // and trimmed rather than handed over with its markup or its trailing
+  // newline attached.
+  const SUMMARY = 'Body words that stand in for a description.';
+  const all = records(configuredDir);
+  const advance = calibrate(all);
+  const rec = all.get('/blog/summary-only');
+  assert.equal(rec.description, '', 'the page really carries no description');
+  const img = cardImage(configuredDir, rec.cards[0].url);
+  const bands = inkBands(img, {region: DESCRIPTION_REGION});
+  assert.equal(bands.length, 1, 'the description slot drew one line');
+  assert.equal(
+    charsOn(bands[0], {anchorX: TITLE_BOX.x, advance: advance / 2}),
+    SUMMARY.length,
+    'and it is the summary, at the description slot’s own half size',
+  );
+});
+
 test('an OpenType face draws, and draws at its own widths', () => {
   // Hugo's own documentation lists OpenType as unsupported for images.Text
   // while the module's guard admits it. This build is warning-gated, so the

@@ -31,6 +31,9 @@ export const multilingualDir = dir('FIXTURE_PUBLIC_MULTILINGUAL', 'fixture/publi
 // A baseURL carrying a path, which is the only shape in which a card URL that
 // keeps the base path and one that drops it are different bytes.
 export const subpathDir = dir('FIXTURE_PUBLIC_SUBPATH', 'fixture/public/subpath');
+// The only build that sets default_template, the tier `configured` proves the
+// opposite statement about.
+export const routingDir = dir('FIXTURE_PUBLIC_ROUTING', 'fixture/public/routing');
 
 const LOG_KEYS = {
   baseline: 'HUGO_BUILD_LOG_BASELINE',
@@ -38,6 +41,7 @@ const LOG_KEYS = {
   degraded: 'HUGO_BUILD_LOG_DEGRADED',
   multilingual: 'HUGO_BUILD_LOG_MULTILINGUAL',
   subpath: 'HUGO_BUILD_LOG_SUBPATH',
+  routing: 'HUGO_BUILD_LOG_ROUTING',
 };
 
 export function buildLog(which) {

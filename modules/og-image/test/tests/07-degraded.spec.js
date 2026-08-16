@@ -43,6 +43,10 @@ const FAULTS = [
 
   ['background: path names nothing', /^The card background "og\/nope\.png" was not found/],
   [
+    'background: path the operating system refuses',
+    /^The card background "og\/\*\.png" was not found/,
+  ],
+  [
     'background: bytes are not an image',
     /^The card background "og\/not-an-image\.png" carries no image/,
   ],
@@ -52,6 +56,10 @@ const FAULTS = [
   [
     'font: registered path names nothing',
     /^The font "fonts\/DoesNotExist\.ttf" registered as "missing" was not found/,
+  ],
+  [
+    'font: registered path the operating system refuses',
+    /^The font "fonts\/\*\.ttf" registered as "odd" was not found/,
   ],
   [
     'font: rejected format',
@@ -72,14 +80,53 @@ const FAULTS = [
     /^The card text slot in template "badslots" reads the page parameter "tags"/,
   ],
   ['slot: unknown metrics table', /^No metrics table named "nosuch"/],
+  [
+    'slot: float knob too large for a float64',
+    /^Ignoring the width_factor value "9{300,}" on text slot 14/,
+  ],
+
+  // Every level of a hand-written width table. A wrong shape at any of them
+  // raises inside `range` or `index`, so each of these is a build the module
+  // would otherwise have stopped rather than a card it drew coarsely.
+  [
+    'metrics: named table is not a table',
+    /^Ignoring the width table "scalartable" in data\/og-image\/metrics-local/,
+  ],
+  ['metrics: and no table of that name is found', /^No metrics table named "scalartable"/],
+  ['metrics: classes is not a list', /^Ignoring the classes key of the width table "badclasses"/],
+  ['metrics: glyphs is not a table', /^Ignoring the glyphs key of the width table "badglyphs"/],
+  [
+    'metrics: a classes entry names no characters',
+    /^Ignoring entry 0 of the classes list in the width table "badclassentry"/,
+  ],
 
   ['overlay: path names nothing', /^The overlay "og\/nope-overlay\.png" .* was not found/],
+  [
+    'overlay: path the operating system refuses',
+    /^The overlay "og\/\*\.png" .* was not found under assets\//,
+  ],
   ['overlay: bytes are not an image', /^The overlay "og\/not-an-image\.png" .* carries no image/],
   ['overlay: unknown source token', /^Unknown overlay source "bundle"/],
   ['overlay: no src at all', /^Overlay 3 of card template "badoverlay" names no image/],
+  [
+    'overlay: no key at all',
+    /^Overlay 9 of card template "badoverlay" names no image: an overlay reading from a page parameter/,
+  ],
+  [
+    'overlay: no match at all',
+    /^Overlay 10 of card template "badoverlay" names no image: an overlay reading from the page's own resources/,
+  ],
+  [
+    'overlay: a pattern Hugo cannot match with',
+    /^The overlay pattern "cover-\[1\.png" in card template "badoverlay"/,
+  ],
   ['overlay: unknown anchor', /^Unknown overlay anchor "northeast"/],
   ['overlay: unparseable width', /^Ignoring the width value "wide" on overlay 5/],
   ['overlay: unparseable opacity', /^Ignoring the opacity value "half" on overlay 6/],
+  [
+    'overlay: opacity too large for a float64',
+    /^Ignoring the opacity value "9{300,}" on overlay 11/,
+  ],
 
   [
     'text array: an entry that is not a table',
@@ -189,26 +236,33 @@ test('a background fault declines the whole card; an overlay fault drops one ove
   // an overlay that cannot be read leaves a card that is merely missing a
   // logo, which is far better than no card.
   const all = records(degradedDir);
-  for (const path of ['/deg-missingbg/a', '/deg-textbg/a', '/deg-nobgkey/a']) {
+  // The last of these is routed by KIND rather than by section, and its
+  // background is a path the operating system refuses to look up at all:
+  // resources.Get raises on it instead of returning nil, so an uncaught raise
+  // here would be the whole build rather than one card.
+  for (const path of ['/deg-missingbg/a', '/deg-textbg/a', '/deg-nobgkey/a', '/tags/alpha']) {
     assert.deepEqual(all.get(path).cards, [], `${path} declined`);
   }
   assert.equal(all.get('/deg-overlay/a').cards.length, 1, 'the overlay page kept its card');
 });
 
-test('the overlays that survived are exactly the three that had nothing wrong with them', () => {
-  // Four of the seven overlays are dropped, each for its own reason. The three
-  // that remain are placed by the anchors they name -- one at the top left
-  // corner from the rejected anchor's fallback, one at the bottom left, one at
-  // the top right -- so the count and the bounding box together say that the
-  // right four were dropped rather than merely that four were.
+test('the overlays that survived are exactly the four that named a usable image', () => {
+  // Eight of the twelve overlays are dropped, each for its own reason. The
+  // four that remain are placed by the anchors they name -- one at the top
+  // left corner from the rejected anchor's fallback, one at the bottom left,
+  // one at the top right, one at the bottom right -- so the count and the
+  // bounding box together say that the right eight were dropped rather than
+  // merely that eight were. Two of the four carry a value the module rejected
+  // (a width and an opacity) and are drawn at their own size, fully opaque,
+  // which is what those two fallbacks promise.
   const rec = records(degradedDir).get('/deg-overlay/a');
   const img = cardImage(degradedDir, rec.cards[0].url);
-  assert.equal(countColor(img, BADGE), 3 * 80 * 80, 'three badges, none of them resized');
+  assert.equal(countColor(img, BADGE), 4 * 80 * 80, 'four badges, none of them resized or faded');
   const bounds = colorBounds(img, BADGE);
   assert.deepEqual(
     {left: bounds.left, right: bounds.right, top: bounds.top, bottom: bounds.bottom},
     {left: 0, right: 1179, top: 0, bottom: 609},
-    'top left, top right and bottom left, at the offsets each named',
+    'the four corners each named, at the offsets each named',
   );
 });
 

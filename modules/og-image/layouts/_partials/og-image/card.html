@@ -68,8 +68,13 @@
       {{- $description = printf "%v" (index $ctx "description") -}}
       {{- $hasDescription = true -}}
     {{- end -}}
-    {{- $o := index $ctx "opts" -}}
-    {{- if reflect.IsMap $o -}}{{- $callOpts = $o -}}{{- end -}}
+    {{/* Forwarded WHATEVER it is, including a scalar or a list. config.html
+         owns the shape check for every tier and reports a call tier that is
+         not a table; filtering the value here would leave that guard
+         unreachable and turn a caller's mistake into silence. */}}
+    {{- if isset $ctx "opts" -}}
+      {{- $callOpts = index $ctx "opts" -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 

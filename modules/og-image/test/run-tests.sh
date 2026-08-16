@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Builds the fixture site FIVE TIMES with hugo (a BUILD, not a server: no port
+# Builds the fixture site SIX TIMES with hugo (a BUILD, not a server: no port
 # binding, and a finite build exits by itself) and runs the Node build-output
-# assertion suite against all five trees.
+# assertion suite against all six trees.
 #
 # Each environment earns its place by a distinction no other one can make. The
 # default environment omits [params.ogcard] entirely, so it is the only build
@@ -20,7 +20,11 @@
 # through the rendering language give different answers. The `subpath`
 # environment repeats the card set under a baseURL carrying a PATH, which is
 # the only shape in which a published card URL that keeps the base path and
-# one that drops it are different bytes.
+# one that drops it are different bytes. The `routing` environment is the only
+# one that sets `default_template`, the card template for a page no route
+# names: `configured` proves the contradictory statement that such a page gets
+# nothing at all, and its decline set is that proof, so the two cannot share a
+# build.
 #
 # Follows the repository's hugo process lifecycle rule with a pre-launch
 # process check, and hard-fails on any deprecation or error output in any
@@ -34,11 +38,12 @@ LOG_CONFIGURED="$HERE/hugo-build-configured.log"
 LOG_DEGRADED="$HERE/hugo-build-degraded.log"
 LOG_MULTILINGUAL="$HERE/hugo-build-multilingual.log"
 LOG_SUBPATH="$HERE/hugo-build-subpath.log"
+LOG_ROUTING="$HERE/hugo-build-routing.log"
 
 # The logs are retained after a successful run so the documented re-run recipe
 # can read them; they are gitignored at the repo root. Only an interrupt
 # discards them mid-run.
-trap 'rm -f "$LOG_BASELINE" "$LOG_CONFIGURED" "$LOG_DEGRADED" "$LOG_MULTILINGUAL" "$LOG_SUBPATH"' INT TERM
+trap 'rm -f "$LOG_BASELINE" "$LOG_CONFIGURED" "$LOG_DEGRADED" "$LOG_MULTILINGUAL" "$LOG_SUBPATH" "$LOG_ROUTING"' INT TERM
 
 # `pgrep -x` matches the process NAME, the semantic twin of the tasklist
 # IMAGENAME filter below. `-f` would match the whole command line, and this
@@ -85,12 +90,12 @@ build() { # build <environment> <destination> <log> [strict]
     grep "ERROR" "$log" >&2
     exit 1
   fi
-  # The happy path is SILENT, and only the configured build is gated this way.
-  # The degraded build exists to produce warnings, the baseline build carries
-  # the unconfigured notice, and the multilingual build carries the two colors
-  # it exists to prove are reported separately.
+  # The happy path is SILENT, and only the configured and routing builds are
+  # gated this way. The degraded build exists to produce warnings, the baseline
+  # build carries the unconfigured notice, and the multilingual build carries
+  # the two colors it exists to prove are reported separately.
   if [ "$strict" = "strict" ] && grep -q "WARN" "$log"; then
-    echo "The configured build must warn about nothing:" >&2
+    echo "The ${env_name:-default} build must warn about nothing:" >&2
     grep "WARN" "$log" >&2
     exit 1
   fi
@@ -101,6 +106,7 @@ build configured public/configured "$LOG_CONFIGURED" strict
 build degraded public/degraded "$LOG_DEGRADED"
 build multilingual public/multilingual "$LOG_MULTILINGUAL"
 build subpath public/subpath "$LOG_SUBPATH"
+build routing public/routing "$LOG_ROUTING" strict
 
 export FIXTURE_DIR
 MODULE_ROOT="$(cd "$HERE/.." && pwd)"
@@ -110,11 +116,13 @@ export FIXTURE_PUBLIC_CONFIGURED="$FIXTURE_DIR/public/configured"
 export FIXTURE_PUBLIC_DEGRADED="$FIXTURE_DIR/public/degraded"
 export FIXTURE_PUBLIC_MULTILINGUAL="$FIXTURE_DIR/public/multilingual"
 export FIXTURE_PUBLIC_SUBPATH="$FIXTURE_DIR/public/subpath"
+export FIXTURE_PUBLIC_ROUTING="$FIXTURE_DIR/public/routing"
 export HUGO_BUILD_LOG_BASELINE="$LOG_BASELINE"
 export HUGO_BUILD_LOG_CONFIGURED="$LOG_CONFIGURED"
 export HUGO_BUILD_LOG_DEGRADED="$LOG_DEGRADED"
 export HUGO_BUILD_LOG_MULTILINGUAL="$LOG_MULTILINGUAL"
 export HUGO_BUILD_LOG_SUBPATH="$LOG_SUBPATH"
+export HUGO_BUILD_LOG_ROUTING="$LOG_ROUTING"
 HUGO_VERSION="$(hugo version | sed -E 's/^hugo v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
 export HUGO_VERSION
 

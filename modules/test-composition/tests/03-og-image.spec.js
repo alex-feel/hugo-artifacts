@@ -173,3 +173,24 @@ test('each carded page carries its own card', () => {
   assert.ok(cards.length >= 3, 'the fixture must publish more than a couple of cards');
   assert.equal(new Set(cards).size, cards.length, `card URLs must be unique: ${cards.join(', ')}`);
 });
+
+test("og-image's own image-tag renderer stands down where the seo module owns the head", () => {
+  // og-image ships a standalone renderer for a site with no seo module, and it
+  // decides whether to render by probing for `_partials/seo/head.html`. That
+  // probe takes a path under layouts/ WITH the .html suffix, and the pre-v0.146
+  // `partials/` spelling silently returns false -- which would publish a second
+  // og:image beside the first, with no error and no warning, on every page of
+  // every site that mounts both modules. This fixture is the only one in the
+  // repository where both are mounted, and its head calls both renderers, so
+  // one tag per document is the whole assertion.
+  const html = documents();
+  assert.ok(html.length >= 4, `the fixture publishes a tree to read: ${html.length} documents`);
+  for (const doc of html) {
+    const tags = [...doc.matchAll(/<meta property="og:image" content="([^"]*)"/g)];
+    assert.equal(tags.length, 1, `exactly one og:image tag: ${tags.map((t) => t[1]).join(', ')}`);
+  }
+  // And the renderer really is wired in, so the count above is a silence
+  // rather than an absence.
+  const baseof = readFileSync(join(fixtureDir, 'layouts/baseof.html'), 'utf8');
+  assert.match(baseof, /partial "og-image\/meta\.html"/);
+});

@@ -9,10 +9,21 @@
 // while still being "an overlay on the card".
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {configuredDir, records, cardImage, BADGE} from './helpers.js';
+import {configuredDir, records, cardImage, BADGE, BACKGROUNDS} from './helpers.js';
 import {colorBounds, countColor, pixel, hex} from './lib/raster.js';
 
 const BOX = {left: 1072, right: 1151, top: 502, bottom: 581};
+
+// The overlaid template. Three squares of 80 pixels, one per source, each a
+// flat color that appears nowhere else on the card: the parameter's image is
+// blue, the page's own bundled image is green, and the badge at half opacity
+// is neither red nor the backdrop.
+const PARAM_IMAGE = {r: 0x00, g: 0x00, b: 0xfa};
+const BUNDLED_IMAGE = {r: 0x00, g: 0xfa, b: 0x00};
+const SQUARE = (x) => ({left: x, right: x + 79, top: 440, bottom: 519, pixels: 80 * 80});
+const FADED = {x: 600, y: 440};
+
+const overlaid = (all, path) => cardImage(configuredDir, all.get(path).cards[0].url);
 
 test('the badge occupies exactly the rectangle its anchor and offsets name', () => {
   const rec = records(configuredDir).get('/blog/short');
@@ -71,6 +82,91 @@ test('a template with no overlay produces a card with no badge pixel at all', ()
     const img = cardImage(configuredDir, all.get(path).cards[0].url);
     assert.equal(countColor(img, BADGE), 0, `${path} carries no overlay`);
     assert.equal(colorBounds(img, BADGE), null, `${path} really carries none`);
+  }
+});
+
+test("an overlay reading a page parameter resolves that page's own value", () => {
+  // The parameter holds a path, and the module resolves it against the page's
+  // own bundle FIRST and assets/ second. Two pages take the two halves of that
+  // rule: one names an assets/ path, one names its own bundled image, and the
+  // colors say which resolution actually happened rather than merely that
+  // something was drawn.
+  const all = records(configuredDir);
+  const fromAssets = overlaid(all, '/overlays/asset-param');
+  assert.deepEqual(colorBounds(fromAssets, PARAM_IMAGE), SQUARE(200), 'the assets/ path resolved');
+  assert.equal(countColor(fromAssets, BUNDLED_IMAGE), 0, 'and nothing else did');
+
+  const fromBundle = overlaid(all, '/overlays/bundled');
+  assert.equal(countColor(fromBundle, PARAM_IMAGE), 0, 'this page names no assets/ path');
+  assert.equal(
+    countColor(fromBundle, BUNDLED_IMAGE, {region: {x: 200, y: 440, width: 80, height: 80}}),
+    80 * 80,
+    "the page's own bundled image resolved instead",
+  );
+});
+
+test("an overlay matching the page's own resources draws the image it matched", () => {
+  // The documented per-page avatar: a glob against the page's bundle. The page
+  // carrying the bundle draws it; the pages that do not carry one draw nothing
+  // there and say nothing about it, because a page without the image is the
+  // design rather than a mistake.
+  const all = records(configuredDir);
+  const bundled = overlaid(all, '/overlays/bundled');
+  assert.equal(
+    countColor(bundled, BUNDLED_IMAGE, {region: {x: 400, y: 440, width: 80, height: 80}}),
+    80 * 80,
+    'the glob matched the bundled image',
+  );
+  assert.deepEqual(
+    colorBounds(bundled, BUNDLED_IMAGE),
+    {...SQUARE(200), right: 479, pixels: 2 * 80 * 80},
+    'and the two squares that image fills are the only ones',
+  );
+  for (const path of ['/overlays', '/overlays/asset-param', '/overlays/odd-param']) {
+    assert.equal(countColor(overlaid(all, path), BUNDLED_IMAGE), 0, `${path} carries no bundle`);
+  }
+});
+
+test('an overlay a page cannot resolve is dropped without a word, and the rest is drawn', () => {
+  // Two pages whose parameter holds a value no lookup can turn into an image:
+  // one path the operating system refuses outright and one value that is not a
+  // matchable pattern. Both of those RAISE rather than returning nothing, so
+  // an unguarded lookup takes the whole build down; caught, they mean what an
+  // absent parameter means. This build's silence is gated by the runner, so
+  // the card existing with its remaining overlay intact is the assertion.
+  const all = records(configuredDir);
+  for (const path of ['/overlays/odd-param', '/overlays/odd-glob', '/overlays']) {
+    const img = overlaid(all, path);
+    assert.equal(countColor(img, PARAM_IMAGE), 0, `${path}: nothing resolved from the parameter`);
+    assert.equal(countColor(img, BUNDLED_IMAGE), 0, `${path}: and nothing from the bundle`);
+    assert.notEqual(
+      hex(pixel(img, FADED.x + 40, FADED.y + 40)),
+      hex(BACKGROUNDS.post),
+      `${path}: the overlay that could be resolved still was`,
+    );
+  }
+});
+
+test('an overlay given an opacity is blended with the backdrop, not stamped on it', () => {
+  // The badge is a flat red and the backdrop is a flat dark red, so half
+  // opacity has exactly one possible answer: a color that is neither, sitting
+  // between them on every channel. An opacity that was parsed and then not
+  // applied draws the badge's own color, which is why the assertion is that
+  // NO pixel of the card carries it.
+  const all = records(configuredDir);
+  for (const path of ['/overlays', '/overlays/bundled', '/overlays/asset-param']) {
+    const img = overlaid(all, path);
+    assert.equal(countColor(img, BADGE), 0, `${path}: the badge is nowhere drawn opaque`);
+    const blended = pixel(img, FADED.x + 40, FADED.y + 40);
+    assert.ok(
+      blended.r > BACKGROUNDS.post.r && blended.r < BADGE.r,
+      `${path}: blended between the two: ${hex(blended)}`,
+    );
+    assert.deepEqual(
+      colorBounds(img, blended),
+      SQUARE(FADED.x),
+      `${path}: and the blend covers exactly the square the overlay was placed in`,
+    );
   }
 });
 

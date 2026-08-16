@@ -167,6 +167,13 @@ jobs:
           # indentation is governed by Prettier and the template docstring
           # style, while this check enforces the line endings, charset, final
           # newline, and trailing whitespace rules from .editorconfig.
+          #
+          # .ecrc also excludes the license text that ships beside a vendored
+          # font in a test fixture. That text is reproduced verbatim from
+          # upstream and its exact bytes are the point of committing it, so a
+          # tab or a trailing space in it is content rather than a formatting
+          # slip, and reformatting it to satisfy this check would misstate the
+          # license the font is distributed under.
           go install github.com/editorconfig-checker/editorconfig-checker/v3/cmd/editorconfig-checker@v3.0.3
           "$(go env GOPATH)/bin/editorconfig-checker"
 
