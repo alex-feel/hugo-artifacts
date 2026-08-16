@@ -1,0 +1,71 @@
+{{/*
+  og-image/text/metrics.html -- INTERNAL (text tier).
+
+  Purpose: resolves ONE named width table into a flat per-glyph lookup. Call
+  through partialCached keyed on the name: the result is a pure function of
+  the data files, so one build computes it once.
+
+  Tables come from data/og-image/metrics.toml and, where a site supplies one,
+  data/og-image/metrics-local.toml, which wins per NAME. Classes are expanded
+  first, then the per-glyph table overrides them, so an exact width always
+  beats a class width.
+
+  The lookup is assembled with newScratch, NEVER with merge: Hugo's merge
+  folds map keys to lower case, which collapses "W" into "w" and would
+  silently measure every capital at the fallback width while still producing
+  plausible-looking output. newScratch is local to this template execution:
+  no shared state, no concurrency hazard, and -- unlike a map built up
+  incrementally in hugo.Store -- no reader can ever observe a half-filled
+  table.
+
+  Context (dict):
+  - .name (string) Table name; defaults to "default".
+
+  Return value: dict{em, fallback, space, glyphs}. One terminal return.
+*/}}
+
+{{- $name := printf "%v" (.name | default "default") -}}
+{{- $data := index hugo.Data "og-image" | default dict -}}
+{{- $shipped := index $data "metrics" | default dict -}}
+{{- $local := index $data "metrics-local" | default dict -}}
+{{- $table := index (index $shipped "fonts" | default dict) $name -}}
+{{- with index (index $local "fonts" | default dict) $name -}}
+  {{- $table = . -}}
+{{- end -}}
+{{- if not (reflect.IsMap $table) -}}
+  {{- partial "og-image/lib/warn.html" (dict
+      "key" (printf "og-image:warn:unknown-metrics:%s" $name)
+      "message" (printf "[og-image] No metrics table named %q in data/og-image/metrics.toml or data/og-image/metrics-local.toml; every glyph falls back to the nominal average width, so line breaking is coarse." $name)) -}}
+  {{- $table = dict -}}
+{{- end -}}
+
+{{- $em := 1000 -}}
+{{- $fallback := 560 -}}
+{{- $space := 260 -}}
+{{- with partial "og-image/lib/int.html" (index $table "em" | default 1000) -}}
+  {{- if and .ok (ge .value 1) -}}{{- $em = .value -}}{{- end -}}
+{{- end -}}
+{{- with partial "og-image/lib/int.html" (index $table "fallback" | default 560) -}}
+  {{- if and .ok (ge .value 0) -}}{{- $fallback = .value -}}{{- end -}}
+{{- end -}}
+{{- with partial "og-image/lib/int.html" (index $table "space" | default 260) -}}
+  {{- if and .ok (ge .value 0) -}}{{- $space = .value -}}{{- end -}}
+{{- end -}}
+
+{{- $s := newScratch -}}
+{{- range $c := (index $table "classes" | default slice) -}}
+  {{- if reflect.IsMap $c -}}
+    {{- $w := partial "og-image/lib/int.html" (index $c "width") -}}
+    {{- if and $w.ok (ge $w.value 0) -}}
+      {{- range $ch := split (printf "%v" (index $c "chars")) "" -}}
+        {{- if ne $ch "" -}}{{- $s.Set $ch $w.value -}}{{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- range $ch, $v := (index $table "glyphs" | default dict) -}}
+  {{- $w := partial "og-image/lib/int.html" $v -}}
+  {{- if and $w.ok (ge $w.value 0) -}}{{- $s.Set $ch $w.value -}}{{- end -}}
+{{- end -}}
+
+{{- return (dict "em" $em "fallback" $fallback "space" $space "glyphs" $s.Values) -}}

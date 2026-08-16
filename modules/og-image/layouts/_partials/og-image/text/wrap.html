@@ -1,0 +1,127 @@
+{{/*
+  og-image/text/wrap.html -- INTERNAL (text tier).
+
+  Purpose: greedy word wrap against a per-mille-em budget. The function is
+  TOTAL: it returns at most max_lines lines for EVERY input, with
+  overflow=true when content had to be dropped. That is what lets the fitter
+  treat the shrink ladder as "the first rung whose overflow is false" and
+  still hold a usable answer when no rung fits.
+
+  A word wider than the budget is hard-split. A hard break flushes the current
+  line even when it is empty, so an author's blank line survives. Truncation
+  keeps the LONGEST PREFIX of the last allowed line that leaves room for the
+  ellipsis -- accumulated width is monotonic, so one forward pass finds it --
+  and when not even the first piece fits, that piece is itself split against
+  budget minus the ellipsis width, so a single over-long word truncates to a
+  readable head plus the ellipsis rather than to a bare ellipsis.
+
+  Hugo has no `while` and no `break`: every loop here ranges over a finite
+  slice guarded by an early-exit flag, so termination is structural.
+
+  Context (dict):
+  - .tokens (slice)   Tokens from og-image/text/measure.html.
+  - .space (int)      Separator width in per-mille em.
+  - .budget (int)     Line budget in per-mille em.
+  - .max_lines (int)  Hard line bound (callers pass a large sentinel for
+                      "unlimited").
+  - .ellipsis (string) Appended to a truncated last line.
+  - .ellipsis_w (int) Width of that ellipsis.
+  - .glyphs (map)     Per-glyph widths, for hard-splitting.
+  - .fallback (int)   Width for a glyph the table does not name.
+
+  Return value: dict{lines (slice of string), widths (slice of int), overflow
+  (bool)}. One terminal return.
+*/}}
+
+{{- $tokens := .tokens -}}
+{{- $space := .space -}}
+{{- $budget := .budget -}}
+{{- $maxLines := .max_lines -}}
+{{- $ellipsis := .ellipsis -}}
+{{- $ellw := .ellipsis_w -}}
+{{- $glyphs := .glyphs -}}
+{{- $fallback := .fallback -}}
+{{- $lines := slice -}}
+{{- $widths := slice -}}
+{{- $cur := "" -}}
+{{- $curw := 0 -}}
+{{- $pieces := slice -}}
+{{- $stop := false -}}
+{{- $over := false -}}
+
+{{- range $tok := $tokens -}}
+  {{- if not $stop -}}
+    {{- if $tok.br -}}
+      {{- if ge (len $lines) (sub $maxLines 1) -}}
+        {{- $stop = true -}}
+        {{- $over = true -}}
+      {{- else -}}
+        {{- $lines = $lines | append $cur -}}
+        {{- $widths = $widths | append $curw -}}
+        {{- $cur = "" -}}
+        {{- $curw = 0 -}}
+        {{- $pieces = slice -}}
+      {{- end -}}
+    {{- else -}}
+      {{- $ps := slice (dict "t" $tok.t "w" $tok.w "nosp" false) -}}
+      {{- if gt $tok.w $budget -}}
+        {{- $ps = partial "og-image/text/split-word.html" (dict "word" $tok.t "budget" $budget "glyphs" $glyphs "fallback" $fallback) -}}
+      {{- end -}}
+      {{- range $p := $ps -}}
+        {{- if not $stop -}}
+          {{- $lead := 0 -}}
+          {{- if and (ne $cur "") (not $p.nosp) -}}{{- $lead = $space -}}{{- end -}}
+          {{- if and (ne $cur "") (gt (add $curw (add $lead $p.w)) $budget) -}}
+            {{- if ge (len $lines) (sub $maxLines 1) -}}
+              {{- $stop = true -}}
+              {{- $over = true -}}
+            {{- else -}}
+              {{- $lines = $lines | append $cur -}}
+              {{- $widths = $widths | append $curw -}}
+              {{- $cur = "" -}}
+              {{- $curw = 0 -}}
+              {{- $pieces = slice -}}
+              {{- $lead = 0 -}}
+            {{- end -}}
+          {{- end -}}
+          {{- if not $stop -}}
+            {{- $cur = printf "%s%s%s" $cur (cond (eq $lead 0) "" " ") $p.t -}}
+            {{- $curw = add $curw (add $lead $p.w) -}}
+            {{- $pieces = $pieces | append $p -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if $over -}}
+  {{- $tt := "" -}}
+  {{- $tw := 0 -}}
+  {{- $acct := "" -}}
+  {{- $accw := 0 -}}
+  {{- range $p := $pieces -}}
+    {{- $lead := 0 -}}
+    {{- if and (ne $acct "") (not $p.nosp) -}}{{- $lead = $space -}}{{- end -}}
+    {{- $accw = add $accw (add $lead $p.w) -}}
+    {{- $acct = printf "%s%s%s" $acct (cond (eq $lead 0) "" " ") $p.t -}}
+    {{- if le (add $accw $ellw) $budget -}}
+      {{- $tt = $acct -}}
+      {{- $tw = $accw -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if and (eq $tt "") (gt (len $pieces) 0) -}}
+    {{- $head := partial "og-image/text/split-word.html" (dict "word" (index $pieces 0).t "budget" (sub $budget $ellw) "glyphs" $glyphs "fallback" $fallback) -}}
+    {{- if gt (len $head) 0 -}}
+      {{- $tt = (index $head 0).t -}}
+      {{- $tw = (index $head 0).w -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $lines = $lines | append (printf "%s%s" $tt $ellipsis) -}}
+  {{- $widths = $widths | append (add $tw $ellw) -}}
+{{- else if ne $cur "" -}}
+  {{- $lines = $lines | append $cur -}}
+  {{- $widths = $widths | append $curw -}}
+{{- end -}}
+
+{{- return (dict "lines" $lines "widths" $widths "overflow" $over) -}}

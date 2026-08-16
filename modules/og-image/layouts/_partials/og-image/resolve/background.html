@@ -1,0 +1,76 @@
+{{/*
+  og-image/resolve/background.html -- INTERNAL (resolver tier).
+
+  Purpose: turns a card template's `background` key into the base raster every
+  other filter draws onto, normalized to exactly the configured canvas size.
+  Because the raster is normalized with .Fill plus the configured anchor, a
+  site can drop in a backdrop of any size and every coordinate in the template
+  stays valid.
+
+  A card is composed ON a raster, so every failure here declines the whole
+  card rather than publishing a half-made one: a template with no background,
+  a path that names nothing, an SVG (Hugo cannot raster-process one), and a
+  file that carries no decodable image all warn once and return not-ok. The
+  decode probe matters because a media type is inferred from the extension: a
+  text file named .png reads as an image resource and would otherwise take the
+  build down at the first pixel operation.
+
+  Context (dict):
+  - .page (Page)     The current page (for diagnostics).
+  - .opts (dict)     The resolved options from og-image/config.html.
+  - .name (string)   The card template's name.
+  - .template (map)  The card template's table.
+
+  Return value: dict{ok (bool), resource}. One terminal return.
+*/}}
+
+{{- $opts := .opts -}}
+{{- $name := .name -}}
+{{- $tpl := .template -}}
+{{- $result := dict "ok" false "resource" "" -}}
+
+{{- $path := "" -}}
+{{- $raw := index $tpl "background" -}}
+{{- if and (ne $raw nil) (not (reflect.IsMap $raw)) (not (reflect.IsSlice $raw)) (ne (printf "%T" $raw) "bool") -}}
+  {{- $path = trim (printf "%v" $raw) " \t\n\r" -}}
+{{- end -}}
+
+{{- if not $path -}}
+  {{- partial "og-image/lib/warn.html" (dict
+      "key" (printf "og-image:warn:no-background:%s" $name)
+      "message" (printf "[og-image] Card template %q defines no background, so no card is composed for the pages it covers. Set [params.ogcard.templates.%s] background to an image under assets/." $name $name)) -}}
+{{- else -}}
+  {{- $res := resources.Get $path -}}
+  {{- if not $res -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:missing-background:%s" $path)
+        "message" (printf "[og-image] The card background %q was not found under assets/, so the pages using card template %q get no card." $path $name)) -}}
+  {{- else -}}
+    {{- $usable := eq $res.ResourceType "image" -}}
+    {{- if and $usable (eq $res.MediaType.SubType "svg") -}}
+      {{- $usable = false -}}
+    {{- end -}}
+    {{- if $usable -}}
+      {{/* .Width decodes: a width of zero, or an error, means the bytes are
+           not the image the extension claims. */}}
+      {{- $probe := try $res.Width -}}
+      {{- $usable = and (not $probe.Err) (gt (int ($probe.Value | default 0)) 0) -}}
+    {{- end -}}
+    {{- if not $usable -}}
+      {{- partial "og-image/lib/warn.html" (dict
+          "key" (printf "og-image:warn:unusable-background:%s" $path)
+          "message" (printf "[og-image] The card background %q carries no image Hugo can process (an SVG, an unsupported format, or a file whose bytes are not the image its extension claims), so the pages using card template %q get no card." $path $name)) -}}
+    {{- else -}}
+      {{- $fill := try ($res.Fill (printf "%dx%d %s" $opts.width $opts.height $opts.anchor)) -}}
+      {{- with $fill.Err -}}
+        {{- partial "og-image/lib/warn.html" (dict
+            "key" (printf "og-image:warn:unfillable-background:%s" $path)
+            "message" (printf "[og-image] Could not normalize the card background %q to %dx%d: %s. The pages using card template %q get no card." $path $opts.width $opts.height . $name)) -}}
+      {{- else -}}
+        {{- $result = dict "ok" true "resource" $fill.Value -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $result -}}

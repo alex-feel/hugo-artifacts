@@ -1,0 +1,111 @@
+{{/*
+  og-image/card.html -- PUBLIC ENTRY.
+
+  Purpose: the module's single stable public API. It returns the composed
+  social card for a page as an image resource, or "" when this generator has
+  no card for that page. It NEVER renders markup: a partial that renders hands
+  its caller template.HTML of whatever it drew, which names no image.
+
+  Two ways to call it. Standalone, with the page itself:
+
+      {{ partial "og-image/card.html" . }}
+
+  Or as a generated-image hook, with a dict {page, title, description, opts}:
+
+      [params.seo]
+        image_partial = "og-image/card.html"
+
+  title and description are honored by PRESENCE, not by truthiness: a caller
+  that passes them -- including a deliberately empty description -- has them
+  drawn as handed, and only an ABSENT key is derived from the page. The card
+  draws the strings it was given and never re-derives them, because those are
+  the strings the head publishes as og:title and og:description, and a card
+  that re-derives them silently disagrees with the tags beside it.
+
+  Declining is SILENT, and that is the contract: a page no route names is a
+  page this generator has no template for, so the caller falls through to
+  whatever it uses otherwise. Every image problem below the wiring guard is a
+  deduplicated warning plus a safe fallback; the guard itself is the module's
+  ONE build-failing case, because a wiring mistake has no other diagnostic.
+
+  The card returned is exactly the configured canvas size (1200x630 by
+  default), which is the frame Open Graph consumers expect, so a caller that
+  crops to that ratio is a no-op rather than a second, wasted derivative.
+
+  This module returns at most ONE resource per call. A site that wants a
+  second card for a page calls the partial again with a different `variant`
+  in `opts`: page, language and variant together are a card's identity, and a
+  call that varies anything else without varying `variant` gets the first
+  call's card back.
+
+  Expected context: the current Page, or a dict carrying one under `page`.
+
+  Return value: an image resource, or "". One terminal return.
+*/}}
+
+{{- $ctx := . -}}
+{{- $page := "" -}}
+{{- $title := "" -}}
+{{- $hasTitle := false -}}
+{{- $description := "" -}}
+{{- $hasDescription := false -}}
+{{- $callOpts := dict -}}
+
+{{/* The Page test runs FIRST, before any key lookup: a .page lookup on a Page
+     context raises a template error before any guard could speak.
+     reflect.IsPage is safe on nil and never panics. */}}
+{{- if reflect.IsPage $ctx -}}
+  {{- $page = $ctx -}}
+{{- else if reflect.IsMap $ctx -}}
+  {{- $candidate := index $ctx "page" -}}
+  {{- if reflect.IsPage $candidate -}}
+    {{- $page = $candidate -}}
+    {{- if isset $ctx "title" -}}
+      {{- $title = printf "%v" (index $ctx "title") -}}
+      {{- $hasTitle = true -}}
+    {{- end -}}
+    {{- if isset $ctx "description" -}}
+      {{- $description = printf "%v" (index $ctx "description") -}}
+      {{- $hasDescription = true -}}
+    {{- end -}}
+    {{- $o := index $ctx "opts" -}}
+    {{- if reflect.IsMap $o -}}{{- $callOpts = $o -}}{{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $card := "" -}}
+{{- if not (reflect.IsPage $page) -}}
+  {{- errorf "[og-image] card.html must be called either with the current Page as its context, e.g. {{ partial \"og-image/card.html\" . }}, or with a dict carrying it under \"page\"." -}}
+{{- else -}}
+  {{- if not $hasTitle -}}
+    {{- $title = printf "%v" $page.Title -}}
+  {{- end -}}
+  {{- if not $hasDescription -}}
+    {{- $description = printf "%v" $page.Description -}}
+    {{- if not $description -}}
+      {{- $description = trim (plainify $page.Summary) " \t\n\r" -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- $opts := partial "og-image/config.html" (dict "page" $page "opts" $callOpts) -}}
+  {{- if $opts.enable -}}
+    {{- $routed := partial "og-image/resolve/template.html" (dict "page" $page "opts" $opts) -}}
+    {{- if $routed.ok -}}
+      {{/* The memo saves the measuring and wrapping work across the repeated
+           calls one page receives (a head render per output format, plus any
+           body call); Hugo's own image cache already deduplicates the raster
+           work behind it. The language is named explicitly even though the
+           cache is per language, so the key reads true on its own. */}}
+      {{- $card = partialCached "og-image/compose.html" (dict
+          "page" $page
+          "opts" $opts
+          "name" $routed.name
+          "template" $routed.template
+          "title" $title
+          "description" $description)
+          (printf "%s|%s|%s" $page.Path $page.Language.Lang $opts.variant) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $card -}}

@@ -1,0 +1,141 @@
+# Two languages, and three things no single-language build can see.
+#
+# First, a card is composed for a page of ONE language while ANOTHER language
+# is the one rendering (layouts/home.html does exactly that, under a variant
+# no other caller uses so no memoized card can answer for it). A configuration
+# read through the rendering language and a configuration read through the
+# page's own language give different answers only here, and the two languages
+# carry DIFFERENT background rasters so the answer is a corner pixel rather
+# than an opinion.
+#
+# Second, both languages configure a color Hugo cannot read, and the two bad
+# values differ. A deduplication key that named only the fault class would
+# report whichever language rendered first and stay silent about the other.
+#
+# Third, the German language sets only a background and a slot; its canvas
+# size, format and routing come from the root table, so this build is where
+# per-language params inheriting the site-wide ones is visible.
+#
+# `label` rather than `languageName`: the latter has been reporting a
+# deprecation since Hugo v0.158.0, and this suite's runner fails any build
+# whose log carries one.
+defaultContentLanguage = 'en'
+defaultContentLanguageInSubdir = true
+
+[languages]
+
+  [languages.en]
+    label = 'English'
+    weight = 1
+
+  [languages.de]
+    label = 'Deutsch'
+    weight = 2
+    contentDir = 'content-de'
+
+    [languages.de.params]
+
+      [languages.de.params.ogcard]
+
+        [languages.de.params.ogcard.templates.post]
+          background = 'og/de-bg.png'
+
+          [[languages.de.params.ogcard.templates.post.text]]
+            source = 'title'
+            font = 'mono'
+            metrics = 'mono'
+            size = 64
+            color = '#hh0000'
+            x = 72
+            y = 120
+            width = 1040
+            max_lines = 3
+
+[params]
+
+  [params.ogcard]
+    width = 1200
+    height = 630
+    format = 'png'
+
+    [params.ogcard.sections]
+      blog = 'post'
+
+    [params.ogcard.kinds]
+      home = 'home'
+
+    [params.ogcard.fonts]
+      mono = 'fonts/Go-Mono.ttf'
+
+    [params.ogcard.templates.post]
+      background = 'og/post-bg.png'
+
+      [[params.ogcard.templates.post.text]]
+        source = 'title'
+        font = 'mono'
+        metrics = 'mono'
+        size = 64
+        color = '#gg0000'
+        x = 72
+        y = 120
+        width = 1040
+        max_lines = 3
+
+    [params.ogcard.templates.home]
+      background = 'og/home-bg.png'
+
+      [[params.ogcard.templates.home.text]]
+        source = 'title'
+        font = 'mono'
+        metrics = 'mono'
+        size = 64
+        color = '#ffd400'
+        x = 72
+        y = 120
+        width = 1040
+        max_lines = 3
+
+    # The shared content set names these three templates from front matter.
+    # They are defined here so that the only warnings this build carries are
+    # the ones it exists to produce.
+    [params.ogcard.templates.plain]
+      background = 'og/post-bg.png'
+
+      [[params.ogcard.templates.plain.text]]
+        source = 'title'
+        font = 'mono'
+        metrics = 'mono'
+        size = 64
+        color = '#ffd400'
+        x = 72
+        y = 120
+        width = 1040
+        max_lines = 3
+
+    [params.ogcard.templates.wrongsize]
+      background = 'og/wrong-size.png'
+
+      [[params.ogcard.templates.wrongsize.text]]
+        source = 'title'
+        font = 'mono'
+        metrics = 'mono'
+        size = 64
+        color = '#ffd400'
+        x = 72
+        y = 120
+        width = 1040
+        max_lines = 3
+
+    [params.ogcard.templates.otf]
+      background = 'og/post-bg.png'
+
+      [[params.ogcard.templates.otf.text]]
+        source = 'title'
+        font = 'mono'
+        metrics = 'mono'
+        size = 64
+        color = '#ffd400'
+        x = 72
+        y = 120
+        width = 1040
+        max_lines = 3

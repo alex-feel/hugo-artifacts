@@ -7,3 +7,4 @@ use ../../search
 use ../../pwa
 use ../../workbox
 use ../../idb
+use ../../og-image

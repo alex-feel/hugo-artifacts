@@ -1,4 +1,12 @@
-# A consuming site that imports seo, agent-readiness AND search at once.
+# A consuming site that imports seo, agent-readiness, search, pwa AND og-image
+# at once.
+#
+# Two surfaces here can only exist in a site that holds more than one module.
+# The first is the [outputs] table below. The second is the pair of [params.seo]
+# image keys further down, which hand a page with no image of its own to the
+# og-image module and publish what it composes as that page's og:image -- a
+# generated card crossing a real module boundary, which no fixture importing
+# either module alone can produce.
 #
 # The ONE table this fixture exists for is [outputs]. Hugo REPLACES the output
 # list per page kind rather than merging it, and a module's own [outputs] table
@@ -22,6 +30,15 @@ locale = 'en-us'
 # ships no layouts/robots.txt of its own, which would shadow it silently.
 enableRobotsTXT = true
 
+[build]
+  # This fixture holds assets/ (the card background) and, through the pwa and
+  # search modules, calls js.Build. Together those make Hugo write an editor
+  # intellisense file into assets/ on every build, whose contents are absolute
+  # paths into the building machine's own Hugo module cache. A build target is
+  # not an editor workspace: the file is machine-specific, would differ per
+  # contributor and per runner, and nothing here reads it.
+  noJSConfigInAssets = true
+
 [outputs]
   home = ['html', 'rss', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills', 'searchindex', 'opensearch', 'webappmanifest']
   section = ['html', 'rss', 'markdown']
@@ -44,10 +61,24 @@ enableRobotsTXT = true
   [[module.imports]]
     path = "github.com/alex-feel/hugo-artifacts/modules/pwa"
 
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/og-image"
+
 [params]
 
   [params.seo]
-    description = 'A fixture site that imports the seo, agent-readiness and search modules together.'
+    description = 'A fixture site that imports the seo, agent-readiness, search, pwa and og-image modules together.'
+
+    # The generated-image hook, wired across a real module boundary: seo calls
+    # og-image for a page that has no image of its own, and publishes whatever
+    # comes back as og:image. Both keys are needed together. image_partial
+    # alone could not show that the hook OUTRANKS the site banner, because with
+    # no default configured every "an og:image is present" assertion passes
+    # either way; default_image alone could not show that a card ever displaces
+    # it. The banner is a different file in a different color, so which of the
+    # two answered is readable from the published bytes.
+    image_partial = 'og-image/card.html'
+    default_image = '/img/site-banner.png'
 
     [params.seo.organization]
       name = 'Composition Fixture'
@@ -84,3 +115,30 @@ enableRobotsTXT = true
     # Dotted rather than a [table] header, which would swallow the flat key
     # above it into that table.
     opensearch.enable = true
+
+  # The card generator behind the seo hook above. Routing covers the home page
+  # and the blog section and NOTHING else, so /search/ reaches the hook, gets
+  # no card, and falls through to the site banner -- the decline half of the
+  # contract, end to end across two modules.
+  [params.ogcard]
+
+    [params.ogcard.kinds]
+      home = 'card'
+
+    [params.ogcard.sections]
+      blog = 'card'
+
+    [params.ogcard.templates.card]
+      # A flat single-color raster: the corner pixel of a published card names
+      # the base it was composed on, so a card can be traced back to THIS
+      # site's asset rather than to anything the module carries. No font is
+      # registered, so the text is drawn in Hugo's built-in face.
+      background = 'og/card-base.png'
+
+      [[params.ogcard.templates.card.text]]
+        source = 'title'
+        size = 40
+        x = 60
+        y = 280
+        align = 'left'
+        color = '#ffffff'

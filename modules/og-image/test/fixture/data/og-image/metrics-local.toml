@@ -1,0 +1,18 @@
+# A width table for the monospace face this fixture draws with, supplied the
+# way a consuming site supplies one: data/og-image/metrics-local.toml, which
+# the module never ships, merged per NAME over the shipped tables.
+#
+# Go Mono advances every glyph by 1229/2048 of the em, so a single width of
+# 600 per mille describes the whole face to within a thousandth of an em.
+# That is what makes a line count arithmetic rather than a guess: at size 64
+# in a 1040-pixel box the budget is floor(1040 * 1000 * 0.98 / 64) = 15925
+# per mille, which is 26 glyphs, and every wrapping assertion in this suite
+# is derived from that number rather than read off a rendered card.
+#
+# The shipped [fonts.default] table stays untouched, so the merge-per-name
+# path is exercised without shadowing anything the module ships.
+
+[fonts.mono]
+em = 1000
+space = 600
+fallback = 600

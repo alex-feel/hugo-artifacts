@@ -1,0 +1,48 @@
+{{/*
+  og-image/text/measure.html -- INTERNAL (text tier).
+
+  Purpose: turns a string into a flat token slice with widths in per-mille em.
+  Widths are size-independent, so the fitter re-wraps the same vector at every
+  rung of the shrink ladder without measuring anything twice.
+
+  Normalization order: CRLF and CR become LF; the whole string is trimmed, so
+  leading and trailing blank lines never become empty output lines; each
+  remaining LF becomes a HARD BREAK token, so an author's own line breaks
+  survive; within a segment every run of non-space characters is one token and
+  every whitespace run is one separator that is dropped. An empty or
+  whitespace-only string yields ZERO tokens, which wraps to zero lines, which
+  the caller reads as "nothing to draw".
+
+  A glyph the table does not name takes the fallback width, while an explicit
+  ZERO width is honored (a combining mark advances nothing), so the lookup
+  tests for nil instead of piping through `default`. Splitting on the empty
+  string splits per RUNE, not per byte, so non-Latin text measures correctly.
+
+  Context (dict):
+  - .text (any)     The string to measure.
+  - .metrics (dict) A table from og-image/text/metrics.html.
+
+  Return value: slice of dict{t (string), w (int), br (bool)}. One terminal
+  return.
+*/}}
+
+{{- $m := .metrics -}}
+{{- $glyphs := $m.glyphs -}}
+{{- $fallback := $m.fallback -}}
+{{- $text := trim (replaceRE `\r\n?` "\n" (printf "%v" .text)) " \t\n\r" -}}
+{{- $tokens := slice -}}
+{{- range $i, $seg := split $text "\n" -}}
+  {{- if gt $i 0 -}}
+    {{- $tokens = $tokens | append (dict "t" "" "w" 0 "br" true) -}}
+  {{- end -}}
+  {{- range $word := findRE `\S+` $seg -}}
+    {{- $w := 0 -}}
+    {{- range $ch := split $word "" -}}
+      {{- $gw := index $glyphs $ch -}}
+      {{- if eq $gw nil -}}{{- $gw = $fallback -}}{{- end -}}
+      {{- $w = add $w $gw -}}
+    {{- end -}}
+    {{- $tokens = $tokens | append (dict "t" $word "w" $w "br" false) -}}
+  {{- end -}}
+{{- end -}}
+{{- return $tokens -}}

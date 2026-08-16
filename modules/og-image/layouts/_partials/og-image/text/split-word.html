@@ -1,0 +1,43 @@
+{{/*
+  og-image/text/split-word.html -- INTERNAL (text tier).
+
+  Purpose: breaks ONE over-budget word into chunks that each fit the budget.
+  Nothing is inserted -- no hyphen, no marker: the author's text is not the
+  module's to edit.
+
+  A SINGLE glyph wider than the whole budget still emits as its own chunk (the
+  `ne $cur ""` guard is what guarantees it), so no input can drop a character
+  or fail to terminate. The first chunk carries nosp=false and every
+  continuation nosp=true, so the wrapper never inserts a space inside a word.
+
+  Context (dict):
+  - .word (any)      The word to break.
+  - .budget (int)    Line budget in per-mille em.
+  - .glyphs (map)    Per-glyph widths.
+  - .fallback (int)  Width for a glyph the table does not name.
+
+  Return value: slice of dict{t (string), w (int), nosp (bool)}. One terminal
+  return.
+*/}}
+
+{{- $budget := .budget -}}
+{{- $glyphs := .glyphs -}}
+{{- $fallback := .fallback -}}
+{{- $chunks := slice -}}
+{{- $cur := "" -}}
+{{- $curw := 0 -}}
+{{- range $ch := split (printf "%v" .word) "" -}}
+  {{- $gw := index $glyphs $ch -}}
+  {{- if eq $gw nil -}}{{- $gw = $fallback -}}{{- end -}}
+  {{- if and (ne $cur "") (gt (add $curw $gw) $budget) -}}
+    {{- $chunks = $chunks | append (dict "t" $cur "w" $curw "nosp" (gt (len $chunks) 0)) -}}
+    {{- $cur = "" -}}
+    {{- $curw = 0 -}}
+  {{- end -}}
+  {{- $cur = printf "%s%s" $cur $ch -}}
+  {{- $curw = add $curw $gw -}}
+{{- end -}}
+{{- if ne $cur "" -}}
+  {{- $chunks = $chunks | append (dict "t" $cur "w" $curw "nosp" (gt (len $chunks) 0)) -}}
+{{- end -}}
+{{- return $chunks -}}

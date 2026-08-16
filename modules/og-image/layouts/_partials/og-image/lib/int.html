@@ -1,0 +1,31 @@
+{{/*
+  og-image/lib/int.html -- INTERNAL (lib tier).
+
+  Purpose: parses ONE stringified value as a SIGNED decimal integer, returning
+  {ok, value}. Hugo's `int` casts strings with strconv base-0 semantics: a
+  leading zero makes "010" octal 8 silently, while "08" and int64-overflowing
+  digit strings RAISE a template error that breaks the build. Every
+  consumer-supplied integer in this module therefore parses through here:
+  leading zeros are stripped (author intent is always decimal), the digit
+  count is capped at nine so nothing can overflow, and anything else returns
+  ok=false so the caller can warn and fall back to a documented default.
+
+  It returns a dict rather than a negative sentinel because a negative value
+  is LEGAL here: a slot may be positioned left of, or above, the canvas edge.
+
+  Context: the raw value (any type; stringified and trimmed here).
+
+  Return value: dict{ok (bool), value (int)}. One terminal return.
+*/}}
+
+{{- $raw := trim (printf "%v" .) " \t\n\r" -}}
+{{- $result := dict "ok" false "value" 0 -}}
+{{- if findRE `^-?\d{1,9}$` $raw -}}
+  {{- $neg := hasPrefix $raw "-" -}}
+  {{- $norm := strings.TrimLeft "0" (strings.TrimPrefix "-" $raw) -}}
+  {{- if eq $norm "" -}}{{- $norm = "0" -}}{{- end -}}
+  {{- $n := int $norm -}}
+  {{- if $neg -}}{{- $n = sub 0 $n -}}{{- end -}}
+  {{- $result = dict "ok" true "value" $n -}}
+{{- end -}}
+{{- return $result -}}

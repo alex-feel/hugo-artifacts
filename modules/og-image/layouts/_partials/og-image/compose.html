@@ -1,0 +1,113 @@
+{{/*
+  og-image/compose.html -- INTERNAL (composer tier).
+
+  Purpose: composes ONE card and returns it as an image resource. Reached only
+  through partialCached from card.html, keyed by page, language and variant --
+  which is what makes those three, together, the identity of a card.
+
+  Order of work: normalize the background raster to the canvas size, resolve
+  the overlays and the text slots, then apply overlay filters first and text
+  filters last, so the words are never hidden under a logo. All the filters go
+  into ONE images.Filter call, so a card with any number of lines and overlays
+  still costs a single derivative, and the result is encoded once with the
+  configured format and quality.
+
+  A card with nothing drawn on it is NOT published: a per-page copy of a
+  shared background costs build time and says nothing the site's own default
+  image does not already say, so an empty card declines silently and the
+  caller falls through to whatever it uses when this module has no answer.
+
+  Everything from images.Filter onward runs inside `try`. An unparseable font
+  fails the whole filter chain at the images.Filter call rather than at
+  construction or at publication, so the net catches it, warns once, and
+  retries with every font key removed -- Hugo's built-in Go Regular cannot
+  fail the same way, so the page keeps its card in a fallback face. The encode
+  and the first read of the published URL are inside the net for the same
+  reason: this module never breaks a build over an image, and that promise
+  must not depend on any list of anticipated failures being complete.
+
+  Context (dict):
+  - .page (Page)          The current page.
+  - .opts (dict)          The resolved options from og-image/config.html.
+  - .name (string)        The card template's name.
+  - .template (map)       The card template's table.
+  - .title (string)       The resolved title handed to card.html.
+  - .description (string) The resolved description handed to card.html.
+
+  Return value: an image resource, or "" when this page gets no card. One
+  terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $opts := .opts -}}
+{{- $name := .name -}}
+{{- $tpl := .template -}}
+{{- $card := "" -}}
+
+{{- $bg := partial "og-image/resolve/background.html" (dict
+    "page" $page "opts" $opts "name" $name "template" $tpl) -}}
+
+{{- if $bg.ok -}}
+  {{- $overlays := partial "og-image/resolve/overlays.html" (dict
+      "page" $page "opts" $opts "name" $name "template" $tpl) -}}
+  {{- $slots := partial "og-image/resolve/slots.html" (dict
+      "page" $page "opts" $opts "name" $name "template" $tpl
+      "title" .title "description" .description) -}}
+
+  {{- if or $slots.drew $overlays.any -}}
+    {{- $filters := slice -}}
+    {{- range $overlays.filters -}}{{- $filters = $filters | append . -}}{{- end -}}
+    {{- range $slots.filters -}}{{- $filters = $filters | append . -}}{{- end -}}
+
+    {{- $r := try (images.Filter $filters $bg.resource) -}}
+    {{- with $r.Err -}}
+      {{- partial "og-image/lib/warn.html" (dict
+          "key" (printf "og-image:warn:font-bytes:%s:%s" $name (delimit $slots.fonts ","))
+          "message" (printf "[og-image] A font used by card template %q could not be read (%s; fonts: %s); its cards are drawn with Hugo's built-in Go Regular instead. Supply a TrueType (.ttf) or OpenType (.otf) file." $name . (delimit $slots.fonts ", "))) -}}
+      {{- $fallback := slice -}}
+      {{- range $overlays.filters -}}{{- $fallback = $fallback | append . -}}{{- end -}}
+      {{- range $slots.filters_nofont -}}{{- $fallback = $fallback | append . -}}{{- end -}}
+      {{- $r2 := try (images.Filter $fallback $bg.resource) -}}
+      {{- with $r2.Err -}}
+        {{- partial "og-image/lib/warn.html" (dict
+            "key" (printf "og-image:warn:compose-failed:%s:%s" $page.Path $name)
+            "message" (printf "[og-image] Could not compose the card for %s with card template %q: %s. The page keeps whatever image it would have had without this module." $page.Path $name .)) -}}
+      {{- else -}}
+        {{- $card = $r2.Value -}}
+      {{- end -}}
+    {{- else -}}
+      {{- $card = $r.Value -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Encode. The quality token is emitted for the lossy formats only. */}}
+{{- if $card -}}
+  {{- $spec := $opts.format -}}
+  {{- if in (slice "jpeg" "webp") $opts.format -}}
+    {{- $spec = printf "%s q%d" $opts.format $opts.quality -}}
+  {{- end -}}
+  {{- $encoded := try ($card.Process $spec) -}}
+  {{- with $encoded.Err -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:encode-failed:%s:%s" $page.Path $name)
+        "message" (printf "[og-image] Could not encode the card for %s as %q: %s. The page keeps whatever image it would have had without this module." $page.Path $spec .)) -}}
+    {{- $card = "" -}}
+  {{- else -}}
+    {{- $card = $encoded.Value -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* First read of the published URL, which is where a lazily transformed
+     image is actually materialized. */}}
+{{- if $card -}}
+  {{- $published := try $card.RelPermalink -}}
+  {{- with $published.Err -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:publish-failed:%s:%s" $page.Path $name)
+        "message" (printf "[og-image] Could not publish the card for %s with card template %q: %s. The page keeps whatever image it would have had without this module." $page.Path $name .)) -}}
+    {{- $card = "" -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $card -}}

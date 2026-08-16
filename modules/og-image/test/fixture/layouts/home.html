@@ -1,0 +1,59 @@
+{{ define "main" }}
+  {{/* A module-independent inventory of everything Hugo actually built in
+       this language, so the "a declining page publishes nothing" assertion is
+       made against the real page set rather than against a list someone
+       remembered to update. */}}
+  {{- $items := slice -}}
+  {{- range site.Pages -}}
+    {{- $items = $items | append (dict
+        "path" (printf "%v" .Path)
+        "kind" (printf "%v" .Kind)
+        "section" (printf "%v" .Section)
+        "lang" .Language.Lang
+        "url" .RelPermalink
+        "sidecar" (path.Join "cards" .Language.Lang (printf "%v" .Path) "payload.json")) -}}
+  {{- end -}}
+  {{- $inventory := resources.FromString
+      (path.Join "inventory" site.Language.Lang "pages.json")
+      (jsonify (dict "lang" site.Language.Lang "pages" $items)) -}}
+  {{- $publishedInventory := $inventory.RelPermalink -}}
+
+  {{/* Cards composed for a page of ANOTHER language while THIS language is
+       the one rendering. In a single-language build there is nothing to do
+       here; in the multilingual build it is the only place where a
+       configuration read through the rendering language and one read through
+       the page's own language give different answers. */}}
+  {{- $cross := slice -}}
+  {{- range $other := hugo.Sites -}}
+    {{- if ne $other.Language.Lang site.Language.Lang -}}
+      {{- range $foreign := $other.Pages -}}
+        {{- $urls := slice -}}
+        {{/* A variant no other caller uses, so the memo cannot hand back a
+             card composed while the page's own language was rendering: this
+             composition definitely happens under THIS language. */}}
+        {{- $card := partial "og-image/card.html" (dict
+            "page" $foreign
+            "opts" (dict "variant" "crosslang")) -}}
+        {{- with $card -}}
+          {{- $urls = $urls | append (dict
+              "url" .RelPermalink
+              "width" .Width
+              "height" .Height
+              "mediaType" .MediaType.Type) -}}
+        {{- end -}}
+        {{- $cross = $cross | append (dict
+            "path" (printf "%v" $foreign.Path)
+            "kind" (printf "%v" $foreign.Kind)
+            "lang" $foreign.Language.Lang
+            "rendered_by" site.Language.Lang
+            "cards" $urls) -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $crossFile := resources.FromString
+      (path.Join "crosslang" site.Language.Lang "pages.json")
+      (jsonify (dict "rendered_by" site.Language.Lang "pages" $cross)) -}}
+  {{- $publishedCross := $crossFile.RelPermalink -}}
+
+  <h1>{{ .Title }}</h1>
+{{ end }}

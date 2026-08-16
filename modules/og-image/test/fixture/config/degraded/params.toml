@@ -1,0 +1,332 @@
+# Every fault class at once, each on its own section, template or slot, so
+# that N distinct mistakes must produce N distinct warnings. That is provable
+# only together: it is what shows the deduplication key discriminates rather
+# than collapsing two mistakes into whichever page rendered first. It is also
+# why this environment cannot be merged into `configured`, which has to stay
+# silent.
+#
+# Every deg-* section is UNROUTED in the configured environment, so the same
+# content set is silent there and faulty here, and no fault has to live in
+# front matter where both builds would see it.
+#
+# The module never breaks a build over an image, so this build exits 0 and
+# tests/07-degraded.spec.js asserts the pixel-side consequence of each fault
+# beside its warning: a card still drawn, or a page declined.
+
+[ogcard]
+  # Module-level faults: an unknown format falls back to png, an out-of-range
+  # quality and an unknown anchor fall back to the shipped mechanical values.
+  format = 'gif'
+  quality = 400
+  anchor = 'middle'
+
+  [ogcard.sections]
+    deg-slots = 'badslots'
+    deg-badfont = 'badfont'
+    deg-missingbg = 'nobg'
+    deg-textbg = 'textbg'
+    deg-nobgkey = 'emptybg'
+    deg-overlay = 'badoverlay'
+    deg-badentry = 'badentry'
+    deg-badwhole = 'badwhole'
+    # A name no [templates] table defines. Its warning has to stay separate
+    # from the differently misspelled one below, which is what keying by
+    # ORIGIN as well as name buys.
+    deg-ghost = 'ghostsection'
+
+  [ogcard.kinds]
+    taxonomy = 'ghostkind'
+
+  [ogcard.fonts]
+    mono = 'fonts/Go-Mono.ttf'
+    # Registered but absent from assets/.
+    missing = 'fonts/DoesNotExist.ttf'
+    # A web font format images.Text is not handed.
+    web = 'fonts/webfont.woff2'
+    # Correct extension, 32 bytes of text inside: the whole filter chain fails
+    # at the images.Filter call, which is what the try net is for.
+    broken = 'fonts/broken.ttf'
+
+  # ---- Slot-level faults, all on one card so the warnings must be told apart
+  #      by slot index, key and value rather than by page.
+  [ogcard.templates.badslots]
+    background = 'og/post-bg.png'
+
+    [[ogcard.templates.badslots.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 48
+      x = 72
+      y = 60
+      width = 1040
+      max_lines = 1
+      # Hugo draws a color it cannot read as white and says nothing at all,
+      # so this warning is the only diagnostic that exists.
+      color = 'rebeccapurple'
+
+    [[ogcard.templates.badslots.text]]
+      source = 'literal'
+      value = 'unparseable size'
+      font = 'mono'
+      size = 'abc'
+      x = 72
+      y = 160
+
+    [[ogcard.templates.badslots.text]]
+      source = 'literal'
+      value = 'unparseable x'
+      font = 'mono'
+      size = 24
+      x = 'left'
+      y = 200
+
+    [[ogcard.templates.badslots.text]]
+      source = 'literal'
+      value = 'unparseable safety'
+      font = 'mono'
+      size = 24
+      x = 72
+      y = 240
+      width = 900
+      safety = 'lots'
+
+    [[ogcard.templates.badslots.text]]
+      source = 'literal'
+      value = 'unknown align'
+      font = 'mono'
+      size = 24
+      x = 72
+      y = 280
+      align = 'middle'
+
+    [[ogcard.templates.badslots.text]]
+      source = 'literal'
+      value = 'unknown case'
+      font = 'mono'
+      size = 24
+      x = 72
+      y = 320
+      case = 'camel'
+
+    [[ogcard.templates.badslots.text]]
+      source = 'literal'
+      value = 'unknown overflow'
+      font = 'mono'
+      size = 24
+      x = 72
+      y = 360
+      width = 900
+      overflow = 'clip'
+
+    # An unknown source token drops this ONE slot; the rest of the card draws.
+    [[ogcard.templates.badslots.text]]
+      source = 'autor'
+      font = 'mono'
+      size = 24
+      x = 72
+      y = 400
+
+    # A page parameter holding a list names no single string.
+    [[ogcard.templates.badslots.text]]
+      source = 'param'
+      key = 'tags'
+      font = 'mono'
+      size = 24
+      x = 72
+      y = 440
+
+    # A font NAME the registry does not define.
+    [[ogcard.templates.badslots.text]]
+      source = 'literal'
+      value = 'unregistered font'
+      font = 'ghostface'
+      size = 24
+      x = 72
+      y = 480
+
+    # A registered font whose path names nothing.
+    [[ogcard.templates.badslots.text]]
+      source = 'literal'
+      value = 'missing font file'
+      font = 'missing'
+      size = 24
+      x = 72
+      y = 520
+
+    # A registered font in a format images.Text is not handed.
+    [[ogcard.templates.badslots.text]]
+      source = 'literal'
+      value = 'web font format'
+      font = 'web'
+      size = 24
+      x = 72
+      y = 560
+
+    # A width table no data file defines: every glyph falls back to the
+    # nominal average width and the card is still produced.
+    [[ogcard.templates.badslots.text]]
+      source = 'literal'
+      value = 'unknown metrics table'
+      font = 'mono'
+      metrics = 'nosuch'
+      size = 24
+      x = 600
+      y = 600
+      width = 500
+
+  # ---- A font that passes the extension guard and carries no font inside.
+  #      The whole filter chain fails, the try net catches it, and the card is
+  #      redrawn in Hugo's built-in face.
+  [ogcard.templates.badfont]
+    background = 'og/post-bg.png'
+
+    [[ogcard.templates.badfont.text]]
+      source = 'title'
+      font = 'broken'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 2
+
+  # ---- Background faults: a card is composed ON a raster, so each of these
+  #      declines the whole card rather than publishing a half-made one.
+  [ogcard.templates.nobg]
+    background = 'og/nope.png'
+
+    [[ogcard.templates.nobg.text]]
+      source = 'title'
+      size = 48
+      x = 72
+      y = 120
+
+  [ogcard.templates.textbg]
+    background = 'og/not-an-image.png'
+
+    [[ogcard.templates.textbg.text]]
+      source = 'title'
+      size = 48
+      x = 72
+      y = 120
+
+  [ogcard.templates.emptybg]
+
+    [[ogcard.templates.emptybg.text]]
+      source = 'title'
+      size = 48
+      x = 72
+      y = 120
+
+  # ---- Overlay faults. Each drops its own overlay and the card still draws,
+  #      which is the difference between a logo and a backdrop.
+  [ogcard.templates.badoverlay]
+    background = 'og/post-bg.png'
+
+    [[ogcard.templates.badoverlay.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 48
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 2
+
+    [[ogcard.templates.badoverlay.overlay]]
+      source = 'asset'
+      src = 'og/nope-overlay.png'
+
+    [[ogcard.templates.badoverlay.overlay]]
+      source = 'asset'
+      src = 'og/not-an-image.png'
+
+    [[ogcard.templates.badoverlay.overlay]]
+      source = 'bundle'
+      src = 'og/badge.png'
+
+    [[ogcard.templates.badoverlay.overlay]]
+      source = 'asset'
+
+    [[ogcard.templates.badoverlay.overlay]]
+      source = 'asset'
+      src = 'og/badge.png'
+      anchor = 'northeast'
+
+    [[ogcard.templates.badoverlay.overlay]]
+      source = 'asset'
+      src = 'og/badge.png'
+      width = 'wide'
+      anchor = 'bottomleft'
+      x = 20
+      y = 20
+
+    [[ogcard.templates.badoverlay.overlay]]
+      source = 'asset'
+      src = 'og/badge.png'
+      opacity = 'half'
+      anchor = 'topright'
+      x = 20
+      y = 20
+
+  # ---- Templates the SHARED content set names from front matter and from the
+  #      call site. They are defined here so that the only front-matter-origin
+  #      routing fault in this build is the deliberate one: blog/otf.md names
+  #      `otf`, which this environment does not define, so its warning sits
+  #      beside the two route-origin ones above and the three keys have to
+  #      stay apart by origin as well as by name.
+  [ogcard.templates.plain]
+    background = 'og/post-bg.png'
+
+    [[ogcard.templates.plain.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+
+  [ogcard.templates.wrongsize]
+    background = 'og/wrong-size.png'
+
+    [[ogcard.templates.wrongsize.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+
+  [ogcard.templates.home]
+    background = 'og/home-bg.png'
+
+    [[ogcard.templates.home.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+
+  # ---- A text array holding something that is not a table, and a text key
+  #      written as a bare scalar. Go's range accepts neither, so without the
+  #      guard the second one would stop a consuming site's build outright.
+  [ogcard.templates.badentry]
+    background = 'og/post-bg.png'
+    text = ['oops']
+
+  [ogcard.templates.badwhole]
+    background = 'og/post-bg.png'
+    text = 'oops'

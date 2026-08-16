@@ -1,0 +1,51 @@
+{{/*
+  og-image/lib/as-map-list.html -- INTERNAL (lib tier).
+
+  Purpose: reads a configuration key documented as an ARRAY OF TABLES (a card
+  template's `text` slots and `overlay` entries) as something safe to range
+  over, keeping only the entries that are actually tables.
+
+  WHY IT EXISTS: Go's `range` accepts only an array, slice, map, chan or int,
+  so a key written as a bare scalar -- `text = "Title"` instead of a
+  [[...text]] block -- would abort template execution and STOP THE CONSUMING
+  SITE'S BUILD. A single table written without the double brackets is the
+  other common shape, and it means exactly one entry, so it is accepted as a
+  one-item list rather than rejected.
+
+  Each surviving entry is a map. A scalar, boolean or nested list entry names
+  no slot or overlay at all: it warns once and is dropped, and the rest of the
+  card still renders.
+
+  Context (dict):
+  - .value (any)     The raw configured value.
+  - .key (string)    Dedup key prefix for the warnings raised here.
+  - .label (string)  Human-readable description of what was expected, used in
+                     the warning text (e.g. `a text slot in template "post"`).
+
+  Return value: a slice of maps, possibly empty. One terminal return.
+*/}}
+
+{{- $value := .value -}}
+{{- $key := .key -}}
+{{- $label := printf "%v" .label -}}
+{{- $out := slice -}}
+
+{{- if reflect.IsSlice $value -}}
+  {{- range $i, $entry := $value -}}
+    {{- if reflect.IsMap $entry -}}
+      {{- $out = $out | append $entry -}}
+    {{- else if ne $entry nil -}}
+      {{- partial "og-image/lib/warn.html" (dict
+          "key" (printf "%s:%d" $key $i)
+          "message" (printf "[og-image] Ignoring entry %d of %s: it expects a table of keys but was given %q. That entry is dropped; the rest of the card still renders." $i $label (printf "%v" $entry))) -}}
+    {{- end -}}
+  {{- end -}}
+{{- else if reflect.IsMap $value -}}
+  {{- $out = slice $value -}}
+{{- else if ne $value nil -}}
+  {{- partial "og-image/lib/warn.html" (dict
+      "key" (printf "%s:whole" $key)
+      "message" (printf "[og-image] Ignoring %s: it expects one or more tables but was given %q. Nothing is drawn from it." $label (printf "%v" $value))) -}}
+{{- end -}}
+
+{{- return $out -}}

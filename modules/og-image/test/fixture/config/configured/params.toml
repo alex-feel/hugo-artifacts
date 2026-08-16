@@ -1,0 +1,169 @@
+# The working card set. This is the ONLY environment whose build log must be
+# silent: every positive assertion in the suite is made against it, so a
+# warning here means a configuration this suite claims is correct is not.
+#
+# Geometry is arithmetic, not taste. The title box is 1040 pixels wide at size
+# 64 with safety 0.98, so the budget is floor(1040 * 1000 * 0.98 / 64) = 15925
+# per mille, which is 26 glyphs of the 600-per-mille monospace table in
+# data/og-image/metrics-local.toml, and every expected line count in
+# tests/04-wrapping.spec.js is derived from that number.
+#
+# The two text slots carry DIFFERENT colors on purpose: one color cannot tell
+# a slot that took its own configured value from a slot that took the other
+# slot's, and Hugo draws an unreadable color as white without saying so.
+
+[ogcard]
+  width = 1200
+  height = 630
+  format = 'png'
+  anchor = 'Center'
+
+  # No default_template: a page no route names gets no card, which is what
+  # tests/06-decline.spec.js measures. Every deg-* section is unrouted here
+  # and routed in the degraded environment, so the same content set is silent
+  # in this build and faulty in that one.
+  [ogcard.sections]
+    blog = 'post'
+    twins = 'plain'
+    oversize = 'oversize'
+
+  [ogcard.kinds]
+    home = 'home'
+
+  [ogcard.fonts]
+    mono = 'fonts/Go-Mono.ttf'
+    sans = 'fonts/SourceSans3-Regular.otf'
+
+  # ---- home: a distinct flat background, so a card's corner pixel names the
+  #      template that composed it.
+  [ogcard.templates.home]
+    background = 'og/home-bg.png'
+
+    [[ogcard.templates.home.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+
+  # ---- post: the full shape -- two slots, two colors, two sizes, and one
+  #      overlay pinned to a corner.
+  [ogcard.templates.post]
+    background = 'og/post-bg.png'
+
+    [[ogcard.templates.post.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+      line_height = 1.4
+      align = 'left'
+      overflow = 'shrink'
+      min_scale = 0.7
+      shrink_step = 4
+      safety = 0.98
+
+    [[ogcard.templates.post.text]]
+      source = 'description'
+      font = 'mono'
+      metrics = 'mono'
+      size = 32
+      color = '#33ccff'
+      x = 72
+      y = 430
+      width = 960
+      max_lines = 2
+
+    # 80 pixels square, anchored bottom right and moved 48 pixels inward on
+    # both axes: (1200 - 80) - 48 = 1072 and (630 - 80) - 48 = 502, so the
+    # badge occupies exactly x 1072..1151, y 502..581 and nothing outside it.
+    [[ogcard.templates.post.overlay]]
+      source = 'asset'
+      src = 'og/badge.png'
+      width = 80
+      anchor = 'bottomright'
+      x = 48
+      y = 48
+
+  # ---- plain: the post background with a title and NO overlay, so a card
+  #      carrying zero badge pixels is distinguishable from one that lost its
+  #      overlay by accident.
+  [ogcard.templates.plain]
+    background = 'og/post-bg.png'
+
+    [[ogcard.templates.plain.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+
+  # ---- wrongsize: an 800x400 background normalized up to the canvas.
+  [ogcard.templates.wrongsize]
+    background = 'og/wrong-size.png'
+
+    [[ogcard.templates.wrongsize.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+
+  # ---- otf: an OpenType face, measured against the shipped nominal table.
+  #      Hugo's own documentation lists OpenType as unsupported for
+  #      images.Text while the module's guard admits it, and this build is
+  #      warning-gated, so the card either draws or the suite goes red.
+  [ogcard.templates.otf]
+    background = 'og/post-bg.png'
+
+    [[ogcard.templates.otf.text]]
+      source = 'title'
+      font = 'sans'
+      metrics = 'default'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+
+  # ---- oversize: an overlay wider and taller than the canvas, anchored at
+  #      the top left, so it covers the whole card and the base color is gone.
+  [ogcard.templates.oversize]
+    background = 'og/post-bg.png'
+
+    [[ogcard.templates.oversize.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+
+    [[ogcard.templates.oversize.overlay]]
+      source = 'asset'
+      src = 'og/badge.png'
+      width = 1400
+      anchor = 'topleft'
+      x = 0
+      y = 0

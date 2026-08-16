@@ -1,0 +1,222 @@
+{{/*
+  og-image/config.html -- INTERNAL (resolver tier).
+
+  Purpose: resolves the module's entire configuration through the four-tier
+  cascade, so every downstream partial renders from ONE normalized options
+  dict and nothing re-derives a value. Precedence, highest first: call-site
+  opts > page front matter (ogcard: map) > site params ([params.ogcard]) >
+  data/og-image/defaults.toml. Presence wins at every tier (isset, not
+  truthiness), so an explicit false, 0, or "" overrides the tier below it.
+
+  The table keys (templates, fonts, sections, kinds) merge per NAME across
+  tiers, so a page can override one template's background without restating
+  its slots. The `text` and `overlay` ARRAYS inside a template are REPLACED
+  wholesale by a higher tier: Hugo's merge does not merge slices, and
+  index-wise slot merging would be an invented semantic nobody could predict.
+  For the same reason a page writing its own `ogcard:` map replaces a
+  cascaded one wholesale -- that is Hugo's semantic for front matter, not the
+  module's.
+
+  Config and front-matter keys are lower-cased by Hugo, so template, font,
+  section and kind names are effectively lower case, and names are looked up
+  lower-cased throughout. Glyph width tables therefore cannot live in params
+  at all (the folding would collapse "W" into "w"); they live in data files.
+
+  Every tier is read through $page.Site.Params, never the global `site`: the
+  global names the RENDERING language, and a card composed for a translation
+  must read that translation's configuration.
+
+  Context (dict):
+  - .page (Page) The current page (already validated by the caller).
+  - .opts (map)  Call-site options (possibly empty). Carries `variant`, which
+                 exists at this tier only.
+
+  Return value: dict with enable, width, height, format, quality, anchor,
+  template, default_template, variant, templates, fonts, sections, kinds, and
+  where (the diagnostics origin: the page path).
+
+  One terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $lang := $page.Language.Lang -}}
+{{- $where := printf "%v" $page.Path -}}
+
+{{- $data := index hugo.Data "og-image" | default dict -}}
+{{- $defaults := index $data "defaults" | default dict -}}
+{{- if not $defaults -}}
+  {{- partial "og-image/lib/warn.html" (dict
+      "key" "og-image:warn:missing-defaults"
+      "message" "[og-image] data/og-image/defaults.toml was not found; the module is not mounted correctly, so only explicitly configured values apply.") -}}
+{{- end -}}
+
+{{/* Tier 2: site params, read per language. */}}
+{{- $sitep := $page.Site.Params.ogcard -}}
+{{- $siteSet := ne $sitep nil -}}
+{{- if not (reflect.IsMap $sitep) -}}
+  {{- if $siteSet -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:nonmap-config:site:%s" $lang)
+        "message" (printf "[og-image] Ignoring params.ogcard for language %q: expected a table, got %q. To turn the module off site-wide, set params.ogcard.enable = false." $lang (printf "%v" $sitep))) -}}
+  {{- end -}}
+  {{- $sitep = dict -}}
+{{- end -}}
+
+{{/* Tier 3: page front matter, which a Hugo cascade can set for a section. */}}
+{{- $pagep := $page.Params.ogcard -}}
+{{- $pageSet := ne $pagep nil -}}
+{{- if not (reflect.IsMap $pagep) -}}
+  {{- if $pageSet -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:nonmap-config:%s" $where)
+        "message" (printf "[og-image] Ignoring the ogcard front matter value on %s: expected a table, got %q. To turn the card off for this page, set ogcard: { enable: false }." $where (printf "%v" $pagep))) -}}
+  {{- end -}}
+  {{- $pagep = dict -}}
+{{- end -}}
+
+{{/* Tier 4: the call site. Never populated by the seo hook; it exists so a
+     direct caller can request a second card for one page, which front matter
+     -- one value per page -- cannot express. */}}
+{{- $callp := .opts -}}
+{{- if not (reflect.IsMap $callp) -}}
+  {{- if ne $callp nil -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:nonmap-config:call:%s" $where)
+        "message" (printf "[og-image] Ignoring the opts argument passed to og-image/card.html on %s: expected a table, got %q." $where (printf "%v" $callp))) -}}
+  {{- end -}}
+  {{- $callp = dict -}}
+{{- end -}}
+
+{{- $tiers := slice $defaults $sitep $pagep $callp -}}
+
+{{/* Names the tier a value came from, positionally parallel to $tiers. A
+     diagnostic must blame the CONFIGURATION that carries the mistake, not the
+     page that happened to resolve it first: a site-wide params.ogcard typo is
+     read by every page, so naming a page there points the maintainer at a file
+     containing nothing wrong. The two per-page tiers keep the page path,
+     because there the page IS the origin -- which also keeps their dedup keys
+     per-page, so the same mistake repeated on two pages surfaces twice. */}}
+{{- $tierNames := slice
+    "data/og-image/defaults.toml"
+    (printf "params.ogcard for language %q" $lang)
+    (printf "the ogcard front matter on %s" $where)
+    (printf "the opts argument passed on %s" $where) -}}
+
+{{- $opts := dict "where" $where -}}
+
+{{/* ---- Bool keys ---- */}}
+{{- $truthy := slice "true" "1" "yes" "on" -}}
+{{- range $k := slice "enable" -}}
+  {{- $v := index $defaults $k -}}
+  {{- range $tier := $tiers -}}
+    {{- if isset $tier $k -}}{{- $v = index $tier $k -}}{{- end -}}
+  {{- end -}}
+  {{- $opts = merge $opts (dict $k (in $truthy (lower (printf "%v" $v)))) -}}
+{{- end -}}
+
+{{/* ---- Int keys. A value that does not parse, or falls outside its range,
+     warns once and leaves the shipped mechanical default in place. ---- */}}
+{{- range $sp := slice
+    (dict "k" "width" "d" 1200 "lo" 1 "hi" 100000)
+    (dict "k" "height" "d" 630 "lo" 1 "hi" 100000)
+    (dict "k" "quality" "d" 75 "lo" 1 "hi" 100) -}}
+  {{- $v := $sp.d -}}
+  {{- $raw := "" -}}
+  {{- $found := false -}}
+  {{- $origin := "" -}}
+  {{- range $i, $tier := $tiers -}}
+    {{- if isset $tier $sp.k -}}
+      {{- $raw = index $tier $sp.k -}}
+      {{- $found = true -}}
+      {{- $origin = index $tierNames $i -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if $found -}}
+    {{- $n := partial "og-image/lib/int.html" $raw -}}
+    {{- if and $n.ok (ge $n.value $sp.lo) (le $n.value $sp.hi) -}}
+      {{- $v = $n.value -}}
+    {{- else -}}
+      {{- partial "og-image/lib/warn.html" (dict
+          "key" (printf "og-image:warn:bad-int:%s:%v:%s" $sp.k $raw $origin)
+          "message" (printf "[og-image] Ignoring ogcard.%s value %q set in %s (expected a whole number from %d to %d); using %d instead." $sp.k (printf "%v" $raw) $origin $sp.lo $sp.hi $sp.d)) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $opts = merge $opts (dict $sp.k $v) -}}
+{{- end -}}
+
+{{/* ---- Enum keys ---- */}}
+{{- range $sp := slice
+    (dict "k" "format" "allowed" (slice "png" "jpeg" "webp") "fallback" "png")
+    (dict "k" "anchor" "allowed" (slice "topleft" "top" "topright" "left" "center" "right" "bottomleft" "bottom" "bottomright" "smart") "fallback" "Center") -}}
+  {{- $v := printf "%v" (index $defaults $sp.k | default $sp.fallback) -}}
+  {{- $origin := index $tierNames 0 -}}
+  {{- range $i, $tier := $tiers -}}
+    {{- if isset $tier $sp.k -}}
+      {{- $v = printf "%v" (index $tier $sp.k) -}}
+      {{- $origin = index $tierNames $i -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $v = trim $v " \t\n\r" -}}
+  {{- if not (in $sp.allowed (lower $v)) -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:unknown-enum:%s:%s:%s" $sp.k $v $origin)
+        "message" (printf "[og-image] Unknown ogcard.%s value %q set in %s; using %q instead (allowed: %s)." $sp.k $v $origin $sp.fallback (delimit $sp.allowed ", "))) -}}
+    {{- $v = $sp.fallback -}}
+  {{- end -}}
+  {{- $opts = merge $opts (dict $sp.k $v) -}}
+{{- end -}}
+
+{{/* ---- String keys ---- */}}
+{{- range $k := slice "template" "default_template" -}}
+  {{- $v := printf "%v" (index $defaults $k | default "") -}}
+  {{- range $tier := $tiers -}}
+    {{- if isset $tier $k -}}
+      {{- $tv := index $tier $k -}}
+      {{- if or (reflect.IsMap $tv) (reflect.IsSlice $tv) -}}
+        {{- partial "og-image/lib/warn.html" (dict
+            "key" (printf "og-image:warn:template-shape:ogcard.%s:%v" $k $tv)
+            "message" (printf "[og-image] Ignoring ogcard.%s: it expects a template name written as a single value but was given %q. No card is generated for the pages it covers." $k (printf "%v" $tv))) -}}
+      {{- else -}}
+        {{- $v = printf "%v" $tv -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $opts = merge $opts (dict $k (trim $v " \t\n\r")) -}}
+{{- end -}}
+
+{{/* ---- variant: the call tier ONLY. It is the memo discriminator that lets
+     one page carry more than one card, and it is part of a card's identity
+     together with the page and the language. ---- */}}
+{{- $variant := "" -}}
+{{- if isset $callp "variant" -}}
+  {{- $variant = trim (printf "%v" (index $callp "variant")) " \t\n\r" -}}
+{{- end -}}
+{{- $opts = merge $opts (dict "variant" $variant) -}}
+
+{{/* ---- Tables: merged per NAME across tiers ---- */}}
+{{- range $name := slice "templates" "fonts" "sections" "kinds" -}}
+  {{- $m := dict -}}
+  {{- range $tier := $tiers -}}
+    {{- $tv := index $tier $name -}}
+    {{- if reflect.IsMap $tv -}}
+      {{- $m = merge $m $tv -}}
+    {{- else if ne $tv nil -}}
+      {{- partial "og-image/lib/warn.html" (dict
+          "key" (printf "og-image:warn:nonmap-section:%s:%v" $name $tv)
+          "message" (printf "[og-image] Ignoring the ogcard.%s configuration value: expected a table of named entries, got %q. See %s" $name (printf "%v" $tv) $where)) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $opts = merge $opts (dict $name $m) -}}
+{{- end -}}
+
+{{/* A site that imported the module and configured nothing has no other
+     signal that it will never get a card: every per-page decline below is
+     silent by contract. The language is part of the key so a multilingual
+     site hears about each language that is missing the table. */}}
+{{- if and (not $siteSet) (not $pageSet) -}}
+  {{- partial "og-image/lib/warn.html" (dict
+      "key" (printf "og-image:warn:unconfigured:%s" $lang)
+      "message" (printf "[og-image] No params.ogcard configuration was found for language %q, so no page can be carded. Define at least one card template ([params.ogcard.templates.<name>] with a background) and route pages to it." $lang)) -}}
+{{- end -}}
+
+{{- return $opts -}}

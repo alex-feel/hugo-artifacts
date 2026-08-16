@@ -22,6 +22,7 @@ body:
         - modules/carousel/README.md
         - modules/agent-readiness/README.md
         - modules/copy-page/README.md
+        - modules/og-image/README.md
         - modules/pwa/README.md
         - modules/workbox/README.md
         - modules/idb/README.md

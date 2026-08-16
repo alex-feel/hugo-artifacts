@@ -3,14 +3,21 @@
 # port binding, and a finite build exits by itself) and runs the Node
 # build-output assertion suite against that one tree.
 #
-# One build is the whole point. The three modules are each proven alone by
-# their own suite; what none of those fixtures can see is the surface the
-# modules SHARE -- the consuming site's single [outputs] table. Hugo replaces
-# the output list per page kind and never merges a module's own [outputs], so
-# a consumer following two module READMEs literally ends up either with two
-# [outputs] tables in one file (a config-load failure) or with one table
-# replacing the other (an exit-0 build that silently stops publishing
-# documents). This build holds the merged list that publishes all of them.
+# One build is the whole point. Every module here is proven alone by its own
+# suite; what none of those fixtures can see is what the modules do in each
+# other's company. Two such surfaces live in this one build.
+#
+# The consuming site's single [outputs] table. Hugo replaces the output list
+# per page kind and never merges a module's own [outputs], so a consumer
+# following two module READMEs literally ends up either with two [outputs]
+# tables in one file (a config-load failure) or with one table replacing the
+# other (an exit-0 build that silently stops publishing documents). This build
+# holds the merged list that publishes all of them.
+#
+# The generated-image hook. seo names a partial to compose an image for a page
+# that has no image of its own, og-image composes one, and only a site holding
+# both can show a real card reaching og:image -- with the file it names on
+# disk, at the right size, drawn on this site's own base raster.
 #
 # Follows the repository's hugo process lifecycle rule with a pre-launch
 # process check, and hard-fails on any deprecation or error output in the

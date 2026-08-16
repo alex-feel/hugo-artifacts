@@ -1,0 +1,95 @@
+# The same card set under a baseURL that carries a PATH. At a domain root a
+# published card URL is byte-identical whether the base path is handled
+# correctly or dropped entirely, so this is the only build in which the
+# difference exists at all: the URL has to carry /docs/ exactly once and name
+# a file that is really there.
+baseURL = 'https://og-fixture.example/docs/'
+
+[params]
+
+  [params.ogcard]
+    width = 1200
+    height = 630
+    format = 'png'
+
+    [params.ogcard.sections]
+      blog = 'post'
+
+    [params.ogcard.kinds]
+      home = 'home'
+
+    [params.ogcard.fonts]
+      mono = 'fonts/Go-Mono.ttf'
+
+    [params.ogcard.templates.post]
+      background = 'og/post-bg.png'
+
+      [[params.ogcard.templates.post.text]]
+        source = 'title'
+        font = 'mono'
+        metrics = 'mono'
+        size = 64
+        color = '#ffd400'
+        x = 72
+        y = 120
+        width = 1040
+        max_lines = 3
+
+    [params.ogcard.templates.home]
+      background = 'og/home-bg.png'
+
+      [[params.ogcard.templates.home.text]]
+        source = 'title'
+        font = 'mono'
+        metrics = 'mono'
+        size = 64
+        color = '#ffd400'
+        x = 72
+        y = 120
+        width = 1040
+        max_lines = 3
+
+    # The shared content set names these three templates from front matter.
+    # They are defined here so that the only warnings this build carries are
+    # the ones it exists to produce.
+    [params.ogcard.templates.plain]
+      background = 'og/post-bg.png'
+
+      [[params.ogcard.templates.plain.text]]
+        source = 'title'
+        font = 'mono'
+        metrics = 'mono'
+        size = 64
+        color = '#ffd400'
+        x = 72
+        y = 120
+        width = 1040
+        max_lines = 3
+
+    [params.ogcard.templates.wrongsize]
+      background = 'og/wrong-size.png'
+
+      [[params.ogcard.templates.wrongsize.text]]
+        source = 'title'
+        font = 'mono'
+        metrics = 'mono'
+        size = 64
+        color = '#ffd400'
+        x = 72
+        y = 120
+        width = 1040
+        max_lines = 3
+
+    [params.ogcard.templates.otf]
+      background = 'og/post-bg.png'
+
+      [[params.ogcard.templates.otf.text]]
+        source = 'title'
+        font = 'mono'
+        metrics = 'mono'
+        size = 64
+        color = '#ffd400'
+        x = 72
+        y = 120
+        width = 1040
+        max_lines = 3

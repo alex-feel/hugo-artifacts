@@ -1,0 +1,38 @@
+{{/*
+  og-image/lib/warn.html -- INTERNAL (lib tier).
+
+  Emits one deduplicated warnf per warning key, so a given issue surfaces once
+  per build across all pages and output formats rather than screaming per page
+  render.
+
+  This is the only WARNING-emitting helper in the module; every other partial
+  routes its warnf calls through here. The module never breaks a build over an
+  image: card.html's wiring guard is the single errorf, and everything below it
+  is a warning here plus a safe fallback.
+
+  Deduplication is TWO nested mechanisms, and both are load-bearing. A bare
+  hugo.Store check-then-set is not atomic while Hugo renders pages
+  concurrently, so several pages can pass the Get before any of them Sets, and
+  the same misconfiguration then prints two to six times, each line naming a
+  different arbitrary page. partialCached executes its body once per cache key
+  per language, which collapses that concurrency; the hugo.Store sentinel
+  inside it is build-global, which collapses the remaining per-language
+  repetition. Neither alone gives once per build.
+
+  Because the emitting body is cached on .key ALONE, the FIRST message stored
+  under a key is the one printed. Callers therefore put everything that varies
+  into the key: key by class plus the offending value, and add the page only
+  when the fault is per-page. A message naming a page under a key that does not
+  is how a site-wide mistake ends up blaming an unrelated page.
+
+  Context (dict):
+  - .key (string)     Stable dedup key, e.g.
+                      printf "og-image:warn:missing-font:%s" $path.
+  - .message (string) The fully-formatted, [og-image]-prefixed warning text.
+
+  Side effect: warnf once per key. No return value is used by callers.
+*/}}
+
+{{- with .key -}}
+  {{- partialCached "og-image/lib/warn-emit.html" (dict "key" . "message" $.message) . -}}
+{{- end -}}
