@@ -55,6 +55,14 @@ export const sitenameDir = resolve(
 export const generatedDir = resolve(
   process.env.FIXTURE_PUBLIC_GENERATED ?? 'fixture/public/generated',
 );
+// A home page that states its own SEO title, in both the current and the
+// legacy spelling, under a site-wide title suffix: the only build in which
+// either branch of resolve/title.html renders. Everywhere else no suffix is
+// configured and no home page declares a headline, so the home <title> lands
+// on the site title whether the rule is right or wrong.
+export const hometitleDir = resolve(
+  process.env.FIXTURE_PUBLIC_HOMETITLE ?? 'fixture/public/hometitle',
+);
 
 export function rawHtml(rel, dir = publicDir) {
   return readFileSync(join(dir, rel), 'utf8');
@@ -114,6 +122,7 @@ export function buildLog(which = 'baseline') {
     graph: 'HUGO_BUILD_LOG_GRAPH',
     sitename: 'HUGO_BUILD_LOG_SITENAME',
     generated: 'HUGO_BUILD_LOG_GENERATED',
+    hometitle: 'HUGO_BUILD_LOG_HOMETITLE',
   };
   // A key map that throws, rather than a two-state boolean: the boolean form
   // had no path to the third log at all, so a warning assertion against the

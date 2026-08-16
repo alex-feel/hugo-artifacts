@@ -1,7 +1,7 @@
 @echo off
-rem Builds the fixture site TEN TIMES with hugo (a BUILD, not a server: no port
+rem Builds the fixture site ELEVEN TIMES with hugo (a BUILD, not a server: no port
 rem binding, and a finite build exits by itself) and runs the Node
-rem build-output assertion suite against all ten trees. Windows mirror of
+rem build-output assertion suite against all eleven trees. Windows mirror of
 rem run-tests.sh: pre-launch process check, then a hard fail on any
 rem deprecation or error output in any build log.
 rem
@@ -21,9 +21,12 @@ rem own .Permalink; the `graph` environment republishes the baseline content
 rem with `seo.jsonld_container = 'graph'`, the only build that reaches the
 rem @graph serialization site; the `sitename` environment gives the site and
 rem its publisher DIFFERENT names, the only shape that can tell the two ends
-rem of the site-name chain apart; and the `generated` environment wires the
+rem of the site-name chain apart; the `generated` environment wires the
 rem generated-image hook alongside a site default image, the only shape that
-rem can tell a per-page composed card from the site-wide banner.
+rem can tell a per-page composed card from the site-wide banner; and the
+rem `hometitle` environment declares a home-page SEO title and a site-wide
+rem title suffix, the only shape that exercises either branch of
+rem resolve/title.html.
 setlocal
 
 tasklist /FI "IMAGENAME eq hugo.exe" | find /I "hugo.exe" >nul
@@ -42,6 +45,7 @@ set LOG_FILE_PAGINATION=%~dp0hugo-build-pagination.log
 set LOG_FILE_GRAPH=%~dp0hugo-build-graph.log
 set LOG_FILE_SITENAME=%~dp0hugo-build-sitename.log
 set LOG_FILE_GENERATED=%~dp0hugo-build-generated.log
+set LOG_FILE_HOMETITLE=%~dp0hugo-build-hometitle.log
 
 pushd "%~dp0fixture"
 hugo --logLevel info --cleanDestinationDir --destination public\baseline > "%LOG_FILE%" 2>&1
@@ -114,9 +118,16 @@ if errorlevel 1 (
   popd
   exit /b 1
 )
+hugo -e hometitle --logLevel info --cleanDestinationDir --destination public\hometitle > "%LOG_FILE_HOMETITLE%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(hometitle^):
+  type "%LOG_FILE_HOMETITLE%"
+  popd
+  exit /b 1
+)
 popd
 
-for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_SUBPATH%" "%LOG_FILE_BADTYPES%" "%LOG_FILE_OFFSWITCH%" "%LOG_FILE_MULTILINGUAL%" "%LOG_FILE_PAGINATION%" "%LOG_FILE_GRAPH%" "%LOG_FILE_SITENAME%" "%LOG_FILE_GENERATED%") do (
+for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_SUBPATH%" "%LOG_FILE_BADTYPES%" "%LOG_FILE_OFFSWITCH%" "%LOG_FILE_MULTILINGUAL%" "%LOG_FILE_PAGINATION%" "%LOG_FILE_GRAPH%" "%LOG_FILE_SITENAME%" "%LOG_FILE_GENERATED%" "%LOG_FILE_HOMETITLE%") do (
   findstr /I "deprecat" %%L >nul 2>&1
   if not errorlevel 1 (
     echo Hugo reported deprecations in %%L:
@@ -141,6 +152,7 @@ set FIXTURE_PUBLIC_PAGINATION=%~dp0fixture\public\pagination
 set FIXTURE_PUBLIC_GRAPH=%~dp0fixture\public\graph
 set FIXTURE_PUBLIC_SITENAME=%~dp0fixture\public\sitename
 set FIXTURE_PUBLIC_GENERATED=%~dp0fixture\public\generated
+set FIXTURE_PUBLIC_HOMETITLE=%~dp0fixture\public\hometitle
 set HUGO_BUILD_LOG=%LOG_FILE%
 set HUGO_BUILD_LOG_CONFIGURED=%LOG_FILE_CONFIGURED%
 set HUGO_BUILD_LOG_SUBPATH=%LOG_FILE_SUBPATH%
@@ -151,6 +163,7 @@ set HUGO_BUILD_LOG_PAGINATION=%LOG_FILE_PAGINATION%
 set HUGO_BUILD_LOG_GRAPH=%LOG_FILE_GRAPH%
 set HUGO_BUILD_LOG_SITENAME=%LOG_FILE_SITENAME%
 set HUGO_BUILD_LOG_GENERATED=%LOG_FILE_GENERATED%
+set HUGO_BUILD_LOG_HOMETITLE=%LOG_FILE_HOMETITLE%
 for /f "tokens=2 delims=v " %%v in ('hugo version') do (
   set HUGO_VERSION_RAW=%%v
   goto gotversion

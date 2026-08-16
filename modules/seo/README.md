@@ -204,7 +204,7 @@ The full annotated surface:
 | Key | Type | Default | Purpose |
 | --- | --- | --- | --- |
 | `enable` | bool | `true` | Global kill switch. `false` emits nothing anywhere. |
-| `title_suffix` | string | `""` | Appended to `<title>` only, never to `og:title` or `headline`. The home page never gets the suffix. |
+| `title_suffix` | string | `""` | Appended to `<title>` only, never to `og:title` or `headline`. The home page never gets the suffix, whatever else it declares -- see Home page titles below. |
 | `description` | string | `""` | Site-wide fallback description, last link of the description chain. |
 | `content_license` | string | `""` | Absolute URL of the license covering the site's editorial content. When set, emits `"license"` on the `WebPage`, `CollectionPage` and article-class (`Article` / `BlogPosting` / `NewsArticle`) nodes -- the nodes that represent the page's own editorial content. `license` is a schema.org `CreativeWork` property, and other `CreativeWork` subtypes this module emits (`WebSite`, `ProfilePage`, `SoftwareApplication`, `VideoObject`, `ImageObject`) could carry it validly; they deliberately do not, because a site-wide content license describes the page you are reading rather than the site entity or an embedded asset. It is never attached to `Person`, `Organization`, `Offer` or `BreadcrumbList`, where it would not be valid at all. Unset emits nothing. |
 | `default_image` | string | `""` | Site-wide image fallback. Resource path under `assets/`, site-root path for a `static/` file (e.g. `/img/og.png`), or absolute URL. Applied only when no page-level image resolves; a site-root path keeps the `baseURL` path on a subpath deployment. |
@@ -282,7 +282,7 @@ The module reads Hugo-native front-matter fields FIRST wherever they carry the r
 
 | Native field | Feeds |
 | --- | --- |
-| `title` | `<title>`, `og:title`, `twitter:title`, `Article.headline`, `WebPage.name`, `Product.name`, `VideoObject.name`, `SoftwareApplication.name`, `mainEntity.name` |
+| `title` | `<title>` (every page except the home page -- see Home page titles below), `og:title`, `twitter:title`, `Article.headline`, `WebPage.name`, `Product.name`, `VideoObject.name`, `SoftwareApplication.name`, `mainEntity.name` |
 | `description` | meta description, `og:description`, `twitter:description`, JSON-LD `description` |
 | `summary` (or `.Summary`) | description fallback when `description` is empty (plainified, truncated) |
 | `date` | `article:published_time`, `datePublished`, `uploadDate`, `dateCreated` (fallback) |
@@ -300,6 +300,23 @@ The module reads Hugo-native front-matter fields FIRST wherever they carry the r
 The full new-key surface under `seo:` is: `title`, `description`, `canonical`, `robots`, `robots_bots`, `type`, `og_type`, `image`, `images`, `image_alt`, `same_as`, `authors`, `breadcrumb_trails`, `disable`, `allow_index_nonprod`, `robots_expiry`, `organization.on_page`, the four type tables `product`, `offer`, `software`, `video`, `profile`, and the `date_published`/`date_modified` overrides. The examples below show each page shape.
 
 Note: `seo.disable` is type-dependent. As a boolean, `seo.disable: true` on a page is the per-page kill switch -- it suppresses the ENTIRE SEO head surface for that page (title, canonical, OG, Twitter, robots, and all JSON-LD), the per-page counterpart to the site-level `params.seo.enable = false`, intended for hand-templated pages. As a slice, `params.seo.disable = ["VideoObject", ...]` in the site config suppresses individual JSON-LD node types only (see Configuration and Extension Hooks).
+
+### Home page titles
+
+The home page is the one page whose `<title>` does not follow the page title by itself. It follows the title the page DECLARES -- `seo.title`, or the deprecated `meta_title` alias -- and falls back to `site.Title` when the page declares neither. The home page's own `title` front matter is deliberately outside that chain: it names the page for menus and headings and is routinely the word "Home", which makes a worse search headline than the site's own name.
+
+Every other surface reads the full chain on the home page exactly as it does everywhere else, so `og:title`, `twitter:title` and `WebPage.name` still follow `title` there. A home page may therefore present its content title to a share card while its search result carries the brand -- and a home page that wants one string everywhere writes it into `seo.title`.
+
+The suffix never reaches the home page either, whatever it declares: a home `<title>` is never `Home | Acme` or `Acme | Acme`. A home page that wants a suffixed headline writes the whole string, suffix included, into `seo.title`.
+
+```yaml
+# content/_index.md
+---
+title: 'Home' # names the page in menus and headings; reaches og:title
+seo:
+  title: 'Acme Widgets -- Industrial Fasteners Since 1974' # the search headline
+---
+```
 
 ### Plain page (no content schema -- WebPage + BreadcrumbList only)
 
@@ -651,7 +668,7 @@ modules/seo/
         alternates.html                    # Renderer. Alternate representations (opt-in allow-list) plus the static IANA link relations. Called from head-meta.html after feed discovery; emits nothing when [seo.alternates] and [seo.links] are unset.
         head-jsonld.html                   # Renderer/dispatcher. Collects node dicts from jsonld/* + the jsonld-extra hook, emits separate <script> blocks (default) or one @graph block.
         resolve/
-          title.html                       # Returns {title, titleFull} via the title fallback chain.
+          title.html                       # Returns {title, titleFull} via the title fallback chain; titleFull adds the suffix off the home page and follows the declared title on it.
           site-name.html                   # Returns the site's name (website name -> organization name -> site.Title) for og:site_name, WebSite.name, the OpenSearch title and the feed title. Takes the Site, not a Page; called via partialCached.
           description.html                 # Returns the unified description string shared by meta, OG, Twitter, and JSON-LD.
           canonical.html                   # Returns the absolute canonical URL.
