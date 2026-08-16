@@ -1,0 +1,277 @@
+{{/*
+  og-image/resolve/slots.html -- INTERNAL (resolver tier).
+
+  Purpose: turns a card template's `text` array into the images.Text filters
+  that draw it, one filter PER LINE.
+
+  Why per line: for a single-line filter Hugo places the text at the same
+  vertical position whatever the horizontal alignment, while a multi-line
+  filter couples alignment and line pitch and merges lines at card sizes under
+  its own default spacing. Drawing one line per filter takes that coupling out
+  of the picture: `x` is an absolute canvas coordinate naming where the
+  alignment anchor sits, `y` is computed per line as the slot's y plus the
+  line index times the pitch, and `linespacing` is never set because no filter
+  here carries more than one line. All the filters still go into a single
+  images.Filter call, so N lines still cost ONE derivative.
+
+  A slot with `width` set runs through the fit engine: the text is measured
+  once in per-mille em and wrapped against the box, shrinking down a bounded
+  size ladder until it fits or reaching the ladder's floor and truncating with
+  an ellipsis. A slot WITHOUT `width` draws on one line, and the width
+  estimate never enters positioning -- it decides line breaks only.
+
+  Every key of the option dict is written out by name, because images.Text
+  silently ignores an option key it does not know: a typo would be invisible
+  except in the pixels. A key the site did not set is OMITTED rather than
+  defaulted here, so Hugo's own documented default applies and the module
+  invents no value.
+
+  Context (dict):
+  - .page (Page)          The current page.
+  - .opts (dict)          The resolved options from og-image/config.html.
+  - .name (string)        The card template's name.
+  - .template (map)       The card template's table.
+  - .title (string)       The resolved title handed to card.html.
+  - .description (string) The resolved description handed to card.html.
+
+  Return value: dict{filters (slice), filters_nofont (slice), drew (bool),
+  fonts (slice of string)} -- filters_nofont repeats every filter with the
+  font key removed, so the composer can retry in Hugo's built-in face when a
+  font resource turns out to be unparseable. One terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $opts := .opts -}}
+{{- $name := .name -}}
+{{- $tpl := .template -}}
+{{- $filters := slice -}}
+{{- $nofont := slice -}}
+{{- $fonts := slice -}}
+{{- $drew := false -}}
+
+{{- $slots := partial "og-image/lib/as-map-list.html" (dict
+    "value" (index $tpl "text")
+    "key" (printf "og-image:warn:bad-text-entry:%s" $name)
+    "label" (printf "the text of card template %q" $name)) -}}
+
+{{- range $i, $slot := $slots -}}
+  {{- $src := partial "og-image/resolve/source.html" (dict
+      "page" $page
+      "slot" $slot
+      "title" $.title
+      "description" $.description
+      "name" $name) -}}
+  {{- if $src.ok -}}
+
+    {{/* ---- Integer geometry. A value that does not parse warns once and
+         that ONE key falls back to its documented default; the rest of the
+         slot still draws. ---- */}}
+    {{- $ints := dict -}}
+    {{- $has := dict -}}
+    {{- range $sp := slice
+        (dict "k" "size" "d" 20 "lo" 1 "hi" 100000)
+        (dict "k" "x" "d" 0 "lo" -100000 "hi" 100000)
+        (dict "k" "y" "d" 0 "lo" -100000 "hi" 100000)
+        (dict "k" "width" "d" 0 "lo" 1 "hi" 100000)
+        (dict "k" "max_lines" "d" 0 "lo" 0 "hi" 100000)
+        (dict "k" "shrink_step" "d" 4 "lo" 1 "hi" 100000) -}}
+      {{- $v := $sp.d -}}
+      {{- $present := false -}}
+      {{- if isset $slot $sp.k -}}
+        {{- $n := partial "og-image/lib/int.html" (index $slot $sp.k) -}}
+        {{- if and $n.ok (ge $n.value $sp.lo) (le $n.value $sp.hi) -}}
+          {{- $v = $n.value -}}
+          {{- $present = true -}}
+        {{- else -}}
+          {{- partial "og-image/lib/warn.html" (dict
+              "key" (printf "og-image:warn:bad-int:%s:%d:%s:%v" $name $i $sp.k (index $slot $sp.k))
+              "message" (printf "[og-image] Ignoring the %s value %q on text slot %d of card template %q (expected a whole number from %d to %d); that key falls back to its default." $sp.k (printf "%v" (index $slot $sp.k)) $i $name $sp.lo $sp.hi)) -}}
+        {{- end -}}
+      {{- end -}}
+      {{- $ints = merge $ints (dict $sp.k $v) -}}
+      {{- $has = merge $has (dict $sp.k $present) -}}
+    {{- end -}}
+
+    {{/* ---- Float engine knobs. The digit count is unbounded in the pattern
+         on purpose -- a cap would report a value of three hundred digits as
+         "not a number" when it is one, merely far out of range -- so the cast
+         itself runs inside `try`: Hugo's `float` RAISES on a value too large
+         for a float64 rather than returning one, and an unguarded raise here
+         would stop the consuming site's build. A value that cannot be
+         represented is out of range by definition, so it takes the
+         out-of-range branch and reports the range it missed. ---- */}}
+    {{- $floats := dict -}}
+    {{- range $sp := slice
+        (dict "k" "safety" "d" 0.98 "hi" 1.0)
+        (dict "k" "min_scale" "d" 0.7 "hi" 1.0)
+        (dict "k" "width_factor" "d" 1.0 "hi" 100.0)
+        (dict "k" "line_height" "d" 1.4 "hi" 100.0) -}}
+      {{- $v := $sp.d -}}
+      {{- if isset $slot $sp.k -}}
+        {{- $raw := trim (printf "%v" (index $slot $sp.k)) " \t\n\r" -}}
+        {{- if findRE `^\d+(\.\d+)?$` $raw -}}
+          {{- $cast := try (float $raw) -}}
+          {{- $f := 0.0 -}}
+          {{- if not $cast.Err -}}{{- $f = $cast.Value -}}{{- end -}}
+          {{- if and (gt $f 0.0) (le $f $sp.hi) -}}
+            {{- $v = $f -}}
+          {{- else -}}
+            {{- partial "og-image/lib/warn.html" (dict
+                "key" (printf "og-image:warn:bad-float:%s:%d:%s:%s" $name $i $sp.k $raw)
+                "message" (printf "[og-image] Ignoring the %s value %q on text slot %d of card template %q (expected a number greater than 0 and at most %v); using %v instead." $sp.k $raw $i $name $sp.hi $sp.d)) -}}
+          {{- end -}}
+        {{- else -}}
+          {{- partial "og-image/lib/warn.html" (dict
+              "key" (printf "og-image:warn:bad-float:%s:%d:%s:%s" $name $i $sp.k $raw)
+              "message" (printf "[og-image] Ignoring the %s value %q on text slot %d of card template %q (expected a number); using %v instead." $sp.k $raw $i $name $sp.d)) -}}
+        {{- end -}}
+      {{- end -}}
+      {{- $floats = merge $floats (dict $sp.k $v) -}}
+    {{- end -}}
+
+    {{/* ---- Enums ---- */}}
+    {{- $align := "left" -}}
+    {{- $hasAlign := false -}}
+    {{- if isset $slot "align" -}}
+      {{- $a := lower (trim (printf "%v" (index $slot "align")) " \t\n\r") -}}
+      {{- if in (slice "left" "center" "right") $a -}}
+        {{- $align = $a -}}
+        {{- $hasAlign = true -}}
+      {{- else -}}
+        {{- partial "og-image/lib/warn.html" (dict
+            "key" (printf "og-image:warn:unknown-enum:align:%s" $a)
+            "message" (printf "[og-image] Unknown align value %q on text slot %d of card template %q; using \"left\" instead (allowed: left, center, right)." $a $i $name)) -}}
+      {{- end -}}
+    {{- end -}}
+    {{- $overflow := "shrink" -}}
+    {{- if isset $slot "overflow" -}}
+      {{- $o := lower (trim (printf "%v" (index $slot "overflow")) " \t\n\r") -}}
+      {{- if in (slice "shrink" "truncate") $o -}}
+        {{- $overflow = $o -}}
+      {{- else -}}
+        {{- partial "og-image/lib/warn.html" (dict
+            "key" (printf "og-image:warn:unknown-enum:overflow:%s" $o)
+            "message" (printf "[og-image] Unknown overflow value %q on text slot %d of card template %q; using \"shrink\" instead (allowed: shrink, truncate)." $o $i $name)) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{/* ---- Color. Hugo accepts a value it cannot read and silently draws
+         white, with no diagnostic of its own, so this warning is the only
+         thing standing between a typo and a card of invisible text. An
+         invalid value drops the key, which is what makes Hugo's own
+         documented default apply. ---- */}}
+    {{- $color := "" -}}
+    {{- if isset $slot "color" -}}
+      {{- $c := trim (printf "%v" (index $slot "color")) " \t\n\r" -}}
+      {{- if findRE `^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$` $c -}}
+        {{- $color = $c -}}
+      {{- else -}}
+        {{- partial "og-image/lib/warn.html" (dict
+            "key" (printf "og-image:warn:bad-color:%s:%s" $name $c)
+            "message" (printf "[og-image] Ignoring the color value %q on text slot %d of card template %q: a color is written as \"#rgb\" or \"#rrggbb\". Hugo draws an unreadable color as white without saying so, so check this card." $c $i $name)) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{/* ---- Font: a registry NAME resolves to a resource or to nothing.
+         A name the registry does not define is a typo worth one warning; the
+         slot still draws in Hugo's built-in face. ---- */}}
+    {{- $font := "" -}}
+    {{- $fontLabel := "" -}}
+    {{- if isset $slot "font" -}}
+      {{- $fname := lower (trim (printf "%v" (index $slot "font")) " \t\n\r") -}}
+      {{- if $fname -}}
+        {{- $fpath := "" -}}
+        {{- $fraw := index $opts.fonts $fname -}}
+        {{- if and (ne $fraw nil) (not (reflect.IsMap $fraw)) (not (reflect.IsSlice $fraw)) -}}
+          {{- $fpath = trim (printf "%v" $fraw) " \t\n\r" -}}
+        {{- end -}}
+        {{- if $fpath -}}
+          {{- $font = partialCached "og-image/resolve/font.html" (dict "name" $fname "path" $fpath) $fpath -}}
+          {{- $fontLabel = printf "%s (%s)" $fname $fpath -}}
+        {{- else -}}
+          {{- partial "og-image/lib/warn.html" (dict
+              "key" (printf "og-image:warn:unknown-font:%s" $fname)
+              "message" (printf "[og-image] No font named %q is registered under [params.ogcard.fonts], so the slots asking for it are drawn with Hugo's built-in Go Regular instead." $fname)) -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+    {{- if and $font (not (in $fonts $fontLabel)) -}}
+      {{- $fonts = $fonts | append $fontLabel -}}
+    {{- end -}}
+
+    {{/* ---- Emit the filters ---- */}}
+    {{- $emit := slice -}}
+    {{- if $has.width -}}
+      {{/* Wrapped slot: the fit engine decides the size and the line breaks,
+           and each line is drawn as its own filter at its own y. */}}
+      {{- $ellipsis := "…" -}}
+      {{- if isset $slot "ellipsis" -}}
+        {{- $ellipsis = printf "%v" (index $slot "ellipsis") -}}
+      {{- end -}}
+      {{- $box := dict
+          "size" $ints.size
+          "width" $ints.width
+          "max_lines" (cond (le $ints.max_lines 0) 1000000 $ints.max_lines)
+          "shrink_step" $ints.shrink_step
+          "min_scale" $floats.min_scale
+          "safety" $floats.safety
+          "width_factor" $floats.width_factor
+          "overflow" $overflow
+          "ellipsis" $ellipsis -}}
+      {{- $metricsName := lower (trim (printf "%v" (index $slot "metrics" | default "default")) " \t\n\r") -}}
+      {{- $metrics := partialCached "og-image/text/metrics.html" (dict "name" $metricsName) $metricsName -}}
+      {{- $fit := partial "og-image/text/fit.html" (dict "text" $src.text "box" $box "metrics" $metrics) -}}
+      {{/* The engine reports a line it had to place wider than its budget,
+           which no size in the ladder could fix: the box is narrower than one
+           glyph. Nothing else would say so -- the card publishes, and the ink
+           simply runs past the box the slot declared. */}}
+      {{- if $fit.over_budget -}}
+        {{- partial "og-image/lib/warn.html" (dict
+            "key" (printf "og-image:warn:narrow-box:%s:%d" $name $i)
+            "message" (printf "[og-image] The %d-pixel box of text slot %d of card template %q is narrower than a single glyph at the sizes the slot allows, so its lines are drawn running past the box. Widen width, lower size, or lower min_scale." $ints.width $i $name)) -}}
+      {{- end -}}
+      {{- $pitch := int (math.Round (mul (float $fit.size) $floats.line_height)) -}}
+      {{- if lt $pitch 1 -}}{{- $pitch = 1 -}}{{- end -}}
+      {{- $anchor := $ints.x -}}
+      {{- if eq $align "center" -}}
+        {{- $anchor = add $ints.x (int (math.Floor (div (float $ints.width) 2.0))) -}}
+      {{- else if eq $align "right" -}}
+        {{- $anchor = add $ints.x $ints.width -}}
+      {{- end -}}
+      {{- range $li, $line := $fit.lines -}}
+        {{- $emit = $emit | append (dict
+            "text" $line
+            "opts" (dict
+              "size" $fit.size
+              "x" $anchor
+              "y" (add $ints.y (mul $li $pitch))
+              "alignx" $align
+              "aligny" "top")) -}}
+      {{- end -}}
+    {{- else -}}
+      {{/* Unwrapped slot: one line, and only the keys the site actually set.
+           Hugo word-wraps at the canvas edge on its own when a line does not
+           fit, which is a silent backstop, not a placement this module chose:
+           set `width` to lay the text out here instead. */}}
+      {{- $o := dict "aligny" "top" -}}
+      {{- if $has.size -}}{{- $o = merge $o (dict "size" $ints.size) -}}{{- end -}}
+      {{- if $has.x -}}{{- $o = merge $o (dict "x" $ints.x) -}}{{- end -}}
+      {{- if $has.y -}}{{- $o = merge $o (dict "y" $ints.y) -}}{{- end -}}
+      {{- if $hasAlign -}}{{- $o = merge $o (dict "alignx" $align) -}}{{- end -}}
+      {{- $emit = $emit | append (dict "text" $src.text "opts" $o) -}}
+    {{- end -}}
+
+    {{- range $e := $emit -}}
+      {{- $o := $e.opts -}}
+      {{- if $color -}}{{- $o = merge $o (dict "color" $color) -}}{{- end -}}
+      {{- $nofont = $nofont | append (images.Text $e.text $o) -}}
+      {{- $withFont := $o -}}
+      {{- if $font -}}{{- $withFont = merge $o (dict "font" $font) -}}{{- end -}}
+      {{- $filters = $filters | append (images.Text $e.text $withFont) -}}
+      {{- $drew = true -}}
+    {{- end -}}
+
+  {{- end -}}
+{{- end -}}
+
+{{- return (dict "filters" $filters "filters_nofont" $nofont "drew" $drew "fonts" $fonts) -}}

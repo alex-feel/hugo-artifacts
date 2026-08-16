@@ -15,6 +15,7 @@ body:
         - [modules/carousel README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/carousel/README.md) -- Full carousel module reference
         - [modules/agent-readiness README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/agent-readiness/README.md) -- Full agent-readiness module reference
         - [modules/copy-page README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/copy-page/README.md) -- Full copy-page module reference
+        - [modules/og-image README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/og-image/README.md) -- Full Open Graph card module reference
         - [modules/pwa README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/pwa/README.md) -- Full PWA module reference
         - [modules/workbox README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/workbox/README.md) -- Workbox vendor-mount companion of the PWA module
         - [modules/idb README](https://github.com/alex-feel/hugo-artifacts/blob/main/modules/idb/README.md) -- idb vendor-mount companion of the Workbox module
@@ -51,6 +52,7 @@ body:
         - Carousel module configuration (params.carousel.*)
         - Agent-readiness module configuration (params.agent.* / agent front matter)
         - Copy-page module configuration (params.copy_page.* / copy_page front matter)
+        - Open Graph card module configuration (params.ogcard.* / ogcard front matter)
         - PWA module configuration (params.pwa.*)
         - Push notifications / VAPID / reference backends
         - Service worker / Workbox / idb

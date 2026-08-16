@@ -1,0 +1,121 @@
+{{/*
+  fixture/record.html -- the suite's recorder.
+
+  Purpose: calls og-image/card.html exactly as a consumer does and writes down
+  what crossed the boundary, because what the module draws lives in pixels no
+  assertion can read and what it DECLINES leaves no trace at all. One JSON
+  sidecar per page is published beside the site, at
+
+      cards/<language>/<page path>/payload.json
+
+  so a spec locates a page's record from the page's own identity rather than
+  from a URL the module chose.
+
+  Three call shapes, selected by front matter, because the entry treats them
+  differently and a fixture that only ever used one would leave the other two
+  unproven:
+
+    - no front-matter marker: the bare Page, the standalone call, so the
+      module derives the title and the description itself;
+    - handed_title (with handed_description): the dict form the generated-image
+      hook uses, so the strings the caller supplies are what gets drawn --
+      handed_title deliberately disagrees with .Title on one page, which is
+      the only shape that can tell a module honoring the contract from one
+      re-deriving the page title;
+    - card_variant: a SECOND call for the same page naming a different variant
+      and template, which is how one page carries more than one card.
+
+  The recorder also dumps the scalar half of og-image/config.html's resolved
+  options. That dump names which tier answered, and every option in it that
+  reaches pixels is asserted in pixels as well, so it can never become the
+  module agreeing with itself.
+
+  Expected context: the current Page.
+
+  Return value: none. This partial renders nothing; it publishes files.
+*/}}
+
+{{- $page := . -}}
+{{- $cards := slice -}}
+{{- $handedTitle := "" -}}
+{{- $handedDescription := "" -}}
+{{- $mode := "page" -}}
+
+{{- if isset $page.Params "handed_title" -}}
+  {{- $mode = "handed" -}}
+  {{- $handedTitle = printf "%v" $page.Params.handed_title -}}
+  {{- $handedDescription = printf "%v" (index $page.Params "handed_description" | default "") -}}
+  {{- $card := partial "og-image/card.html" (dict
+      "page" $page
+      "title" $handedTitle
+      "description" $handedDescription) -}}
+  {{- with $card -}}
+    {{- $cards = $cards | append (dict
+        "url" .RelPermalink
+        "permalink" .Permalink
+        "width" .Width
+        "height" .Height
+        "mediaType" .MediaType.Type
+        "variant" "") -}}
+  {{- end -}}
+{{- else -}}
+  {{- $card := partial "og-image/card.html" $page -}}
+  {{- with $card -}}
+    {{- $cards = $cards | append (dict
+        "url" .RelPermalink
+        "permalink" .Permalink
+        "width" .Width
+        "height" .Height
+        "mediaType" .MediaType.Type
+        "variant" "") -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if isset $page.Params "card_variant" -}}
+  {{- $variant := printf "%v" $page.Params.card_variant -}}
+  {{- $second := partial "og-image/card.html" (dict
+      "page" $page
+      "opts" (dict
+        "variant" $variant
+        "template" (printf "%v" (index $page.Params "card_variant_template" | default "")))) -}}
+  {{- with $second -}}
+    {{- $cards = $cards | append (dict
+        "url" .RelPermalink
+        "permalink" .Permalink
+        "width" .Width
+        "height" .Height
+        "mediaType" .MediaType.Type
+        "variant" $variant) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $o := partial "og-image/config.html" (dict "page" $page "opts" dict) -}}
+{{- $payload := dict
+    "path" (printf "%v" $page.Path)
+    "kind" (printf "%v" $page.Kind)
+    "section" (printf "%v" $page.Section)
+    "lang" $page.Language.Lang
+    "url" $page.RelPermalink
+    "mode" $mode
+    "title" (printf "%v" $page.Title)
+    "description" (printf "%v" $page.Description)
+    "handed_title" $handedTitle
+    "handed_description" $handedDescription
+    "opts" (dict
+      "enable" $o.enable
+      "width" $o.width
+      "height" $o.height
+      "format" $o.format
+      "quality" $o.quality
+      "anchor" $o.anchor
+      "template" $o.template
+      "default_template" $o.default_template
+      "variant" $o.variant)
+    "cards" $cards -}}
+
+{{/* Reading .RelPermalink is what publishes the resource, so the assignment
+     is the publish and its value is deliberately unused. */}}
+{{- $sidecar := resources.FromString
+    (path.Join "cards" $page.Language.Lang (printf "%v" $page.Path) "payload.json")
+    (jsonify $payload) -}}
+{{- $published := $sidecar.RelPermalink -}}

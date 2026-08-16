@@ -1,0 +1,129 @@
+{{/*
+  og-image/resolve/source.html -- INTERNAL (resolver tier).
+
+  Purpose: resolves ONE text slot's `source` into the string that slot draws,
+  then applies `case`, `prefix` and `suffix`.
+
+  Vocabulary:
+    title         the title the caller handed in (never re-derived here)
+    description   the description the caller handed in
+    section       the page's section (empty on the home page)
+    section_title the current section's link title, skipped on the home page
+    kind          the page's kind
+    site_title    the site title for THIS page's language
+    domain        the host of the site's base URL
+    date          the page date, formatted with `key` as the layout
+                  (default ":date_long")
+    param         the page parameter named by `key`, dotted paths included
+    literal       the slot's own `value`
+
+  A source that resolves to nothing is a SILENT skip together with its prefix
+  and suffix, because an optional per-page field only some pages carry is
+  exactly what a slot is for: no section on the home page, no date on an
+  undated page, no subtitle on most posts. Only a mistake speaks: an unknown
+  source token, or a `param` that resolves to a table or list, warns once and
+  drops that one slot while the rest of the card renders.
+
+  Everything reads through $page.Site, never the global `site`, so a card
+  composed for a translation carries that translation's site title and host.
+
+  Context (dict):
+  - .page (Page)          The current page.
+  - .slot (map)           The slot's configuration table.
+  - .title (string)       The resolved title handed to card.html.
+  - .description (string) The resolved description handed to card.html.
+  - .name (string)        The card template's name, for diagnostics.
+
+  Return value: dict{ok (bool), text (string)}. One terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $slot := .slot -}}
+{{- $name := .name -}}
+{{- $known := slice "title" "description" "section" "section_title" "kind" "site_title" "domain" "date" "param" "literal" -}}
+{{- $source := lower (trim (printf "%v" (index $slot "source" | default "title")) " \t\n\r") -}}
+{{- $key := trim (printf "%v" (index $slot "key" | default "")) " \t\n\r" -}}
+{{- $text := "" -}}
+
+{{- if not (in $known $source) -}}
+  {{- partial "og-image/lib/warn.html" (dict
+      "key" (printf "og-image:warn:unknown-source:%s" $source)
+      "message" (printf "[og-image] Unknown card text source %q in card template %q; that slot is left blank. Use one of: %s." $source $name (delimit $known ", "))) -}}
+{{- else if eq $source "title" -}}
+  {{- $text = printf "%v" .title -}}
+{{- else if eq $source "description" -}}
+  {{- $text = printf "%v" .description -}}
+{{- else if eq $source "section" -}}
+  {{- $text = printf "%v" $page.Section -}}
+{{- else if eq $source "section_title" -}}
+  {{/* .CurrentSection is the page ITSELF on the home page, so reading it there
+       draws the home title under the name of a section the page is not in.
+       The home page has no section, which `section` above reports by being
+       empty, and this reports by skipping. */}}
+  {{- if not $page.IsHome -}}
+    {{- with $page.CurrentSection -}}
+      {{- $text = printf "%v" .LinkTitle -}}
+    {{- end -}}
+  {{- end -}}
+{{- else if eq $source "kind" -}}
+  {{- $text = printf "%v" $page.Kind -}}
+{{- else if eq $source "site_title" -}}
+  {{- $text = printf "%v" $page.Site.Title -}}
+{{- else if eq $source "domain" -}}
+  {{- with urls.Parse $page.Site.BaseURL -}}
+    {{- $text = printf "%v" .Hostname -}}
+  {{- end -}}
+{{- else if eq $source "date" -}}
+  {{- if not $page.Date.IsZero -}}
+    {{- $layout := cond (eq $key "") ":date_long" $key -}}
+    {{- $formatted := try (time.Format $layout $page.Date) -}}
+    {{- with $formatted.Err -}}
+      {{- partial "og-image/lib/warn.html" (dict
+          "key" (printf "og-image:warn:bad-date-layout:%s" $layout)
+          "message" (printf "[og-image] Ignoring the date slot in card template %q: %q is not a date layout Hugo understands (%s)." $name $layout .)) -}}
+    {{- else -}}
+      {{- $text = printf "%v" $formatted.Value -}}
+    {{- end -}}
+  {{- end -}}
+{{- else if eq $source "literal" -}}
+  {{- $text = printf "%v" (index $slot "value" | default "") -}}
+{{- else if eq $source "param" -}}
+  {{/* .Param returns nil through a scalar segment, so a dotted path into a
+       non-table is absent rather than an error. An absent key is the ordinary
+       case and stays silent; a table or list names no single string, which is
+       a configuration mistake worth one warning. */}}
+  {{- if $key -}}
+    {{- $v := $page.Param $key -}}
+    {{- if or (reflect.IsMap $v) (reflect.IsSlice $v) -}}
+      {{- partial "og-image/lib/warn.html" (dict
+          "key" (printf "og-image:warn:param-shape:%s" $key)
+          "message" (printf "[og-image] The card text slot in template %q reads the page parameter %q, which holds a table or a list rather than a single value, so the slot is left blank." $name $key)) -}}
+    {{- else if ne $v nil -}}
+      {{- $text = printf "%v" $v -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $text = trim $text " \t\n\r" -}}
+{{- if $text -}}
+  {{- $case := lower (trim (printf "%v" (index $slot "case" | default "none")) " \t\n\r") -}}
+  {{- if eq $case "upper" -}}
+    {{- $text = upper $text -}}
+  {{- else if eq $case "lower" -}}
+    {{- $text = lower $text -}}
+  {{- else if eq $case "title" -}}
+    {{- $text = title $text -}}
+  {{- else if ne $case "none" -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:unknown-enum:case:%s" $case)
+        "message" (printf "[og-image] Unknown card text case %q in card template %q; the text is drawn as written (allowed: none, upper, lower, title)." $case $name)) -}}
+  {{- end -}}
+  {{/* Prefix and suffix glue only around a value that exists, so they
+       disappear with the value rather than drawing a lone separator. */}}
+  {{- $text = printf "%s%s%s"
+      (printf "%v" (index $slot "prefix" | default ""))
+      $text
+      (printf "%v" (index $slot "suffix" | default "")) -}}
+{{- end -}}
+
+{{- return (dict "ok" (ne $text "") "text" $text) -}}

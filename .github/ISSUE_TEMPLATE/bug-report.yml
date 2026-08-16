@@ -63,6 +63,7 @@ body:
         - modules/carousel
         - modules/agent-readiness
         - modules/copy-page
+        - modules/og-image
         - modules/pwa
         - modules/workbox
         - modules/idb

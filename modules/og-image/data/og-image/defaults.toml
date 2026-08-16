@@ -1,0 +1,46 @@
+# Consumer-facing defaults for the og-image module.
+#
+# Every key can be overridden, from lowest to highest precedence:
+#   1. this file (module defaults)
+#   2. site config:       [params.ogcard]
+#   3. page front matter: ogcard: (map)
+#   4. call-site:         partial "og-image/card.html" (dict "page" . "opts" (dict ...))
+# Presence wins at every tier, so an explicit false, 0, or "" overrides the
+# tier below it. The namespace is `ogcard` (NOT `og_image`): `og_image` and
+# `ogimage` are widely used SCALAR front-matter keys naming a page's OG image
+# URL, and a map cannot coexist with a scalar at the same key -- the same
+# collision that made the images module choose `img` over `images`.
+#
+# This file carries MECHANICAL values only. A default text color, size, or
+# position would be a design decision, and the module ships none: a slot key
+# the site did not set is omitted from the images.Text option dict entirely,
+# so Hugo's own documented default applies and no module-invented number ever
+# enters a fallback path.
+
+# Master switch. false makes card.html decline everywhere, silently.
+enable = true
+
+# Canvas size in pixels. Every x, y, size and width in a template is expressed
+# in these canvas pixels, and the background raster is normalized to exactly
+# this size, so a template's coordinates stay valid whatever raster is dropped
+# in. 1200x630 is the 1.91:1 frame Open Graph consumers crop to.
+width = 1200
+height = 630
+
+# Encoded output format: png | jpeg | webp. PNG is lossless (text stays crisp)
+# and universally accepted by social platforms.
+format = 'png'
+
+# Encoder quality, 1-100, emitted for jpeg and webp only and never for png.
+# 75 is Hugo's own jpeg default, so the fallback path invents no number.
+quality = 75
+
+# Fill anchor used to normalize the background raster to width x height. Any
+# Hugo anchor, including Smart. Center rather than Smart because a designed
+# backdrop is composed as a whole and should not be content-cropped.
+anchor = 'Center'
+
+# Template used for a page that no route names. Empty means an unrouted page
+# gets NO card, silently -- that is how this generator says it has nothing for
+# the page. Set it to a template name to card every page.
+default_template = ''

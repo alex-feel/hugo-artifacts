@@ -1,10 +1,10 @@
 /* global process */
 // Cross-module composition assertions.
 //
-// Each of seo, agent-readiness and search is proven on its own by its own
-// suite, against a fixture that imports that module alone. None of those
-// fixtures can see the one surface the three modules SHARE: the consuming
-// site's single `[outputs]` table.
+// Every module the fixture imports is proven on its own by its own suite,
+// against a fixture that imports that module alone. None of those fixtures can
+// see the surface those modules SHARE: the consuming site's single `[outputs]`
+// table.
 //
 // Hugo replaces the output list per page kind rather than merging it, and a
 // module's own `[outputs]` table never reaches the consumer configuration, so
@@ -17,7 +17,7 @@
 // suite exists to catch, because nothing in a single-module suite can.
 //
 // The fixture therefore carries ONE merged home list, and these assertions
-// hold it to the union of what the three modules define.
+// hold it to the union of what those modules define.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync, readFileSync} from 'node:fs';
@@ -78,7 +78,7 @@ test('one build publishes every module document side by side', () => {
   }
 });
 
-test('the merged home list carries every format the three modules define', () => {
+test('the merged home list carries every format the modules define', () => {
   const home = homeOutputs();
   const defined = [...moduleFormats('agent-readiness'), ...moduleFormats('search')];
   // Guards the enumeration itself: a mis-typed module name or a changed table
@@ -100,7 +100,7 @@ test('the merged home list carries every format the three modules define', () =>
 
 test('the fixture configuration carries exactly one outputs table', () => {
   // Two [outputs] tables in one file is a config-load failure, so the merged
-  // single table is the only shape a consumer can hold all three modules in.
+  // single table is the only shape a consumer can hold every module in.
   const tables = fixtureConfig.match(/^\[outputs\]$/gm) ?? [];
   assert.equal(tables.length, 1);
 });

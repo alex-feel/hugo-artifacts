@@ -6,6 +6,13 @@
     {{/* The seo module's whole surface is head markup, so it composes only
          if this call still renders alongside the other two modules. */}}
     {{ partial "seo/head.html" . }}
+    {{/* og-image ships its own image-tag renderer for a site with no seo
+         module, and it must render NOTHING here: two og:image tags is worse
+         than none, and this is the only fixture in the repository where both
+         modules are mounted, so it is the only place that silence can be
+         observed. Calling it AFTER seo/head.html is deliberate -- a second tag
+         would land where a reader of the head would see it last. */}}
+    {{ partial "og-image/meta.html" . }}
   </head>
   <body>
     <header>{{ partial "search/modal.html" . }}</header>

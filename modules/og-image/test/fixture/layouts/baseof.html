@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="{{ .Site.Language.Lang }}">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{ .Title }}</title>
+    {{/* The recorder runs FIRST, because it is the only caller that hands the
+         module a title and a description; og-image/meta.html below calls the
+         same entry with a bare Page and gets the memoized card back. */}}
+    {{ partial "fixture/record.html" . }}
+    {{ partial "og-image/meta.html" . }}
+  </head>
+  <body>
+    <main>{{ block "main" . }}{{ end }}</main>
+  </body>
+</html>

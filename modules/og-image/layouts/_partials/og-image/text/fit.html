@@ -1,0 +1,118 @@
+{{/*
+  og-image/text/fit.html -- INTERNAL (text tier).
+
+  Purpose: finds the largest size in a bounded descending ladder at which the
+  text wraps within max_lines, and falls back to the smallest rung's truncated
+  wrap when no rung fits. Words are measured ONCE, in per-mille em, and every
+  rung re-wraps that same width vector against a different budget:
+
+      budget = floor(box_width * em * safety * width_factor / size)
+
+  TERMINATION IS STRUCTURAL: the ladder is a FIXED slice built before the
+  loop, `range` walks it once with an early-exit flag, and wrap.html is total
+  at every rung, so the worst case is exactly len(sizes) iterations with the
+  last rung's truncated result as the answer. The ladder is capped at 25
+  entries (the base size plus at most 24 rungs); when the configured step
+  would need more rungs than that to reach the floor, the STEP is widened so
+  the ladder still spans size down to floor instead of stopping short.
+
+  The floor is the ladder's LAST rung, always. Stepping down from size lands on
+  it only when the step divides the span exactly, so the floor is appended
+  whenever the stepped rungs stop above it -- the stepped rungs are all kept,
+  because a size that fits is preferable to the smaller one below it, and the
+  step budget is one rung shorter to hold the cap. Without that final rung the
+  smallest size the author allowed is never tried, and text that would have
+  fitted whole is truncated at a larger size instead.
+
+  A rung is accepted when the wrap neither dropped content NOR left a placed
+  line wider than the budget; a box narrower than a single glyph can only
+  produce the latter, and shrinking is exactly what widens the per-mille budget
+  that such a line overruns.
+
+  The clamps below duplicate config normalization ON PURPOSE: the resolver
+  warns for the author, and this partial stays total on its own so that no
+  configuration -- including a size of 0, which would otherwise divide by zero
+  and break the build -- can escape as a template error.
+
+  Context (dict):
+  - .text (any)     The resolved slot text.
+  - .box (dict)     Normalized slot geometry: size, width, max_lines,
+                    shrink_step, min_scale, safety, width_factor, overflow,
+                    ellipsis.
+  - .metrics (dict) A table from og-image/text/metrics.html.
+
+  Return value: dict{lines, widths, overflow, over_budget, size, budget}. One
+  terminal return.
+*/}}
+
+{{- $box := .box -}}
+{{- $m := .metrics -}}
+{{- $em := $m.em -}}
+{{- if lt $em 1 -}}{{- $em = 1000 -}}{{- end -}}
+{{- $size := $box.size -}}
+{{- if lt $size 1 -}}{{- $size = 1 -}}{{- end -}}
+{{- $width := $box.width -}}
+{{- if lt $width 1 -}}{{- $width = 1 -}}{{- end -}}
+{{- $maxLines := $box.max_lines -}}
+{{- if lt $maxLines 1 -}}{{- $maxLines = 1 -}}{{- end -}}
+{{- $step := $box.shrink_step -}}
+{{- if lt $step 1 -}}{{- $step = 1 -}}{{- end -}}
+{{- $scale := $box.min_scale -}}
+{{- if or (le $scale 0.0) (gt $scale 1.0) -}}{{- $scale = 1.0 -}}{{- end -}}
+{{- $safety := $box.safety -}}
+{{- if or (le $safety 0.0) (gt $safety 1.0) -}}{{- $safety = 1.0 -}}{{- end -}}
+{{- $wf := $box.width_factor -}}
+{{- if le $wf 0.0 -}}{{- $wf = 1.0 -}}{{- end -}}
+
+{{- $tokens := partial "og-image/text/measure.html" (dict "text" .text "metrics" $m) -}}
+{{- $ellipsis := printf "%v" $box.ellipsis -}}
+{{- $ellw := 0 -}}
+{{- range $ch := split $ellipsis "" -}}
+  {{- $gw := index $m.glyphs $ch -}}
+  {{- if eq $gw nil -}}{{- $gw = $m.fallback -}}{{- end -}}
+  {{- $ellw = add $ellw $gw -}}
+{{- end -}}
+
+{{- $sizes := slice $size -}}
+{{- if eq $box.overflow "shrink" -}}
+  {{- $floor := int (math.Ceil (mul (float $size) $scale)) -}}
+  {{- if lt $floor 1 -}}{{- $floor = 1 -}}{{- end -}}
+  {{- $steps := 0 -}}
+  {{- if gt $size $floor -}}
+    {{- $steps = int (math.Floor (div (float (sub $size $floor)) (float $step))) -}}
+  {{- end -}}
+  {{- if gt $steps 23 -}}
+    {{- $step = int (math.Ceil (div (float (sub $size $floor)) 23.0)) -}}
+    {{- if lt $step 1 -}}{{- $step = 1 -}}{{- end -}}
+    {{- $steps = int (math.Floor (div (float (sub $size $floor)) (float $step))) -}}
+  {{- end -}}
+  {{- if gt $steps 0 -}}
+    {{- range $i := seq 1 $steps -}}
+      {{- $sizes = $sizes | append (sub $size (mul $i $step)) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if and (gt $size $floor) (ne (index $sizes (sub (len $sizes) 1)) $floor) -}}
+    {{- $sizes = $sizes | append $floor -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $result := dict -}}
+{{- $done := false -}}
+{{- range $s := $sizes -}}
+  {{- if not $done -}}
+    {{- $budget := int (math.Floor (div (mul (mul (mul (float $width) (float $em)) $safety) $wf) (float $s))) -}}
+    {{- $w := partial "og-image/text/wrap.html" (dict
+        "tokens" $tokens
+        "space" $m.space
+        "budget" $budget
+        "max_lines" $maxLines
+        "ellipsis" $ellipsis
+        "ellipsis_w" $ellw
+        "glyphs" $m.glyphs
+        "fallback" $m.fallback) -}}
+    {{- $result = merge $w (dict "size" $s "budget" $budget) -}}
+    {{- if not (or $w.overflow $w.over_budget) -}}{{- $done = true -}}{{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $result -}}

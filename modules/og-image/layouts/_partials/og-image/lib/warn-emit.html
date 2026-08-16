@@ -1,0 +1,23 @@
+{{/*
+  og-image/lib/warn-emit.html -- INTERNAL (lib tier).
+
+  The emitting body behind og-image/lib/warn.html. Never call it directly:
+  reaching it through partialCached is what makes the check-then-set below
+  safe, and calling it straight reintroduces exactly the concurrency the
+  wrapper exists to remove. See warn.html for the full reasoning.
+
+  partialCached keeps one cache per language, so this body still runs once per
+  language on a multilingual site; the hugo.Store sentinel is build-global and
+  collapses those into a single line.
+
+  Context (dict):
+  - .key (string)     The dedup key, already non-empty.
+  - .message (string) The fully-formatted, [og-image]-prefixed warning text.
+
+  Side effect: warnf at most once. Renders nothing.
+*/}}
+
+{{- if not (hugo.Store.Get .key) -}}
+  {{- hugo.Store.Set .key true -}}
+  {{- warnf "%s" .message -}}
+{{- end -}}

@@ -1,0 +1,81 @@
+{{/*
+  og-image/resolve/template.html -- INTERNAL (resolver tier).
+
+  Purpose: decides WHICH card template this page uses, and -- just as
+  important -- whether a page with no template is a silent decline or a
+  misconfiguration worth reporting. That distinction is PROVENANCE, not
+  emptiness: a page that no route named is one this generator simply has no
+  template for, which is the contract, so it declines silently; a name that a
+  route, front matter or default_template ACTUALLY SUPPLIED but [templates]
+  does not define is a typo whose only other symptom would be the site's
+  default banner appearing where a card was expected, so it warns once.
+
+  Candidates are walked most specific first: front matter ogcard.template,
+  then [sections].<page section>, then [kinds].<page kind>, then
+  default_template. Each candidate is SHAPE-checked before use, because `with`
+  treats false as absent and would send the resolver looking for a template
+  literally named "true": a table, list or boolean candidate warns once and is
+  treated as unnamed, so the next tier is tried; a nil is skipped; a string is
+  trimmed and, when non-empty, wins along with its origin label.
+
+  A winning name that [templates] does not define warns once keyed by ORIGIN
+  PLUS NAME, so two sections pointing at two differently misspelled templates
+  in one build both report, rather than whichever page happened to render
+  first. That key covers every page reaching the same origin with the same
+  name, so the page in the message is named as an EXAMPLE: the one whose render
+  filled the cached message is arbitrary among them, and claiming it is the
+  only page without a card would be a claim the key cannot support. Template,
+  section and kind names are looked up lower-cased, because Hugo lower-cases
+  configuration keys.
+
+  Context (dict):
+  - .page (Page)  The current page.
+  - .opts (dict)  The resolved options from og-image/config.html.
+
+  Return value: dict{ok (bool), name (string), origin (string), template
+  (map)}. One terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $opts := .opts -}}
+{{- $section := lower (printf "%v" $page.Section) -}}
+{{- $kind := lower (printf "%v" $page.Kind) -}}
+
+{{- $candidates := slice
+    (dict "v" (index $opts "template") "o" "ogcard.template")
+    (dict "v" (index $opts.sections $section) "o" (printf "ogcard.sections.%s" $section))
+    (dict "v" (index $opts.kinds $kind) "o" (printf "ogcard.kinds.%s" $kind))
+    (dict "v" (index $opts "default_template") "o" "ogcard.default_template") -}}
+
+{{- $name := "" -}}
+{{- $origin := "" -}}
+{{- range $c := $candidates -}}
+  {{- if not $name -}}
+    {{- $v := $c.v -}}
+    {{- if or (reflect.IsMap $v) (reflect.IsSlice $v) (eq (printf "%T" $v) "bool") -}}
+      {{- partial "og-image/lib/warn.html" (dict
+          "key" (printf "og-image:warn:template-shape:%s:%v" $c.o $v)
+          "message" (printf "[og-image] Ignoring %s: it expects a template name written as a single value but was given %q. That route is skipped, so the next candidate decides and the card may be drawn from a different template." $c.o (printf "%v" $v))) -}}
+    {{- else if ne $v nil -}}
+      {{- $t := trim (printf "%v" $v) " \t\n\r" -}}
+      {{- if $t -}}
+        {{- $name = $t -}}
+        {{- $origin = $c.o -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $result := dict "ok" false "name" "" "origin" "" "template" dict -}}
+{{- if $name -}}
+  {{- $tpl := index $opts.templates (lower $name) -}}
+  {{- if reflect.IsMap $tpl -}}
+    {{- $result = dict "ok" true "name" (lower $name) "origin" $origin "template" $tpl -}}
+  {{- else -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:unknown-template:%s:%s" $origin $name)
+        "message" (printf "[og-image] %s names the card template %q, but no [params.ogcard.templates.%s] table defines it, so the pages it names get no card (%s among them). Template names are lower-cased by Hugo." $origin $name (lower $name) $opts.where)) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $result -}}

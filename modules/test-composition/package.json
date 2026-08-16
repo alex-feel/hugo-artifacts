@@ -2,7 +2,7 @@
   "name": "composition-module-tests",
   "private": true,
   "type": "module",
-  "description": "Cross-module build-output assertion suite. Not a Hugo module: this directory holds the one fixture that imports modules/seo, modules/agent-readiness and modules/search TOGETHER, and asserts that a single merged [outputs] table publishes every module's documents from one build. It carries no dependencies -- node --test and node:assert are enough -- so it needs no npm install of its own.",
+  "description": "Cross-module build-output assertion suite. Not a Hugo module: this directory holds the one fixture that imports modules/seo, modules/agent-readiness, modules/search, modules/pwa and modules/og-image TOGETHER, and asserts what only a site holding several of them can show -- that a single merged [outputs] table publishes every module's documents from one build, and that a card og-image composes reaches og:image through the seo module's generated-image hook. It carries no dependencies -- node --test, node:assert and node:zlib are enough -- so it needs no npm install of its own.",
   "scripts": {
     "test": "node --test \"tests/*.spec.js\""
   }

@@ -1,0 +1,487 @@
+# The working card set. This is the ONLY environment whose build log must be
+# silent: every positive assertion in the suite is made against it, so a
+# warning here means a configuration this suite claims is correct is not.
+#
+# Geometry is arithmetic, not taste. The title box is 1040 pixels wide at size
+# 64 with safety 0.98, so the budget is floor(1040 * 1000 * 0.98 / 64) = 15925
+# per mille, which is 26 glyphs of the 600-per-mille monospace table in
+# data/og-image/metrics-local.toml, and every expected line count in
+# tests/04-wrapping.spec.js is derived from that number.
+#
+# The two text slots carry DIFFERENT colors on purpose: one color cannot tell
+# a slot that took its own configured value from a slot that took the other
+# slot's, and Hugo draws an unreadable color as white without saying so.
+
+[ogcard]
+  width = 1200
+  height = 630
+  format = 'png'
+  anchor = 'Center'
+
+  # No default_template: a page no route names gets no card, which is what
+  # tests/06-decline.spec.js measures. Every deg-* section is unrouted here
+  # and routed in the degraded environment, so the same content set is silent
+  # in this build and faulty in that one.
+  [ogcard.sections]
+    blog = 'post'
+    twins = 'plain'
+    oversize = 'oversize'
+    sources = 'sources'
+    aligned = 'aligned'
+    overlays = 'overlaid'
+    fitting = 'fitting'
+
+  [ogcard.kinds]
+    home = 'home'
+
+  [ogcard.fonts]
+    mono = 'fonts/Go-Mono.ttf'
+    sans = 'fonts/SourceSans3-Regular.otf'
+
+  # ---- home: a distinct flat background, so a card's corner pixel names the
+  #      template that composed it. The two probe slots below the title are
+  #      what makes the home page's own emptiness measurable: `section` and
+  #      `section_title` name nothing on the home page and both draw on every
+  #      other page, and this ONE template is used by both, so the difference
+  #      is the page rather than the configuration. blog/variant.md asks for
+  #      the same template from a blog page, and its second card carries the
+  #      two lines this card must not.
+  [ogcard.templates.home]
+    background = 'og/home-bg.png'
+
+    [[ogcard.templates.home.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+
+    [[ogcard.templates.home.text]]
+      source = 'section'
+      font = 'mono'
+      size = 28
+      color = '#ffd400'
+      x = 72
+      y = 440
+
+    [[ogcard.templates.home.text]]
+      source = 'section_title'
+      font = 'mono'
+      size = 28
+      color = '#ffd400'
+      x = 72
+      y = 500
+
+  # ---- post: the full shape -- two slots, two colors, two sizes, and one
+  #      overlay pinned to a corner.
+  [ogcard.templates.post]
+    background = 'og/post-bg.png'
+
+    [[ogcard.templates.post.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+      line_height = 1.4
+      align = 'left'
+      overflow = 'shrink'
+      min_scale = 0.7
+      shrink_step = 4
+      safety = 0.98
+
+    [[ogcard.templates.post.text]]
+      source = 'description'
+      font = 'mono'
+      metrics = 'mono'
+      size = 32
+      color = '#33ccff'
+      x = 72
+      y = 430
+      width = 960
+      max_lines = 2
+
+    # 80 pixels square, anchored bottom right and moved 48 pixels inward on
+    # both axes: (1200 - 80) - 48 = 1072 and (630 - 80) - 48 = 502, so the
+    # badge occupies exactly x 1072..1151, y 502..581 and nothing outside it.
+    [[ogcard.templates.post.overlay]]
+      source = 'asset'
+      src = 'og/badge.png'
+      width = 80
+      anchor = 'bottomright'
+      x = 48
+      y = 48
+
+  # ---- plain: the post background with a title and NO overlay, so a card
+  #      carrying zero badge pixels is distinguishable from one that lost its
+  #      overlay by accident.
+  [ogcard.templates.plain]
+    background = 'og/post-bg.png'
+
+    [[ogcard.templates.plain.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+
+  # ---- wrongsize: an 800x400 background normalized up to the canvas.
+  [ogcard.templates.wrongsize]
+    background = 'og/wrong-size.png'
+
+    [[ogcard.templates.wrongsize.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+
+  # ---- otf: an OpenType face, measured against the shipped nominal table.
+  #      Hugo's own documentation lists OpenType as unsupported for
+  #      images.Text while the module's guard admits it, and this build is
+  #      warning-gated, so the card either draws or the suite goes red.
+  [ogcard.templates.otf]
+    background = 'og/post-bg.png'
+
+    [[ogcard.templates.otf.text]]
+      source = 'title'
+      font = 'sans'
+      metrics = 'default'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+
+  # ---- oversize: an overlay wider and taller than the canvas, anchored at
+  #      the top left, so it covers the whole card and the base color is gone.
+  [ogcard.templates.oversize]
+    background = 'og/post-bg.png'
+
+    [[ogcard.templates.oversize.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 3
+
+    [[ogcard.templates.oversize.overlay]]
+      source = 'asset'
+      src = 'og/badge.png'
+      width = 1400
+      anchor = 'topleft'
+      x = 0
+      y = 0
+
+  # ---- sources: one row per text source, one source per row, drawn in a
+  #      monospace face at a constant advance so the ROW COUNT and the glyph
+  #      count of each row say which source resolved and what it resolved to.
+  #      Row 8 reads a page parameter no page carries, so it draws nothing at
+  #      all -- prefix and suffix included, which is what makes twelve rows
+  #      rather than thirteen the assertion that they glue only to a value
+  #      that exists. The last four rows draw the same nine characters under
+  #      the four case transforms: none and lower land on the x-height, upper
+  #      and title reach the cap height, and the ink of each is a different
+  #      amount, so no two of them can be confused.
+  [ogcard.templates.sources]
+    background = 'og/post-bg.png'
+
+    [[ogcard.templates.sources.text]]
+      source = 'section'
+      font = 'mono'
+      size = 28
+      color = '#ffd400'
+      x = 72
+      y = 16
+
+    [[ogcard.templates.sources.text]]
+      source = 'section_title'
+      font = 'mono'
+      size = 28
+      color = '#ffd400'
+      x = 72
+      y = 60
+
+    [[ogcard.templates.sources.text]]
+      source = 'kind'
+      font = 'mono'
+      size = 28
+      color = '#ffd400'
+      x = 72
+      y = 104
+
+    [[ogcard.templates.sources.text]]
+      source = 'site_title'
+      font = 'mono'
+      size = 28
+      color = '#ffd400'
+      x = 72
+      y = 148
+
+    [[ogcard.templates.sources.text]]
+      source = 'domain'
+      font = 'mono'
+      size = 28
+      color = '#ffd400'
+      x = 72
+      y = 192
+
+    # An explicit layout rather than the default, so the row is the same ten
+    # glyphs in every language this fixture builds.
+    [[ogcard.templates.sources.text]]
+      source = 'date'
+      key = '2006-01-02'
+      font = 'mono'
+      size = 28
+      color = '#ffd400'
+      x = 72
+      y = 236
+
+    [[ogcard.templates.sources.text]]
+      source = 'literal'
+      value = 'mid'
+      prefix = '<<'
+      suffix = '>>'
+      font = 'mono'
+      size = 28
+      color = '#ffd400'
+      x = 72
+      y = 280
+
+    [[ogcard.templates.sources.text]]
+      source = 'literal'
+      value = 'mid'
+      font = 'mono'
+      size = 28
+      color = '#ffd400'
+      x = 72
+      y = 324
+
+    # No page carries this parameter, so this row draws nothing -- and its
+    # prefix and suffix draw nothing either.
+    [[ogcard.templates.sources.text]]
+      source = 'param'
+      key = 'nosuchparam'
+      prefix = '['
+      suffix = ']'
+      font = 'mono'
+      size = 28
+      color = '#ffd400'
+      x = 72
+      y = 368
+
+    [[ogcard.templates.sources.text]]
+      source = 'literal'
+      value = 'anon crux'
+      font = 'mono'
+      size = 28
+      color = '#ffd400'
+      x = 72
+      y = 412
+
+    [[ogcard.templates.sources.text]]
+      source = 'literal'
+      value = 'anon crux'
+      case = 'upper'
+      font = 'mono'
+      size = 28
+      color = '#ffd400'
+      x = 72
+      y = 456
+
+    [[ogcard.templates.sources.text]]
+      source = 'literal'
+      value = 'ANON CRUX'
+      case = 'lower'
+      font = 'mono'
+      size = 28
+      color = '#ffd400'
+      x = 72
+      y = 500
+
+    [[ogcard.templates.sources.text]]
+      source = 'literal'
+      value = 'anon crux'
+      case = 'title'
+      font = 'mono'
+      size = 28
+      color = '#ffd400'
+      x = 72
+      y = 544
+
+  # ---- aligned: the same ten glyphs in the same 1000-pixel box, drawn once
+  #      per alignment. A wrapped slot draws one filter per line and computes
+  #      the alignment anchor itself -- x for left, x plus half the width for
+  #      center, x plus the width for right -- so the three rows' ink
+  #      positions are the only place that arithmetic is visible. The rows sit
+  #      below the title box so the whole-tree wrapping assertion still
+  #      measures only titles.
+  [ogcard.templates.aligned]
+    background = 'og/post-bg.png'
+
+    [[ogcard.templates.aligned.text]]
+      source = 'literal'
+      value = 'MMMMMMMMMM'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 420
+      width = 1000
+      max_lines = 1
+      align = 'left'
+
+    [[ogcard.templates.aligned.text]]
+      source = 'literal'
+      value = 'MMMMMMMMMM'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 490
+      width = 1000
+      max_lines = 1
+      align = 'center'
+
+    [[ogcard.templates.aligned.text]]
+      source = 'literal'
+      value = 'MMMMMMMMMM'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 560
+      width = 1000
+      max_lines = 1
+      align = 'right'
+
+  # ---- overlaid: the two overlay sources the badge cannot reach. param takes
+  #      a path from the page's own front matter and resolves it against the
+  #      page's bundle first and assets/ second; resource matches a glob
+  #      against the page's bundle. Each lands in its own 80-pixel square, and
+  #      the three squares carry three different flat colors, so which source
+  #      resolved is a bounding box rather than a guess. The third square is
+  #      the badge at half opacity: a blend of two known colors is neither of
+  #      them, which is what tells a faded overlay from an opaque one.
+  #
+  #      Five pages share this template: one carrying an assets/ path in the
+  #      parameter, one leaf bundle whose parameter and glob both name its own
+  #      image, two whose parameter holds a path no lookup can resolve (one
+  #      the operating system refuses and one that is not a matchable
+  #      pattern), and the section page, which carries neither. All of those
+  #      are the page's value rather than the template's, so all of them are
+  #      silent, and this build's silence is gated.
+  [ogcard.templates.overlaid]
+    background = 'og/post-bg.png'
+
+    [[ogcard.templates.overlaid.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 2
+
+    [[ogcard.templates.overlaid.overlay]]
+      source = 'param'
+      key = 'cardbadge'
+      width = 80
+      anchor = 'topleft'
+      x = 200
+      y = 440
+
+    [[ogcard.templates.overlaid.overlay]]
+      source = 'resource'
+      match = '*avatar*'
+      width = 80
+      anchor = 'topleft'
+      x = 400
+      y = 440
+
+    [[ogcard.templates.overlaid.overlay]]
+      source = 'asset'
+      src = 'og/badge.png'
+      opacity = 0.5
+      width = 80
+      anchor = 'topleft'
+      x = 600
+      y = 440
+
+  # ---- fitting: overflow = 'truncate', which skips the shrink ladder
+  #      entirely and truncates at the base size. Row 0 draws the same title
+  #      that walks the ladder to its floor under shrink, so the pitch of its
+  #      lines is what separates the two policies. Rows 1 and 2 draw one
+  #      unbreakable token under two different ellipsis strings, so the ink on
+  #      the truncated line says which ellipsis was actually appended.
+  [ogcard.templates.fitting]
+    background = 'og/post-bg.png'
+
+    [[ogcard.templates.fitting.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 40
+      width = 1040
+      max_lines = 2
+      line_height = 1.4
+      overflow = 'truncate'
+      min_scale = 0.7
+      shrink_step = 4
+
+    [[ogcard.templates.fitting.text]]
+      source = 'literal'
+      value = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 300
+      width = 1040
+      max_lines = 1
+      overflow = 'truncate'
+      ellipsis = ''
+
+    [[ogcard.templates.fitting.text]]
+      source = 'literal'
+      value = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 460
+      width = 1040
+      max_lines = 1
+      overflow = 'truncate'
+      ellipsis = 'MMMM'

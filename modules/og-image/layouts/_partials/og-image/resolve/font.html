@@ -1,0 +1,61 @@
+{{/*
+  og-image/resolve/font.html -- INTERNAL (resolver tier).
+
+  Purpose: turns ONE registered font PATH into a font resource that
+  images.Text can use, or into nothing at all.
+
+  It is called through partialCached keyed on the path, so a font is fetched
+  and guarded once per build however many slots, pages and output formats
+  reference it. The path is the memo key rather than the registry name,
+  because a name means whatever the tier that defined it says it means: two
+  pages can carry different registries under the same name, and keying on the
+  name would silently hand the second page the first page's face.
+
+  The extension guard is the module's first line of defense: a font resource
+  Hugo cannot parse fails the whole compose step, so only TrueType (.ttf) and
+  OpenType (.otf) files are handed to images.Text. Collections (.ttc) and web
+  formats (.woff, .woff2) are rejected here with a warning, and the slot falls
+  back to Hugo's built-in Go Regular -- a card with the right words in a
+  fallback face beats losing the page's card entirely.
+
+  Returning a resource OR nothing (never a nil and never a bare string) is
+  what keeps the whole font surface safe: images.Text fails at construction
+  when handed a string or a nil font, so the caller's option dict either
+  carries a real resource under `font` or omits the key.
+
+  Context (dict):
+  - .name (string) The registry name, for diagnostics.
+  - .path (string) The assets/ path registered under that name.
+
+  Return value: a font resource, or "" when none is usable. One terminal
+  return.
+*/}}
+
+{{- $name := printf "%v" (.name | default "") -}}
+{{- $path := trim (printf "%v" (.path | default "")) " \t\n\r" -}}
+{{- $font := "" -}}
+
+{{- if $path -}}
+  {{- $ext := lower (path.Ext $path) -}}
+  {{- if in (slice ".ttf" ".otf") $ext -}}
+    {{/* resources.Get returns nil for a path that names no file, but RAISES
+         when the operating system rejects the path itself -- one carrying
+         `*`, `?`, or the `:` of a pasted URL is such a path on Windows. Both
+         mean no font file, so the caught error and the plain nil take the one
+         warn-and-fall-back branch below. */}}
+    {{- $got := try (resources.Get $path) -}}
+    {{- with $got.Value -}}
+      {{- $font = . -}}
+    {{- else -}}
+      {{- partial "og-image/lib/warn.html" (dict
+          "key" (printf "og-image:warn:missing-font:%s" $path)
+          "message" (printf "[og-image] The font %q registered as %q was not found under assets/; the slots using it are drawn with Hugo's built-in Go Regular instead." $path $name)) -}}
+    {{- end -}}
+  {{- else -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:font-format:%s" $path)
+        "message" (printf "[og-image] The font %q registered as %q is not a TrueType (.ttf) or OpenType (.otf) file; the slots using it are drawn with Hugo's built-in Go Regular instead. Only those two formats are used -- font collections (.ttc) and web fonts (.woff, .woff2) are not." $path $name)) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $font -}}

@@ -1,0 +1,53 @@
+# Glyph advance widths in 1/1000 em, used only to decide where lines BREAK.
+#
+# Widths are expressed per mille of the font size, so a word is measured once
+# and the same width vector is re-wrapped against a different budget at every
+# rung of the shrink ladder.
+#
+# This table is a NOMINAL model of a generic proportional Latin sans. It is
+# not a measurement of any particular font, and it is not exact for any font:
+# side bearings and kerning are not modeled, so an estimated line width and
+# the ink a font actually draws differ by a small amount that accumulates on
+# long lines. The `safety` budget multiplier (0.98 by default) exists to
+# absorb that error, `width_factor` corrects a font that is systematically
+# wider or narrower than this model, and an exact per-glyph table extracted
+# from the font itself removes the estimate altogether.
+#
+# A site supplies its own tables in data/og-image/metrics-local.toml, which
+# this module never ships, so nothing shadows a consumer file. Tables merge
+# per NAME with the site winning, so overriding `default` replaces only that
+# table. See the module README for the extraction recipe.
+#
+# Glyph tables MUST live in a data file: Hugo folds site-param map keys to
+# lower case, which would collapse "W" into "w" and silently measure every
+# capital at the fallback width. Data files preserve case.
+#
+# Keys: em (the per-mille denominator), space (width of the separator between
+# words), fallback (width for a glyph this table does not name), classes (a
+# width shared by a run of glyphs), glyphs (an exact width per glyph, and the
+# highest-precision form -- it overrides classes).
+
+[fonts.default]
+em = 1000
+space = 260
+fallback = 560
+
+[[fonts.default.classes]]
+width = 660
+chars = "ABCDEFGHJKLNOPQRSTUVXYZ"
+
+[[fonts.default.classes]]
+width = 940
+chars = "MW"
+
+[[fonts.default.classes]]
+width = 860
+chars = "mw"
+
+[[fonts.default.classes]]
+width = 340
+chars = 'fjtr()[]{}/\-"'
+
+[[fonts.default.classes]]
+width = 260
+chars = "ilI.,:;!|'`"

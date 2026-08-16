@@ -1,0 +1,36 @@
+{{/*
+  og-image/meta.html -- OPTIONAL PUBLIC RENDERER (standalone use only).
+
+  Purpose: for a site with no SEO module, emits the Open Graph and Twitter
+  image tags for this page's card, or nothing when the page has no card. Call
+  it inside <head>:
+
+      {{ partial "og-image/meta.html" . }}
+
+  It renders NOTHING when modules/seo is mounted, because that module owns
+  og:image and two of them is worse than none. The _partials/ prefix AND the
+  .html suffix are both load-bearing: templates.Exists takes a path under
+  layouts/ and wants the suffix, and the pre-v0.146 "partials/" spelling
+  silently returns false, which here would mean duplicate tags with no error
+  and no warning. The probe does see a partial mounted from a module.
+
+  Note the limit of that probe: it reflects whether the SEO module is MOUNTED,
+  not whether the site actually calls its head partial. A site that imports
+  the module but renders its own head gets no image tags from either one.
+
+  Expected context: the current Page.
+
+  Return value: none. This partial renders; it does not return.
+*/}}
+
+{{- $page := . -}}
+{{- if and (reflect.IsPage $page) (not (templates.Exists "_partials/seo/head.html")) -}}
+  {{- with partial "og-image/card.html" $page -}}
+    {{- $first := . -}}
+    {{- if reflect.IsSlice . -}}{{- $first = index . 0 -}}{{- end -}}
+    <meta property="og:image" content="{{ $first.Permalink }}">
+    <meta property="og:image:width" content="{{ $first.Width }}">
+    <meta property="og:image:height" content="{{ $first.Height }}">
+    <meta name="twitter:card" content="summary_large_image">
+  {{- end -}}
+{{- end -}}

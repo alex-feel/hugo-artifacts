@@ -77,6 +77,7 @@ jobs:
             modules/carousel
             modules/agent-readiness
             modules/copy-page
+            modules/og-image
             shortcodes/github-repo
             shortcodes/github-profile
             shortcodes/hf-space
@@ -97,6 +98,7 @@ jobs:
             modules/agent-readiness/test/fixture-widgets
             modules/agent-readiness/test/fixture-extra
             modules/copy-page/test/fixture
+            modules/og-image/test/fixture
             shortcodes/github-profile/test/fixture
             shortcodes/test-smoke/fixture
             modules/test-composition/fixture
@@ -122,7 +124,7 @@ jobs:
           # fetch over the module proxy as +incompatible versions. This step is
           # what proves a consumer can import any one of these modules alone,
           # so keep the list in sync with the leaf module set.
-          for m in modules/pwa modules/workbox modules/idb modules/seo modules/social-share modules/search modules/images modules/carousel modules/agent-readiness modules/copy-page shortcodes/github-repo shortcodes/github-profile shortcodes/hf-space shortcodes/callout shortcodes/youtube-embed shortcodes/arxiv-paper; do
+          for m in modules/pwa modules/workbox modules/idb modules/seo modules/social-share modules/search modules/images modules/carousel modules/agent-readiness modules/copy-page modules/og-image shortcodes/github-repo shortcodes/github-profile shortcodes/hf-space shortcodes/callout shortcodes/youtube-embed shortcodes/arxiv-paper; do
             echo "::group::hugo mod graph -- ${m}"
             ( cd "${m}" && hugo mod graph )
             echo "::endgroup::"
@@ -165,6 +167,13 @@ jobs:
           # indentation is governed by Prettier and the template docstring
           # style, while this check enforces the line endings, charset, final
           # newline, and trailing whitespace rules from .editorconfig.
+          #
+          # .ecrc also excludes the license text that ships beside a vendored
+          # font in a test fixture. That text is reproduced verbatim from
+          # upstream and its exact bytes are the point of committing it, so a
+          # tab or a trailing space in it is content rather than a formatting
+          # slip, and reformatting it to satisfy this check would misstate the
+          # license the font is distributed under.
           go install github.com/editorconfig-checker/editorconfig-checker/v3/cmd/editorconfig-checker@v3.0.3
           "$(go env GOPATH)/bin/editorconfig-checker"
 
@@ -264,6 +273,20 @@ jobs:
           - name: composition
             dir: modules/test-composition
             run: bash run-tests.sh
+          - name: og-image
+            dir: modules/og-image/test
+            run: bash run-tests.sh
+          # The SECOND og-image row runs the same suite at the module's
+          # declared hugoVersion floor. Its cards are built out of primitives
+          # introduced across several releases below that floor, and three of
+          # the behaviors it relies on are undocumented upstream, so the only
+          # way to know they hold at the version the module promises is to
+          # build there. A floor nothing runs at is a promise to consumers that
+          # nothing checks.
+          - name: og-image (at the declared Hugo floor)
+            dir: modules/og-image/test
+            run: bash run-tests.sh
+            hugo: '0.160.0'
           - name: pwa
             dir: modules/pwa/test
             run: |
@@ -288,8 +311,10 @@ jobs:
         uses: peaceiris/actions-hugo@v3
         with:
           # A row may pin its own Hugo; everything else gets the current
-          # one. Only modules/images uses the override, to run its
-          # version-gated suite on both sides of the gate.
+          # one. Two suites use the override: modules/images, to run its
+          # version-gated suite on both sides of the gate, and modules/og-image,
+          # to run its suite at the version its hugo.toml promises consumers as
+          # well as at the current one.
           hugo-version: ${{ matrix.hugo || '0.164.0' }}
           extended: true
 

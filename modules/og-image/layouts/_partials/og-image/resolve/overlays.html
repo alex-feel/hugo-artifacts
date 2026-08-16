@@ -1,0 +1,252 @@
+{{/*
+  og-image/resolve/overlays.html -- INTERNAL (resolver tier).
+
+  Purpose: turns a card template's `overlay` array into images.Overlay
+  filters. Overlays are composited in declaration order and UNDER the text, so
+  a logo can never hide the words the card exists to show.
+
+  Each entry names its image one of three ways: an `asset` path (the shared
+  badge every card carries), a `param` naming a front-matter key that holds a
+  path, or a `resource` glob matched against the page's own bundle (the
+  per-page avatar). The split between a warning and silence follows WHO made
+  the mistake, not which source it happened under: an entry whose own `src`,
+  `key` or `match` is missing, or whose `match` is not a pattern that can be
+  matched at all, is a card-template mistake no page can satisfy and warns
+  once; a param or bundle resource the page simply does not have is the
+  ordinary case and stays silent. Either way the rest of the card still
+  renders.
+
+  Placement: images.Overlay takes absolute pixel coordinates from the top-left
+  corner, so the configured `anchor` plus the overlay's own size decide the
+  base coordinate and `x`/`y` move it INWARD from that anchor -- a left or top
+  anchor adds them, a right or bottom anchor subtracts them, and a centered
+  axis offsets from the center. The overlay is resized before its position is
+  computed, because the position depends on the size that will be drawn.
+
+  Context (dict):
+  - .page (Page)    The current page.
+  - .opts (dict)    The resolved options from og-image/config.html.
+  - .name (string)  The card template's name.
+  - .template (map) The card template's table.
+
+  Return value: dict{filters (slice), any (bool)}. One terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $opts := .opts -}}
+{{- $name := .name -}}
+{{- $tpl := .template -}}
+{{- $filters := slice -}}
+{{- $any := false -}}
+
+{{- $entries := partial "og-image/lib/as-map-list.html" (dict
+    "value" (index $tpl "overlay")
+    "key" (printf "og-image:warn:bad-overlay-entry:%s" $name)
+    "label" (printf "the overlays of card template %q" $name)) -}}
+
+{{- range $i, $ov := $entries -}}
+  {{- $source := lower (trim (printf "%v" (index $ov "source" | default "asset")) " \t\n\r") -}}
+  {{- $res := "" -}}
+  {{- $label := "" -}}
+
+  {{- if eq $source "asset" -}}
+    {{- $src := trim (printf "%v" (index $ov "src" | default "")) " \t\n\r" -}}
+    {{- $label = $src -}}
+    {{- if $src -}}
+      {{/* resources.Get returns nil for a path that names no file, but RAISES
+           when the operating system rejects the path itself -- one carrying
+           `*`, `?`, or the `:` of a pasted URL is such a path on Windows.
+           Both mean the same thing to the site that wrote it, so the caught
+           error and the plain nil take the one warn-and-drop branch below. */}}
+      {{- $got := try (resources.Get $src) -}}
+      {{- with $got.Value -}}
+        {{- $res = . -}}
+      {{- else -}}
+        {{- partial "og-image/lib/warn.html" (dict
+            "key" (printf "og-image:warn:missing-overlay:%s" $src)
+            "message" (printf "[og-image] The overlay %q used by card template %q was not found under assets/; that overlay is dropped and the card is composed without it." $src $name)) -}}
+      {{- end -}}
+    {{- else -}}
+      {{- partial "og-image/lib/warn.html" (dict
+          "key" (printf "og-image:warn:overlay-no-src:%s:%d" $name $i)
+          "message" (printf "[og-image] Overlay %d of card template %q names no image: an overlay reading from assets/ needs a src path. That overlay is dropped." $i $name)) -}}
+    {{- end -}}
+  {{- else if eq $source "param" -}}
+    {{/* A page that simply does not carry the parameter, or carries a value
+         that names nothing, is the design rather than a mistake, so it is
+         skipped in silence. The value is the PAGE's, and both lookups below
+         are wrapped for it: GetMatch RAISES on a value that is not a matchable
+         pattern, and resources.Get RAISES on one the operating system rejects
+         outright. Each caught error means here exactly what a nil means --
+         this page has no such image. */}}
+    {{- $key := trim (printf "%v" (index $ov "key" | default "")) " \t\n\r" -}}
+    {{- if $key -}}
+      {{- $v := $page.Param $key -}}
+      {{- if and (ne $v nil) (not (reflect.IsMap $v)) (not (reflect.IsSlice $v)) -}}
+        {{- $p := trim (printf "%v" $v) " \t\n\r" -}}
+        {{- $label = $p -}}
+        {{- if $p -}}
+          {{- $bundled := try ($page.Resources.GetMatch $p) -}}
+          {{- with $bundled.Value -}}
+            {{- $res = . -}}
+          {{- else -}}
+            {{- $got := try (resources.Get $p) -}}
+            {{- with $got.Value -}}
+              {{- $res = . -}}
+            {{- end -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- else -}}
+      {{- partial "og-image/lib/warn.html" (dict
+          "key" (printf "og-image:warn:overlay-no-key:%s:%d" $name $i)
+          "message" (printf "[og-image] Overlay %d of card template %q names no image: an overlay reading from a page parameter needs a key naming that parameter. That overlay is dropped." $i $name)) -}}
+    {{- end -}}
+  {{- else if eq $source "resource" -}}
+    {{- $match := trim (printf "%v" (index $ov "match" | default "")) " \t\n\r" -}}
+    {{- $label = $match -}}
+    {{- if $match -}}
+      {{/* The pattern is the card template's, so an unmatchable one is a
+           configuration mistake no page can satisfy: GetMatch RAISES on it
+           (an unclosed `[` is enough, and it raises even on a page with no
+           resources, because the pattern is compiled before anything is
+           matched), and it is worth the same one warning as a missing
+           pattern. A pattern that is fine and simply matches nothing stays
+           silent -- that is the page not carrying the image. */}}
+      {{- $bundled := try ($page.Resources.GetMatch $match) -}}
+      {{- if $bundled.Err -}}
+        {{- partial "og-image/lib/warn.html" (dict
+            "key" (printf "og-image:warn:overlay-bad-match:%s:%s" $name $match)
+            "message" (printf "[og-image] The overlay pattern %q in card template %q is not a pattern Hugo can match against a page's resources, so it names no image on any page and that overlay is dropped. An unclosed [ is the usual cause." $match $name)) -}}
+      {{- else -}}
+        {{- with $bundled.Value -}}
+          {{- $res = . -}}
+        {{- end -}}
+      {{- end -}}
+    {{- else -}}
+      {{- partial "og-image/lib/warn.html" (dict
+          "key" (printf "og-image:warn:overlay-no-match:%s:%d" $name $i)
+          "message" (printf "[og-image] Overlay %d of card template %q names no image: an overlay reading from the page's own resources needs a match pattern. That overlay is dropped." $i $name)) -}}
+    {{- end -}}
+  {{- else -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:unknown-enum:overlay-source:%s" $source)
+        "message" (printf "[og-image] Unknown overlay source %q in card template %q; that overlay is dropped (allowed: asset, param, resource)." $source $name)) -}}
+  {{- end -}}
+
+  {{- if $res -}}
+    {{/* A resource can be media-typed as an image and still carry nothing
+         Hugo can decode, and reading .Width is what finds out. */}}
+    {{- $usable := eq $res.ResourceType "image" -}}
+    {{- if and $usable (eq $res.MediaType.SubType "svg") -}}
+      {{- $usable = false -}}
+    {{- end -}}
+    {{- if $usable -}}
+      {{- $probe := try $res.Width -}}
+      {{- $usable = and (not $probe.Err) (gt (int ($probe.Value | default 0)) 0) -}}
+    {{- end -}}
+    {{- if not $usable -}}
+      {{- partial "og-image/lib/warn.html" (dict
+          "key" (printf "og-image:warn:unusable-overlay:%s" $label)
+          "message" (printf "[og-image] The overlay %q used by card template %q carries no image Hugo can process (an SVG, an unsupported format, or a file whose bytes are not the image its extension claims); that overlay is dropped." $label $name)) -}}
+    {{- else -}}
+      {{/* Resize first: the anchor arithmetic below needs the size that will
+           actually be drawn. */}}
+      {{- $ok := true -}}
+      {{- if isset $ov "width" -}}
+        {{- $n := partial "og-image/lib/int.html" (index $ov "width") -}}
+        {{- if and $n.ok (ge $n.value 1) (le $n.value 100000) -}}
+          {{- $sized := try ($res.Resize (printf "%dx" $n.value)) -}}
+          {{- with $sized.Err -}}
+            {{- $ok = false -}}
+            {{- partial "og-image/lib/warn.html" (dict
+                "key" (printf "og-image:warn:unresizable-overlay:%s" $label)
+                "message" (printf "[og-image] Could not resize the overlay %q used by card template %q: %s. That overlay is dropped." $label $name .)) -}}
+          {{- else -}}
+            {{- $res = $sized.Value -}}
+          {{- end -}}
+        {{- else -}}
+          {{- partial "og-image/lib/warn.html" (dict
+              "key" (printf "og-image:warn:bad-int:%s:overlay%d:width:%v" $name $i (index $ov "width"))
+              "message" (printf "[og-image] Ignoring the width value %q on overlay %d of card template %q (expected a whole number of pixels); the overlay is drawn at its own size." (printf "%v" (index $ov "width")) $i $name)) -}}
+        {{- end -}}
+      {{- end -}}
+
+      {{- if $ok -}}
+        {{- $opacity := 1.0 -}}
+        {{- if isset $ov "opacity" -}}
+          {{/* The pattern bounds the SHAPE but not the magnitude, and `float`
+               RAISES on a digit string too long for a float64, so the cast is
+               caught rather than trusted. A shape that does not match, a cast
+               that fails and a number outside 0..1 are one mistake to the
+               site -- the value is not an opacity -- so they share the
+               sentinel below and warn once in one place. */}}
+          {{- $raw := trim (printf "%v" (index $ov "opacity")) " \t\n\r" -}}
+          {{- $f := -1.0 -}}
+          {{- if findRE `^\d+(\.\d+)?$` $raw -}}
+            {{- $parsed := try (float $raw) -}}
+            {{- if not $parsed.Err -}}
+              {{- $f = $parsed.Value -}}
+            {{- end -}}
+          {{- end -}}
+          {{- if and (ge $f 0.0) (le $f 1.0) -}}
+            {{- $opacity = $f -}}
+          {{- else -}}
+            {{- partial "og-image/lib/warn.html" (dict
+                "key" (printf "og-image:warn:bad-float:%s:overlay%d:opacity:%s" $name $i $raw)
+                "message" (printf "[og-image] Ignoring the opacity value %q on overlay %d of card template %q (expected a number from 0 to 1); the overlay is drawn fully opaque." $raw $i $name)) -}}
+          {{- end -}}
+        {{- end -}}
+        {{- if lt $opacity 1.0 -}}
+          {{- $faded := try ($res.Filter (images.Opacity $opacity)) -}}
+          {{- with $faded.Err -}}
+            {{- $ok = false -}}
+            {{- partial "og-image/lib/warn.html" (dict
+                "key" (printf "og-image:warn:unfadeable-overlay:%s" $label)
+                "message" (printf "[og-image] Could not apply opacity to the overlay %q used by card template %q: %s. That overlay is dropped." $label $name .)) -}}
+          {{- else -}}
+            {{- $res = $faded.Value -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+
+      {{- if $ok -}}
+        {{- $anchor := lower (trim (printf "%v" (index $ov "anchor" | default "topleft")) " \t\n\r") -}}
+        {{- if not (in (slice "topleft" "top" "topright" "left" "center" "right" "bottomleft" "bottom" "bottomright") $anchor) -}}
+          {{- partial "og-image/lib/warn.html" (dict
+              "key" (printf "og-image:warn:unknown-enum:overlay-anchor:%s" $anchor)
+              "message" (printf "[og-image] Unknown overlay anchor %q in card template %q; using \"topleft\" instead (allowed: topleft, top, topright, left, center, right, bottomleft, bottom, bottomright)." $anchor $name)) -}}
+          {{- $anchor = "topleft" -}}
+        {{- end -}}
+        {{- $dx := 0 -}}
+        {{- if isset $ov "x" -}}
+          {{- $n := partial "og-image/lib/int.html" (index $ov "x") -}}
+          {{- if $n.ok -}}{{- $dx = $n.value -}}{{- end -}}
+        {{- end -}}
+        {{- $dy := 0 -}}
+        {{- if isset $ov "y" -}}
+          {{- $n := partial "og-image/lib/int.html" (index $ov "y") -}}
+          {{- if $n.ok -}}{{- $dy = $n.value -}}{{- end -}}
+        {{- end -}}
+        {{- $freeX := sub $opts.width $res.Width -}}
+        {{- $freeY := sub $opts.height $res.Height -}}
+        {{- $x := $dx -}}
+        {{- if in (slice "top" "center" "bottom") $anchor -}}
+          {{- $x = add (int (math.Floor (div (float $freeX) 2.0))) $dx -}}
+        {{- else if in (slice "topright" "right" "bottomright") $anchor -}}
+          {{- $x = sub $freeX $dx -}}
+        {{- end -}}
+        {{- $y := $dy -}}
+        {{- if in (slice "left" "center" "right") $anchor -}}
+          {{- $y = add (int (math.Floor (div (float $freeY) 2.0))) $dy -}}
+        {{- else if in (slice "bottomleft" "bottom" "bottomright") $anchor -}}
+          {{- $y = sub $freeY $dy -}}
+        {{- end -}}
+        {{- $filters = $filters | append (images.Overlay $res $x $y) -}}
+        {{- $any = true -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return (dict "filters" $filters "any" $any) -}}
