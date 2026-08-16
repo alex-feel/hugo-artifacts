@@ -1,0 +1,163 @@
+@echo off
+rem Builds the fixture site EIGHT TIMES with hugo (a BUILD, not a server: no
+rem port binding, and a finite build exits by itself) and runs the Node
+rem build-output assertion suite against the seven trees that succeed. Windows
+rem mirror of run-tests.sh: pre-launch process check, then a hard fail on any
+rem deprecation or error output in any build log.
+rem
+rem The default environment omits [params.url_retirement] entirely, so it is
+rem the only build that shows what a site that configured nothing gets; the
+rem `configured` environment turns on every knob at once; the `degraded`
+rem environment holds every fault class at once, so N distinct faults must
+rem produce N distinct diagnostics; the `off` environment proves the documented
+rem difference between an unwired format and a disabled module, which is an
+rem empty file rather than no file; the `multilingual` environment is the only
+rem shape in which one _redirects file is written by two languages; `subpath`
+rem and `canonify` are a PAIR that must agree byte for byte, which a
+rem root-baseURL build cannot check; and the `hostile` environment is the only
+rem build that MUST FAIL, because its content carries an alias containing
+rem whitespace.
+setlocal
+
+tasklist /FI "IMAGENAME eq hugo.exe" | find /I "hugo.exe" >nul
+if not errorlevel 1 (
+  echo A hugo process is already running; stop it first: taskkill /F /IM hugo.exe
+  exit /b 1
+)
+
+set LOG_BASELINE=%~dp0hugo-build-baseline.log
+set LOG_CONFIGURED=%~dp0hugo-build-configured.log
+set LOG_DEGRADED=%~dp0hugo-build-degraded.log
+set LOG_OFF=%~dp0hugo-build-off.log
+set LOG_MULTILINGUAL=%~dp0hugo-build-multilingual.log
+set LOG_SUBPATH=%~dp0hugo-build-subpath.log
+set LOG_CANONIFY=%~dp0hugo-build-canonify.log
+set LOG_HOSTILE=%~dp0hugo-build-hostile.log
+
+rem The destination is REMOVED, not merely cleaned: --cleanDestinationDir only
+rem drops files absent from the static directories, so a document a previous
+rem build published and this one does not would survive into the tree the specs
+rem read, and one of this suite's assertions is that a disabled module
+rem publishes an EMPTY file.
+if exist "%~dp0fixture\public" rmdir /S /Q "%~dp0fixture\public"
+
+pushd "%~dp0fixture"
+hugo --logLevel info --cleanDestinationDir --destination public\baseline > "%LOG_BASELINE%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(default^):
+  type "%LOG_BASELINE%"
+  popd
+  exit /b 1
+)
+hugo -e configured --logLevel info --cleanDestinationDir --destination public\configured > "%LOG_CONFIGURED%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(configured^):
+  type "%LOG_CONFIGURED%"
+  popd
+  exit /b 1
+)
+hugo -e degraded --logLevel info --cleanDestinationDir --destination public\degraded > "%LOG_DEGRADED%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(degraded^):
+  type "%LOG_DEGRADED%"
+  popd
+  exit /b 1
+)
+hugo -e off --logLevel info --cleanDestinationDir --destination public\off > "%LOG_OFF%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(off^):
+  type "%LOG_OFF%"
+  popd
+  exit /b 1
+)
+hugo -e multilingual --logLevel info --cleanDestinationDir --destination public\multilingual > "%LOG_MULTILINGUAL%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(multilingual^):
+  type "%LOG_MULTILINGUAL%"
+  popd
+  exit /b 1
+)
+hugo -e subpath --logLevel info --cleanDestinationDir --destination public\subpath > "%LOG_SUBPATH%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(subpath^):
+  type "%LOG_SUBPATH%"
+  popd
+  exit /b 1
+)
+hugo -e canonify --logLevel info --cleanDestinationDir --destination public\canonify > "%LOG_CANONIFY%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(canonify^):
+  type "%LOG_CANONIFY%"
+  popd
+  exit /b 1
+)
+rem The hostile build MUST fail: its content carries an alias containing
+rem whitespace, and publishing that rule would corrupt the file format.
+hugo -e hostile --logLevel info --cleanDestinationDir --destination public\hostile > "%LOG_HOSTILE%" 2>&1
+if not errorlevel 1 (
+  echo The hostile build was expected to FAIL and did not.
+  type "%LOG_HOSTILE%"
+  popd
+  exit /b 1
+)
+popd
+
+for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_DEGRADED%" "%LOG_OFF%" "%LOG_MULTILINGUAL%" "%LOG_SUBPATH%" "%LOG_CANONIFY%") do (
+  findstr /I "deprecat" %%L >nul 2>&1
+  if not errorlevel 1 (
+    echo Hugo reported deprecations in %%L:
+    findstr /I "deprecat" %%L
+    exit /b 1
+  )
+  findstr /C:"ERROR" %%L >nul 2>&1
+  if not errorlevel 1 (
+    echo Hugo reported errors in %%L:
+    findstr /C:"ERROR" %%L
+    exit /b 1
+  )
+)
+
+rem Every build except `degraded` is gated on warnings: the happy path is
+rem silent, and producing one diagnostic per fault is the only thing the
+rem degraded build exists to demonstrate.
+for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_OFF%" "%LOG_MULTILINGUAL%" "%LOG_SUBPATH%" "%LOG_CANONIFY%") do (
+  findstr /C:"WARN" %%L >nul 2>&1
+  if not errorlevel 1 (
+    echo A build that must warn about nothing did: %%L
+    findstr /C:"WARN" %%L
+    exit /b 1
+  )
+)
+
+set FIXTURE_DIR=%~dp0fixture
+for %%I in ("%~dp0..") do set MODULE_ROOT=%%~fI
+set FIXTURE_PUBLIC_BASELINE=%~dp0fixture\public\baseline
+set FIXTURE_PUBLIC_CONFIGURED=%~dp0fixture\public\configured
+set FIXTURE_PUBLIC_DEGRADED=%~dp0fixture\public\degraded
+set FIXTURE_PUBLIC_OFF=%~dp0fixture\public\off
+set FIXTURE_PUBLIC_MULTILINGUAL=%~dp0fixture\public\multilingual
+set FIXTURE_PUBLIC_SUBPATH=%~dp0fixture\public\subpath
+set FIXTURE_PUBLIC_CANONIFY=%~dp0fixture\public\canonify
+set HUGO_BUILD_LOG_BASELINE=%LOG_BASELINE%
+set HUGO_BUILD_LOG_CONFIGURED=%LOG_CONFIGURED%
+set HUGO_BUILD_LOG_DEGRADED=%LOG_DEGRADED%
+set HUGO_BUILD_LOG_OFF=%LOG_OFF%
+set HUGO_BUILD_LOG_MULTILINGUAL=%LOG_MULTILINGUAL%
+set HUGO_BUILD_LOG_SUBPATH=%LOG_SUBPATH%
+set HUGO_BUILD_LOG_CANONIFY=%LOG_CANONIFY%
+set HUGO_BUILD_LOG_HOSTILE=%LOG_HOSTILE%
+for /f "tokens=2 delims=v " %%v in ('hugo version') do (
+  set HUGO_VERSION_RAW=%%v
+  goto gotversion
+)
+:gotversion
+for /f "tokens=1 delims=-+" %%v in ("%HUGO_VERSION_RAW%") do set HUGO_VERSION=%%v
+
+pushd "%~dp0"
+call npm test %*
+set EXITCODE=%ERRORLEVEL%
+popd
+
+rem The logs are retained (gitignored at the repo root) so the documented
+rem re-run recipe can read them without rebuilding.
+exit /b %EXITCODE%

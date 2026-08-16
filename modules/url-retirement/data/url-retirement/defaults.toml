@@ -1,0 +1,90 @@
+# Consumer-facing defaults for the url-retirement module.
+#
+# Every key can be overridden, from lowest to highest precedence:
+#   1. this file (module defaults)
+#   2. site config: [params.url_retirement]
+#
+# There is deliberately no front-matter tier. Both documents this module
+# publishes describe the WHOLE site, and a single page cannot hold an opinion
+# about a site-wide file without every other page contradicting it. Per-page
+# input still reaches both documents, but as content rather than configuration:
+# a page's `aliases` become redirect rules, and a page's URLs become manifest
+# lines.
+#
+# On a multilingual site these keys belong in the site-wide table, OUTSIDE any
+# [languages.<lang>] block. /_redirects is published once at the site root, so
+# every language renders the same path and the last one to render wins; the
+# module makes that harmless by building the file from every language, which
+# only holds while every language resolves the same configuration. When they do
+# not, the module says so once rather than letting the winner be silent.
+#
+# This file carries no design decision, only mechanical values, and every one
+# of them is stated here rather than hidden in a template so that a site can
+# see what it is overriding.
+
+# Master switch. false makes both documents publish NOTHING -- Hugo writes no
+# file for a template that produces no output -- which is how a site turns the
+# module off without unwiring its output formats. On the hosts these documents
+# are written for, a deployment is a complete upload rather than a patch, so an
+# absent file leaves nothing stale behind.
+enable = true
+
+[redirects]
+
+  # Whether to emit /_redirects at all. Turning this off while leaving the
+  # format wired publishes no file, exactly as the master switch above does.
+  enable = true
+
+  # Path, relative to the site's assets/ directory, of the hand-written rules
+  # this module copies verbatim ahead of the generated ones. Empty means the
+  # site has no hand-written rules. This exists because Hugo publishes a
+  # rendered file and a static/ file to the same path with NO warning at any
+  # log level and the rendered one wins, so a site keeping static/_redirects
+  # beside this module would lose every hand-written rule silently. Handing the
+  # rules to the module instead removes the collision rather than betting on it.
+  rules = ''
+
+  # HTTP status emitted for each generated rule. 301 is a permanent move, which
+  # is what an alias states. 308 preserves the request method, 302/303/307 are
+  # temporary; any of the five is accepted.
+  status = 301
+
+  # Which spelling of an alias path to emit: both | bare | slash.
+  #
+  # Hugo's .Aliases returns a path with NO trailing slash (/old-name), while the
+  # stub it would have published lands at <alias>/index.html, so the URL the
+  # site actually served -- the one search engines and bookmarks hold -- carries
+  # the slash (/old-name/). Netlify documents that it normalizes trailing
+  # slashes when matching, so either spelling would do there; Cloudflare's
+  # documentation does not say that it does. `both` emits two rules per alias so
+  # the redirect is correct wherever the site is hosted. Set `slash` or `bare`
+  # to halve the rule count once you know your host's behavior -- the file is
+  # capped at 2,000 static rules on Cloudflare Pages.
+  trailing_slash = 'both'
+
+[manifest]
+
+  # Whether to emit /url-manifest.txt at all. Same as redirects.enable above.
+  enable = true
+
+  # Whether to list a page's secondary output formats (its RSS feed, its
+  # Markdown twin, its JSON representation) beside its primary URL. They are
+  # published URLs, so they belong in a manifest of published URLs by default;
+  # a site whose coverage check only cares about HTML pages can drop them.
+  output_formats = true
+
+  # Additional URLs to list, for the things Hugo publishes but exposes to no
+  # template: files copied verbatim from static/, and the site-level documents
+  # whose publication is decided by settings a template cannot read
+  # (sitemap.xml, robots.txt, 404.html). The module lists none of them by
+  # default rather than guessing, because a manifest that claims a URL the
+  # build did not publish is the same defect as one that omits a URL it did.
+  #
+  # A site-wide value appears in every language's manifest; put a list inside
+  # [languages.<lang>.params.url_retirement.manifest] to scope it to one.
+  extra = []
+
+  # The manifest carries NO build timestamp, and that is deliberate rather than
+  # an omission: its whole purpose is to be compared against the copy production
+  # is serving, and a stamp would make every build differ from every other one
+  # in a line that says nothing about the URL surface.

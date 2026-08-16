@@ -1,0 +1,90 @@
+{{/*
+  url-retirement/redirects/aliases.html -- INTERNAL (resolver tier).
+
+  Purpose: turns every alias of every page of every language into the rules
+  /_redirects carries, sorted by source path and checked for conflicts.
+
+  Every language is walked through `hugo.Sites` rather than the current site
+  alone, because /_redirects is published once at the site root and has to
+  describe the whole deployment. Two older spellings of this walk are gone:
+  `.Site.AllPages` was deprecated in Hugo v0.156.0, and `.Page.Sites` in the
+  same release.
+
+  The page a rule points AT is captured with `{{ $p := . }}`, never read as `$`.
+  Inside a range, `$` stays bound to the template's top-level context -- the home
+  page rendering the document -- so a rule written with `$.RelPermalink` sends
+  every retired URL to the home page. The example in Hugo's own method
+  documentation is written that way; a build proved what it emits.
+
+  Whitespace ends a field in this file format, so an alias or a target
+  containing any is fatal rather than degraded: Hugo neither sanitizes nor
+  rejects such a path, and the alternative to failing is publishing a rule that
+  redirects somewhere nobody asked for.
+
+  Context (dict):
+  - .page (Page) The page rendering the document, for diagnostics.
+  - .cfg  (dict) Resolved configuration from url-retirement/config.html.
+
+  Return value: slice of dicts with `from`, `to` and `status`, sorted by `from`.
+
+  One terminal return.
+*/}}
+
+{{- $cfg := .cfg -}}
+{{- $status := $cfg.redirects.status -}}
+{{- $mode := $cfg.redirects.trailing_slash -}}
+{{- $rules := slice -}}
+
+{{- range $site := hugo.Sites -}}
+  {{- $base := strings.TrimSuffix "/" (urls.Parse $site.BaseURL).Path -}}
+  {{- range $p := $site.Pages -}}
+    {{- with $p.Aliases -}}
+      {{- $target := partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" $p.RelPermalink) -}}
+      {{- if findRE `\s` $target -}}
+        {{- errorf "[url-retirement] The URL of %s is %q, which contains whitespace and cannot be written as a redirect target. Give the page a URL without spaces, or remove its aliases." $p.Path $target -}}
+      {{- end -}}
+      {{- range $alias := . -}}
+        {{- if findRE `\s` $alias -}}
+          {{- errorf "[url-retirement] Alias %q on %s contains whitespace, which ends a field in the _redirects format. Remove the whitespace from the alias." $alias $p.Path -}}
+        {{- else -}}
+          {{- $bare := strings.TrimSuffix "/" (partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" $alias)) -}}
+          {{- $forms := slice -}}
+          {{- if eq $bare "" -}}
+            {{- /* The alias names the site root, whose only spelling is "/". */ -}}
+            {{- $forms = slice "/" -}}
+          {{- else if eq $mode "bare" -}}
+            {{- $forms = slice $bare -}}
+          {{- else if eq $mode "slash" -}}
+            {{- $forms = slice (printf "%s/" $bare) -}}
+          {{- else -}}
+            {{- $forms = slice $bare (printf "%s/" $bare) -}}
+          {{- end -}}
+          {{- range $from := $forms -}}
+            {{- $rules = $rules | append (dict "from" $from "to" $target "status" $status) -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $sorted := slice -}}
+{{- with $rules -}}
+  {{- $sorted = sort . "from" -}}
+{{- end -}}
+
+{{/* Two pages claiming the same retired URL is a content mistake this file
+     cannot resolve: both hosts take the first matching rule, so one of the two
+     pages silently never receives its traffic. Sorted order puts the pair
+     adjacent, so one walk finds every conflict. */}}
+{{- $previous := dict -}}
+{{- range $r := $sorted -}}
+  {{- if and $previous (eq (index $previous "from" | default "") $r.from) (ne (index $previous "to" | default "") $r.to) -}}
+    {{- partial "url-retirement/lib/warn.html" (dict
+        "key" (printf "url-retirement:warn:conflicting-alias:%s" $r.from)
+        "message" (printf "[url-retirement] The alias %q is claimed by more than one page (%s and %s). The host takes the first matching rule, so only one of them will ever receive that traffic." $r.from (index $previous "to") $r.to)) -}}
+  {{- end -}}
+  {{- $previous = $r -}}
+{{- end -}}
+
+{{- return $sorted -}}

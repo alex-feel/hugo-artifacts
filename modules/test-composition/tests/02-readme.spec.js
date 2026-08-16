@@ -21,7 +21,7 @@ const modulesRoot = resolve(here, '..', '..');
 // file exists to close: a consumer who wired the other three and then
 // followed pwa literally lands on a second table (a load failure) or a
 // replacing list (an exit-0 build that silently stops publishing).
-const MODULES = ['seo', 'agent-readiness', 'search', 'pwa'];
+const MODULES = ['seo', 'agent-readiness', 'search', 'pwa', 'url-retirement'];
 const HEADING = '### Combining this module with other modules that wire output formats';
 
 const readme = (moduleName) => readFileSync(join(modulesRoot, moduleName, 'README.md'), 'utf8');

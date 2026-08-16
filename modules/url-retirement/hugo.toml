@@ -1,0 +1,59 @@
+[mediaTypes]
+
+  # The host-level redirect map (_redirects on Cloudflare Pages, GitLab Pages
+  # and Netlify) has no registered media type and no file extension at all, so
+  # it needs one declared here: `delimiter = ""` is what makes Hugo publish a
+  # bare `_redirects` rather than `_redirects.<something>`. The subtype is
+  # namespaced to this module because media types are global configuration
+  # space shared with every other module a site imports, and a generic name
+  # like `text/redirects` would collide silently with a different definition.
+  # Declaring a media type is additive: Hugo's built-in set is untouched.
+  [mediaTypes."text/x-url-retirement"]
+    delimiter = ''
+
+[outputFormats]
+
+  # Publishes /_redirects. `root` is mandatory rather than optional here: the
+  # hosts that read this file read exactly one copy at the site root, so the
+  # per-language publication the other documents in this repository prefer
+  # would put the rules where nothing looks for them. On a multilingual site
+  # every language therefore renders the same path, and the last language to
+  # render wins -- which is harmless only because home.redirects builds the
+  # whole file from every language through `.Sites`, so all of them emit
+  # identical bytes. isPlainText switches to text/template so Go's HTML
+  # auto-escaping cannot mangle a URL. notAlternative keeps the file out of
+  # .AlternativeOutputFormats: it is a host configuration file, not a
+  # representation of the home page.
+  [outputFormats.redirects]
+    mediaType = 'text/x-url-retirement'
+    baseName = '_redirects'
+    isPlainText = true
+    notAlternative = true
+    root = true
+
+  # Publishes /url-manifest.txt, the list of every URL the build publishes.
+  # text/plain's first suffix is `txt`, so baseName 'url-manifest' publishes
+  # url-manifest.txt with no header override, exactly as agent-readiness
+  # publishes llms-index.txt. `root` is intentionally NOT set, so a
+  # multilingual site gets /url-manifest.txt and /de/url-manifest.txt rather
+  # than one path every language overwrites: each language's manifest is
+  # complete at the moment that language renders it, while a single shared one
+  # could only ever be complete for whichever language rendered last.
+  #
+  # `weight` is load-bearing and must stay ABOVE the html format's 10. Hugo
+  # renders one output format at a time across the whole site, and pager URLs
+  # are registered by the site's own list templates during the html pass; a
+  # manifest rendered before that pass would publish an empty pager set. A
+  # non-zero weight also sorts this format ahead of every zero-weight one,
+  # which costs nothing because the manifest reads no other format's output.
+  [outputFormats.urlmanifest]
+    mediaType = 'text/plain'
+    baseName = 'url-manifest'
+    isPlainText = true
+    notAlternative = true
+    weight = 100
+
+[module]
+
+  [module.hugoVersion]
+    min = "0.160.0"

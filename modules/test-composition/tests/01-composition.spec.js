@@ -72,6 +72,8 @@ test('one build publishes every module document side by side', () => {
     'robots.txt',
     'index.html',
     'manifest.webmanifest',
+    '_redirects',
+    'url-manifest.txt',
   ]) {
     assert.ok(existsSync(join(publicDir, relPath)), `public/${relPath} must be published`);
     assert.ok(published(relPath).trim().length > 0, `public/${relPath} must not be empty`);
@@ -80,7 +82,11 @@ test('one build publishes every module document side by side', () => {
 
 test('the merged home list carries every format the modules define', () => {
   const home = homeOutputs();
-  const defined = [...moduleFormats('agent-readiness'), ...moduleFormats('search')];
+  const defined = [
+    ...moduleFormats('agent-readiness'),
+    ...moduleFormats('search'),
+    ...moduleFormats('url-retirement'),
+  ];
   // Guards the enumeration itself: a mis-typed module name or a changed table
   // header would make `defined` empty and every assertion below vacuous.
   assert.ok(defined.length >= 5, 'the modules must define at least five output formats');

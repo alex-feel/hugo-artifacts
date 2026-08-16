@@ -9,6 +9,7 @@ require (
 	github.com/alex-feel/hugo-artifacts/modules/pwa v0.0.0-00010101000000-000000000000
 	github.com/alex-feel/hugo-artifacts/modules/search v0.0.0-00010101000000-000000000000
 	github.com/alex-feel/hugo-artifacts/modules/seo v0.0.0-00010101000000-000000000000
+	github.com/alex-feel/hugo-artifacts/modules/url-retirement v0.0.0-00010101000000-000000000000
 	github.com/alex-feel/hugo-artifacts/modules/workbox v0.0.0-20260802210223-6fb48a799944
 )
 
@@ -23,5 +24,7 @@ replace github.com/alex-feel/hugo-artifacts/modules/pwa => ../../pwa
 replace github.com/alex-feel/hugo-artifacts/modules/search => ../../search
 
 replace github.com/alex-feel/hugo-artifacts/modules/seo => ../../seo
+
+replace github.com/alex-feel/hugo-artifacts/modules/url-retirement => ../../url-retirement
 
 replace github.com/alex-feel/hugo-artifacts/modules/workbox => ../../workbox

@@ -1,0 +1,17 @@
+{{/*
+  url-retirement/lib/warn-emit.html -- INTERNAL (lib tier).
+
+  Purpose: the one place a warning is actually emitted. Reached only through
+  lib/warn.html, whose partialCached call is what makes the store check below
+  safe: this template runs at most once per key, so the get-then-set inside it
+  has no second caller to race.
+
+  Expected context (dict): .key and .message, as documented in lib/warn.html.
+
+  Return value: none.
+*/}}
+
+{{- if not (hugo.Store.Get .key) -}}
+  {{- hugo.Store.Set .key true -}}
+  {{- warnf "%s" .message -}}
+{{- end -}}

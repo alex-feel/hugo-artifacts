@@ -1,0 +1,200 @@
+{{/*
+  url-retirement/config.html -- INTERNAL (resolver tier).
+
+  Purpose: resolves the module's entire configuration through the two-tier
+  cascade, so every downstream partial renders from ONE normalized dict and
+  nothing re-derives a value. Precedence, highest first:
+  [params.url_retirement] > data/url-retirement/defaults.toml. Presence wins
+  (isset, not truthiness), so an explicit false, 0 or "" overrides the tier
+  below it.
+
+  There is no front-matter tier by design: both documents describe the whole
+  site, and a per-page opinion about a site-wide file is a contradiction one
+  page cannot resolve. See data/url-retirement/defaults.toml.
+
+  EVERY tier is a consumer surface, the data tier included -- a site may ship
+  its own data/url-retirement/defaults.* -- so a tier whose shape is wrong is
+  reported and replaced with an empty table rather than indexed: `index` on a
+  scalar or a list raises and would stop the consuming site's build.
+
+  The site tier is read through $page.Site.Params rather than the global `site`
+  because the global names the RENDERING language, and /_redirects is built by
+  walking every language's pages; a partial resolving configuration for one of
+  them must read that language's own table.
+
+  Context (dict):
+  - .page (Page) The page carrying the document being rendered.
+
+  Return value: dict with enable, redirects (enable, rules, status,
+  trailing_slash), manifest (enable, output_formats) and lang.
+
+  One terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $lang := $page.Language.Lang -}}
+
+{{/* Tier 1: the data files, which a site can override with its own
+     data/url-retirement/defaults.* of any shape at all. */}}
+{{- $data := index hugo.Data "url-retirement" -}}
+{{- if not (reflect.IsMap $data) -}}{{- $data = dict -}}{{- end -}}
+{{- $defaults := index $data "defaults" -}}
+{{- if and (ne $defaults nil) (not (reflect.IsMap $defaults)) -}}
+  {{- partial "url-retirement/lib/warn.html" (dict
+      "key" "url-retirement:warn:nonmap-config:defaults"
+      "message" (printf "[url-retirement] Ignoring data/url-retirement/defaults.*: expected a table of keys, got %q. The shipped defaults do not apply, so only explicitly configured values do." (printf "%v" $defaults))) -}}
+{{- else if not $defaults -}}
+  {{- partial "url-retirement/lib/warn.html" (dict
+      "key" "url-retirement:warn:missing-defaults"
+      "message" "[url-retirement] data/url-retirement/defaults.toml was not found; the module is not mounted correctly, so only explicitly configured values apply.") -}}
+{{- end -}}
+{{- if not (reflect.IsMap $defaults) -}}{{- $defaults = dict -}}{{- end -}}
+
+{{/* Tier 2: site params, read per language. */}}
+{{- $sitep := $page.Site.Params.url_retirement -}}
+{{- if not (reflect.IsMap $sitep) -}}
+  {{- if ne $sitep nil -}}
+    {{- partial "url-retirement/lib/warn.html" (dict
+        "key" (printf "url-retirement:warn:nonmap-config:site:%s" $lang)
+        "message" (printf "[url-retirement] Ignoring params.url_retirement for language %q: expected a table, got %q. To turn the module off, set params.url_retirement.enable = false." $lang (printf "%v" $sitep))) -}}
+  {{- end -}}
+  {{- $sitep = dict -}}
+{{- end -}}
+
+{{- $tiers := slice $defaults $sitep -}}
+{{- $origins := slice
+    "data/url-retirement/defaults.toml"
+    (printf "params.url_retirement for language %q" $lang) -}}
+
+{{/* A diagnostic must blame the CONFIGURATION carrying the mistake rather than
+     the page that happened to render the document, which is why $origins above
+     names files and tables and never a page path: both documents are rendered
+     by the home page, so a page path would accuse the same innocent page of
+     every misconfiguration a site can make. */}}
+
+{{- $truthy := slice "true" "1" "yes" "on" -}}
+{{- $opts := dict "lang" $lang -}}
+
+{{/* ---- The master switch, at the top level of the namespace ---- */}}
+{{- $enable := true -}}
+{{- range $tier := $tiers -}}
+  {{- if isset $tier "enable" -}}
+    {{- $enable = in $truthy (lower (printf "%v" (index $tier "enable"))) -}}
+  {{- end -}}
+{{- end -}}
+{{- $opts = merge $opts (dict "enable" $enable) -}}
+
+{{/* ---- The two sub-tables. Each is merged per KEY across tiers, so a site
+     setting one key of [params.url_retirement.redirects] keeps the shipped
+     value of every other key instead of blanking the table. ---- */}}
+{{- $sub := dict -}}
+{{- range $name := slice "redirects" "manifest" -}}
+  {{- $m := dict -}}
+  {{- range $i, $tier := $tiers -}}
+    {{- $tv := index $tier $name -}}
+    {{- if reflect.IsMap $tv -}}
+      {{- $m = merge $m $tv -}}
+    {{- else if ne $tv nil -}}
+      {{- partial "url-retirement/lib/warn.html" (dict
+          "key" (printf "url-retirement:warn:nonmap-section:%s:%v:%d" $name $tv $i)
+          "message" (printf "[url-retirement] Ignoring url_retirement.%s set in %s: expected a table of settings, got %q. That tier is dropped, so the shipped defaults apply." $name (index $origins $i) (printf "%v" $tv))) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $sub = merge $sub (dict $name $m) -}}
+{{- end -}}
+
+{{/* ---- Booleans inside the sub-tables ---- */}}
+{{- $redirects := dict -}}
+{{- $manifest := dict -}}
+{{- range $spec := slice
+    (dict "table" "redirects" "key" "enable" "fallback" true)
+    (dict "table" "manifest" "key" "enable" "fallback" true)
+    (dict "table" "manifest" "key" "output_formats" "fallback" true) -}}
+  {{- $raw := index (index $sub $spec.table) $spec.key -}}
+  {{- $v := $spec.fallback -}}
+  {{- if ne $raw nil -}}
+    {{- $v = in $truthy (lower (printf "%v" $raw)) -}}
+  {{- end -}}
+  {{- if eq $spec.table "redirects" -}}
+    {{- $redirects = merge $redirects (dict $spec.key $v) -}}
+  {{- else -}}
+    {{- $manifest = merge $manifest (dict $spec.key $v) -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ---- redirects.rules: an assets-relative path. A table, a list or a
+     boolean names no file, and stringifying one would hand resources.Get the
+     literal "map[]" or "false"; each is reported and dropped so the tier below
+     stands. ---- */}}
+{{- $rules := "" -}}
+{{- $rawRules := index (index $sub "redirects") "rules" -}}
+{{- if or (reflect.IsMap $rawRules) (reflect.IsSlice $rawRules) (eq (printf "%T" $rawRules) "bool") -}}
+  {{- partial "url-retirement/lib/warn.html" (dict
+      "key" (printf "url-retirement:warn:rules-shape:%v" $rawRules)
+      "message" (printf "[url-retirement] Ignoring url_retirement.redirects.rules: it expects one path below assets/ written as a single value but was given %q. No hand-written rules are copied into /_redirects." (printf "%v" $rawRules))) -}}
+{{- else if ne $rawRules nil -}}
+  {{- $rules = printf "%v" $rawRules -}}
+{{- end -}}
+{{- $redirects = merge $redirects (dict "rules" (trim $rules " \t\n\r")) -}}
+
+{{/* ---- redirects.status. Compared as a STRING against the accepted set
+     rather than parsed as a number: `float` raises on a digit string too long
+     for a float64, and a status is a fixed vocabulary, not a range. ---- */}}
+{{- $statuses := slice "301" "302" "303" "307" "308" -}}
+{{- $status := "301" -}}
+{{- $rawStatus := index (index $sub "redirects") "status" -}}
+{{- if ne $rawStatus nil -}}
+  {{- $cand := trim (printf "%v" $rawStatus) " \t\n\r" -}}
+  {{- if in $statuses $cand -}}
+    {{- $status = $cand -}}
+  {{- else -}}
+    {{- partial "url-retirement/lib/warn.html" (dict
+        "key" (printf "url-retirement:warn:bad-status:%s" $cand)
+        "message" (printf "[url-retirement] Ignoring url_retirement.redirects.status value %q (allowed: %s); using 301 instead." $cand (delimit $statuses ", "))) -}}
+  {{- end -}}
+{{- end -}}
+{{- $redirects = merge $redirects (dict "status" $status) -}}
+
+{{/* ---- redirects.trailing_slash ---- */}}
+{{- $slashModes := slice "both" "bare" "slash" -}}
+{{- $slash := "both" -}}
+{{- $rawSlash := index (index $sub "redirects") "trailing_slash" -}}
+{{- if ne $rawSlash nil -}}
+  {{- $cand := lower (trim (printf "%v" $rawSlash) " \t\n\r") -}}
+  {{- if in $slashModes $cand -}}
+    {{- $slash = $cand -}}
+  {{- else -}}
+    {{- partial "url-retirement/lib/warn.html" (dict
+        "key" (printf "url-retirement:warn:bad-trailing-slash:%s" $cand)
+        "message" (printf "[url-retirement] Ignoring url_retirement.redirects.trailing_slash value %q (allowed: %s); using %q instead." $cand (delimit $slashModes ", ") "both")) -}}
+  {{- end -}}
+{{- end -}}
+{{- $redirects = merge $redirects (dict "trailing_slash" $slash) -}}
+
+{{/* ---- manifest.extra: a list of URLs. A bare string is accepted as a
+     one-element list, because writing one value where a list is expected is a
+     plausible thing to mean; `range` over a string raises and `delimit` walks
+     it byte by byte, so the shape has to be settled here rather than downstream.
+     A table names no URL and is dropped. ---- */}}
+{{- $extra := slice -}}
+{{- $rawExtra := index (index $sub "manifest") "extra" -}}
+{{- if reflect.IsSlice $rawExtra -}}
+  {{- range $rawExtra -}}
+    {{- with trim (printf "%v" .) " \t\n\r" -}}
+      {{- $extra = $extra | append . -}}
+    {{- end -}}
+  {{- end -}}
+{{- else if and (ne $rawExtra nil) (not (reflect.IsMap $rawExtra)) (ne (printf "%T" $rawExtra) "bool") -}}
+  {{- with trim (printf "%v" $rawExtra) " \t\n\r" -}}
+    {{- $extra = slice . -}}
+  {{- end -}}
+{{- else if ne $rawExtra nil -}}
+  {{- partial "url-retirement/lib/warn.html" (dict
+      "key" (printf "url-retirement:warn:extra-shape:%v" $rawExtra)
+      "message" (printf "[url-retirement] Ignoring url_retirement.manifest.extra: it expects a list of URLs but was given %q. No extra URLs are listed in /url-manifest.txt." (printf "%v" $rawExtra))) -}}
+{{- end -}}
+{{- $manifest = merge $manifest (dict "extra" $extra) -}}
+
+{{- $opts = merge $opts (dict "redirects" $redirects "manifest" $manifest) -}}
+
+{{- return $opts -}}

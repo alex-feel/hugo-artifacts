@@ -71,6 +71,10 @@ Vendor-mount companion that exposes [`github.com/GoogleChrome/workbox`](https://
 
 Vendor-mount companion that exposes [`github.com/jakearchibald/idb`](https://github.com/jakearchibald/idb) v8.0.3 source files as Hugo assets. Imported transitively by `modules/workbox` (and therefore by `modules/pwa`), which records it at a real commit pseudo-version, so consumers neither import nor require it directly -- see [`modules/idb/README.md`](modules/idb/README.md).
 
+### `modules/url-retirement`
+
+Universal URL-retirement module: publishes `/_redirects` -- the host redirect map read by Cloudflare Pages, GitLab Pages and Netlify -- containing the site's own hand-written rules verbatim followed by one real `301` redirect per page alias, so a retired URL becomes a server-side redirect instead of a meta-refresh stub, plus a per-language `/url-manifest.txt` listing every URL the build publishes -- every page crossed with its output formats, plus paginated list pages, which no sitemap contains -- so a deployment check can diff what production serves against what the build produces instead of diffing a sitemap, which is a filtered subset. Style-agnostic, zero CSS, zero JavaScript, a two-tier configuration cascade under `params.url_retirement`, and graceful degradation on every misconfiguration -- the one fatal case is an alias containing whitespace, which would silently corrupt the file format. See [`modules/url-retirement/README.md`](modules/url-retirement/README.md).
+
 ## Shortcodes
 
 Reusable Hugo shortcode modules live under [`shortcodes/`](shortcodes/). Every one is style-agnostic -- semantic BEM markup, `data-*` attributes, and zero CSS (see [Design Principles](#design-principles)) -- so you style it to fit your site. Each ships its own `README.md` with installation, usage, parameters, and styling guidance.

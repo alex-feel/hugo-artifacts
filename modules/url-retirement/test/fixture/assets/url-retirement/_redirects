@@ -1,0 +1,3 @@
+# Hand-written rules, owned by the site and copied verbatim.
+/hand-written/  /notes/note-b/  301
+/vendor/*  https://vendor.example/:splat  302

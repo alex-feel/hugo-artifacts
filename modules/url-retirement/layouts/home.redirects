@@ -1,0 +1,17 @@
+{{- /*
+  /_redirects -- the host-level redirect map (Cloudflare Pages, GitLab Pages,
+  Netlify), published at the site root.
+
+  This template does every byte of the printing, and redirects/lines.html does
+  every decision. The split is forced rather than stylistic: a partial named
+  .html is parsed as an HTML template, so text it EMITS arrives here escaped
+  (`&#34;` for a quote, `&amp;` for an ampersand in a query string), while a
+  value it RETURNS crosses untouched.
+
+  The file is published whether or not the module is switched on, because an
+  unwired output format and an empty file mean different things to a deployment
+  and only one of them is a state that can be built against.
+*/ -}}
+{{- $lines := partial "url-retirement/redirects/lines.html" (dict "page" .) -}}
+{{- with $lines -}}{{ delimit . "\n" }}
+{{ end -}}

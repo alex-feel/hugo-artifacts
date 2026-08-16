@@ -1,0 +1,82 @@
+{{/*
+  url-retirement/redirects/lines.html -- INTERNAL (document tier).
+
+  Purpose: builds every line of /_redirects -- the site's hand-written rules
+  verbatim, then one generated rule per alias of every page of every language --
+  and RETURNS them. It prints nothing, which is not a style preference: a
+  partial named .html is parsed as an HTML template, so anything it emits is
+  HTML-escaped before it reaches a plain-text output format, and a manifest of
+  URLs would arrive carrying &#34; and &amp;. A returned value crosses that
+  boundary untouched, so every byte of both documents is printed by the
+  plain-text template that owns the file.
+
+  Hand-written rules come FIRST because both hosts that read this file take the
+  first matching rule, so a site's own decision outranks a generated one.
+
+  Context (dict):
+  - .page (Page) The home page rendering the document.
+
+  Return value: slice of strings, one line each. Empty when the module or the
+  document is switched off, which publishes an empty file rather than none.
+
+  One terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $cfg := partial "url-retirement/config.html" (dict "page" $page) -}}
+{{- $lines := slice -}}
+
+{{/* This file is published ONCE at the site root, so on a multilingual site
+     every language renders the same path and the last one to render wins. That
+     is harmless only while every language produces identical bytes, which holds
+     while every language resolves the same configuration -- so the module
+     checks rather than assumes. Each language records its resolved settings and
+     any language that finds two different records says so once. The check sits
+     ahead of the enable gate deliberately: a site that disabled the module for
+     one language only is exactly the case where the winning render decides
+     whether the file has any rules at all. */}}
+{{- $signature := printf "enable=%v redirects=%v rules=%q status=%s trailing_slash=%s"
+    $cfg.enable $cfg.redirects.enable $cfg.redirects.rules $cfg.redirects.status $cfg.redirects.trailing_slash -}}
+{{- hugo.Store.SetInMap "url-retirement:redirects-signature" $cfg.lang $signature -}}
+{{- $signatures := uniq (hugo.Store.GetSortedMapValues "url-retirement:redirects-signature") -}}
+{{- if gt (len $signatures) 1 -}}
+  {{- partial "url-retirement/lib/warn.html" (dict
+      "key" "url-retirement:warn:divergent-redirects-config"
+      "message" (printf "[url-retirement] params.url_retirement.redirects resolves differently per language (%s). /_redirects is published once at the site root, so whichever language renders last decides its contents. Move these settings out of the [languages.<lang>] tables into the site-wide [params.url_retirement] table." (delimit $signatures "; "))) -}}
+{{- end -}}
+
+{{- if and $cfg.enable $cfg.redirects.enable -}}
+
+  {{/* The site's own rules, copied verbatim. resources.Get is wrapped in `try`
+       because it returns nil for a file that is simply absent but RAISES when
+       the operating system rejects the path itself -- a `*`, a `?` or the `:`
+       of a pasted URL is such a path on Windows, and pointing this key at a URL
+       is a mistake a consumer really makes. Both failures mean the same thing
+       to the site ("that path names nothing usable"), so both take the same
+       warning and the same degradation. */}}
+  {{- with $cfg.redirects.rules -}}
+    {{- $attempt := try (resources.Get .) -}}
+    {{- with $attempt.Err -}}
+      {{- partial "url-retirement/lib/warn.html" (dict
+          "key" (printf "url-retirement:warn:rules-unreadable:%s" $cfg.redirects.rules)
+          "message" (printf "[url-retirement] Could not read the hand-written rules at assets/%s (%s); /_redirects carries the generated rules only." $cfg.redirects.rules .)) -}}
+    {{- else -}}
+      {{- with $attempt.Value -}}
+        {{- with trim .Content " \t\r\n" -}}
+          {{- $lines = $lines | append . -}}
+        {{- end -}}
+      {{- else -}}
+        {{- partial "url-retirement/lib/warn.html" (dict
+            "key" (printf "url-retirement:warn:rules-missing:%s" $cfg.redirects.rules)
+            "message" (printf "[url-retirement] No file at assets/%s, which url_retirement.redirects.rules names; /_redirects carries the generated rules only." $cfg.redirects.rules)) -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- range $rule := partial "url-retirement/redirects/aliases.html" (dict "page" $page "cfg" $cfg) -}}
+    {{- $lines = $lines | append (printf "%s %s %s" $rule.from $rule.to $rule.status) -}}
+  {{- end -}}
+
+{{- end -}}
+
+{{- return $lines -}}

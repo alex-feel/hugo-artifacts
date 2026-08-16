@@ -31,11 +31,11 @@ background_color = "#ffffff"
 
 This module needs `webappmanifest` in your `home` output list, and your site configuration holds exactly ONE `[outputs]` table whose lists are the union of every module's needs. A second `[outputs]` table in the same file fails the configuration load outright (`unmarshal failed: toml: table outputs already exists`); pasting one module README's `[outputs]` block over another's leaves a single table that loads cleanly, exits 0, warns about nothing -- and silently stops publishing every document the replaced list asked for. That silent shape is the dangerous one, and it cuts both ways here: copy this module's block over another's and you lose that module's documents; copy another's over this one's and the manifest stops being generated, which takes installability with it. So do not copy any module's block wholesale into a site that already has one: MERGE the names into the list already there.
 
-A site importing this module together with [`seo`](../seo/README.md), [`agent-readiness`](../agent-readiness/README.md) and [`search`](../search/README.md) wires all of them at once:
+A site importing this module together with [`seo`](../seo/README.md), [`agent-readiness`](../agent-readiness/README.md), [`search`](../search/README.md) and [`url-retirement`](../url-retirement/README.md) wires all of them at once:
 
 ```toml
 [outputs]
-  home = ['html', 'rss', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills', 'searchindex', 'opensearch', 'webappmanifest']
+  home = ['html', 'rss', 'markdown', 'llmstxt', 'llmsindex', 'agentfacts', 'agentskills', 'searchindex', 'opensearch', 'webappmanifest', 'redirects', 'urlmanifest']
   section = ['html', 'rss', 'markdown']
   page = ['html', 'markdown']
 ```

@@ -1,0 +1,13 @@
+# Every value here is wrong on purpose: an unknown status, an unknown
+# trailing-slash mode, a rules path naming no file, and a list key given a
+# table. Each must warn once and leave the shipped default standing.
+[url_retirement]
+
+  [url_retirement.redirects]
+    rules = 'url-retirement/does-not-exist'
+    status = 499
+    trailing_slash = 'sometimes'
+
+  [url_retirement.manifest]
+    [url_retirement.manifest.extra]
+      not = 'a list'
