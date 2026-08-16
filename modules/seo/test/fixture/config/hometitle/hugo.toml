@@ -29,6 +29,19 @@ defaultContentLanguage = 'en'
     weight = 2
     contentDir = 'content-ru'
 
+  # The third language declares NOTHING, and it is the one that makes the
+  # suffix rule provable. Both cascades below restrict themselves to en and
+  # ru, so this home is undeclared by construction rather than by omission,
+  # and it is the ordinary consumer shape: a home page with a content title,
+  # on a site that configures a suffix. Without it the fallback arm of the
+  # resolver renders only in builds where the suffix is empty, and appending
+  # the suffix there -- publishing the "Acme | Acme" shape this module
+  # promises never happens -- changes no byte of any build in the suite.
+  [languages.de]
+    locale = 'de-DE'
+    weight = 3
+    contentDir = 'content-undeclared'
+
 # A home page declares its search headline through the SEO title, never
 # through its own `title`: that field names the page for menus and headings and
 # is routinely the word "Home", which is the worst possible search headline.
@@ -45,8 +58,8 @@ defaultContentLanguage = 'en'
     [cascade.target.sites.matrix]
       languages = ['en']
 
-# The deprecated alias, on the other language's home. seo.title would mask it
-# on a page carrying both, so the two spellings cannot share one home page.
+# The deprecated alias, on the second language's home. seo.title would mask
+# it on a page carrying both, so the two spellings cannot share one home page.
 [[cascade]]
 
   [cascade.params]

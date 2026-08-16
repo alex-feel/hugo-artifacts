@@ -34,6 +34,12 @@
   for whatever page it was handed, and resolve/author.html hands it an author
   page resolved from the default-language site while a translation renders.
 
+  Every consumer-authored link of both chains passes through
+  seo/lib/as-scalar.html first, so a table, list or boolean written under any
+  of them warns once and falls through to the next source instead of printing
+  Go's debug form into the title, and an unquoted number publishes as the
+  number rather than as a verb-mismatch marker.
+
   ONE terminal return.
 */}}
 
@@ -45,17 +51,17 @@
      merely has a content title". */}}
 {{- $title := "" -}}
 {{- $declared := false -}}
-{{- with $page.Param "seo.title" -}}
+{{- with partial "seo/lib/as-scalar.html" (dict "value" ($page.Param "seo.title") "key" "seo.title") -}}
   {{- $title = . -}}
   {{- $declared = true -}}
-{{- else with $page.Params.meta_title -}}
+{{- else with partial "seo/lib/as-scalar.html" (dict "value" $page.Params.meta_title "key" "meta_title") -}}
   {{- $title = . -}}
   {{- $declared = true -}}
 {{- else with $page.Title -}}
   {{- $title = . -}}
 {{- else -}}
   {{- if $page.IsHome -}}
-    {{- with $page.Param "seo.organization.name" -}}
+    {{- with partial "seo/lib/as-scalar.html" (dict "value" ($page.Param "seo.organization.name") "key" "seo.organization.name") -}}
       {{- $title = . -}}
     {{- else -}}
       {{- $title = $page.Site.Title -}}
@@ -66,9 +72,9 @@
 {{- end -}}
 
 {{- $suffix := "" -}}
-{{- with $page.Param "seo.title_suffix" -}}
+{{- with partial "seo/lib/as-scalar.html" (dict "value" ($page.Param "seo.title_suffix") "key" "seo.title_suffix") -}}
   {{- $suffix = . -}}
-{{- else with $page.Param "metadata.title_suffix" -}}
+{{- else with partial "seo/lib/as-scalar.html" (dict "value" ($page.Param "metadata.title_suffix") "key" "metadata.title_suffix") -}}
   {{- $suffix = . -}}
 {{- end -}}
 

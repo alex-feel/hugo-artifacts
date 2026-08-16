@@ -1,0 +1,46 @@
+# Wrong-shaped TITLE values, which the site-level params of this environment
+# cannot express: params.toml writes the whole `seo` namespace as a bare
+# scalar on purpose, and TOML will not let a file write `seo` as a value and
+# then open `[seo]` as a table. A site-level cascade reaches the pages
+# directly instead, which is also the shape a real site writes.
+#
+# Cascade tables must live in a ROOT configuration file, never in a dedicated
+# config/<env>/cascade.toml, which Hugo silently ignores.
+
+# A TABLE where a single string belongs. Unguarded, Go's fmt renders it into
+# the <title>, og:title, twitter:title and WebPage.name of this page as
+# `map[...]` -- silently, exit 0. It must warn once and fall through to the
+# page's own title instead.
+[[cascade]]
+
+  [cascade.params.seo.title]
+    en = 'A Table Where A Title Belongs'
+
+  [cascade.target]
+    path = '/page'
+
+# A NUMBER, which is a perfectly good title and must be PUBLISHED rather than
+# dropped -- and a suffix beside it, because the two together are the shape
+# that mangles: a number reaching a "%s" verb prints Go's verb-mismatch
+# marker rather than the number. This is the only page in the suite that
+# carries both, so it is the only place that shape renders at all.
+[[cascade]]
+
+  [cascade.params.seo]
+    title = 2024
+    title_suffix = ' | Numeric Title Probe'
+
+  [cascade.target]
+    path = '/promo/thing'
+
+# A LIST where the suffix belongs. It must warn under its own key -- two
+# differently-shaped title mistakes in one build must produce two diagnostics,
+# not one -- and leave the page's title unsuffixed rather than appending a
+# rendered slice.
+[[cascade]]
+
+  [cascade.params.seo]
+    title_suffix = [' | One', ' | Two']
+
+  [cascade.target]
+    path = '/blog/post'

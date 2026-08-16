@@ -28,7 +28,9 @@
 # present". The `hometitle` environment declares a home-page SEO title and a
 # site-wide title suffix, the only shape that exercises either branch of
 # resolve/title.html: nowhere else is a suffix configured at all, and nowhere
-# else does a home page state a headline of its own.
+# else does a home page state a headline of its own. Its third language
+# declares nothing, which is what pins the fallback arm while the suffix is in
+# force -- a declaring home leaves that arm unrendered.
 #
 # Follows the repository's hugo process lifecycle rule with a pre-launch
 # process check, and hard-fails on any deprecation or error output in any

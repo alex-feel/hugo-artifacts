@@ -26,7 +26,8 @@ rem generated-image hook alongside a site default image, the only shape that
 rem can tell a per-page composed card from the site-wide banner; and the
 rem `hometitle` environment declares a home-page SEO title and a site-wide
 rem title suffix, the only shape that exercises either branch of
-rem resolve/title.html.
+rem resolve/title.html, with a third language that declares nothing so the
+rem fallback arm renders while the suffix is in force.
 setlocal
 
 tasklist /FI "IMAGENAME eq hugo.exe" | find /I "hugo.exe" >nul
