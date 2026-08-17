@@ -144,7 +144,9 @@ LOG_FILE_EXTRA="$HERE/hugo-build-extra.log"
 ORIGIN_LOG="$HERE/fixture-origin.log"
 # The origin's per-request record, written by serve-origin.mjs at a path it
 # fixes itself. Named here only so an interrupted run discards it with the
-# rest; nothing passes it in.
+# rest; nothing passes it in. It is NOT a build log and must never join the
+# deprecation/ERROR gate below: it records a route named SERVERERROR.md, so
+# the ERROR pattern matches it by construction, on a healthy run.
 ORIGIN_REQUEST_LOG="$HERE/fixture-origin-requests.log"
 # Fixed, because a Hugo configuration file cannot learn a port at run time and
 # the fixture's `source` URLs name this one. Kept in step with the value in
