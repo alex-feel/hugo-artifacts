@@ -52,7 +52,7 @@
 {{- $rules := slice -}}
 
 {{- range $site := hugo.Sites -}}
-  {{- $lang := $site.Language.Lang -}}
+  {{- $lang := $site.Language.Name -}}
   {{- $registered := hugo.Store.GetSortedMapValues (printf "url-retirement:pager-firsts:%s" $lang) -}}
   {{- with $registered -}}
     {{- $base := strings.TrimSuffix "/" (urls.Parse $site.BaseURL).Path -}}

@@ -1,0 +1,76 @@
+{{/*
+  url-retirement/redirects/language-root.html -- INTERNAL (resolver tier).
+
+  Purpose: turns Hugo's own redirect to the default site into the rule that
+  keeps it answering once the site stops publishing it as a file.
+
+  Why this rule has to exist. A site whose default language is served from the
+  root publishes a meta-refresh stub at /<lang>/ pointing at /, and a site that
+  moves its default language into a subdirectory publishes the mirror image, a
+  stub at / pointing at /<lang>/. Neither is a front-matter alias, so
+  `disableAliases` does not reach it; the switch that does is
+  `disableDefaultSiteRedirect`, which this module's README requires for the same
+  reason it requires the other two -- a published file wins over a redirect rule
+  on the hosts this document is written for. Turning it on without replacing it
+  would turn a URL that answered 200 into a 404, and in the subdirectory shape
+  that URL is the site root itself.
+
+  The rule is emitted for the shape the site is in, unconditionally, exactly as
+  the first-pager rule is: whether Hugo still publishes the stub is decided by a
+  setting no template can read, so a site that leaves the switch at Hugo's
+  default gets a rule that never fires rather than a wrong one.
+
+  Which shape a site is in is DERIVED from the default site rather than read
+  from configuration, which is unavailable -- site.Config exposes only the
+  services and privacy blocks. Three cases, each measured rather than assumed:
+
+  - A multihost site (every language carrying its own baseURL) publishes each
+    language at its own host root and mints no such stub at all.
+  - A default site with a language prefix is one served from a subdirectory,
+    whatever the language count: the stub is at the root and points at that
+    subdirectory, which its own home page names.
+  - A default site with no prefix has the stub at /<lang>/ only where a second
+    language exists; a monolingual site publishes nothing there. The language's
+    own name is the only template-readable source for that segment, since the
+    prefix that would otherwise carry it is precisely what is empty here.
+
+  Only the LANGUAGE dimension is modeled. Hugo mints the same redirect for the
+  default role and the default version, and `disableDefaultSiteRedirect`
+  governs all three, but a site using those dimensions has a URL surface this
+  module does not describe.
+
+  Context (dict):
+  - .cfg (dict) Resolved configuration from url-retirement/config.html, for the
+    language rendering the document.
+
+  Return value: slice of dicts with `from`, `to` and `status`. Unsorted and
+  unchecked for conflicts, which redirects/rules.html owns for the merged set.
+
+  One terminal return.
+*/}}
+
+{{- $cfg := .cfg -}}
+{{- $rules := slice -}}
+
+{{- if not hugo.IsMultihost -}}
+  {{- $default := hugo.Sites.Default -}}
+  {{- $retired := "" -}}
+  {{- with $default.LanguagePrefix -}}
+    {{- $retired = "/" -}}
+  {{- else -}}
+    {{- if hugo.IsMultilingual -}}
+      {{- $retired = printf "/%s/" $default.Language.Name -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- with $retired -}}
+    {{- $base := strings.TrimSuffix "/" (urls.Parse $default.BaseURL).Path -}}
+    {{- $from := partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" .) -}}
+    {{- $to := partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" $default.Home.RelPermalink) -}}
+    {{- range $spelling := partial "url-retirement/lib/spellings.html" (dict "url" $from "mode" $cfg.redirects.trailing_slash) -}}
+      {{- $rules = $rules | append (dict "from" $spelling "to" $to "status" $cfg.redirects.status) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $rules -}}

@@ -56,7 +56,7 @@
         "key" (printf "url-retirement:warn:register-no-paginator:%v" $page.Path)
         "message" (printf "[url-retirement] register-pagers.html was called on %s without a usable paginator (%s). Pass the value returned by .Paginate or .Paginator; no pager URLs were recorded for this page." $page.Path $attempt.Err)) -}}
   {{- else -}}
-    {{- $lang := $page.Language.Lang -}}
+    {{- $lang := $page.Language.Name -}}
     {{- $pagers := $attempt.Value -}}
 
     {{- $key := printf "url-retirement:pagers:%s" $lang -}}

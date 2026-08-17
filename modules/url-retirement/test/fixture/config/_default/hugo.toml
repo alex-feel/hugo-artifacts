@@ -1,11 +1,16 @@
 baseURL = 'https://url-retirement.example/'
 title = 'URL Retirement Fixture'
 
-# Both switches, deliberately. The site-level one stops Hugo publishing a
+# All three switches, deliberately. The site-level one stops Hugo publishing a
 # meta-refresh stub for a front-matter alias; the pagination one stops it
-# publishing the first-pager alias at /<section>/page/1/. They are separate
-# settings and each leaves a different stub behind when it is the one forgotten.
+# publishing the first-pager alias at /<section>/page/1/; the third stops it
+# publishing the redirect between the site root and the default language's own
+# directory. They are separate settings and each leaves a different stub behind
+# when it is the one forgotten -- disableAliases in particular does NOT reach
+# the language redirect, which is why a build with more than one language keeps
+# publishing /en/ until this key is set.
 disableAliases = true
+disableDefaultSiteRedirect = true
 
 [pagination]
   pagerSize = 2

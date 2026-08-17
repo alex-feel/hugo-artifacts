@@ -1,21 +1,23 @@
 {{/*
   url-retirement/redirects/rules.html -- INTERNAL (resolver tier).
 
-  Purpose: assembles the generated half of /_redirects -- the alias rules and
-  the first-pager rules -- into ONE set, sorted by source path and checked for
-  conflicts.
+  Purpose: assembles the generated half of /_redirects -- the alias rules, the
+  first-pager rules and the default site's root redirect -- into ONE set, sorted
+  by source path and checked for conflicts.
 
-  The two producers are separate because their evidence is: an alias is content
-  a page carries, a pager is a URL the site registered while rendering. Their
-  OUTPUT is not separate, because both hosts that read this file take the first
-  matching rule, so two rules claiming one retired URL mean one of them silently
-  never receives its traffic. A conflict walk inside either producer would see
-  half the file and miss exactly the case worth catching: a page aliased to a
-  URL that is also some list's first pager.
+  The three producers are separate because their evidence is: an alias is
+  content a page carries, a pager is a URL the site registered while rendering,
+  and the root redirect is the shape the language configuration puts the site
+  in. Their OUTPUT is not separate, because both hosts that read this file take
+  the first matching rule, so two rules claiming one retired URL mean one of
+  them silently never receives its traffic. A conflict walk inside any one
+  producer would see part of the file and miss exactly the cases worth catching:
+  a page aliased to a URL that is also some list's first pager, or to the site
+  root a default-language subdirectory retires.
 
-  Sorting for the same reason happens here and once. Concatenating two sorted
-  halves would leave the file unsorted, and sorted order is what puts claimants
-  of one URL next to each other so a single walk finds them.
+  Sorting for the same reason happens here and once. Concatenating sorted parts
+  would leave the file unsorted, and sorted order is what puts claimants of one
+  URL next to each other so a single walk finds them.
 
   Context (dict):
   - .page (Page) The page rendering the document, for diagnostics.
@@ -37,6 +39,9 @@
   {{- $rules = $rules | append $r -}}
 {{- end -}}
 {{- range $r := partial "url-retirement/redirects/pagers.html" (dict "cfg" $cfg) -}}
+  {{- $rules = $rules | append $r -}}
+{{- end -}}
+{{- range $r := partial "url-retirement/redirects/language-root.html" (dict "cfg" $cfg) -}}
   {{- $rules = $rules | append $r -}}
 {{- end -}}
 

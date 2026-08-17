@@ -1,7 +1,15 @@
 // One _redirects file written by two languages, and one manifest per language.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {multilingualDir, docExists, manifest, redirectRules, publishedUrls} from './helpers.js';
+import {
+  baselineDir,
+  multilingualDir,
+  multiSubdirDir,
+  docExists,
+  manifest,
+  redirectRules,
+  publishedUrls,
+} from './helpers.js';
 
 // /_redirects is published once at the site root, so on a multilingual site
 // every language renders the same path and the last one to render wins. That is
@@ -89,4 +97,59 @@ test('the pager registration is scoped per language', () => {
     !de.some((url) => url.startsWith('/posts/page/')),
     "the second language's manifest republished the first language's pagers",
   );
+});
+
+// Hugo redirects between the site root and the default language's own
+// directory, and disableAliases does not reach that stub -- disableDefaultSite-
+// Redirect does, which is why the installation instructions ask for it and why
+// a rule has to replace what it switches off. Which URL is retired depends on
+// where the default language sits, so both directions are built.
+test("a site serving its default language at the root retires that language's directory", () => {
+  const byFrom = new Map(redirectRules(multilingualDir).map((r) => [r.from, r.to]));
+  assert.equal(byFrom.get('/en'), '/');
+  assert.equal(byFrom.get('/en/'), '/');
+});
+
+test('a site serving its default language from a subdirectory retires the site root', () => {
+  const rules = redirectRules(multiSubdirDir).filter((r) => r.to === '/en/' && r.from === '/');
+  assert.equal(rules.length, 1, 'the root rule is missing or duplicated');
+  assert.equal(rules[0].status, '301');
+});
+
+// The root is the one retired URL with a single spelling: trimming its slash
+// leaves the empty string, which no host matches. Every other retired URL in
+// the same file carries both spellings, so the count is what proves the case
+// was handled rather than the mode being narrowed for the whole build.
+test('the retired root is emitted once while its neighbors keep both spellings', () => {
+  const rules = redirectRules(multiSubdirDir);
+  assert.ok(!rules.some((r) => r.from === ''), 'an empty source path reached the file');
+  assert.equal(rules.filter((r) => r.from === '/').length, 1);
+  assert.equal(rules.filter((r) => r.to === '/en/posts/').length, 2, 'the premise changed');
+});
+
+test('the default language is the one the redirect names, whatever the language weights say', () => {
+  const rules = redirectRules(multilingualDir).filter((r) => r.to === '/' && r.from === '/en/');
+  assert.equal(rules.length, 1);
+  assert.ok(
+    !redirectRules(multilingualDir).some((r) => r.from === '/de/'),
+    'the German directory was retired, but German is not the default language',
+  );
+});
+
+// The stub exists only where a language sits in a subdirectory, so a
+// single-language site publishes none and must receive no rule for one. Nothing
+// but a monolingual build can show the gate holding.
+test('a single-language build gets no such rule at all', () => {
+  for (const rule of redirectRules(baselineDir))
+    assert.ok(rule.from !== '/' && !/^\/[a-z]{2}\/?$/.test(rule.from), `${rule.from} was emitted`);
+});
+
+// With the default language in a subdirectory there is no manifest at the site
+// root, so the deployment check starts one level down. The README says so; this
+// pins the shape it describes.
+test('each language publishes its manifest under its own prefix', () => {
+  assert.ok(!docExists(multiSubdirDir, 'url-manifest.txt'), 'a root manifest appeared');
+  assert.ok(docExists(multiSubdirDir, 'en/url-manifest.txt'));
+  assert.ok(docExists(multiSubdirDir, 'de/url-manifest.txt'));
+  assert.ok(manifest(multiSubdirDir, 'en/url-manifest.txt').urls.includes('/en/posts/post-1/'));
 });
