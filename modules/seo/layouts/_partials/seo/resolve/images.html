@@ -5,6 +5,14 @@
 
   Context (dict):
   - .page (page)       The current Page.
+  - .variant (string)  Optional, "og" (default) or "natural", handed to every
+                       resolve/image.html call. A caller that emits the native
+                       aspect states that here, and then reads the one value
+                       it emits rather than picking the `natural` sub-dict out
+                       of a cropped result afterwards -- a choice easy to make
+                       once and forget, and the wrong branch of it publishes a
+                       1.91:1 crop of a person's face. resolve/author.html is
+                       the caller that needs it.
   - .generated (dict)  Optional. When present, the params.seo.image_partial
                        generated-image hook may be consulted (step 5), and
                        this dict is what the hook receives, with the page
@@ -41,13 +49,18 @@
 
   Each candidate is normalized through resolve/image.html (which itself
   resolves bundle-relative paths, global resources, and bare URLs) and
-  deduped by url.
+  deduped by that partial's `key` -- an identity that costs no published
+  file, unlike the URL it replaced: de-duplicating on URLs meant resolving
+  every candidate's URL, and resolving a URL is what writes the image to the
+  output whether or not any page ever names it.
 
-  Returns: an ordered slice of {url,width,height,type,alt,natural} dicts
-  (possibly empty). ONE terminal return.
+  Returns: an ordered slice of {key,resource|url,width,height,type,alt,natural}
+  dicts (possibly empty), each of which becomes a URL only where one is
+  written, through seo/lib/image-url.html. ONE terminal return.
 */}}
 
 {{- $page := .page -}}
+{{- $variant := .variant | default "og" -}}
 {{- $generated := .generated -}}
 {{- $candidates := slice -}}
 
@@ -100,8 +113,8 @@
 {{- $images := slice -}}
 {{- $seen := slice -}}
 {{- range $candidates -}}
-  {{- $img := partial "seo/resolve/image.html" (dict "candidate" . "page" $page) -}}
-  {{- with $img.url -}}
+  {{- $img := partial "seo/resolve/image.html" (dict "candidate" . "page" $page "variant" $variant) -}}
+  {{- with $img.key -}}
     {{- if not (in $seen .) -}}
       {{- $seen = $seen | append . -}}
       {{- $images = $images | append $img -}}
@@ -181,12 +194,17 @@
             ) -}}
           {{- end -}}
         {{- else -}}
-          {{- $img := partial "seo/resolve/image.html" (dict "candidate" . "page" $page) -}}
-          {{- with $img.url -}}
-            {{- if not (in $seen .) -}}
-              {{- $seen = $seen | append . -}}
-              {{- $images = $images | append $img -}}
-            {{- end -}}
+          {{/* Hook results are NOT deduped, and cannot be: a resource
+               composed at build time reports the .Name of the image it was
+               derived FROM, so the light and dark cards a generator returns
+               as a pair are one name, and keying them would silently keep
+               the first. They compete with nothing else either -- the tier
+               runs only when every declared and bundled candidate failed --
+               so a generator that hands back the same image twice is the one
+               thing this drops the guard against. */}}
+          {{- $img := partial "seo/resolve/image.html" (dict "candidate" . "page" $page "variant" $variant) -}}
+          {{- with $img.key -}}
+            {{- $images = $images | append $img -}}
           {{- end -}}
         {{- end -}}
       {{- end -}}
@@ -212,8 +230,8 @@
     {{- $default = . -}}
   {{- end -}}
   {{- with $default -}}
-    {{- $img := partial "seo/resolve/image.html" (dict "candidate" . "page" $page) -}}
-    {{- with $img.url -}}
+    {{- $img := partial "seo/resolve/image.html" (dict "candidate" . "page" $page "variant" $variant) -}}
+    {{- with $img.key -}}
       {{- $images = $images | append $img -}}
     {{- end -}}
   {{- end -}}

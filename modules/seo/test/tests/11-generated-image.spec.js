@@ -173,16 +173,34 @@ test('a hook returning a SLICE contributes every resource, in order', () => {
   // documented slice contract is asserted by nothing.
   const html = rawHtml(PAGES.blogPost, generatedDir);
   const primary = meta(html, 'og:image');
-  assert.ok(primary.endsWith('.png') && primary.includes('/cards/blog/post/og_hu'));
+  assert.equal(primary, `${SITE}/cards/blog/post/og.png`);
   const article = jsonldNodes(html).find((n) => n['@type'] === 'BlogPosting');
   assert.ok(Array.isArray(article.image), 'the article node carries an image LIST');
   assert.equal(article.image.length, 2);
   assert.equal(article.image[0].url, primary, 'the first returned resource is the primary one');
-  assert.match(article.image[1].url, /\/cards\/blog\/post\/og-dark_hu[^"]*\.png$/);
+  assert.equal(article.image[1].url, `${SITE}/cards/blog/post/og-dark.png`);
   for (const img of article.image) {
     assert.equal(img.width, 1200);
     assert.equal(img.height, 630);
   }
+});
+
+test('a card already measuring 1200x630 is served as-is, never cropped into a twin', () => {
+  // Cropping an image that already measures the og target returns a SECOND
+  // file holding the same pixels, and reading its URL publishes it -- so the
+  // pairing this hook exists for, a generator drawing at the recommended
+  // 1200x630, shipped every card twice. The og:image URL is the card's OWN,
+  // and the whole tree carries no derivative of one.
+  assert.equal(meta(rawHtml(PAGES.page, generatedDir), 'og:image'), `${SITE}/cards/page/og.png`);
+  const derived = readdirSync(generatedDir, {recursive: true, withFileTypes: true}).filter(
+    (e) =>
+      e.isFile() && /_hu_[0-9a-f]+\./.test(e.name) && join(e.parentPath, e.name).includes('cards'),
+  );
+  assert.deepEqual(
+    derived.map((e) => e.name),
+    [],
+    'a card was cropped into a second file',
+  );
 });
 
 test('a partial named without the .html suffix resolves, exactly as `partial` resolves it', () => {
@@ -261,16 +279,29 @@ test('a page the generator declines still falls through to the default image', (
 
 test("an author's Person.image is never a generated card", () => {
   // Both halves on ONE document: the page's own share image is a card, while
-  // the Person node describing its author keeps the portrait path. A social
-  // card is a picture of a page, never a photograph of a human, and
-  // resolve/author.html asks for the author page's images WITHOUT the payload
-  // that enables the hook.
-  const html = rawHtml(PAGES.blogPost, generatedDir);
+  // the Person node describing its author is answered without the payload
+  // that enables the hook. A social card is a picture of a page, never a
+  // photograph of a human. The subject is the post whose author page declares
+  // NOTHING, so the author falls all the way through to the site default --
+  // the tier a card would have outranked had the hook been reachable here.
+  const html = rawHtml('blog/second-author/index.html', generatedDir);
   assert.ok(meta(html, 'og:image').includes('/cards/'), 'the page itself did get a card');
   const article = jsonldNodes(html).find((n) => n['@type'] === 'BlogPosting');
   assert.equal(article.author.length, 1);
   assert.equal(article.author[0]['@type'], 'Person');
   assert.equal(article.author[0].image, DEFAULT_IMAGE);
+});
+
+test("an author's Person.image is the portrait, in its own aspect", () => {
+  // The other half of the same contract, on the author who HAS a photograph:
+  // Person.image is the source image rather than the 1.91:1 crop the page it
+  // appears on shows, and rather than a card. The two are different files, so
+  // an author path that reused the page's share image would say so here.
+  const html = rawHtml(PAGES.blogPost, generatedDir);
+  const article = jsonldNodes(html).find((n) => n['@type'] === 'BlogPosting');
+  assert.equal(article.author[0].image, `${SITE}/img/portrait.png`);
+  assert.ok(!article.author[0].image.includes('/cards/'), 'and it is not a card');
+  assert.ok(meta(html, 'og:image').includes('/cards/'), 'while the page itself carries one');
 });
 
 test('a hook pointed at a partial that does not exist warns once and generates nothing', () => {

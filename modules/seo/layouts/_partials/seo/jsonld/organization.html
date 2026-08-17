@@ -71,14 +71,16 @@
   {{- with $org.logo -}}
     {{- $imgDict := partial "seo/resolve/image.html" (dict "candidate" . "page" $site.Home "variant" "natural") -}}
     {{- with $imgDict -}}
-      {{- with .url -}}
-        {{- $imgNode := partial "seo/jsonld/image-object.html" $imgDict -}}
-        {{- with $imgNode -}}
-          {{- if $isPerson -}}
-            {{- $node = merge $node (dict "image" $imgNode) -}}
-          {{- else -}}
-            {{- $node = merge $node (dict "logo" $imgNode) -}}
-          {{- end -}}
+      {{/* image-object.html answers with an empty dict when the candidate
+           resolved to nothing, so it is also the resolution guard -- a
+           separate one here would have to read the URL, which publishes the
+           logo of every site whose node is never emitted. */}}
+      {{- $imgNode := partial "seo/jsonld/image-object.html" $imgDict -}}
+      {{- with $imgNode -}}
+        {{- if $isPerson -}}
+          {{- $node = merge $node (dict "image" $imgNode) -}}
+        {{- else -}}
+          {{- $node = merge $node (dict "logo" $imgNode) -}}
         {{- end -}}
       {{- end -}}
     {{- end -}}

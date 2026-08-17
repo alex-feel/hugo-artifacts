@@ -1,0 +1,37 @@
+{{/*
+  seo/lib/image-url.html -- turn a normalized image dict into an absolute URL.
+
+  This is the ONE place a resolved image resource becomes a URL, and calling
+  it PUBLISHES that image: .Permalink is what writes a resource to the output
+  directory. seo/resolve/image.html therefore answers in resources rather
+  than URLs, and every surface that actually writes an image URL -- the
+  og:image and twitter:image tags, a JSON-LD image node, a thumbnailUrl entry
+  -- calls this partial at the moment it writes one. A candidate nothing
+  writes costs nothing.
+
+  Expected context (dict): a normalized image dict from
+  seo/resolve/image.html, or its `natural` sub-dict. Either names its image
+  by a `resource` or by an already-absolute `url` (the bare-URL branch, where
+  no resource exists and nothing can be published).
+
+  Calling it twice for one resource costs one file: Hugo publishes a resource
+  once and returns the same permalink, which is what lets og:image and
+  twitter:image name the same image without a second copy.
+
+  Returns: the absolute URL, or "" when the dict names no image. ONE terminal
+  return.
+*/}}
+
+{{- $url := "" -}}
+
+{{- with . -}}
+  {{- with .url -}}
+    {{- $url = . -}}
+  {{- else -}}
+    {{- with .resource -}}
+      {{- $url = .Permalink -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $url -}}

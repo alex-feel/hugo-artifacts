@@ -70,7 +70,7 @@
   {{- if not $thumbs -}}
     {{- if and $seo.images (gt (len $seo.images) 0) -}}
       {{- range $seo.images -}}
-        {{- with .url -}}
+        {{- with partial "seo/lib/image-url.html" . -}}
           {{- $thumbs = $thumbs | append . -}}
         {{- end -}}
       {{- end -}}
