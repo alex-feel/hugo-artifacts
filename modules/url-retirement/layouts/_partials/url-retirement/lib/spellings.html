@@ -1,0 +1,37 @@
+{{/*
+  url-retirement/lib/spellings.html -- INTERNAL (lib tier).
+
+  Purpose: turns one retired URL into the spellings /_redirects should carry,
+  under the trailing_slash mode the site configured.
+
+  The distinction is not cosmetic. A retired URL is served at one spelling and
+  requested at another: Hugo's .Aliases returns a path with no trailing slash
+  while the stub it would have published lands at <alias>/index.html, and a
+  pager stub is a directory whose only real spelling carries the slash. Netlify
+  documents that it normalizes the difference when matching; Cloudflare's
+  documentation does not say that it does, so `both` is the default and the
+  narrower modes are for a site that knows its host.
+
+  The site root is the one URL with a single spelling: trimming its slash leaves
+  nothing, and "" is not a path any host will match. An alias naming the root
+  therefore returns "/" whatever the mode says.
+
+  Expected context (dict):
+  - .url  (string) A server-relative path, already carrying the baseURL segment.
+  - .mode (string) One of both, bare, slash, as config.html resolved it.
+
+  Return value: slice of strings, one spelling each. One terminal return.
+*/}}
+
+{{- $bare := strings.TrimSuffix "/" .url -}}
+{{- $forms := slice -}}
+{{- if eq $bare "" -}}
+  {{- $forms = slice "/" -}}
+{{- else if eq .mode "bare" -}}
+  {{- $forms = slice $bare -}}
+{{- else if eq .mode "slash" -}}
+  {{- $forms = slice (printf "%s/" $bare) -}}
+{{- else -}}
+  {{- $forms = slice $bare (printf "%s/" $bare) -}}
+{{- end -}}
+{{- return $forms -}}

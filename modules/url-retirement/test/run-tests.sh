@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Builds the fixture site TWELVE TIMES with hugo (a BUILD, not a server: no port
-# binding, and a finite build exits by itself) and runs the Node build-output
-# assertion suite against the eleven trees that succeed.
+# Builds the fixture site FOURTEEN TIMES with hugo (a BUILD, not a server: no
+# port binding, and a finite build exits by itself) and runs the Node
+# build-output assertion suite against the thirteen trees that succeed.
 #
 # Each environment earns its place by a distinction no other one can make. The
 # default environment omits [params.url_retirement] entirely, so it is the only
@@ -25,6 +25,13 @@
 # languages and the per-language manifests have siblings to name, and
 # `multilingual-partial` is the only one where a sibling exists but publishes
 # nothing, so the header must not name it.
+# The `pagerpath` environment renames Hugo's pagination segment without telling
+# the module, so every rule it emits carrying that name was DERIVED from a pager
+# URL rather than read from configuration -- which no other build can show,
+# because everywhere else the derived segment and the shipped default are the
+# same word. The `ugly` environment is the only one in which the URL Hugo
+# reports for a page and the URL it serves it at come apart, which is what makes
+# a first-pager rule built by string concatenation visibly wrong.
 # The `subpath` and `canonify` environments are a PAIR and neither is redundant:
 # a baseURL carrying a path is the only shape in which a rule that keeps the
 # base segment and one that drops it are different bytes, and canonifyURLs is
@@ -51,12 +58,14 @@ LOG_OFF="$HERE/hugo-build-off.log"
 LOG_MULTILINGUAL="$HERE/hugo-build-multilingual.log"
 LOG_SUBPATH="$HERE/hugo-build-subpath.log"
 LOG_CANONIFY="$HERE/hugo-build-canonify.log"
+LOG_PAGERPATH="$HERE/hugo-build-pagerpath.log"
+LOG_UGLY="$HERE/hugo-build-ugly.log"
 LOG_HOSTILE="$HERE/hugo-build-hostile.log"
 
 # The logs are retained after a successful run so the documented re-run recipe
 # can read them; they are gitignored at the repo root. Only an interrupt
 # discards them mid-run.
-trap 'rm -f "$LOG_BASELINE" "$LOG_CONFIGURED" "$LOG_DEGRADED" "$LOG_SHAPES" "$LOG_PARTIAL" "$LOG_CONFLICT" "$LOG_OFF" "$LOG_MULTILINGUAL" "$LOG_MULTIPARTIAL" "$LOG_SUBPATH" "$LOG_CANONIFY" "$LOG_HOSTILE"' INT TERM
+trap 'rm -f "$LOG_BASELINE" "$LOG_CONFIGURED" "$LOG_DEGRADED" "$LOG_SHAPES" "$LOG_PARTIAL" "$LOG_CONFLICT" "$LOG_OFF" "$LOG_MULTILINGUAL" "$LOG_MULTIPARTIAL" "$LOG_SUBPATH" "$LOG_CANONIFY" "$LOG_PAGERPATH" "$LOG_UGLY" "$LOG_HOSTILE"' INT TERM
 
 # `pgrep -x` matches the process NAME, the semantic twin of the tasklist
 # IMAGENAME filter below. `-f` would match the whole command line, and this
@@ -132,6 +141,8 @@ build multilingual public/multilingual "$LOG_MULTILINGUAL" strict
 build multilingual-partial public/multilingual-partial "$LOG_MULTIPARTIAL" strict
 build subpath public/subpath "$LOG_SUBPATH" strict
 build canonify public/canonify "$LOG_CANONIFY" strict
+build pagerpath public/pagerpath "$LOG_PAGERPATH" strict
+build ugly public/ugly "$LOG_UGLY" strict
 build_must_fail hostile public/hostile "$LOG_HOSTILE"
 
 export FIXTURE_DIR
@@ -148,6 +159,8 @@ export FIXTURE_PUBLIC_OFF="$FIXTURE_DIR/public/off"
 export FIXTURE_PUBLIC_MULTILINGUAL="$FIXTURE_DIR/public/multilingual"
 export FIXTURE_PUBLIC_SUBPATH="$FIXTURE_DIR/public/subpath"
 export FIXTURE_PUBLIC_CANONIFY="$FIXTURE_DIR/public/canonify"
+export FIXTURE_PUBLIC_PAGERPATH="$FIXTURE_DIR/public/pagerpath"
+export FIXTURE_PUBLIC_UGLY="$FIXTURE_DIR/public/ugly"
 export HUGO_BUILD_LOG_BASELINE="$LOG_BASELINE"
 export HUGO_BUILD_LOG_CONFIGURED="$LOG_CONFIGURED"
 export HUGO_BUILD_LOG_DEGRADED="$LOG_DEGRADED"
@@ -159,6 +172,8 @@ export HUGO_BUILD_LOG_OFF="$LOG_OFF"
 export HUGO_BUILD_LOG_MULTILINGUAL="$LOG_MULTILINGUAL"
 export HUGO_BUILD_LOG_SUBPATH="$LOG_SUBPATH"
 export HUGO_BUILD_LOG_CANONIFY="$LOG_CANONIFY"
+export HUGO_BUILD_LOG_PAGERPATH="$LOG_PAGERPATH"
+export HUGO_BUILD_LOG_UGLY="$LOG_UGLY"
 export HUGO_BUILD_LOG_HOSTILE="$LOG_HOSTILE"
 HUGO_VERSION="$(hugo version | sed -E 's/^hugo v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
 export HUGO_VERSION

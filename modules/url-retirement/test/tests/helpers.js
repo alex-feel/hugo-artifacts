@@ -45,6 +45,12 @@ export const subpathDir = dir('FIXTURE_PUBLIC_SUBPATH', 'fixture/public/subpath'
 // The same baseURL with canonifyURLs, under which .RelPermalink stops carrying
 // that segment on its own. The two builds must agree byte for byte.
 export const canonifyDir = dir('FIXTURE_PUBLIC_CANONIFY', 'fixture/public/canonify');
+// pagination.path renamed and nothing telling the module about it, so a rule
+// carrying the new name was read off a pager URL rather than off configuration.
+export const pagerpathDir = dir('FIXTURE_PUBLIC_PAGERPATH', 'fixture/public/pagerpath');
+// uglyURLs: the only build in which the URL Hugo reports for a page and the URL
+// it serves that page at come apart.
+export const uglyDir = dir('FIXTURE_PUBLIC_UGLY', 'fixture/public/ugly');
 
 const LOG_KEYS = {
   baseline: 'HUGO_BUILD_LOG_BASELINE',
@@ -58,6 +64,8 @@ const LOG_KEYS = {
   multilingual: 'HUGO_BUILD_LOG_MULTILINGUAL',
   subpath: 'HUGO_BUILD_LOG_SUBPATH',
   canonify: 'HUGO_BUILD_LOG_CANONIFY',
+  pagerpath: 'HUGO_BUILD_LOG_PAGERPATH',
+  ugly: 'HUGO_BUILD_LOG_UGLY',
   hostile: 'HUGO_BUILD_LOG_HOSTILE',
 };
 

@@ -2,7 +2,7 @@
 
 A Hugo module that makes a retired URL a real redirect and makes the set of published URLs checkable.
 
-It publishes two documents and no markup at all: `/_redirects`, the host redirect map read by Cloudflare Pages, GitLab Pages and Netlify, carrying your own hand-written rules verbatim followed by one `301` per page alias; and `/url-manifest.txt`, one per language, listing every URL the build publishes. Zero CSS, zero JavaScript, zero visual surface.
+It publishes two documents and no markup at all: `/_redirects`, the host redirect map read by Cloudflare Pages, GitLab Pages and Netlify, carrying your own hand-written rules verbatim followed by one `301` per page alias and one per paginated list, for the `/blog/page/1/` Hugo stops publishing; and `/url-manifest.txt`, one per language, listing every URL the build publishes. Zero CSS, zero JavaScript, zero visual surface.
 
 Both answer the same failure, from opposite ends. A page that moves leaves an `aliases` entry behind, and Hugo turns that into a small HTML file containing a meta refresh -- a published file, which on these hosts wins over any redirect rule, and which no sitemap lists. A page that is deleted outright leaves nothing behind at all. In both cases a deployment check that compares the live `sitemap.xml` against the freshly built one sees nothing, because a sitemap is a filtered projection of the published surface rather than the surface itself: alias stubs are not in it, and neither are paginated list pages, which is how an indexed `/blog/page/4/` becomes a 404 with every check green.
 
@@ -37,7 +37,8 @@ disableAliases = true
 [pagination]
   # 2. The same thing for the first pager of every paginated list, which is a
   #    SEPARATE setting: /blog/page/1/ is an alias of /blog/ and survives the
-  #    switch above.
+  #    switch above. The module generates the rule that replaces it, from the
+  #    paginator your list template registers -- see "Register paginated pages".
   disableAliases = true
 
 [outputs]
@@ -82,23 +83,44 @@ Pager pages are reachable only through the paginator of the page that owns them.
 {{ partial "url-retirement/register-pagers.html" (dict "page" . "paginator" $paginator) }}
 ```
 
-Add it to every list template that paginates. The partial never calls `.Paginate` or `.Paginator` itself, so it cannot replace your filtered, sorted collection with the default one. Ordering is safe by construction: Hugo renders one output format at a time across the whole site, and the manifest format is declared with a weight above the HTML format's, so every registration made during the HTML pass is already recorded when the manifest renders.
+Add it to every list template that paginates. The partial never calls `.Paginate` or `.Paginator` itself, so it cannot replace your filtered, sorted collection with the default one. Ordering is safe by construction: Hugo renders one output format at a time across the whole site, and both documents are declared so they render after the HTML pass, so every registration is already recorded when they are built.
+
+Registration feeds BOTH documents, which is why it is worth making even on a list short enough to fit one pager. `/url-manifest.txt` gains every pager URL, and `/_redirects` gains the rule for the FIRST one -- the `/blog/page/1/` that setting 2 above stops Hugo publishing. Hugo mints that URL for every list a template paginates, a one-pager section included, and it is in no page's `.Aliases`, so a list you never register keeps its pager URLs invisible to the manifest AND loses `/blog/page/1/` to a 404 the moment you adopt the module.
+
+The pagination URL segment -- the `page` of `/blog/page/2/` -- is read off the second pager of any list you register, per language, so a site that renamed it needs no configuration as long as one list in that language runs past a single pager. Where no such list exists, `redirects.pagination_path` supplies it. The module cannot read your `[pagination] path` directly: `site.Config` exposes the `services` and `privacy` blocks and nothing else.
+
+If you localize that segment, restate the whole block. A `[languages.<lang>.pagination]` table REPLACES the site-wide one rather than merging with it, so a language naming only `path` silently reverts `pagerSize` to Hugo's default of 10 and `disableAliases` to `false` -- publishing, for that language alone, the exact stub setting 2 exists to suppress:
+
+```toml
+[languages.de]
+
+  [languages.de.pagination]
+    path = 'seite'
+    pagerSize = 10
+    disableAliases = true
+```
 
 ## What gets published
 
 ### `/_redirects`
 
-Your hand-written rules first, exactly as you wrote them, then one rule per alias, sorted by source path:
+Your hand-written rules first, exactly as you wrote them, then the generated ones -- one per alias and one per registered paginator's first pager -- sorted together by source path:
 
 ```text
 # Hand-written rules, owned by the site and copied verbatim.
 /hand-written/  /notes/note-b/  301
 /vendor/*  https://vendor.example/:splat  302
+/blog/page/1 /blog/ 301
+/blog/page/1/ /blog/ 301
 /legacy/first-post /posts/post-1/ 301
 /legacy/first-post/ /posts/post-1/ 301
 ```
 
-Every alias appears in two spellings by default. Hugo's `.Aliases` returns a path without a trailing slash, while the stub it would have published lands at `<alias>/index.html`, so the URL your visitors and Google actually hold carries the slash. Netlify documents that it normalizes the difference when matching; Cloudflare's documentation does not say that it does. Set `trailing_slash` to `slash` or `bare` once you know your host's behavior -- Cloudflare Pages caps the file at 2,000 static rules.
+The two producers share one sorted set so that two rules claiming the same retired URL are reported rather than silent -- both hosts take the first match, so the loser never receives its traffic.
+
+A pager rule is emitted for every paginator your templates register, whatever `[pagination] disableAliases` says, because no template can read that setting. Leave it at Hugo's default and the stub stays published and keeps winning, which makes the rule inert rather than wrong; the installation instructions above turn it off precisely so the rule is what answers.
+
+Every retired URL appears in two spellings by default. Hugo's `.Aliases` returns a path without a trailing slash, while the stub it would have published lands at `<alias>/index.html`, so the URL your visitors and Google actually hold carries the slash. Netlify documents that it normalizes the difference when matching; Cloudflare's documentation does not say that it does. Set `trailing_slash` to `slash` or `bare` once you know your host's behavior -- Cloudflare Pages caps the file at 2,000 static rules.
 
 On a multilingual site the file is published once at the site root and contains every language's aliases, each pointing at its own translation.
 
@@ -141,14 +163,15 @@ Every key lives under `[params.url_retirement]` and is overridable there; the sh
 | `redirects.enable` | `true` | The redirect map alone. |
 | `redirects.rules` | `''` | Path below `assets/` of the hand-written rules copied verbatim ahead of the generated ones. Empty means the site has none. |
 | `redirects.status` | `301` | Status emitted on generated rules. One of `301`, `302`, `303`, `307`, `308`. |
-| `redirects.trailing_slash` | `'both'` | Which spelling of an alias to emit: `both`, `slash` or `bare`. |
+| `redirects.trailing_slash` | `'both'` | Which spelling of a retired URL to emit: `both`, `slash` or `bare`. |
+| `redirects.pagination_path` | `'page'` | Your `[pagination] path`, for building the first-pager rule. Consulted only where the segment cannot be read off a pager URL: a language whose every registered list fits on one pager. |
 | `manifest.enable` | `true` | The manifest alone. |
 | `manifest.output_formats` | `true` | Whether to list a page's secondary output formats beside its primary URL. |
 | `manifest.extra` | `[]` | Extra URLs to list, for what Hugo publishes but exposes to no template. Each entry is a server-relative path beginning with `/`; anything else is reported and dropped. |
 
 ### Validation
 
-Every value is checked, and every rejected value warns once and leaves the shipped default standing: an unknown status, an unknown trailing-slash mode, a boolean written as anything other than a true or false spelling, a table given to a key that expects a list or a path, an `extra` entry that is not a server-relative path, a rules path that names no file, and a path the operating system rejects outright. The module never breaks a consuming build over its own configuration.
+Every value is checked, and every rejected value warns once and leaves the shipped default standing: an unknown status, an unknown trailing-slash mode, a boolean written as anything other than a true or false spelling, a table given to a key that expects a list or a path, an `extra` entry that is not a server-relative path, a pagination segment carrying whitespace or a slash, a rules path that names no file, and a path the operating system rejects outright. The module never breaks a consuming build over its own configuration.
 
 The boolean check is two-sided on purpose. Matching only the true spellings would make `enable = 'yse'` resolve to false and switch a document off with no diagnostic at all, which is the loudest thing this module can do reached in the quietest possible way.
 
@@ -162,6 +185,7 @@ Two classes, both named in the file's own header rather than left for you to dis
 
 - **Files copied verbatim from `static/`.** Hugo exposes that directory to no template. If a retired URL of yours is a hand-placed HTML file there, name it in `manifest.extra`.
 - **Documents whose publication is decided by settings no template can read** -- `sitemap.xml`, `robots.txt`, `404.html`. `site.Config` exposes only the privacy and services blocks, so the module cannot tell whether your site publishes them. `manifest.extra` again.
+- **First-pager stubs, on a site that left `[pagination] disableAliases` at Hugo's default.** That setting is invisible for the same reason, so where it is off Hugo publishes `/blog/page/1/` and the manifest does not list it. Turning it on -- which the installation instructions above ask for -- removes the URL rather than the omission, and the generated rule takes over.
 
 One more thing worth knowing rather than hiding: `.OutputFormats` reports the formats CONFIGURED for a page, so a page with a format wired but no matching template contributes a URL that publishes nothing. Hugo warns loudly for that case (`found no layout file for ...`), so the condition surfaces at build time rather than only here.
 
@@ -179,13 +203,16 @@ modules/url-retirement/
 │   │       ├── lib/
 │   │       │   ├── extra-url.html
 │   │       │   ├── prefix-url.html
+│   │       │   ├── spellings.html
 │   │       │   ├── warn-emit.html
 │   │       │   └── warn.html
 │   │       ├── manifest/
 │   │       │   └── lines.html
 │   │       ├── redirects/
 │   │       │   ├── aliases.html
-│   │       │   └── lines.html
+│   │       │   ├── lines.html
+│   │       │   ├── pagers.html
+│   │       │   └── rules.html
 │   │       └── register-pagers.html
 │   ├── home.redirects
 │   └── home.urlmanifest.txt

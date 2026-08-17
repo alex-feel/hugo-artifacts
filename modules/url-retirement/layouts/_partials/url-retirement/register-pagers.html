@@ -1,9 +1,10 @@
 {{/*
   url-retirement/register-pagers.html -- PUBLIC.
 
-  Purpose: records the URLs of a list page's pagers so /url-manifest.txt can
-  carry them. Call it from your own list template, passing the paginator you
-  have ALREADY built:
+  Purpose: records a list page's pagers, which feeds BOTH documents this module
+  publishes -- /url-manifest.txt lists every pager URL, and /_redirects carries
+  the rule that keeps the FIRST pager answering. Call it from your own list
+  template, passing the paginator you have ALREADY built:
 
     {{ $paginator := .Paginate $pages }}
     {{ partial "url-retirement/register-pagers.html" (dict "page" . "paginator" $paginator) }}
@@ -24,9 +25,17 @@
   would silently replace your filtered, sized collection with the default one.
 
   Ordering is safe by construction. Hugo renders one output format at a time
-  across the whole site, and /url-manifest.txt is declared with a weight above
-  the html format's, so every registration made during the html pass is already
-  recorded when the manifest renders.
+  across the whole site, and both documents are declared so they render after
+  the html pass, so every registration is already recorded when they are built.
+
+  Three things are recorded, all scoped by language because the store is
+  build-global: every pager URL, for the manifest; the list page itself, from
+  which /_redirects builds the first-pager rule; and the pagination URL segment,
+  DERIVED from the second pager's URL. That derivation is the only way the
+  module can learn the segment: Hugo's pagination.path is configurable and
+  localizable, and site.Config exposes the services and privacy blocks alone.
+  A list that fits on one pager leaves nothing to derive from, and there
+  redirects.pagination_path applies instead.
 
   Expected context (dict):
   - .page      (Page)  The list page being rendered; names the language.
@@ -47,10 +56,40 @@
         "key" (printf "url-retirement:warn:register-no-paginator:%v" $page.Path)
         "message" (printf "[url-retirement] register-pagers.html was called on %s without a usable paginator (%s). Pass the value returned by .Paginate or .Paginator; no pager URLs were recorded for this page." $page.Path $attempt.Err)) -}}
   {{- else -}}
-    {{- $key := printf "url-retirement:pagers:%s" $page.Language.Lang -}}
-    {{- range $pager := $attempt.Value -}}
+    {{- $lang := $page.Language.Lang -}}
+    {{- $pagers := $attempt.Value -}}
+
+    {{- $key := printf "url-retirement:pagers:%s" $lang -}}
+    {{- range $pager := $pagers -}}
       {{- with $pager.URL -}}
         {{- hugo.Store.SetInMap $key . . -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{/* The first pager's URL is the one URL a paginator does NOT expose: pager
+         one reports the list page's own URL, while the file Hugo publishes for
+         it sits at <list>/<segment>/1/. So the list page is recorded and the
+         rule is assembled later, from it and the segment.
+
+         Both URLs are normalized to the directory form they are SERVED at,
+         because under uglyURLs Hugo reports /posts/index.html for the list and
+         /posts/page/2/index.html for a pager while publishing the first-pager
+         stub at the directory /posts/page/1/ either way. */}}
+    {{- with $page.RelPermalink -}}
+      {{- $dir := strings.TrimSuffix "index.html" . -}}
+      {{- if not (hasSuffix $dir "/") -}}
+        {{- $dir = printf "%s/" $dir -}}
+      {{- end -}}
+      {{- hugo.Store.SetInMap (printf "url-retirement:pager-firsts:%s" $lang) $dir (dict "dir" $dir "to" .) -}}
+
+      {{- if ge (len $pagers) 2 -}}
+        {{- $second := strings.TrimSuffix "index.html" (index $pagers 1).URL -}}
+        {{- if and (hasPrefix $second $dir) (hasSuffix $second "/2/") -}}
+          {{- $segment := strings.TrimSuffix "/2/" (strings.TrimPrefix $dir $second) -}}
+          {{- with $segment -}}
+            {{- hugo.Store.SetInMap (printf "url-retirement:pager-path:%s" $lang) . . -}}
+          {{- end -}}
+        {{- end -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}

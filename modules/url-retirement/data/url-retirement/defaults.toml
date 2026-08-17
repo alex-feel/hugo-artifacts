@@ -62,6 +62,23 @@ enable = true
   # capped at 2,000 static rules on Cloudflare Pages.
   trailing_slash = 'both'
 
+  # The URL segment Hugo puts between a list page and a pager number: the
+  # `page` of /blog/page/2/, which is your own `[pagination] path` setting.
+  #
+  # This module needs it to write the rule that keeps /blog/page/1/ answering
+  # after `[pagination] disableAliases = true` stops Hugo publishing a stub
+  # there, and it cannot read your setting: site.Config exposes the services
+  # and privacy blocks alone. So it DERIVES the segment instead, from the URL
+  # of the second pager of any list you register -- which is exact, and per
+  # language, without you restating anything.
+  #
+  # This value applies only where that derivation has nothing to work with: a
+  # language whose every registered list fits on a single pager. Set it if you
+  # changed `[pagination] path` and that describes one of your languages;
+  # inside [languages.<lang>.params.url_retirement.redirects] to scope it to
+  # one language, which is the shape a localized pagination path takes.
+  pagination_path = 'page'
+
 [manifest]
 
   # Whether to emit /url-manifest.txt at all. Same as redirects.enable above.

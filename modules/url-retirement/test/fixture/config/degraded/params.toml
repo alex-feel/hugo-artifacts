@@ -1,12 +1,14 @@
 # Every value here is wrong on purpose: an unknown status, an unknown
-# trailing-slash mode, a rules path naming no file, and a list key given a
-# table. Each must warn once and leave the shipped default standing.
+# trailing-slash mode, a rules path naming no file, a pagination segment
+# carrying a path separator, and a list key given a table. Each must warn once
+# and leave the shipped default standing.
 [url_retirement]
 
   [url_retirement.redirects]
     rules = 'url-retirement/does-not-exist'
     status = 499
     trailing_slash = 'sometimes'
+    pagination_path = 'seite/1'
 
   [url_retirement.manifest]
     [url_retirement.manifest.extra]

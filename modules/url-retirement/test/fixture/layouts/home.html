@@ -1,3 +1,14 @@
 <!DOCTYPE html>
 <html lang="{{ site.Language.Lang }}"><head><title>{{ .Title }}</title></head>
-<body><h1>{{ .Title }}</h1></body></html>
+<body><h1>{{ .Title }}</h1>
+{{/* The home page paginates as well as the sections, because the first pager
+     of a paginated home page is /page/1/ -- the one registration whose list
+     page is the site root, where a rule built by concatenation would produce
+     //page/1/ if the root were handled like any other directory. It paginates
+     site.RegularPages rather than its own, which are none: a home page with a
+     single empty pager would register the root without publishing a pager URL
+     beside it, and half the shape would go unbuilt. */}}
+{{ $paginator := .Paginate site.RegularPages }}
+{{ partial "url-retirement/register-pagers.html" (dict "page" . "paginator" $paginator) }}
+<ul>{{ range $paginator.Pages }}<li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>{{ end }}</ul>
+</body></html>

@@ -1,0 +1,9 @@
+# uglyURLs, the one mode in which the URL Hugo REPORTS for a page and the URL
+# it SERVES that page at come apart: a list page reports /posts/index.html and a
+# pager reports /posts/page/2/index.html, while the first-pager stub is still
+# published at the directory /posts/page/1/. A rule built by pasting a segment
+# onto the reported URL would read /posts/index.htmlpage/1/ and match nothing.
+#
+# The redirect targets follow Hugo's own stub, which points at the page's
+# permalink -- /posts/index.html here -- rather than at the directory.
+uglyURLs = true
