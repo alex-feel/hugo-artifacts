@@ -2,11 +2,30 @@
 # can compare a configured build against the baseline one and prove both
 # halves of the contract: every license surface appears when the table is
 # filled and both switches are on, and NOTHING appears when they are not.
-# It also carries the bot-group directive pair below.
+# It also carries the bot-group directive pair and the accepted `$schema`
+# below.
 #
 # In a config/<environment>/params.toml the top level is already `params`, so
 # these tables are [agent.*] rather than [params.agent.*].
 [agent]
+
+  # A VALID `$schema` other than the shipped default, and the only build that
+  # has one. Every other build publishes the default: baseline and the rest
+  # leave the key unset, `edge` sets a relative value and gets the default
+  # back, and the `multilingual` build's marker value belongs to a language
+  # that must never write the file. So "the configured value is what the index
+  # carries" was proven only for the one value a hardcoded literal would also
+  # produce -- and that gap reached further than this key, because the
+  # multilingual default-language gate is asserted through a per-language
+  # `$schema` and an emitter ignoring the key would have disarmed it silently.
+  #
+  # The value is what the key exists for: the convention's schema URI is an
+  # opaque identifier a client matches against the versions it knows, so a
+  # consumer pointing at a newer one must be able to say so without waiting
+  # for a module release. A reserved-TLD host keeps this fixture from naming
+  # a schema anybody could mistake for a published one.
+  [agent.skills_index]
+    schema = 'https://schemas.example.invalid/discovery/0.3.0/schema.json'
 
   # The block-everything-except shape, and the only build in which the
   # bots_allow emission path executes. It cannot live in `edge`: the edge

@@ -280,9 +280,9 @@ enableRobotsTXT = true
     # bytes over real HTTP -- the digest guarantee cannot be proven any other
     # way -- while nothing outside this repository can change what they are.
     #
-    # NINE of these publish and FOURTEEN are refused; 04-skills.spec.js pins
-    # both sets, so an entry that starts publishing (or stops) is a red suite
-    # rather than a silent change of contract.
+    # SIXTEEN of these publish and EIGHTEEN are refused; 04-skills.spec.js
+    # pins both sets, so an entry that starts publishing (or stops) is a red
+    # suite rather than a silent change of contract.
 
     # ---- Published ----
 
@@ -355,10 +355,42 @@ enableRobotsTXT = true
     # leading slash. Neither can be carried in an archive, so both are
     # reported -- and neither is ever probed, because a resolved path outside
     # the directory would be somebody else's document.
+    #
+    # This entry carries BOTH shapes and is the only one that does, which is
+    # what proves the warning names several candidates in one line rather than
+    # one warning each. It cannot prove which guard caught which: one warning
+    # covers both, so either guard alone keeps this entry's output identical.
+    # The two entries under it are that proof, one guard apiece.
+    #
+    # The description is a VERBATIM copy of this skill's own front matter, so
+    # exactly one warning can name this entry and the assertion on it needs no
+    # allowance for a second, unrelated one.
     [[params.agent.skills]]
       name = 'fixture-outside'
-      description = 'A fixture skill referencing files that lie outside its own directory.'
+      description = 'A fixture skill referencing files that lie outside its own directory, which no archive may carry and no republished copy can resolve.'
       source = 'http://127.0.0.1:51313/fixture-outside/SKILL.md'
+
+    # The `..` guard alone. Its one reference resolves to /ESCAPE.md, outside
+    # the skill directory, and the entry publishes with exactly one warning
+    # naming that one candidate. Delete the traversal check and the reference
+    # is probed instead of reported: the warning disappears and a request for
+    # /ESCAPE.md appears in the origin's request log, which is why the
+    # assertions read both.
+    [[params.agent.skills]]
+      name = 'fixture-outside-dotdot'
+      description = 'A fixture skill whose one reference climbs out of its own directory with a traversal sequence, so nothing but the traversal guard decides its verdict.'
+      source = 'http://127.0.0.1:51313/fixture-outside-dotdot/SKILL.md'
+
+    # The leading-slash guard alone. Deleting it does NOT leave the reference
+    # unguarded, which is the trap: path.Join folds an absolute candidate back
+    # under the skill directory, so /abs/ROOT.md would resolve to
+    # /fixture-outside-abs/abs/ROOT.md, pass the traversal check, and be
+    # probed as though it named a file inside the skill. The warning is then
+    # absent and the origin is asked for a path this skill never referenced.
+    [[params.agent.skills]]
+      name = 'fixture-outside-abs'
+      description = 'A fixture skill whose one reference is an absolute path from the origin root, so nothing but the leading-slash guard decides its verdict.'
+      source = 'http://127.0.0.1:51313/fixture-outside-abs/SKILL.md'
 
     # A body linking back to itself. That probe always succeeds -- it is the
     # artifact just fetched -- so without the self-reference guard every
@@ -476,6 +508,18 @@ enableRobotsTXT = true
       type = 'archive'
       description = 'A zip whose first record is its end-of-central-directory marker: no members at all.'
       source = 'http://127.0.0.1:51313/archives/empty.zip'
+
+    # The third thing zip bytes can be that is not an archive this module may
+    # publish: one volume of a SPLIT archive, marked by the spanning signature
+    # at its very first byte. The refusal is shared with every other
+    # not-an-archive case, so what distinguishes this entry is the sentence
+    # naming WHY -- and until it had a fixture, that sentence was written
+    # nowhere and read by nobody.
+    [[params.agent.skills]]
+      name = 'fixture-spanned-zip'
+      type = 'archive'
+      description = 'One volume of a split zip archive, which carries the spanning signature instead of a local file header.'
+      source = 'http://127.0.0.1:51313/archives/spanned.zip'
 
     # The same rooted.tar.gz, served with Content-Encoding: gzip. Hugo
     # decompresses it in transit, so a bare tar arrives -- and republishing

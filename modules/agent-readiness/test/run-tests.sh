@@ -142,6 +142,10 @@ LOG_FILE_PAGINATED="$HERE/hugo-build-paginated.log"
 LOG_FILE_WIDGETS="$HERE/hugo-build-widgets.log"
 LOG_FILE_EXTRA="$HERE/hugo-build-extra.log"
 ORIGIN_LOG="$HERE/fixture-origin.log"
+# The origin's per-request record, written by serve-origin.mjs at a path it
+# fixes itself. Named here only so an interrupted run discards it with the
+# rest; nothing passes it in.
+ORIGIN_REQUEST_LOG="$HERE/fixture-origin-requests.log"
 # Fixed, because a Hugo configuration file cannot learn a port at run time and
 # the fixture's `source` URLs name this one. Kept in step with the value in
 # serve-origin.mjs and in fixture/config/_default/hugo.toml.
@@ -168,7 +172,7 @@ stop_origin() {
 cleanup_interrupted() {
   kill_stray_hugo
   stop_origin
-  rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_NOTWINS"     "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_LLMSOFF" "$LOG_FILE_EDGE" "$LOG_FILE_OFF"     "$LOG_FILE_BADTABLES" "$LOG_FILE_NSOFF" "$LOG_FILE_NOSECTIONPAGES" "$LOG_FILE_NOLINKMD"     "$LOG_FILE_NOBUILDTIME" "$LOG_FILE_LLMSINDEXOFF" "$LOG_FILE_UNWIRED" "$LOG_FILE_NOLINKINDEXES" "$LOG_FILE_NOCOMPACT" "$LOG_FILE_STRICTSKILLS" "$LOG_FILE_SHADOW" "$LOG_FILE_PAGINATED" "$LOG_FILE_WIDGETS" "$LOG_FILE_EXTRA" "$ORIGIN_LOG"
+  rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_NOTWINS"     "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_LLMSOFF" "$LOG_FILE_EDGE" "$LOG_FILE_OFF"     "$LOG_FILE_BADTABLES" "$LOG_FILE_NSOFF" "$LOG_FILE_NOSECTIONPAGES" "$LOG_FILE_NOLINKMD"     "$LOG_FILE_NOBUILDTIME" "$LOG_FILE_LLMSINDEXOFF" "$LOG_FILE_UNWIRED" "$LOG_FILE_NOLINKINDEXES" "$LOG_FILE_NOCOMPACT" "$LOG_FILE_STRICTSKILLS" "$LOG_FILE_SHADOW" "$LOG_FILE_PAGINATED" "$LOG_FILE_WIDGETS" "$LOG_FILE_EXTRA" "$ORIGIN_LOG" "$ORIGIN_REQUEST_LOG"
 }
 cleanup_exit() {
   kill_stray_hugo

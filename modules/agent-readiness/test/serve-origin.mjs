@@ -25,6 +25,11 @@
 //      a 500, which must read as "cannot tell" rather than as "absent", exist
 //      nowhere public and can only be staged.
 //   3. Builds are deterministic and offline.
+//   4. Every request is RECORDED, which is the only way to assert what the
+//      module did NOT ask for. A guard that refuses to probe a candidate, and
+//      a budget that stops after four, both leave their evidence in requests
+//      that were never issued -- and a published tree is silent about those.
+//      See REQUEST_LOG below.
 //
 // Three subcommands, so both runners drive it identically:
 //   node serve-origin.mjs serve [port]   start (backgrounded by the caller)
@@ -32,7 +37,7 @@
 //   node serve-origin.mjs stop           stop the process named in origin.pid
 import {createServer} from 'node:http';
 import {readFile, writeFile, unlink} from 'node:fs/promises';
-import {existsSync, readFileSync} from 'node:fs';
+import {existsSync, readFileSync, appendFileSync} from 'node:fs';
 import {join, resolve, normalize, extname} from 'node:path';
 import {dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -40,6 +45,23 @@ import {fileURLToPath} from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(here, 'fixture-origin');
 const PID_FILE = resolve(here, 'origin.pid');
+
+// One line per request, `<method> <path>`, for the whole run. The path is
+// FIXED here rather than passed in by a runner, because both runners invoke
+// this same file and a second place to keep in step is a second place to
+// forget; `tests/helpers.js` resolves it from the module root for the same
+// reason. It is gitignored by the repository's `*.log` class.
+//
+// The file records every build, not one, so the assertions built on it read
+// the SET of paths ever requested rather than a count per build. That is
+// deliberate: request counts per build were measured non-deterministic (one
+// route varied between 6 and 13 requests across runs), while "this path was
+// never requested by any build" is stable and is exactly what a refusal to
+// probe and an exhausted budget both claim.
+//
+// Written synchronously, so a request is on disk before its response is, and
+// the log is complete the moment the last build exits.
+const REQUEST_LOG = resolve(here, 'fixture-origin-requests.log');
 
 // The port is fixed because a Hugo configuration file cannot learn one at run
 // time, and the fixture's `source` URLs have to name it. 51313 is Hugo's own
@@ -68,6 +90,11 @@ function contentType(path) {
 async function handle(req, res) {
   const url = new URL(req.url, 'http://127.0.0.1');
   const path = decodeURIComponent(url.pathname);
+
+  // Recorded before anything is decided about it, so a route that rewrites
+  // the path (/encoded/, /weird/) or refuses it still leaves the request the
+  // client actually made.
+  appendFileSync(REQUEST_LOG, `${req.method} ${path}\n`, 'utf8');
 
   if (path === '/ready') {
     res.writeHead(200, {'content-type': 'text/plain'});
@@ -138,6 +165,11 @@ async function serve(port) {
     process.stderr.write(`origin failed to listen on ${port}: ${err.message}\n`);
     process.exit(1);
   });
+  // Truncated BEFORE the socket opens, so the log holds this run's requests
+  // and only this run's, and no request can be recorded and then discarded.
+  // Both runners stop a previous origin before starting their own, so there is
+  // exactly one writer.
+  await writeFile(REQUEST_LOG, '', 'utf8');
   await new Promise((done) => server.listen(port, '127.0.0.1', done));
   await writeFile(PID_FILE, String(process.pid), 'utf8');
   process.stdout.write(`origin listening on http://127.0.0.1:${port}/\n`);
