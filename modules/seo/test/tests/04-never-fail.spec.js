@@ -18,6 +18,7 @@ import {
   badtypesDir,
   configuredDir,
   generatedDir,
+  hometitleDir,
   graph,
   graphDir,
   linkRels,
@@ -288,12 +289,19 @@ test('the JSON-LD keywords skip map items in BOTH consumer lists', () => {
   assert.ok(warnCount(/expects a list of scalar values/) >= 1, 'and it says so');
 });
 
-test('no emitted file in any build tree contains a Go map debug string', () => {
-  // The whole-class net: whichever surface a stringification of a map-shaped
-  // consumer value leaks through, the debug form always carries the
-  // substring "map[". Every tree the suite builds is in the net, because a
-  // net that skips a tree is a net whichever environment introduces the next
-  // stringification can slip through.
+test('no emitted file in any build tree contains a Go debug marker', () => {
+  // The whole-class net, in two shapes. A stringified map-shaped consumer
+  // value always carries the substring "map[", whichever surface it leaks
+  // through. A value of the wrong TYPE for its verb -- an unquoted number
+  // reaching a "%s" -- carries "%!" instead, and that one is easy to miss by
+  // eye because the rest of the string around it reads normally.
+  //
+  // Every tree the suite builds is in the net, because a net that skips a
+  // tree is a net whichever environment introduces the next stringification
+  // can slip through. That is not hypothetical: the tree added with the home
+  // title work was left out of this list at first, and it is the tree that
+  // publishes the only page in the suite carrying both a number and a suffix.
+  const MARKERS = ['map[', '%!'];
   let scanned = 0;
   for (const dir of [
     publicDir,
@@ -306,12 +314,16 @@ test('no emitted file in any build tree contains a Go map debug string', () => {
     graphDir,
     sitenameDir,
     generatedDir,
+    hometitleDir,
   ]) {
     for (const entry of readdirSync(dir, {recursive: true, withFileTypes: true})) {
       if (!entry.isFile() || !/\.(html|xml|json|txt)$/.test(entry.name)) continue;
       const file = join(entry.parentPath, entry.name);
       scanned += 1;
-      assert.ok(!readFileSync(file, 'utf8').includes('map['), `${file} contains "map["`);
+      const body = readFileSync(file, 'utf8');
+      for (const marker of MARKERS) {
+        assert.ok(!body.includes(marker), `${file} contains ${JSON.stringify(marker)}`);
+      }
     }
   }
   assert.ok(scanned > 0, 'the scan actually visited emitted files');

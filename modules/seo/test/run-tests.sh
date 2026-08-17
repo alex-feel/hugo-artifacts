@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Builds the fixture site TEN TIMES with hugo (a BUILD, not a server: no port
+# Builds the fixture site ELEVEN TIMES with hugo (a BUILD, not a server: no port
 # binding, and a finite build exits by itself) and runs the Node
-# build-output assertion suite against all ten trees.
+# build-output assertion suite against all eleven trees.
 #
 # The environments are the point of this suite. The default environment omits
 # [seo.alternates], [seo.links] and [seo] content_license entirely, so it
@@ -25,7 +25,12 @@
 # environment wires the generated-image hook to a fixture partial and also sets
 # a site default image, the only shape that can tell a per-page composed card
 # from the site-wide banner, since either one alone renders as "an og:image is
-# present".
+# present". The `hometitle` environment declares a home-page SEO title and a
+# site-wide title suffix, the only shape that exercises either branch of
+# resolve/title.html: nowhere else is a suffix configured at all, and nowhere
+# else does a home page state a headline of its own. Its third language
+# declares nothing, which is what pins the fallback arm while the suffix is in
+# force -- a declaring home leaves that arm unrendered.
 #
 # Follows the repository's hugo process lifecycle rule with a pre-launch
 # process check, and hard-fails on any deprecation or error output in any
@@ -44,11 +49,12 @@ LOG_FILE_PAGINATION="$HERE/hugo-build-pagination.log"
 LOG_FILE_GRAPH="$HERE/hugo-build-graph.log"
 LOG_FILE_SITENAME="$HERE/hugo-build-sitename.log"
 LOG_FILE_GENERATED="$HERE/hugo-build-generated.log"
+LOG_FILE_HOMETITLE="$HERE/hugo-build-hometitle.log"
 
 # The logs are retained after a successful run so the documented re-run recipe
 # can read them; they are gitignored at the repo root. Only an interrupt
 # discards them mid-run.
-trap 'rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_SUBPATH" "$LOG_FILE_BADTYPES" "$LOG_FILE_OFFSWITCH" "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_PAGINATION" "$LOG_FILE_GRAPH" "$LOG_FILE_SITENAME" "$LOG_FILE_GENERATED"' INT TERM
+trap 'rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_SUBPATH" "$LOG_FILE_BADTYPES" "$LOG_FILE_OFFSWITCH" "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_PAGINATION" "$LOG_FILE_GRAPH" "$LOG_FILE_SITENAME" "$LOG_FILE_GENERATED" "$LOG_FILE_HOMETITLE"' INT TERM
 
 # `pgrep -x` matches the process NAME, the semantic twin of the tasklist
 # IMAGENAME filter below. `-f` would match the whole command line, and this
@@ -100,6 +106,7 @@ build pagination public/pagination "$LOG_FILE_PAGINATION"
 build graph public/graph "$LOG_FILE_GRAPH"
 build sitename public/sitename "$LOG_FILE_SITENAME"
 build generated public/generated "$LOG_FILE_GENERATED"
+build hometitle public/hometitle "$LOG_FILE_HOMETITLE"
 
 export FIXTURE_PUBLIC="$FIXTURE_DIR/public/baseline"
 export FIXTURE_PUBLIC_CONFIGURED="$FIXTURE_DIR/public/configured"
@@ -111,6 +118,7 @@ export FIXTURE_PUBLIC_PAGINATION="$FIXTURE_DIR/public/pagination"
 export FIXTURE_PUBLIC_GRAPH="$FIXTURE_DIR/public/graph"
 export FIXTURE_PUBLIC_SITENAME="$FIXTURE_DIR/public/sitename"
 export FIXTURE_PUBLIC_GENERATED="$FIXTURE_DIR/public/generated"
+export FIXTURE_PUBLIC_HOMETITLE="$FIXTURE_DIR/public/hometitle"
 export HUGO_BUILD_LOG="$LOG_FILE"
 export HUGO_BUILD_LOG_CONFIGURED="$LOG_FILE_CONFIGURED"
 export HUGO_BUILD_LOG_SUBPATH="$LOG_FILE_SUBPATH"
@@ -121,6 +129,7 @@ export HUGO_BUILD_LOG_PAGINATION="$LOG_FILE_PAGINATION"
 export HUGO_BUILD_LOG_GRAPH="$LOG_FILE_GRAPH"
 export HUGO_BUILD_LOG_SITENAME="$LOG_FILE_SITENAME"
 export HUGO_BUILD_LOG_GENERATED="$LOG_FILE_GENERATED"
+export HUGO_BUILD_LOG_HOMETITLE="$LOG_FILE_HOMETITLE"
 HUGO_VERSION="$(hugo version | sed -E 's/^hugo v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
 export HUGO_VERSION
 

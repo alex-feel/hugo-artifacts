@@ -204,7 +204,7 @@ The full annotated surface:
 | Key | Type | Default | Purpose |
 | --- | --- | --- | --- |
 | `enable` | bool | `true` | Global kill switch. `false` emits nothing anywhere. |
-| `title_suffix` | string | `""` | Appended to `<title>` only, never to `og:title` or `headline`. The home page never gets the suffix. |
+| `title_suffix` | string | `""` | Appended to `<title>` only, never to `og:title` or `headline`. The home page never gets the suffix, whatever else it declares -- see Home page titles below. |
 | `description` | string | `""` | Site-wide fallback description, last link of the description chain. |
 | `content_license` | string | `""` | Absolute URL of the license covering the site's editorial content. When set, emits `"license"` on the `WebPage`, `CollectionPage` and article-class (`Article` / `BlogPosting` / `NewsArticle`) nodes -- the nodes that represent the page's own editorial content. `license` is a schema.org `CreativeWork` property, and other `CreativeWork` subtypes this module emits (`WebSite`, `ProfilePage`, `SoftwareApplication`, `VideoObject`, `ImageObject`) could carry it validly; they deliberately do not, because a site-wide content license describes the page you are reading rather than the site entity or an embedded asset. It is never attached to `Person`, `Organization`, `Offer` or `BreadcrumbList`, where it would not be valid at all. Unset emits nothing. |
 | `default_image` | string | `""` | Site-wide image fallback. Resource path under `assets/`, site-root path for a `static/` file (e.g. `/img/og.png`), or absolute URL. Applied only when no page-level image resolves; a site-root path keeps the `baseURL` path on a subpath deployment. |
@@ -282,7 +282,7 @@ The module reads Hugo-native front-matter fields FIRST wherever they carry the r
 
 | Native field | Feeds |
 | --- | --- |
-| `title` | `<title>`, `og:title`, `twitter:title`, `Article.headline`, `WebPage.name`, `Product.name`, `VideoObject.name`, `SoftwareApplication.name`, `mainEntity.name` |
+| `title` | `<title>` (every page except the home page -- see Home page titles below), `og:title`, `twitter:title`, `Article.headline`, `WebPage.name`, `Product.name`, `VideoObject.name`, `SoftwareApplication.name`, `mainEntity.name` |
 | `description` | meta description, `og:description`, `twitter:description`, JSON-LD `description` |
 | `summary` (or `.Summary`) | description fallback when `description` is empty (plainified, truncated) |
 | `date` | `article:published_time`, `datePublished`, `uploadDate`, `dateCreated` (fallback) |
@@ -300,6 +300,23 @@ The module reads Hugo-native front-matter fields FIRST wherever they carry the r
 The full new-key surface under `seo:` is: `title`, `description`, `canonical`, `robots`, `robots_bots`, `type`, `og_type`, `image`, `images`, `image_alt`, `same_as`, `authors`, `breadcrumb_trails`, `disable`, `allow_index_nonprod`, `robots_expiry`, `organization.on_page`, the four type tables `product`, `offer`, `software`, `video`, `profile`, and the `date_published`/`date_modified` overrides. The examples below show each page shape.
 
 Note: `seo.disable` is type-dependent. As a boolean, `seo.disable: true` on a page is the per-page kill switch -- it suppresses the ENTIRE SEO head surface for that page (title, canonical, OG, Twitter, robots, and all JSON-LD), the per-page counterpart to the site-level `params.seo.enable = false`, intended for hand-templated pages. As a slice, `params.seo.disable = ["VideoObject", ...]` in the site config suppresses individual JSON-LD node types only (see Configuration and Extension Hooks).
+
+### Home page titles
+
+The home page is the one page whose `<title>` does not follow the page title by itself. It follows the title the page DECLARES -- `seo.title`, or the deprecated `meta_title` alias -- and falls back to `site.Title` when the page declares neither. The home page's own `title` front matter is deliberately outside that chain: it names the page for menus and headings and is routinely the word "Home", which makes a worse search headline than the site's own name.
+
+Every other surface reads the full chain on the home page exactly as it does everywhere else, so `og:title`, `twitter:title` and `WebPage.name` still follow `title` there. A home page may therefore present its content title to a share card while its search result carries the brand -- and a home page that wants one string everywhere writes it into `seo.title`.
+
+The suffix never reaches the home page either, whatever it declares: a home `<title>` is never `Home | Acme` or `Acme | Acme`. A home page that wants a suffixed headline writes the whole string, suffix included, into `seo.title`.
+
+```yaml
+# content/_index.md
+---
+title: 'Home' # names the page in menus and headings; reaches og:title only when seo.title is absent
+seo:
+  title: 'Acme Widgets -- Industrial Fasteners Since 1974' # the search headline
+---
+```
 
 ### Plain page (no content schema -- WebPage + BreadcrumbList only)
 
@@ -635,7 +652,7 @@ Sites carrying legacy `meta_*`-style front matter (`meta_title`, `meta_descripti
 
 The module ships `layouts/` plus the two identity files, this README, and a `test/` directory carrying its validation suite; it needs no `assets/`, `static/`, `data/`, `i18n/`, `content/`, or `archetypes/` (SEO metadata is fully derived from consumer front matter and site params).
 
-`test/` holds a Hugo fixture site and Node build-output assertions, run with `bash modules/seo/test/run-tests.sh` (or `run-tests.cmd` on Windows). It builds the fixture ten times -- with `[seo.alternates]`, `[seo.links]` and `content_license` unset and then set, under a `baseURL` that carries a path, with those namespaces written as bare scalars, with the kill switch off, with a second language whose params set a noindex baseline, with a two-language paginated section, with `jsonld_container` switched to `"graph"`, with the site's name and its publisher's name set to different strings, and with the generated-image hook wired alongside a site default image -- because a surface that is always on is indistinguishable from one that works unless both are checked, a URL that drops the baseURL path is indistinguishable from a correct one at a domain root, a URL pinned to the first pager is indistinguishable from a correct one until a document is served from a pager, the `@graph` serialization site is reached by no other build, the two ends of the site-name chain are indistinguishable until they resolve to different strings, and a hook ranked below the site fallback is indistinguishable from one ranked above it until both are configured at once. See [`test/README.md`](test/README.md). All partials live under `layouts/_partials/seo/` in three override tiers: RENDERERS at the `seo/` root change WHAT is output, RESOLVERS under `seo/resolve/` change HOW a value is chosen, NODE BUILDERS under `seo/jsonld/` change ONE schema type's shape; `seo/lib/` holds internal cross-cutting utilities.
+`test/` holds a Hugo fixture site and Node build-output assertions, run with `bash modules/seo/test/run-tests.sh` (or `run-tests.cmd` on Windows). It builds the fixture eleven times -- with `[seo.alternates]`, `[seo.links]` and `content_license` unset and then set, under a `baseURL` that carries a path, with those namespaces written as bare scalars, with the kill switch off, with a second language whose params set a noindex baseline, with a two-language paginated section, with `jsonld_container` switched to `"graph"`, with the site's name and its publisher's name set to different strings, with the generated-image hook wired alongside a site default image, and with a home page that declares its own search headline under a site-wide title suffix -- because a surface that is always on is indistinguishable from one that works unless both are checked, a URL that drops the baseURL path is indistinguishable from a correct one at a domain root, a URL pinned to the first pager is indistinguishable from a correct one until a document is served from a pager, the `@graph` serialization site is reached by no other build, the two ends of the site-name chain are indistinguishable until they resolve to different strings, a hook ranked below the site fallback is indistinguishable from one ranked above it until both are configured at once, and the home page is the one page whose `<title>` does not follow the page title, which no build lacking both a declared headline and a suffix can tell apart. See [`test/README.md`](test/README.md). All partials live under `layouts/_partials/seo/` in three override tiers: RENDERERS at the `seo/` root change WHAT is output, RESOLVERS under `seo/resolve/` change HOW a value is chosen, NODE BUILDERS under `seo/jsonld/` change ONE schema type's shape; `seo/lib/` holds internal cross-cutting utilities.
 
 ```text
 modules/seo/
@@ -651,7 +668,7 @@ modules/seo/
         alternates.html                    # Renderer. Alternate representations (opt-in allow-list) plus the static IANA link relations. Called from head-meta.html after feed discovery; emits nothing when [seo.alternates] and [seo.links] are unset.
         head-jsonld.html                   # Renderer/dispatcher. Collects node dicts from jsonld/* + the jsonld-extra hook, emits separate <script> blocks (default) or one @graph block.
         resolve/
-          title.html                       # Returns {title, titleFull} via the title fallback chain.
+          title.html                       # Returns {title, titleFull} via the title fallback chain; titleFull adds the suffix off the home page and follows the declared title on it.
           site-name.html                   # Returns the site's name (website name -> organization name -> site.Title) for og:site_name, WebSite.name, the OpenSearch title and the feed title. Takes the Site, not a Page; called via partialCached.
           description.html                 # Returns the unified description string shared by meta, OG, Twitter, and JSON-LD.
           canonical.html                   # Returns the absolute canonical URL.
@@ -671,6 +688,7 @@ modules/seo/
           time.html                        # Returns an RFC 3339 string for any time.Time value, or "" (with a deduplicated warn) when unparseable, or "" silently when zero; the single date-format authority.
           num.html                         # Returns the parsed decimal number (int or float) for any author-fed numeric value, or "" (with a deduplicated warn) when unparseable; octal-safe, overflow-safe.
           as-scalar-list.html              # Returns a consumer-authored value as a slice of SCALARS, dropping and warning once per non-scalar entry; the list shape every string-valued repeated key reads.
+          as-scalar.html                   # Returns a consumer-authored value as ONE scalar string, warning once and yielding "" for a table, list or boolean; the single-value shape the title keys read.
           as-map.html                      # Returns a consumer-authored value as a map, or an empty map with one deduplicated warn when it is anything else; the map shape every table-valued key reads.
           as-map-list.html                 # Returns a consumer-authored value as a slice of MAPS, accepting a single map as a one-item list and warning once per non-map entry; the shape every repeated-table key reads.
         jsonld/
@@ -687,7 +705,7 @@ modules/seo/
           softwareapplication.html         # Returns the SoftwareApplication node dict (co-typing, enum-validated applicationCategory; self-gates).
           videoobject.html                 # Returns the VideoObject node dict (self-gates to name + thumbnailUrl + uploadDate).
           image-object.html                # Returns an ImageObject dict (or bare URL string) from a normalized image dict; reused by every image-carrying node.
-  test/                                    # Validation suite: a Hugo fixture site built ten times (baseline, configured, subpath, badtypes, offswitch, multilingual, pagination, graph, sitename, generated) plus Node build-output assertions. See test/README.md.
+  test/                                    # Validation suite: a Hugo fixture site built eleven times (baseline, configured, subpath, badtypes, offswitch, multilingual, pagination, graph, sitename, generated, hometitle) plus Node build-output assertions. See test/README.md.
 ```
 
 Two consumer-authored hook files (`layouts/_partials/seo/head-extra.html` and `layouts/_partials/seo/jsonld-extra.html`) are intentionally NOT shipped; the module calls them only behind `templates.Exists` guards, so both are zero-cost until you opt in. The generated-image hook is guarded the same way but named by `[params.seo] image_partial` rather than by convention, so the partial it points at can live in a sibling module's own namespace without that module having to write into this one's.

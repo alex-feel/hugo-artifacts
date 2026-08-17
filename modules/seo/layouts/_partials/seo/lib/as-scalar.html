@@ -1,0 +1,46 @@
+{{/*
+  seo/lib/as-scalar.html -- internal utility.
+
+  Purpose: return a consumer-authored value as ONE scalar string, safe to
+  print into a title, an attribute value or a JSON-LD name.
+
+  WHY IT IS SEPARATE FROM as-scalar-list.html: that helper answers "give me
+  the usable ITEMS of a list", and its diagnostic says exactly that. The keys
+  handled HERE -- seo.title with its meta_title alias, seo.title_suffix with
+  its legacy alias, and the organization name the home title falls back to --
+  are SINGLE values. Reporting a table written under seo.title as "one or
+  more entries" would describe a list the consumer never wrote, and a caller
+  handed back a one-item slice where it expected a string would print the
+  slice rather than the string.
+
+  Behavior: nil becomes ""; a table, list or boolean becomes "" and warns
+  ONCE per config key through seo/lib/warn.html; any other scalar becomes its
+  string form. That last clause is the point of the helper as much as the
+  warning is: an unquoted number reaching a "%s" verb publishes Go's
+  verb-mismatch debug form into the title, silently and with exit 0, and a
+  table publishes Go's map form the same way. An emptied-out value lets the
+  caller's `with` chain fall through to its next source, exactly as an unset
+  key does.
+
+  Expected context (dict):
+  - .value (any)    - the consumer-authored value.
+  - .key   (string) - the config key, named in the warning.
+
+  Return value: a string, possibly "". ONE terminal return.
+*/}}
+
+{{- $out := "" -}}
+{{- $v := .value -}}
+{{- $key := .key -}}
+
+{{- if ne $v nil -}}
+  {{- if or (reflect.IsMap $v) (reflect.IsSlice $v) (eq (printf "%T" $v) "bool") -}}
+    {{- partial "seo/lib/warn.html" (dict
+        "key" (printf "seo:warn:non-scalar:%s" $key)
+        "message" (printf "[seo] Ignoring %s: it expects one scalar value, but a table, list, or boolean arrived, so that key is treated as unset." $key)) -}}
+  {{- else -}}
+    {{- $out = printf "%v" $v -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $out -}}

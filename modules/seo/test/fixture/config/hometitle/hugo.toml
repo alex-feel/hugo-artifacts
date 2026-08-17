@@ -1,0 +1,80 @@
+# The `hometitle` environment: the home page states its own search headline,
+# and a title suffix is in force site-wide.
+#
+# It exists because the home page is the one page whose <title> does not follow
+# the page title, and no other environment can see that rule at all. Everywhere
+# else `title_suffix` is unset -- so the suffix branch of resolve/title.html
+# renders in no build -- and no home page anywhere declares an SEO title, so
+# the home <title> lands on the site title whether the rule is right or wrong.
+#
+# The English home is the sharp case: its cascaded seo.title, its own `title`
+# front matter ('SEO Fixture Home') and the site title ('SEO Fixture') are
+# three DIFFERENT strings, so the <title> it publishes names which of the three
+# the rule actually follows. The Russian home carries the legacy `meta_title`
+# spelling instead, and it is a second LANGUAGE rather than a second page
+# because a site has exactly one home per language -- the alias has nowhere
+# else to be tested on the branch that reads it. That home is also file-less
+# (content-ru/ ships no _index.md), so Hugo answers .Title with the site title
+# there, and only an alias that genuinely reaches the <title> can move it.
+defaultContentLanguage = 'en'
+
+[languages]
+
+  [languages.en]
+    locale = 'en-US'
+    weight = 1
+
+  [languages.ru]
+    locale = 'ru-RU'
+    weight = 2
+    contentDir = 'content-ru'
+
+  # The third language declares NOTHING, and it is the one that makes the
+  # suffix rule provable. Both cascades below restrict themselves to en and
+  # ru, so this home is undeclared by construction rather than by omission,
+  # and it is the ordinary consumer shape: a home page with a content title,
+  # on a site that configures a suffix. Without it the fallback arm of the
+  # resolver renders only in builds where the suffix is empty, and appending
+  # the suffix there -- publishing the "Acme | Acme" shape this module
+  # promises never happens -- changes no byte of any build in the suite.
+  [languages.de]
+    locale = 'de-DE'
+    weight = 3
+    contentDir = 'content-undeclared'
+
+# A home page declares its search headline through the SEO title, never
+# through its own `title`: that field names the page for menus and headings and
+# is routinely the word "Home", which is the worst possible search headline.
+[[cascade]]
+
+  [cascade.params.seo]
+    title = 'Fixture Home Search Headline'
+
+  [cascade.target]
+    kind = 'home'
+
+    # The sites matrix, not the `lang` key: `lang` was deprecated in v0.153.0
+    # and Hugo reports it, which this suite treats as a build failure.
+    [cascade.target.sites.matrix]
+      languages = ['en']
+
+# The deprecated alias, on the second language's home. seo.title would mask
+# it on a page carrying both, so the two spellings cannot share one home page.
+[[cascade]]
+
+  [cascade.params]
+    meta_title = 'Fixture Home Legacy Headline'
+
+  [cascade.target]
+    kind = 'home'
+
+    [cascade.target.sites.matrix]
+      languages = ['ru']
+
+[params]
+
+  [params.seo]
+    # Site-wide suffix: it must reach every non-home <title>, must reach no
+    # og:title anywhere, and must reach no home page even though both homes
+    # here publish a headline of their own.
+    title_suffix = ' | SEO Fixture'

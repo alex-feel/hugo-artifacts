@@ -6,7 +6,8 @@
 # English page cannot see the Russian baseline and emits an hreflang alternate
 # pointing at a noindexed URL -- the exact thing the hreflang block promises
 # never happens. The Russian language reads its content from `content-ru/`,
-# which no other environment mounts, so the translation exists only here.
+# which the `hometitle` environment also mounts; what is unique to this build
+# is the per-language noindex baseline, not the content directory.
 defaultContentLanguage = 'en'
 
 [languages]
