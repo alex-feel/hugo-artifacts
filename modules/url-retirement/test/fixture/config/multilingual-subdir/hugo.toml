@@ -1,0 +1,22 @@
+# The default language moved into its own directory, which is the mirror image
+# of every other multilingual build here: the site root retires and the redirect
+# runs / -> /en/ instead of /en/ -> /. Nothing else in the suite renders that
+# arm, so without this environment the rule would be written and never built.
+#
+# It also makes the root the retired URL, which is the one URL with a single
+# spelling -- the bare form of "/" is the empty string, which no host matches.
+defaultContentLanguageInSubdir = true
+
+defaultContentLanguage = 'en'
+
+[languages]
+
+  [languages.en]
+    weight = 1
+    title = 'URL Retirement Fixture'
+    contentDir = 'content'
+
+  [languages.de]
+    weight = 2
+    title = 'URL-Stilllegung'
+    contentDir = 'content-de'

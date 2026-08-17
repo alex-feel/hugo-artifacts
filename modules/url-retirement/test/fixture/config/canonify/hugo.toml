@@ -1,2 +1,21 @@
 baseURL = 'https://url-retirement.example/docs/'
 canonifyURLs = true
+
+# A SECOND LANGUAGE, not scenery: the redirect Hugo runs between the site root
+# and its default language is the one generated rule whose source path this
+# module has to build by hand rather than read off a page, so a base segment it
+# forgot to add would be visible in no other build -- every other multilingual
+# environment serves its site from the domain root.
+defaultContentLanguage = 'en'
+
+[languages]
+
+  [languages.en]
+    weight = 1
+    title = 'URL Retirement Fixture'
+    contentDir = 'content'
+
+  [languages.de]
+    weight = 2
+    title = 'URL-Stilllegung'
+    contentDir = 'content-de'

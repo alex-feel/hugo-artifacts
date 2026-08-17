@@ -39,6 +39,12 @@ export const multiPartialDir = dir(
 export const offDir = dir('FIXTURE_PUBLIC_OFF', 'fixture/public/off');
 // Two languages writing one _redirects file and two manifests.
 export const multilingualDir = dir('FIXTURE_PUBLIC_MULTILINGUAL', 'fixture/public/multilingual');
+// The same two languages with the default one moved into its own directory, so
+// the site root is the retired URL and the root redirect runs the other way.
+export const multiSubdirDir = dir(
+  'FIXTURE_PUBLIC_MULTISUBDIR',
+  'fixture/public/multilingual-subdir',
+);
 // A baseURL carrying a path: the only shape in which a rule that keeps the base
 // segment and one that drops it are different bytes.
 export const subpathDir = dir('FIXTURE_PUBLIC_SUBPATH', 'fixture/public/subpath');
@@ -62,6 +68,7 @@ const LOG_KEYS = {
   multiPartial: 'HUGO_BUILD_LOG_MULTIPARTIAL',
   off: 'HUGO_BUILD_LOG_OFF',
   multilingual: 'HUGO_BUILD_LOG_MULTILINGUAL',
+  multiSubdir: 'HUGO_BUILD_LOG_MULTISUBDIR',
   subpath: 'HUGO_BUILD_LOG_SUBPATH',
   canonify: 'HUGO_BUILD_LOG_CANONIFY',
   pagerpath: 'HUGO_BUILD_LOG_PAGERPATH',

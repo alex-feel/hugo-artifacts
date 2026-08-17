@@ -40,10 +40,14 @@ test('every shipped key is documented in the README', () => {
     assert.ok(body.includes(key), `${key} is shipped but absent from the README`);
 });
 
-test('the README documents both alias switches a consumer has to set', () => {
+// Three separate settings suppress three different stubs, and a consumer who
+// sets two of them still publishes the third. A switch missing from the README
+// is one nobody sets, and the rule that replaces its stub then never fires.
+test('the README documents all three stub switches a consumer has to set', () => {
   const body = readme();
   assert.match(body, /disableAliases/);
   assert.match(body, /pagination/);
+  assert.match(body, /disableDefaultSiteRedirect/);
 });
 
 test('the README states that the module cannot set them itself', () => {

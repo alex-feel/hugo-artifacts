@@ -1,7 +1,9 @@
-// A baseURL carrying a path, published two ways. Neither build is redundant: a
-// root-baseURL site cannot show the difference between a path that keeps the
-// base segment and one that drops it, and canonifyURLs is the only shape in
-// which .RelPermalink stops carrying that segment by itself.
+// A baseURL carrying a path, published two ways, in two languages. Neither
+// build is redundant: a root-baseURL site cannot show the difference between a
+// path that keeps the base segment and one that drops it, and canonifyURLs is
+// the only shape in which .RelPermalink stops carrying that segment by itself.
+// The second language is what puts the default site's redirect into a build
+// with a base segment at all.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {subpathDir, canonifyDir, readDoc, redirectRules, manifest} from './helpers.js';
@@ -42,4 +44,16 @@ test('the redirect map is byte-identical under canonifyURLs', () => {
 
 test('the manifest is byte-identical under canonifyURLs', () => {
   assert.equal(readDoc(canonifyDir, 'url-manifest.txt'), readDoc(subpathDir, 'url-manifest.txt'));
+});
+
+// Both of these builds carry a second language for one reason: the redirect
+// between the site root and the default language's directory is the only
+// generated rule whose source path is BUILT rather than read off a page, so a
+// base segment missing from it would show up in no other build -- every other
+// multilingual environment serves its site from the domain root.
+test("the default site's redirect carries the base segment on both sides", () => {
+  const byFrom = new Map(redirectRules(subpathDir).map((r) => [r.from, r.to]));
+  assert.equal(byFrom.get(`${BASE}/en`), `${BASE}/`);
+  assert.equal(byFrom.get(`${BASE}/en/`), `${BASE}/`);
+  assert.ok(!byFrom.has('/en/'), 'the source path was emitted relative to the domain');
 });
