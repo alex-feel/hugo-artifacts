@@ -27,6 +27,7 @@ test('the data file ships the keys this module is configured with', () => {
     'enable',
     'extra',
     'output_formats',
+    'pagination_path',
     'rules',
     'status',
     'trailing_slash',

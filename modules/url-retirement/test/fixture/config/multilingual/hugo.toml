@@ -1,11 +1,35 @@
 defaultContentLanguage = 'en'
 
 [languages]
+
   [languages.en]
     weight = 1
     title = 'URL Retirement Fixture'
     contentDir = 'content'
+
   [languages.de]
     weight = 2
     title = 'URL-Stilllegung'
     contentDir = 'content-de'
+
+    # German localizes the pagination segment, which is the shape that makes
+    # the first-pager rule per-language: Hugo publishes /de/posts/seite/1/ here
+    # and /posts/page/1/ in English.
+    #
+    # pagerSize and disableAliases are RESTATED rather than inherited. A
+    # language's [pagination] table REPLACES the site-wide one instead of
+    # merging with it, so a block naming only `path` silently reverts pagerSize
+    # to Hugo's default of 10 and disableAliases to false -- which would publish
+    # the very stub this module's installation instructions turn off, for that
+    # language alone.
+    [languages.de.pagination]
+      path = 'seite'
+      pagerSize = 2
+      disableAliases = true
+
+    # Nothing in this language is paginated across more than one pager, so the
+    # module has no second-pager URL to read the segment off and this is the
+    # only place it can learn it. English needs no such key: its own pagers
+    # name the segment.
+    [languages.de.params.url_retirement.redirects]
+      pagination_path = 'seite'

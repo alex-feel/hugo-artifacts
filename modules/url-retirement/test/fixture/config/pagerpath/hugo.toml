@@ -1,0 +1,15 @@
+# A site that renamed Hugo's pagination segment, in a shape where the module
+# can DERIVE it: /posts/ runs past one pager, so its second pager's URL names
+# the segment exactly. Nothing here sets url_retirement.redirects.pagination_path,
+# so every rule this build emits carrying `seite` was read off the site rather
+# than off configuration -- and /notes/, which fits on a single pager and can
+# name nothing itself, gets the segment its language derived elsewhere.
+#
+# All three keys are restated rather than inherited. An environment overlay
+# merges, but the language-level table this mirrors REPLACES, and a build whose
+# pagerSize or disableAliases quietly changed would prove something other than
+# what it claims.
+[pagination]
+  path = 'seite'
+  pagerSize = 2
+  disableAliases = true

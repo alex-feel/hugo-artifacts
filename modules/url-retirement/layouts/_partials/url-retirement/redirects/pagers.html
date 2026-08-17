@@ -1,0 +1,82 @@
+{{/*
+  url-retirement/redirects/pagers.html -- INTERNAL (resolver tier).
+
+  Purpose: turns every paginator the site registered into the rule that keeps
+  its FIRST pager answering -- /blog/page/1/ -> /blog/.
+
+  Why this rule has to exist. Hugo publishes /blog/page/1/ as an alias of the
+  list page whenever a template paginates, and it publishes it for EVERY such
+  list: a section with a single pager gets one, and so does a paginated home
+  page. `[pagination] disableAliases = true`, which this module's README
+  requires so a real redirect can win over a published stub, stops Hugo writing
+  that file -- and nothing replaces it, because the URL is minted by the
+  paginator and appears in no page's .Aliases. Adopting the module would
+  otherwise turn a URL that answered 200 into a 404, which is the exact failure
+  the module exists to prevent.
+
+  The rule is emitted for every registered paginator, unconditionally. Whether
+  Hugo still publishes the stub is decided by `[pagination] disableAliases`,
+  which no template can read -- site.Config exposes only the services and
+  privacy blocks -- so a site that leaves that switch at Hugo's default gets a
+  rule that never fires, because the published file wins. That is the same
+  precedence the module's own installation instructions turn on.
+
+  The pagination segment (`page` in /blog/page/2/) is configurable AND
+  localizable, and is likewise unreadable from a template, so it is DERIVED from
+  the evidence: pager two's URL is the list URL plus that segment plus `/2/`, so
+  a registered paginator with more than one pager names the segment exactly, for
+  its own language. A language whose every registered list fits on one pager
+  leaves nothing to derive from, and only there does the configured
+  redirects.pagination_path apply.
+
+  Configuration is read per LANGUAGE for that key alone, because Hugo's own
+  pagination.path is a per-language setting and a German site really does
+  publish /de/blog/seite/1/. Every other key -- status, trailing_slash -- is
+  taken from the rendering language exactly as the alias rules take it, since
+  /_redirects is one file that cannot hold two answers; redirects/lines.html
+  reports a site that sets those per language.
+
+  Context (dict):
+  - .cfg (dict) Resolved configuration from url-retirement/config.html, for the
+    language rendering the document.
+
+  Return value: slice of dicts with `from`, `to` and `status`. Unsorted and
+  unchecked for conflicts, which redirects/rules.html owns for the merged set.
+
+  One terminal return.
+*/}}
+
+{{- $cfg := .cfg -}}
+{{- $status := $cfg.redirects.status -}}
+{{- $mode := $cfg.redirects.trailing_slash -}}
+{{- $rules := slice -}}
+
+{{- range $site := hugo.Sites -}}
+  {{- $lang := $site.Language.Lang -}}
+  {{- $registered := hugo.Store.GetSortedMapValues (printf "url-retirement:pager-firsts:%s" $lang) -}}
+  {{- with $registered -}}
+    {{- $base := strings.TrimSuffix "/" (urls.Parse $site.BaseURL).Path -}}
+
+    {{/* Evidence first, configuration second: a segment read off a real pager
+         URL cannot be stale, while the configured one is a value the site
+         restates by hand. */}}
+    {{- $derived := hugo.Store.GetSortedMapValues (printf "url-retirement:pager-path:%s" $lang) -}}
+    {{- $segment := "" -}}
+    {{- with $derived -}}
+      {{- $segment = index . 0 -}}
+    {{- else -}}
+      {{- $segment = (partial "url-retirement/config.html" (dict "page" $site.Home)).redirects.pagination_path -}}
+    {{- end -}}
+
+    {{- range $entry := $registered -}}
+      {{- $target := partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" $entry.to) -}}
+      {{- $from := partial "url-retirement/lib/prefix-url.html" (dict
+          "base" $base "url" (printf "%s%s/1/" $entry.dir $segment)) -}}
+      {{- range $spelling := partial "url-retirement/lib/spellings.html" (dict "url" $from "mode" $mode) -}}
+        {{- $rules = $rules | append (dict "from" $spelling "to" $target "status" $status) -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $rules -}}

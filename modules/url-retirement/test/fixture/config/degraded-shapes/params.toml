@@ -11,6 +11,9 @@
     [url_retirement.redirects.rules]
       not = 'a path'
 
+    [url_retirement.redirects.pagination_path]
+      not = 'a segment'
+
   [url_retirement.manifest]
     output_formats = 'maybe'
     extra = ['/kept.html', 'no-leading-slash.html', 'https://elsewhere.example/x']

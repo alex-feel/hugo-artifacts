@@ -44,10 +44,20 @@ test('redirects.status replaces the default 301 on generated rules only', () => 
   assert.equal(authored.status, '301', 'an authored rule must be copied, not rewritten');
 });
 
-test('trailing_slash = slash emits one spelling per alias, the one production served', () => {
+test('trailing_slash = slash emits one spelling per retired URL, the one production served', () => {
   // Selected by the configured status, which is what tells a generated rule
   // from an authored one whose target happens to look the same.
   const generated = redirectRules(configuredDir).filter((r) => r.status === '308');
-  assert.equal(generated.length, 3, 'three aliases, one rule each');
-  for (const rule of generated) assert.ok(rule.from.endsWith('/'), `${rule.from} lost its slash`);
+  assert.deepEqual(
+    generated.map((r) => r.from),
+    [
+      '/CaseSensitive/Old-Note/',
+      '/legacy/first-post/',
+      '/notes/page/1/',
+      '/old-post-one/',
+      '/page/1/',
+      '/posts/page/1/',
+    ],
+    'three aliases and three registered first pagers, one rule each',
+  );
 });

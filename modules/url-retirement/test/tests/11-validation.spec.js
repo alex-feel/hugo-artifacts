@@ -35,6 +35,10 @@ const SHAPE_FAULTS = [
     match: /Ignoring url_retirement\.redirects\.rules.*map\[not:a path\]/,
   },
   {
+    what: 'a table given to the pagination segment',
+    match: /Ignoring url_retirement\.redirects\.pagination_path.*map\[not:a segment\]/,
+  },
+  {
     what: 'a manifest.extra entry that is not server-relative',
     match: /Ignoring the url_retirement\.manifest\.extra entry "no-leading-slash\.html"/,
   },

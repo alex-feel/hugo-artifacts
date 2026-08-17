@@ -26,7 +26,8 @@
   - .page (Page) The page carrying the document being rendered.
 
   Return value: dict with enable, redirects (enable, rules, status,
-  trailing_slash), manifest (enable, output_formats, extra) and lang.
+  trailing_slash, pagination_path), manifest (enable, output_formats, extra)
+  and lang.
 
   One terminal return.
 */}}
@@ -197,6 +198,31 @@
   {{- end -}}
 {{- end -}}
 {{- $redirects = merge $redirects (dict "trailing_slash" $slash) -}}
+
+{{/* ---- redirects.pagination_path: ONE URL segment, the site's own
+     pagination.path, which no template can read. It is consulted only where the
+     module cannot derive the segment from a pager URL, so a wrong value is
+     invisible until a language's every registered list fits on one pager.
+     Rejected the same way as the other scalars, plus two checks the file format
+     forces: whitespace ends a field in /_redirects, and a value carrying `/`
+     would build a nested path no paginator ever mints. ---- */}}
+{{- $pagerPath := "page" -}}
+{{- $rawPagerPath := index (index $sub "redirects") "pagination_path" -}}
+{{- if or (reflect.IsMap $rawPagerPath) (reflect.IsSlice $rawPagerPath) (eq (printf "%T" $rawPagerPath) "bool") -}}
+  {{- partial "url-retirement/lib/warn.html" (dict
+      "key" (printf "url-retirement:warn:pagination-path-shape:%v" $rawPagerPath)
+      "message" (printf "[url-retirement] Ignoring url_retirement.redirects.pagination_path: it expects one URL segment written as a single value but was given %q; using %q instead." (printf "%v" $rawPagerPath) $pagerPath)) -}}
+{{- else if ne $rawPagerPath nil -}}
+  {{- $cand := trim (printf "%v" $rawPagerPath) " \t\n\r" -}}
+  {{- if and $cand (not (findRE `[\s/]` $cand)) -}}
+    {{- $pagerPath = $cand -}}
+  {{- else -}}
+    {{- partial "url-retirement/lib/warn.html" (dict
+        "key" (printf "url-retirement:warn:bad-pagination-path:%s" $cand)
+        "message" (printf "[url-retirement] Ignoring url_retirement.redirects.pagination_path value %q (expected one URL segment, with no slash and no whitespace); using %q instead." $cand $pagerPath)) -}}
+  {{- end -}}
+{{- end -}}
+{{- $redirects = merge $redirects (dict "pagination_path" $pagerPath) -}}
 
 {{/* ---- manifest.extra: a list of URLs. A bare string is accepted as a
      one-element list, because writing one value where a list is expected is a

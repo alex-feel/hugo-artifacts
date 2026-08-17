@@ -15,6 +15,13 @@ const FAULTS = [
     match: /Ignoring url_retirement\.redirects\.trailing_slash value "sometimes"/,
   },
   {
+    // A slash would build a nested path no paginator ever mints, so the rule
+    // would claim a URL the site never served while the real one stayed
+    // stranded -- which is why the value is rejected rather than passed through.
+    what: 'a pagination segment carrying a path separator',
+    match: /Ignoring url_retirement\.redirects\.pagination_path value "seite\/1"/,
+  },
+  {
     what: 'a table given to a key that expects a list',
     match: /Ignoring url_retirement\.manifest\.extra/,
   },
