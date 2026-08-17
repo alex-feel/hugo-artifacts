@@ -46,6 +46,7 @@ const PUBLISHED = [
   ['fixture-outside', 'skill-md'],
   ['fixture-outside-dotdot', 'skill-md'],
   ['fixture-outside-abs', 'skill-md'],
+  ['fixture-prefix', 'skill-md'],
   ['fixture-selfref', 'skill-md'],
   ['fixture-unverifiable', 'skill-md'],
   ['fixture-cdn-archive', 'archive'],
@@ -137,7 +138,7 @@ test('the index parses and declares its schema', () => {
 
 // The metadata block is a fixed size no matter how many skills the index
 // carries, so this budget holds for a site publishing fifty of them exactly
-// as it does for the fixture's fourteen. It is generous enough for a longer
+// as it does for the fixture's seventeen. It is generous enough for a longer
 // configured `$schema` URI, which is the only member here that can grow.
 const HEAD_BUDGET = 300;
 
@@ -383,6 +384,18 @@ test('a description that disagrees with the skill is published, and warned about
   const entry = index().skills.find((s) => s.name === 'fixture-desc');
   assert.equal(entry.description, 'A paraphrase of the description this skill actually declares.');
   assert.equal(warnCount(/agent skill "fixture-desc" advertises a description that differs/), 1);
+
+  // And it is the ONLY entry that draws this warning. Two others used to, by
+  // accident -- their configured descriptions were shortened copies of their
+  // own front matter -- which meant an assertion demanding one warning for an
+  // entry had to know which unrelated warning that entry also happened to
+  // emit. Keeping the paraphrase deliberate and unique is what lets every
+  // other per-entry warning count be that entry's own contract.
+  assert.equal(
+    warnCount(/advertises a description that differs/),
+    1,
+    'a fixture entry whose description merely drifts from its own SKILL.md is noise, not a case',
+  );
 });
 
 test('a PROVEN multi-file skill is warned about and still published', () => {
@@ -438,22 +451,31 @@ test('the probe budget is reported when it runs out', () => {
   // Six candidates, a budget of four, and none of them exists. The entry
   // publishes, but the build says plainly that it stopped looking -- a cap
   // that truncates in silence reads exactly like a clean result.
+  //
+  // The COUNTS are part of the sentence and are asserted with it. The warning
+  // interpolates how many probes were actually spent, so "4 of 6" is where the
+  // budget's boundary is written down: widening the comparison that enforces
+  // it publishes "5 of 6", and a regex stopping at the prefix would match
+  // either. The same clause pins the reported number to the probes really
+  // issued rather than to the candidate list, which would read "6 of 6" and
+  // tell a consumer the build checked every reference when it stopped at four.
   assert.equal(
-    warnCount(/agent skill "fixture-manyrefs" names more files than this build checks/),
+    warnCount(
+      /agent skill "fixture-manyrefs" names more files than this build checks: 4 of 6 candidate references were probed/,
+    ),
     1,
   );
   assert.ok(index().skills.some((s) => s.name === 'fixture-manyrefs'));
 });
 
 test('the probe budget stops after the fourth request, not the fifth', () => {
-  // The warning above fires at four probes and at five alike -- six candidates
-  // exist and none of them answers either way -- so it says the budget ran out
-  // without saying WHERE. Widening the comparison that enforces it by one
-  // (`lt` to `le`) therefore changes no published byte and no warning, and
-  // spends a fifth request on somebody else's origin every build.
+  // The warning above says the budget ran out and, with the counts, where.
+  // What it cannot say is whether the fifth request was made: a build that
+  // probed five candidates and reported four would print the same line, and so
+  // would one that reported honestly. The count is what the module CLAIMS; the
+  // origin's record is what it DID, and the two are separate observations of
+  // one boundary.
   //
-  // What the boundary is readable in is the origin's own record: the fifth and
-  // sixth candidates must never have been asked for, by any build of the run.
   // The candidate ORDER is the body's own -- lib/skill-references.html
   // preserves it -- so ALPHA through DELTA are the four the budget buys.
   const requested = originRequestedPaths();
@@ -545,28 +567,74 @@ test('a reference outside the skill directory is never requested from the origin
   // that was never issued. The origin records every request of the run, so the
   // absence is readable.
   //
-  // This also settles what the escaped paths would have been: `../ESCAPE.md`
-  // resolves to /ESCAPE.md at the origin ROOT, which is somebody else's
-  // document by construction, and `/abs/ROOT.md` is one already.
+  // The two loops below are not one list split for readability: the escape
+  // shapes fail in two DIFFERENT places, because path.Join folds an absolute
+  // second argument under the first rather than resetting to root. A `..`
+  // candidate can leave the origin's skill directories entirely; an absolute
+  // one never can, and lands inside the skill's own directory instead. So
+  // `/abs/ROOT.md` is not listed here -- no reachable state of the resolver
+  // requests it, and asserting its absence would assert nothing.
   const requested = originRequestedPaths();
-  for (const path of ['/ESCAPE.md', '/abs/ROOT.md']) {
+  for (const path of ['/ESCAPE.md', '/fixture-prefix-sibling/HELPER.md']) {
     assert.ok(
       !requested.has(path),
       `${path} was requested, so a reference that leaves the skill directory was probed after all`,
     );
   }
 
-  // And nothing under any of the three skills' own directories either, beyond
-  // the SKILL.md the resolver fetches by configuration. This is what catches a
-  // dropped leading-slash guard, whose candidate is folded back INSIDE the
-  // directory rather than out of it.
-  for (const name of ['fixture-outside', 'fixture-outside-dotdot', 'fixture-outside-abs']) {
+  // The absolute shape's own failure: nothing under any of these skills' own
+  // directories beyond the SKILL.md the resolver fetches by configuration.
+  // This is what a dropped leading-slash guard produces -- `/abs/ROOT.md`
+  // folded to `/fixture-outside-abs/abs/ROOT.md`, a document the skill never
+  // named, requested as though it sat beside it.
+  for (const name of [
+    'fixture-outside',
+    'fixture-outside-dotdot',
+    'fixture-outside-abs',
+    'fixture-prefix',
+  ]) {
     assert.deepEqual(
       [...requested].filter((p) => p.startsWith(`/${name}/`)).sort(),
       [`/${name}/SKILL.md`],
       `${name}: the entry's own SKILL.md is the only thing its directory was asked for`,
     );
   }
+});
+
+test("a sibling directory whose name extends the skill's own is outside it", () => {
+  // The boundary of the traversal guard itself, which neither escape shape
+  // reaches. The guard asks whether the resolved path starts with the skill's
+  // directory FOLLOWED BY A SEPARATOR, and every other candidate in this
+  // corpus is either plainly inside its directory or lands at the origin root,
+  // so dropping that separator decides nothing anywhere else and the suite
+  // stays green without it.
+  //
+  // Here it decides everything: `/fixture-prefix-sibling/HELPER.md` starts
+  // with `/fixture-prefix` and does not start with `/fixture-prefix/`. And the
+  // failure is not a missing report but a wrong publication -- that file
+  // really exists, so the probe succeeds and the skill is declared multi-file
+  // on the strength of a document belonging to a different skill, which under
+  // on_supporting_files = 'omit' deletes the entry outright. The request-log
+  // assertion above is the other half of this one.
+  assert.equal(
+    warnCount(
+      /agent skill "fixture-prefix" references \.\.\/fixture-prefix-sibling\/HELPER\.md from outside its own directory/,
+    ),
+    1,
+  );
+  assert.equal(
+    warnCount(/agent skill "fixture-prefix"/),
+    1,
+    'and nothing else is said about it -- a MULTI-FILE line here would be the wrong verdict',
+  );
+  assert.ok(
+    index().skills.some((s) => s.name === 'fixture-prefix'),
+    'an outside reference reports, never refuses',
+  );
+  assert.ok(
+    index(strictskillsDir).skills.some((s) => s.name === 'fixture-prefix'),
+    'including under the strict disposition, which a wrong multi-file verdict would delete it from',
+  );
 });
 
 test('a source URL that does not parse is refused, and the build survives', () => {

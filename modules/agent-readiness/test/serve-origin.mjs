@@ -11,7 +11,7 @@
 // WHY OURS AND NOT THE INTERNET. The suite blocks every pull request in this
 // repository, so an endpoint somebody else controls is an endpoint that can
 // turn a pull request red for reasons that have nothing to do with the change.
-// Serving the bytes ourselves also buys three things no public URL can:
+// Serving the bytes ourselves also buys four things no public URL can:
 //
 //   1. The RESPONSE HEADERS are ours. The archive routes answer with exactly
 //      the `application/gzip` and `application/zip` the discovery convention
