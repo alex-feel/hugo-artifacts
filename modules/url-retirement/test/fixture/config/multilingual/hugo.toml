@@ -2,13 +2,16 @@ defaultContentLanguage = 'en'
 
 [languages]
 
-  [languages.en]
-    weight = 1
-    title = 'URL Retirement Fixture'
-    contentDir = 'content'
-
+  # German sorts FIRST and English last, which decides which language's render
+  # of /_redirects survives -- Hugo renders one language completely before
+  # starting the next, and this file is published once at the site root, so the
+  # last writer wins. English is the language that needs no pagination_path key,
+  # so a module reading that key from whichever language happens to be rendering
+  # would resolve German's segment from English's configuration and publish
+  # /de/posts/page/1/ for a site that serves /de/posts/seite/1/. Reversed, the
+  # same mistake would produce the right bytes by accident.
   [languages.de]
-    weight = 2
+    weight = 1
     title = 'URL-Stilllegung'
     contentDir = 'content-de'
 
@@ -33,3 +36,8 @@ defaultContentLanguage = 'en'
     # name the segment.
     [languages.de.params.url_retirement.redirects]
       pagination_path = 'seite'
+
+  [languages.en]
+    weight = 2
+    title = 'URL Retirement Fixture'
+    contentDir = 'content'
