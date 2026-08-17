@@ -36,20 +36,34 @@
   section missing one page from one missing thirty.
 
   THE SHAPE IS A LIST ITEM, so the section stays a pure list. llmstxt.org
-  defines an H2 section as a "file list" whose items are `[name](url)` plus
-  optional notes, and says nothing about prose between the heading and the
-  first item; an item that IS a link therefore stays inside the grammar,
-  while a prose line would sit in a slot the convention never described. It
-  is emitted FIRST, ahead of the pages it qualifies, because a caveat placed
-  after the entries is one a reader who stopped early never reached.
+  v2 defines an H2 section's contents as a "file list" whose every item is
+  "a required markdown hyperlink `[name](url)`, then optionally a `:` and
+  notes about the file", and says nothing about prose between the heading
+  and the first item; an item that IS a link therefore stays inside the
+  grammar, while a prose line would sit in a slot the convention never
+  described. It is emitted FIRST, ahead of the pages it qualifies, because a
+  caveat placed after the entries is one a reader who stopped early never
+  reached.
 
   WITHOUT A ROUTE IT STILL SPEAKS. A site can cap sections while publishing
   no complete index at all -- `llms_index.enable = false`, or the `llmsindex`
   format left unwired -- and the false negative is exactly as available to
   its readers. So the disclosure degrades to a linkless item rather than
-  disappearing: the remedy is gone, the honesty is not. That item is the one
-  shape here the convention's grammar does not describe, and it is the
-  deliberate cost of not letting a configuration silence a true statement.
+  disappearing: the remedy is gone, the honesty is not.
+
+  THAT LINKLESS ITEM IS A DELIBERATE DEVIATION, re-decided against v2's text
+  rather than inherited from v1, because "required markdown hyperlink" is
+  what v2 says too. It is kept for what it costs, which is close to nothing.
+  v2 wants a format "allowing fixed processing methods (i.e. classical
+  programming techniques such as parsers and regex)", and a parser extracting
+  `[name](url)` finds no match on this line and moves on -- it loses no
+  entry, because no page was ever there to lose. The reader who DOES parse
+  the line is the language model the document is written for, and for that
+  reader the sentence is the whole point. So the trade is a grammar no
+  verified consumer enforces against a confident false negative about a real
+  person, and it is not a close call. Moving the sentence to the preamble
+  would satisfy the grammar and defeat WHY IN THE SECTION above, in exactly
+  the configuration that has no remedy to offer.
 
   Expected context (dict):
   - .cfg   (dict)   - The resolved config from agent-readiness/config.html.

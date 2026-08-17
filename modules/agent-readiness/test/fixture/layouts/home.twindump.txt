@@ -1,12 +1,14 @@
 {{- /*
-  Fixture-only dump of the module's three PUBLIC partials, published as
+  Fixture-only dump of the module's four PUBLIC partials, published as
   /twindump.txt per language by the twindump output format the fixture
-  config defines. Three blocks, tab-separated because a logical page path
+  config defines. Four blocks, tab-separated because a logical page path
   can carry any other character:
 
     <page .Path>\t<twin-url.html result, "" when no twin publishes>
     == surfaces ==
     <surface key>\t<surface url>
+    == llms url ==
+    <page .Path>\t<llms-url.html result, "" when no compact index publishes>
     == build time ==
     build_time\t<build-time.html result>
     store\t<the module's own hugo.Store entry for the stamp>
@@ -16,6 +18,13 @@
   specs can assert the non-empty results equal exactly the published twin
   set, in both directions. The second block is the surfaces.html
   enumeration for the same site.
+
+  The third block covers the same page set as the first, and covering it
+  page by page is the point rather than redundancy. llms-url.html is
+  page-shaped by contract -- v2 asks which llms.txt covers THIS page -- and
+  its answer is deliberately NOT filtered by the membership rules that empty
+  the first block, so a page withheld from the twins must still name its
+  covering document. One value per site would prove neither property.
 
   The third block is the only channel the suite has for the value
   build-time.html EXPOSES, as opposed to the values the module writes into
@@ -42,6 +51,10 @@
 {{- printf "== surfaces ==\n" -}}
 {{- range partial "agent-readiness/surfaces.html" . -}}
   {{- printf "%s\t%s\n" .key .url -}}
+{{- end -}}
+{{- printf "== llms url ==\n" -}}
+{{- range site.Pages -}}
+  {{- printf "%s\t%s\n" .Path (partial "agent-readiness/llms-url.html" .) -}}
 {{- end -}}
 {{- printf "== build time ==\n" -}}
 {{- printf "build_time\t%s\n" (partial "agent-readiness/build-time.html" .) -}}

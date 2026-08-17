@@ -1,0 +1,74 @@
+{{/*
+  agent-readiness/llms-url.html -- PUBLIC ENTRY (resolver tier).
+
+  Purpose: the stable public answer to "which llms.txt covers this page, and
+  where". A consumer template -- a rel-describedby emitter, a Link: header
+  builder, a footer pointer -- calls:
+
+      {{ partial "agent-readiness/llms-url.html" . }}
+
+  or passes call-site config overrides:
+
+      {{ partial "agent-readiness/llms-url.html" (dict "page" . "args" (dict ...)) }}
+
+  and receives the covering document's absolute .Permalink, or "" when no
+  compact index publishes for that page's language.
+
+  WHY THIS EXISTS. llmstxt.org v2 recommends two link relations for discovery:
+  `rel="alternate" type="text/markdown"` to a page's Markdown version, and
+  `rel="describedby"` to the llms.txt that covers it, as HTML <link> elements
+  or an HTTP Link: header. The module already answered the first half through
+  twin-url.html; this is the second. Both exist for the same reason -- a
+  consumer that derived the URL from the wired output format alone would
+  advertise a document the renderer withheld, and `.OutputFormats.Get
+  "llmstxt"` answers "is the format wired for the home page's kind", not "did
+  this module write bytes into it".
+
+  The value was reachable before this partial existed, through the `llms`
+  entry of surfaces.html, and both still answer identically because both read
+  lib/llms-url.html. This one exists so the common case -- one page, one URL,
+  emitted into a head or a header -- is a call rather than a range with an
+  equality test inside it.
+
+  NOT FILTERED BY PAGE MEMBERSHIP, which is the one place its contract
+  deliberately parts from twin-url.html. A twin is a file the module either
+  writes for this page or does not, so twin-url.html answers "" for a page the
+  membership rules withhold. Coverage is a different relation: v2 says an
+  llms.txt "describes all pages under its path", so a page excluded from the
+  twins and from the link indexes is still covered by the same document, and
+  this partial still names it. The empty string here means only that no
+  compact index publishes for the language at all.
+
+  Empty-string cases, exhaustive: the module master switch off
+  (enable = false); the compact index surface off (llms.enable = false); and
+  the `llmstxt` output format not wired on the page's own language home.
+
+  Expected context: the current Page, or a dict whose "page" key is the
+  current Page plus an optional "args" map of call-site config overrides
+  (the top tier of the module's four-tier cascade). Anything else is a
+  wiring mistake, not a content problem, and fails the build.
+
+  Return value: the covering llms.txt's absolute URL (string), or "". ONE
+  terminal return.
+*/}}
+
+{{- $arg := . -}}
+{{- $page := $arg -}}
+{{- $args := dict -}}
+{{- if not (reflect.IsPage $arg) -}}
+  {{- if reflect.IsMap $arg -}}
+    {{- $args = $arg.args | default dict -}}
+    {{- $page = $arg.page -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $result := "" -}}
+
+{{- if not (reflect.IsPage $page) -}}
+  {{- errorf "[agent-readiness] llms-url.html must be called with the current Page as its context ({{ partial \"agent-readiness/llms-url.html\" . }}) or as the \"page\" key of an options dict ({{ partial \"agent-readiness/llms-url.html\" (dict \"page\" . \"args\" (dict ...)) }})." -}}
+{{- else -}}
+  {{- $cfg := partial "agent-readiness/config.html" (dict "page" $page "args" $args) -}}
+  {{- $result = partial "agent-readiness/lib/llms-url.html" (dict "page" $page "cfg" $cfg) -}}
+{{- end -}}
+
+{{- return $result -}}

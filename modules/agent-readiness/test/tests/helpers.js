@@ -246,20 +246,23 @@ export function selectionNotice(lines) {
 
 // The fixture-only `twindump` surface, parsed into its three blocks. It lives
 // here rather than in one spec because two specs read it: 09 asserts the
-// twin-url and surfaces enumerations, 11 asserts the exposed build stamp. Two
-// private copies of this parser would be free to drift from the one layout
-// that writes the file.
+// twin-url, surfaces and llms-url enumerations, 11 asserts the exposed build
+// stamp. Two private copies of this parser would be free to drift from the one
+// layout that writes the file.
 //
 // Every block is tab-separated, because a logical page path can carry any
 // other character.
 const SURFACES_MARKER = '== surfaces ==';
+const LLMS_URL_MARKER = '== llms url ==';
 const BUILD_TIME_MARKER = '== build time ==';
 
 export function parseDump(rel, dir) {
   const lines = read(rel, dir).split('\n');
   const surfaces = lines.indexOf(SURFACES_MARKER);
+  const llmsUrl = lines.indexOf(LLMS_URL_MARKER);
   const buildTime = lines.indexOf(BUILD_TIME_MARKER);
   if (surfaces === -1) throw new Error(`${rel} must carry the ${SURFACES_MARKER} line`);
+  if (llmsUrl === -1) throw new Error(`${rel} must carry the ${LLMS_URL_MARKER} line`);
   if (buildTime === -1) throw new Error(`${rel} must carry the ${BUILD_TIME_MARKER} line`);
   const block = (slice) => {
     const out = new Map();
@@ -273,7 +276,12 @@ export function parseDump(rel, dir) {
   };
   return {
     twins: block(lines.slice(0, surfaces)),
-    surfaces: block(lines.slice(surfaces + 1, buildTime)),
+    surfaces: block(lines.slice(surfaces + 1, llmsUrl)),
+    // One entry per page, like `twins`, because llms-url.html is page-shaped
+    // by contract and its answer is deliberately NOT filtered by the
+    // membership rules that empty a twin -- a page withheld from the twins
+    // still has a covering llms.txt. See the dump layout.
+    llmsUrls: block(lines.slice(llmsUrl + 1, buildTime)),
     // The value agent-readiness/build-time.html EXPOSES, which is a different
     // observation from the values the module writes into its own documents:
     // the acceptance criterion is that the two agree. `store` is the

@@ -1,12 +1,13 @@
-// Two of the three PUBLIC partials -- twin-url.html and surfaces.html --
-// asserted through the fixture-only twindump surface. The fixture's home page
-// publishes /twindump.txt per language: one tab-separated line per page of
-// the site recording what twin-url.html returned, a marker line, then one
-// line per surfaces.html entry, then the build-time block that
+// Three of the four PUBLIC partials -- twin-url.html, surfaces.html and
+// llms-url.html -- asserted through the fixture-only twindump surface. The
+// fixture's home page publishes /twindump.txt per language: one tab-separated
+// line per page of the site recording what twin-url.html returned, a marker
+// line, then one line per surfaces.html entry, then one line per page
+// recording what llms-url.html returned, then the build-time block that
 // tests/11-build-stamp.spec.js reads. Every claim is checked against the
 // published tree in BOTH directions across all eighteen environment builds,
-// so neither partial can list a file the build withheld, nor withhold one
-// the build published.
+// so no partial can list a file the build withheld, nor withhold one the
+// build published.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -128,7 +129,75 @@ for (const {name, dir, base = '', dumps = [{rel: 'twindump.txt', prefix: ''}]} o
       }
     }
   });
+
+  test(`${name}: every page's llms-url names its language's published llms.txt`, () => {
+    // Checked against the TREE, not only against surfaces.html: two callers of
+    // one shared gate set agreeing with each other proves nothing about
+    // whether the file is there. The equality with the surfaces entry is
+    // asserted on top, because that shared gate set is what keeps the public
+    // partial and the enumeration from drifting apart.
+    for (const {rel, prefix} of dumps) {
+      const {llmsUrls, surfaces} = parseDump(rel, dir);
+      const target = `${prefix}llms.txt`;
+      const published = exists(target, dir);
+      assert.ok(llmsUrls.size > 0, `${name}/${rel}: the dump must enumerate every page`);
+      for (const [path, url] of llmsUrls) {
+        if (!published) {
+          assert.equal(url, '', `${name}/${rel}: ${path} must name no covering index`);
+          continue;
+        }
+        assert.match(url, /^https:\/\//, `${name}/${rel}: ${path} must report an absolute URL`);
+        assert.equal(
+          stripBase(siteRelative(url), base),
+          `/${target}`,
+          `${name}/${rel}: ${path} must be covered by ${target}`,
+        );
+      }
+      assert.equal(
+        [...llmsUrls.values()].every((url) => url === (surfaces.get('llms') ?? '')),
+        true,
+        `${name}/${rel}: every page must agree with the llms surface entry`,
+      );
+    }
+  });
 }
+
+test('notwins: coverage survives the membership rules that empty every twin', () => {
+  // The discriminating case for llms-url.html's contract. notwins switches the
+  // twins off site-wide while leaving llms.txt published, so every twin-url
+  // result is empty and every llms-url result must NOT be: v2 has an llms.txt
+  // describe "all pages under its path", which a page excluded from the twins
+  // still sits under. A resolver that reused the twin membership filter would
+  // empty this block too, and no other build could tell.
+  const {twins, llmsUrls} = parseDump('twindump.txt', notwinsDir);
+  assert.ok(exists('llms.txt', notwinsDir), 'notwins still publishes the compact index');
+  assert.ok(twins.size > 0 && llmsUrls.size === twins.size, 'both blocks cover every page');
+  for (const [path, url] of twins) {
+    assert.equal(url, '', `notwins: ${path} publishes no twin`);
+    assert.equal(
+      llmsUrls.get(path),
+      'https://fixture.example/llms.txt',
+      `notwins: ${path} is still covered by the compact index`,
+    );
+  }
+});
+
+test('nocompact: the complete index publishes while no page names a covering one', () => {
+  // The mirror case. nocompact wires llmsindex without llmstxt, so the
+  // llms_index surface exists while llms.txt does not -- an llms-url that
+  // resolved through the complete index's format, or through the surface
+  // enumeration's presence rather than the compact document's own gates,
+  // would hand every page a URL that 404s.
+  const {llmsUrls, surfaces} = parseDump('twindump.txt', nocompactDir);
+  assert.ok(!exists('llms.txt', nocompactDir), 'nocompact publishes no compact index');
+  assert.ok(exists('llms-index.txt', nocompactDir), 'nocompact does publish the complete one');
+  assert.ok(surfaces.has('llms_index'), 'the complete index is enumerated');
+  assert.ok(!surfaces.has('llms'), 'the compact one is not');
+  assert.ok(llmsUrls.size > 0, 'the dump still enumerates every page');
+  for (const [path, url] of llmsUrls) {
+    assert.equal(url, '', `nocompact: ${path} must name no covering index`);
+  }
+});
 
 test('baseline: home keeps its twin under the non-empty sections allow-list', () => {
   // The allow-list applies to section kind only, never home. A membership
