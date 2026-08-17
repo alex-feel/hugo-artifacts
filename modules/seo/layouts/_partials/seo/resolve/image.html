@@ -1,6 +1,7 @@
 {{/*
-  Normalizes ONE image candidate to a stable dict {url, width, height, type,
-  alt, natural}. Pure value chooser: no HTML, no side effects.
+  Normalizes ONE image candidate to a stable dict {key, resource or url,
+  width, height, type, alt, natural}. Pure value chooser: no HTML, and NO
+  PUBLISHED FILE -- see "What this returns, and why it is not a URL" below.
 
   Context (dict):
   - .candidate (any)  Either a Hugo resource (page-bundle or global), a
@@ -23,7 +24,8 @@
   - Local raster resource (jpg/png/webp/gif/...), variant "og": .Fill
     "1200x630 Smart" then .Permalink (absolute), .Width (1200), .Height (630),
     .MediaType.Type. This yields real og:image:width/height/type and a
-    content-aware 1.91:1 crop.
+    content-aware 1.91:1 crop. A source already measuring exactly 1200x630 is
+    kept as-is -- see below.
   - Local raster resource, variant "natural": the source resource's own
     .Permalink/.Width/.Height, no processing.
   - SVG resource: passed through WITHOUT processing (Hugo cannot
@@ -35,17 +37,46 @@
     absolutized, no processing, NO fabricated dimensions; type inferred from
     the extension only when unambiguous (.png/.jpg/.jpeg/.webp/.gif/.svg).
 
+  What this returns, and why it is not a URL: reading .Permalink is what
+  PUBLISHES a file, so a resolver that answered in URLs would write every
+  candidate it ever considered into the output -- the losing candidate of a
+  precedence race, the un-cropped source of a page that emits only the crop,
+  the second card of a page kind whose node carries one image. A resolved
+  resource is therefore returned AS a resource, and the one partial that
+  turns it into a URL is seo/lib/image-url.html, called where a URL is
+  actually written. A candidate that resolves to no resource -- a bare URL or
+  site-root path -- carries `url` instead, because there is nothing to
+  publish and the string is the whole answer.
+
+  `key` identifies the candidate for de-duplication WITHOUT publishing it:
+  the resource's .Name (bundle-relative for a page resource, assets-relative
+  for a global one) or, for the bare-URL branch, the URL itself. It is empty
+  exactly when nothing resolved, which is also how a caller tests for that.
+  One limit, measured: a resource composed at build time reports the .Name of
+  the image it was DERIVED FROM, so two cards drawn on one template share a
+  key -- resolve/images.html therefore exempts the generated-image hook's
+  results from de-duplication rather than collapsing a returned pair.
+
   natural sub-dict: every resolved image carries `natural` -- the un-cropped
-  source values {url, width, height} (dimensions present only for local
-  raster resources) -- so a consumer that needs the native aspect can read it
-  regardless of the variant that shaped the top-level values.
+  source -- so a consumer that needs the native aspect can read it regardless
+  of the variant that shaped the top-level values. It holds {resource, width,
+  height} whenever a resource resolved (dimensions only for a decodable
+  raster), and {url} for the bare-URL branch. Only Person and ProfilePage
+  nodes ask for it, so on most pages it is never materialized at all.
+
+  The og short-circuit rests on the same fact. Fill on an image already
+  measuring 1200x630 returns a SECOND file holding the same pixels, and both
+  are published the moment their URLs are read -- so the recommended pairing
+  of a card generator at 1200x630 with this module shipped every card twice.
+  Skipping it also means such an image is served exactly as its author
+  supplied it, rather than re-encoded at Hugo's default quality.
 
   alt chain: seo.image_alt -> resource .Params.alt -> resource .Title (when set
   to something other than the filename) -> params.seo.image_alt -> resolved page
   title. So og:image:alt / twitter:image:alt are ALWAYS present when an image is.
 
-  Returns: {url, width, height, type, alt, natural}, or an empty dict when the
-  candidate is unresolvable. ONE terminal return.
+  Returns: {key, resource or url, width, height, type, alt, natural}, or an
+  empty dict when the candidate is unresolvable. ONE terminal return.
 */}}
 
 {{- $candidate := .candidate -}}
@@ -159,37 +190,48 @@
          attempted through try for the same reason the probe above exists:
          decoding succeeded, but a resize can still fail on a malformed image,
          and a failed crop degrades to the source's own dimensions rather than
-         taking the build down. */}}
-    {{- $natural := dict "url" $res.Permalink "width" $res.Width "height" $res.Height -}}
-    {{- $chosen := $natural -}}
-    {{- if eq $variant "og" -}}
-      {{- $fill := try ($res.Fill "1200x630 Smart") -}}
+         taking the build down.
+
+         An image that ALREADY measures the og target is its own crop, so
+         Fill is skipped: cropping it produces a second file with the same
+         pixels, and every consumer that composes cards at the recommended
+         1200x630 would ship one per page. */}}
+    {{- $ogWidth := 1200 -}}
+    {{- $ogHeight := 630 -}}
+    {{- $chosen := $res -}}
+    {{- $width := $res.Width -}}
+    {{- $height := $res.Height -}}
+    {{- if and (eq $variant "og") (not (and (eq $res.Width $ogWidth) (eq $res.Height $ogHeight))) -}}
+      {{- $fill := try ($res.Fill (printf "%dx%d Smart" $ogWidth $ogHeight)) -}}
       {{- with $fill.Err -}}
         {{- partial "seo/lib/warn.html" (dict
           "key" (printf "seo:warn:uncroppable-image:%s" $res.RelPermalink)
           "message" (printf "[seo] Cannot crop image %q to the 1.91:1 ratio og:image expects; publishing it uncropped at its own dimensions." $res.RelPermalink)
         ) -}}
       {{- else -}}
-        {{- $filled := $fill.Value -}}
-        {{- $chosen = dict "url" $filled.Permalink "width" $filled.Width "height" $filled.Height -}}
+        {{- $chosen = $fill.Value -}}
+        {{- $width = $chosen.Width -}}
+        {{- $height = $chosen.Height -}}
       {{- end -}}
     {{- end -}}
     {{- $result = dict
-      "url" $chosen.url
-      "width" $chosen.width
-      "height" $chosen.height
+      "key" $res.Name
+      "resource" $chosen
+      "width" $width
+      "height" $height
       "type" $res.MediaType.Type
       "alt" $alt
-      "natural" $natural
+      "natural" (dict "resource" $res "width" $res.Width "height" $res.Height)
     -}}
   {{- else -}}
-    {{/* SVG, an undecodable raster, or another non-raster resource: url +
-         type only, no dimensions. */}}
+    {{/* SVG, an undecodable raster, or another non-raster resource: the
+         resource and its type only, no dimensions. */}}
     {{- $result = dict
-      "url" $res.Permalink
+      "key" $res.Name
+      "resource" $res
       "type" $res.MediaType.Type
       "alt" $alt
-      "natural" (dict "url" $res.Permalink)
+      "natural" (dict "resource" $res)
     -}}
   {{- end -}}
 {{- else if $str -}}
@@ -214,14 +256,14 @@
   {{- else if hasSuffix $lower ".svg" -}}
     {{- $type = "image/svg+xml" -}}
   {{- end -}}
-  {{- $result = dict "url" $url "alt" $alt "natural" (dict "url" $url) -}}
+  {{- $result = dict "key" $url "url" $url "alt" $alt "natural" (dict "url" $url) -}}
   {{- with $type -}}
     {{- $result = merge $result (dict "type" .) -}}
   {{- end -}}
 {{- end -}}
 
 {{/* Final alt fallbacks apply only when an image actually resolved. */}}
-{{- if $result.url -}}
+{{- if $result.key -}}
   {{- if not $result.alt -}}
     {{- $altFallback := "" -}}
     {{- with $page.Param "seo.image_alt" -}}

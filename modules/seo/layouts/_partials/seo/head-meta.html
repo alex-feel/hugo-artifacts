@@ -111,8 +111,9 @@
   {{- end }}
 {{- end }}
 {{- with (index $seo.images 0) }}
-<meta property="og:image" content="{{ .url }}">
-<meta property="og:image:secure_url" content="{{ .url }}">
+{{- $imageUrl := partial "seo/lib/image-url.html" . }}
+<meta property="og:image" content="{{ $imageUrl }}">
+<meta property="og:image:secure_url" content="{{ $imageUrl }}">
 {{- with .type }}
 <meta property="og:image:type" content="{{ . }}">
 {{- end }}
@@ -239,7 +240,7 @@
 <meta name="twitter:description" content="{{ . }}">
 {{- end }}
 {{- with $primaryImage }}
-<meta name="twitter:image" content="{{ .url }}">
+<meta name="twitter:image" content="{{ partial "seo/lib/image-url.html" . }}">
 {{- with .alt }}
 <meta name="twitter:image:alt" content="{{ . }}">
 {{- end }}

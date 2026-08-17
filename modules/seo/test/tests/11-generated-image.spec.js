@@ -173,16 +173,34 @@ test('a hook returning a SLICE contributes every resource, in order', () => {
   // documented slice contract is asserted by nothing.
   const html = rawHtml(PAGES.blogPost, generatedDir);
   const primary = meta(html, 'og:image');
-  assert.ok(primary.endsWith('.png') && primary.includes('/cards/blog/post/og_hu'));
+  assert.equal(primary, `${SITE}/cards/blog/post/og.png`);
   const article = jsonldNodes(html).find((n) => n['@type'] === 'BlogPosting');
   assert.ok(Array.isArray(article.image), 'the article node carries an image LIST');
   assert.equal(article.image.length, 2);
   assert.equal(article.image[0].url, primary, 'the first returned resource is the primary one');
-  assert.match(article.image[1].url, /\/cards\/blog\/post\/og-dark_hu[^"]*\.png$/);
+  assert.equal(article.image[1].url, `${SITE}/cards/blog/post/og-dark.png`);
   for (const img of article.image) {
     assert.equal(img.width, 1200);
     assert.equal(img.height, 630);
   }
+});
+
+test('a card already measuring 1200x630 is served as-is, never cropped into a twin', () => {
+  // Cropping an image that already measures the og target returns a SECOND
+  // file holding the same pixels, and reading its URL publishes it -- so the
+  // pairing this hook exists for, a generator drawing at the recommended
+  // 1200x630, shipped every card twice. The og:image URL is the card's OWN,
+  // and the whole tree carries no derivative of one.
+  assert.equal(meta(rawHtml(PAGES.page, generatedDir), 'og:image'), `${SITE}/cards/page/og.png`);
+  const derived = readdirSync(generatedDir, {recursive: true, withFileTypes: true}).filter(
+    (e) =>
+      e.isFile() && /_hu_[0-9a-f]+\./.test(e.name) && join(e.parentPath, e.name).includes('cards'),
+  );
+  assert.deepEqual(
+    derived.map((e) => e.name),
+    [],
+    'a card was cropped into a second file',
+  );
 });
 
 test('a partial named without the .html suffix resolves, exactly as `partial` resolves it', () => {

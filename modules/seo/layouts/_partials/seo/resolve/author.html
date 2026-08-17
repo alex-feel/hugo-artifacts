@@ -91,20 +91,17 @@
         {{- $descriptor = merge $descriptor (dict "twitter" .) -}}
       {{- end -}}
       {{/* image: the author page's primary bundle image URL, native aspect
-           (Person.image never carries the 1.91:1 og crop). No `generated`
-           payload, so the params.seo.image_partial hook does not fire here:
-           a generated social card is a page's share image, never a
-           photograph of the person the node describes. */}}
-      {{- $imgs := partial "seo/resolve/images.html" (dict "page" $ap) -}}
+           (Person.image never carries the 1.91:1 og crop). Asked for as the
+           natural VARIANT rather than taken from an og-variant result: the
+           crop this node declines is published all the same once it is made,
+           so a portrait nothing shows would ship a 1200x630 copy of itself.
+           No `generated` payload, so the params.seo.image_partial hook does
+           not fire here: a generated social card is a page's share image,
+           never a photograph of the person the node describes. */}}
+      {{- $imgs := partial "seo/resolve/images.html" (dict "page" $ap "variant" "natural") -}}
       {{- with $imgs -}}
         {{- $primary := index . 0 -}}
-        {{- $imgURL := $primary.url -}}
-        {{- with $primary.natural -}}
-          {{- with .url -}}
-            {{- $imgURL = . -}}
-          {{- end -}}
-        {{- end -}}
-        {{- $descriptor = merge $descriptor (dict "image" $imgURL) -}}
+        {{- $descriptor = merge $descriptor (dict "image" (partial "seo/lib/image-url.html" $primary)) -}}
       {{- end -}}
     {{- else -}}
       {{/* Author page resolved in no language: degrade to a humanized slug. */}}
