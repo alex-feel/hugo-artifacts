@@ -1,0 +1,57 @@
+{{/*
+  agent-readiness/lib/llms-url.html -- utility (LIB tier).
+
+  Purpose: the ONE answer to "which llms.txt covers this page, and does that
+  document actually publish". agent-readiness/surfaces.html reads it for the
+  `llms` entry of the public surface enumeration, and the public
+  agent-readiness/llms-url.html returns it to a consumer; factoring the answer
+  here keeps the two callers from ever drifting apart on the gate set, exactly
+  as lib/llms-index-url.html does for the complete index and
+  lib/skills-index-url.html for the Agent Skills index.
+
+  PUBLISHED, not merely wired. The answer reproduces the gates of
+  layouts/home.llmstxt.txt: cfg.enable, cfg.llms.enable, and the llmstxt
+  format wired on the PAGE'S OWN LANGUAGE home. An enabled renderer always
+  emits at least its H1 line, so enabled-and-wired IS published. The format
+  leaves `root` unset and therefore publishes per language (/llms.txt,
+  /ru/llms.txt), which is why the lookup goes through the caller's own site
+  rather than hugo.Sites.Default -- unlike the skills index, whose one
+  root-pinned file every language must answer with.
+
+  NO WARNING HERE, unlike lib/llms-index-url.html. That partial warns because
+  an enabled-but-unwired COMPLETE index leaves a published compact document
+  naming a route that 404s -- a broken promise already in the bytes. Nothing
+  equivalent exists here: a site that wires no llmstxt format publishes no
+  compact document, promises nothing, and has simply not asked for the
+  surface. Wiring the format IS the opt-in, and staying silent about its
+  absence is the same restraint lib/skills-index-url.html shows.
+
+  COVERAGE IS BY PATH, NOT BY MEMBERSHIP, which is what separates this from
+  lib/page-included.html and from the twin resolver built on it. llmstxt.org
+  v2: "An llms.txt file describes all pages under its path, so /docs/llms.txt
+  covers everything in /docs/." A page the module withholds from the twins and
+  from the link indexes -- `agent: false`, a noindex robots value, the search
+  page -- still SITS under the path the document describes, so the covering
+  document is the same one. Filtering by membership here would answer "no
+  llms.txt covers this page" for a page that one plainly does, which is a
+  different question from the one the caller asked.
+
+  Expected context (dict):
+  - .page (Page) - The page whose language site is asked.
+  - .cfg  (dict) - The resolved config from agent-readiness/config.html.
+
+  Return value: the covering llms.txt's ABSOLUTE Permalink (string) when that
+  document publishes, else "". ONE terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $cfg := .cfg -}}
+{{- $url := "" -}}
+
+{{- if and $cfg.enable $cfg.llms.enable -}}
+  {{- with $page.Site.Home.OutputFormats.Get "llmstxt" -}}
+    {{- $url = .Permalink -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $url -}}

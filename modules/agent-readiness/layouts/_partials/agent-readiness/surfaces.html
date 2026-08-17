@@ -28,7 +28,9 @@
   - llms:  cfg.enable AND llms.enable AND the llmstxt format wired on the
     page's own language home. An enabled llms.html always emits at least
     its H1 line, so enabled-and-wired IS published. Per-language file
-    (/llms.txt, /ru/llms.txt), so the answer follows the page's site.
+    (/llms.txt, /ru/llms.txt), so the answer follows the page's site. The
+    gate set lives in lib/llms-url.html -- shared with the public
+    agent-readiness/llms-url.html, so the two callers cannot drift apart.
   - llms_index: the same three gates plus llms_index.enable, on the
     llmsindex format. The gate set lives in lib/llms-index-url.html --
     shared with the derived `## Start here` entry in llms.html, so the two
@@ -67,10 +69,8 @@
 {{- else -}}
   {{- $cfg := partial "agent-readiness/config.html" (dict "page" $page "args" $args) -}}
 
-  {{- if and $cfg.enable $cfg.llms.enable -}}
-    {{- with $page.Site.Home.OutputFormats.Get "llmstxt" -}}
-      {{- $surfaces = $surfaces | append (dict "key" "llms" "url" .Permalink "label" $cfg.i18n.surface_llms) -}}
-    {{- end -}}
+  {{- with partial "agent-readiness/lib/llms-url.html" (dict "page" $page "cfg" $cfg) -}}
+    {{- $surfaces = $surfaces | append (dict "key" "llms" "url" . "label" $cfg.i18n.surface_llms) -}}
   {{- end -}}
 
   {{- with partial "agent-readiness/lib/llms-index-url.html" (dict "page" $page "cfg" $cfg) -}}

@@ -51,7 +51,7 @@ Only `[outputs]` needs this care. `[outputFormats]` and `[mediaTypes]` DO merge 
 
 ## Usage
 
-Every surface the module publishes is output-format-driven, so the wiring that makes the documents exist is the module import, the `[outputs]` lists, the `[params.agent]` configuration block, and the deletion of the site's own `layouts/robots.txt` -- no surface requires calling a partial. On top of that, the module exposes exactly three partials as public API, [`twin-url.html`](#twin-urlhtml), [`surfaces.html`](#surfaceshtml) and [`build-time.html`](#build-timehtml), for the site templates that want to LINK what the module publishes or to STAMP their own surfaces with the same build time: a copy-page widget, a footer block, a human-visible discovery page, a `build-time` meta tag. Every other partial under the `agent-readiness` namespace is internal.
+Every surface the module publishes is output-format-driven, so the wiring that makes the documents exist is the module import, the `[outputs]` lists, the `[params.agent]` configuration block, and the deletion of the site's own `layouts/robots.txt` -- no surface requires calling a partial. On top of that, the module exposes exactly four partials as public API, [`twin-url.html`](#twin-urlhtml), [`llms-url.html`](#llms-urlhtml), [`surfaces.html`](#surfaceshtml) and [`build-time.html`](#build-timehtml), for the site templates that want to LINK what the module publishes or to STAMP their own surfaces with the same build time: a copy-page widget, a `rel="alternate"` or `rel="describedby"` link, a footer block, a human-visible discovery page, a `build-time` meta tag. Every other partial under the `agent-readiness` namespace is internal.
 
 Hugo does not merge a module's `[outputs]` configuration into the site's, and a site-level `[outputs]` key **replaces** the default list for that page kind rather than extending it. Every format below must therefore be wired by the consuming site, restating every entry that is already there:
 
@@ -68,9 +68,9 @@ Hugo's defaults for the kinds above are `home = ['html', 'rss']` and `section = 
 
 ## Public partials
 
-The module exposes exactly three partials as public API: `agent-readiness/twin-url.html`, `agent-readiness/surfaces.html` and `agent-readiness/build-time.html`. Every other partial under `layouts/_partials/agent-readiness/` is an internal implementation detail.
+The module exposes exactly four partials as public API: `agent-readiness/twin-url.html`, `agent-readiness/llms-url.html`, `agent-readiness/surfaces.html` and `agent-readiness/build-time.html`. Every other partial under `layouts/_partials/agent-readiness/` is an internal implementation detail.
 
-`twin-url.html` and `surfaces.html` accept the same two call shapes -- the current Page as the context, or a dict whose `page` key is the current Page plus an optional `args` map of call-site config overrides, the top tier of the [four-tier cascade](#parameters) -- and calling either with anything else fails the build, because a missing Page is a wiring mistake in a template, not a content problem to degrade over. `build-time.html` reads no context at all: its value is a property of the build rather than of any page, so pass the conventional `.` or anything else. All three contracts are locked by the suite, which dumps every page's results through a fixture-only output format and asserts them against the files each of its builds actually publishes -- `test/tests/09-public-partials.spec.js` for the two page-shaped partials, in both directions, and `test/tests/11-build-stamp.spec.js` for the build stamp.
+`twin-url.html`, `llms-url.html` and `surfaces.html` accept the same two call shapes -- the current Page as the context, or a dict whose `page` key is the current Page plus an optional `args` map of call-site config overrides, the top tier of the [four-tier cascade](#parameters) -- and calling any of them with anything else fails the build, because a missing Page is a wiring mistake in a template, not a content problem to degrade over. `build-time.html` reads no context at all: its value is a property of the build rather than of any page, so pass the conventional `.` or anything else. All four contracts are locked by the suite, which dumps every page's results through a fixture-only output format and asserts them against the files each of its builds actually publishes -- `test/tests/09-public-partials.spec.js` for the three page-shaped partials, in both directions, and `test/tests/11-build-stamp.spec.js` for the build stamp.
 
 ### `twin-url.html`
 
@@ -97,6 +97,30 @@ The intended pairing is a widget that needs the twin URL only when the twin exis
 
 The widget renders on exactly the pages whose twin publishes and receives the source-of-truth URL, instead of deriving a URL from the wired format and pointing at a file that does not exist on every excluded page.
 
+### `llms-url.html`
+
+```go-html-template
+{{ partial "agent-readiness/llms-url.html" . }}
+{{ partial "agent-readiness/llms-url.html" (dict "page" . "args" (dict ...)) }}
+```
+
+Returns the absolute URL of the `llms.txt` that covers the page (string), or the empty string when no compact index publishes for that page's language. The empty-string cases, exhaustively: the master switch off (`enable = false`); the compact index surface off (`llms.enable = false`); and the `llmstxt` output format not wired on the page's own language home. On a multilingual site the answer follows the calling page's language, because the document publishes per language (`/llms.txt`, `/ru/llms.txt`).
+
+This is the second half of what [llmstxt.org](https://llmstxt.org/) v2 recommends for discovery, and `twin-url.html` is the first: "we recommend using standard link relations: `rel="alternate" type="text/markdown"` points to the markdown version of a page, and `rel="describedby"` points to the llms.txt file that covers it". The module supplies both values and emits neither tag -- what a consuming site puts in its `<head>`, and whether it prefers the HTTP `Link:` header form, stays the site's decision:
+
+```go-html-template
+{{ with partial "agent-readiness/twin-url.html" . }}
+  <link rel="alternate" type="text/markdown" href="{{ . }}">
+{{ end }}
+{{ with partial "agent-readiness/llms-url.html" . }}
+  <link rel="describedby" href="{{ . }}">
+{{ end }}
+```
+
+**Coverage is by path, not by membership, which is the one place this contract deliberately parts from `twin-url.html`.** A twin is a file the module either writes for a page or does not, so `twin-url.html` answers empty for a page the membership rules withhold. Coverage is a different relation: v2 has an `llms.txt` describe "all pages under its path", so a page excluded from the twins and from the link indexes -- `agent: false`, a `noindex` robots value, the search page -- is still covered by the same document and still receives its URL here. A `describedby` link therefore appears on pages that carry no `alternate` link, which is correct: the page has no Markdown twin, and the site's index still describes the path it sits under.
+
+The value is also reachable through the `llms` entry of [`surfaces.html`](#surfaceshtml), and both answer identically because both read one shared implementation (`lib/llms-url.html`). This partial exists so the common case -- one page, one URL, emitted into a head or a header -- is a call rather than a range with an equality test inside it.
+
 ### `surfaces.html`
 
 ```go-html-template
@@ -107,7 +131,7 @@ The widget renders on exactly the pages whose twin publishes and receives the so
 
 Returns an ordered slice of dicts, each `{key, url, label}`, enumerating the site-level agent surfaces the module actually publishes under the resolved config: `llms` (the compact `llms.txt` link index), then `llms_index` (the complete `/llms-index.txt` one), then `facts` (the `/about.md` facts document), then `skills` (the Agent Skills index at `/.well-known/agent-skills/index.json`). Every `url` is absolute. Every `label` is the module's i18n-resolved display string (`agent_surface_llms`, `agent_surface_llms_index`, `agent_surface_facts`, `agent_surface_skills`), so a consumer renders the list without authoring labels. An entry is present only when its document publishes, and the slice may be empty.
 
-Each entry reproduces its producer's own publish gates rather than merely checking the wired format. `llms` requires the master switch, `llms.enable`, and the `llmstxt` format wired on the page's own language home -- an enabled `llms.txt` always emits at least its H1 line, so enabled-and-wired is published. `llms_index` requires those three plus `llms_index.enable`, on the `llmsindex` format. `facts` requires the master switch, `facts.enable`, and the `agentfacts` format wired on the page's own language home, by the same reasoning. `skills` reproduces all four gates of the index file itself -- the master switch, `skills_index.enable`, the `agentskills` format wired on the default site's home, and at least one skill surviving validation and fetch -- through the same shared implementation that feeds the [derived `llms.txt` entry](#llmstxt), so the two callers can never disagree about whether the index exists. The `llms_index` gate set is shared the same way, with the [derived complete-index route](#the--start-here-section) in `llms.txt` and with every twin's [trailing pointer section](#the-trailing-pointer-section) -- three callers, one answer.
+Each entry reproduces its producer's own publish gates rather than merely checking the wired format. `llms` requires the master switch, `llms.enable`, and the `llmstxt` format wired on the page's own language home -- an enabled `llms.txt` always emits at least its H1 line, so enabled-and-wired is published; that gate set is shared with [`llms-url.html`](#llms-urlhtml), so the enumeration and the public partial can never disagree about whether the compact index exists. `llms_index` requires those three plus `llms_index.enable`, on the `llmsindex` format. `facts` requires the master switch, `facts.enable`, and the `agentfacts` format wired on the page's own language home, by the same reasoning. `skills` reproduces all four gates of the index file itself -- the master switch, `skills_index.enable`, the `agentskills` format wired on the default site's home, and at least one skill surviving validation and fetch -- through the same shared implementation that feeds the [derived `llms.txt` entry](#llmstxt), so the two callers can never disagree about whether the index exists. The `llms_index` gate set is shared the same way, with the [derived complete-index route](#the--start-here-section) in `llms.txt` and with every twin's [trailing pointer section](#the-trailing-pointer-section) -- three callers, one answer.
 
 On a multilingual site the `llms`, `llms_index` and `facts` entries follow the calling page's language, because those documents publish per language (`/llms.txt`, `/ru/llms.txt`). The `skills` entry is evaluated against the default language's site whatever language calls, because the index's format sets `root = true` and publishes once for the whole site, so every language must answer with the one file that actually exists.
 
@@ -445,6 +469,8 @@ The twin is withheld for a page carrying `agent: false`, for a `robots: noindex`
 
 The module's own surfaces all agree about this, because they share one filter, and a site template joins the agreement by calling [`twin-url.html`](#twin-urlhtml), which answers from that same filter. Anything that does not call it cannot see the withholding: Hugo's `.OutputFormats.Get "markdown"` answers "is this format wired for this page kind", which is a fact about your `[outputs]` lists, and there is no template API for "did that format publish bytes". So a generic `<link rel="alternate" type="text/markdown">` emitter that consults only the format -- including the `seo` module's `[seo.alternates]` allow-list -- will advertise a twin on pages that have none. If you run both modules, keep `[seo.alternates] formats` and `[params.agent] sections` describing the same page set, or leave `formats` unset and let `llms.txt` be the discovery surface for twins.
 
+The companion `rel="describedby"` link carries no such hazard, and the asymmetry is deliberate rather than an omission. [`llms-url.html`](#llms-urlhtml) answers for a document that publishes once per language, not once per page, so there is nothing per-page to withhold: every page of a language gets the same URL or, when no compact index publishes at all, the empty string. A `describedby` emitter can therefore be unconditional in a way an `alternate` emitter cannot.
+
 ## llms.txt
 
 Publishes TWO link indexes from ONE page walk: the compact `/llms.txt` through the module's `llmstxt` output format, and the complete `/llms-index.txt` through `llmsindex` beside it. Both are wired by adding their format names to `[outputs] home`.
@@ -489,7 +515,9 @@ They differ in exactly three places, and the third follows from the first: the c
 
 **Start with `/llms.txt`.** It is the file the convention names, it is the one an agent finds without being told, and its `## Start here` section names the complete index -- so a narrower selection costs REACH, not ACCESS, and nothing is more than one further fetch away. Fetch `/llms-index.txt` when you want the whole catalog.
 
-The one-file alternative -- keep everything, and let the overflow live under a longer `## Optional` -- loses on the convention's own terms. Verbatim from [llmstxt.org](https://llmstxt.org/): "Note that the 'Optional' section has a special meaning-if it's included, the URLs provided there can be skipped if a shorter context is needed. Use it for secondary information which can often be skipped." An agent conforming to that has been told it may drop those URLs, which is exactly backwards for pages a cap removed: they are the ones a reader who wants MORE goes looking for. Filing the overflow under the heading that means "safe to drop" defeats the point of having it.
+The one-file alternative -- keep everything, and let the overflow live under a longer `## Optional` -- loses on the convention's own terms. Verbatim from [llmstxt.org](https://llmstxt.org/): "The \"Optional\" section is used, by convention, for secondary information: links an agent can skip when a shorter context is needed." An agent following that convention has been told it may drop those URLs, which is exactly backwards for pages a cap removed: they are the ones a reader who wants MORE goes looking for. Filing the overflow under the heading that means "safe to drop" defeats the point of having it.
+
+The argument survived a change in the source it quotes, and the distinction is worth keeping straight. v2 of the proposal retired the section's MECHANICAL semantics along with the `llms_txt2ctx` context-expansion tool that consumed them -- "Optional sections are still allowed, and remain a useful convention for secondary links, but they no longer carry mechanical semantics" -- so no tool is contractually entitled to strip those URLs any more. What v2 kept is the reader-facing convention quoted above, and that is the whole basis of this argument: a section whose name tells an agent the links are skippable is the wrong place to file the links a cap made most worth fetching.
 
 Two other things the split buys. The compact file's size stays bounded by configuration rather than growing with the content forever, which is the problem it exists to solve -- the document an agent reads FIRST is otherwise the one that gets most expensive as a site succeeds. And the route to everything is ONE link in the section an agent is told to keep, rather than a tail of links in the section it is told it may discard.
 
@@ -584,7 +612,7 @@ The entry resolves through [`twin-url.html`](#twin-urlhtml), so it carries every
 
 **The complete index, in the compact file only** -- a document does not link itself. This is the entry that makes a narrower selection cost reach rather than access. It is gated on the complete index actually publishing, through the same shared implementation [`surfaces.html`](#surfaceshtml) reads, so the two callers can never disagree; it is named and annotated through the `agent_llms_index_entry_name` and `agent_llms_index_entry_note` i18n keys. Each narrowed section names the same URL again under the same label, so the disclosure and the route arrive together where the omission happened.
 
-**Why neither is in `## Optional`,** where the derived Agent Skills entry lives and where the derivation machinery already existed. The convention defines that heading as links whose "URLs provided there can be skipped if a shorter context is needed... secondary information which can often be skipped" -- and neither a site's front door nor the only route to what a cap dropped is something an agent should drop. The convention reserves no name for an entry point and constrains no H2 name other than `Optional`, and among the generated `llms.txt` files surveyed for this decision the only one that links its own overview at all places it first, ahead of the ordinary sections. So these get their own heading in first position. Preamble prose was rejected for the reason the rest of the document is a link list: an agent parses `- [name](url)`, not a sentence. The contrast with the Agent Skills entry is the point -- that index genuinely is secondary and an agent can drop it without losing the site.
+**Why neither is in `## Optional`,** where the derived Agent Skills entry lives and where the derivation machinery already existed. The convention defines that heading as "secondary information: links an agent can skip when a shorter context is needed" -- and neither a site's front door nor the only route to what a cap dropped is something an agent should drop. The convention reserves no name for an entry point and constrains no H2 name other than `Optional`, and among the generated `llms.txt` files surveyed for this decision the only one that links its own overview at all places it first, ahead of the ordinary sections. So these get their own heading in first position. Preamble prose was rejected for the reason the rest of the document is a link list: an agent parses `- [name](url)`, not a sentence. The contrast with the Agent Skills entry is the point -- that index genuinely is secondary and an agent can drop it without losing the site.
 
 A consumer who already lists either URL in `[[params.agent.llms.optional]]` keeps their own name and note: URLs are compared after absolutization, and a match suppresses the derived entry rather than doubling the link under two headings. Suppressing one leaves the other in place; suppressing both removes the heading with them.
 
@@ -905,6 +933,7 @@ modules/agent-readiness/
 │           ├── facts.html
 │           ├── skills.html
 │           ├── twin-url.html       # PUBLIC API. See "Public partials".
+│           ├── llms-url.html       # PUBLIC API. See "Public partials".
 │           ├── surfaces.html       # PUBLIC API. See "Public partials".
 │           ├── build-time.html     # PUBLIC API. See "Public partials".
 │           └── lib/
@@ -916,6 +945,7 @@ modules/agent-readiness/
 │               ├── llms-index-url.html
 │               ├── llms-partial-notice.html
 │               ├── llms-select.html
+│               ├── llms-url.html
 │               ├── map-list.html
 │               ├── markdown-link.html
 │               ├── page-excluded.html
