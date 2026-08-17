@@ -6,13 +6,13 @@
   Context (dict):
   - .page (page)       The current Page.
   - .variant (string)  Optional, "og" (default) or "natural", handed to every
-                       resolve/image.html call. A caller that will emit the
-                       native aspect asks for it HERE rather than reading the
-                       `natural` sub-dict of an og-variant result, because
-                       cropping is what mints the second file: a crop nobody
-                       emits is still published. resolve/author.html is the
-                       caller that needs it -- Person.image is a photograph,
-                       never the 1.91:1 share crop.
+                       resolve/image.html call. A caller that emits the native
+                       aspect states that here, and then reads the one value
+                       it emits rather than picking the `natural` sub-dict out
+                       of a cropped result afterwards -- a choice easy to make
+                       once and forget, and the wrong branch of it publishes a
+                       1.91:1 crop of a person's face. resolve/author.html is
+                       the caller that needs it.
   - .generated (dict)  Optional. When present, the params.seo.image_partial
                        generated-image hook may be consulted (step 5), and
                        this dict is what the hook receives, with the page
