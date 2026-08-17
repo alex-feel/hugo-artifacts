@@ -279,16 +279,29 @@ test('a page the generator declines still falls through to the default image', (
 
 test("an author's Person.image is never a generated card", () => {
   // Both halves on ONE document: the page's own share image is a card, while
-  // the Person node describing its author keeps the portrait path. A social
-  // card is a picture of a page, never a photograph of a human, and
-  // resolve/author.html asks for the author page's images WITHOUT the payload
-  // that enables the hook.
-  const html = rawHtml(PAGES.blogPost, generatedDir);
+  // the Person node describing its author is answered without the payload
+  // that enables the hook. A social card is a picture of a page, never a
+  // photograph of a human. The subject is the post whose author page declares
+  // NOTHING, so the author falls all the way through to the site default --
+  // the tier a card would have outranked had the hook been reachable here.
+  const html = rawHtml('blog/second-author/index.html', generatedDir);
   assert.ok(meta(html, 'og:image').includes('/cards/'), 'the page itself did get a card');
   const article = jsonldNodes(html).find((n) => n['@type'] === 'BlogPosting');
   assert.equal(article.author.length, 1);
   assert.equal(article.author[0]['@type'], 'Person');
   assert.equal(article.author[0].image, DEFAULT_IMAGE);
+});
+
+test("an author's Person.image is the portrait, in its own aspect", () => {
+  // The other half of the same contract, on the author who HAS a photograph:
+  // Person.image is the source image rather than the 1.91:1 crop the page it
+  // appears on shows, and rather than a card. The two are different files, so
+  // an author path that reused the page's share image would say so here.
+  const html = rawHtml(PAGES.blogPost, generatedDir);
+  const article = jsonldNodes(html).find((n) => n['@type'] === 'BlogPosting');
+  assert.equal(article.author[0].image, `${SITE}/img/portrait.png`);
+  assert.ok(!article.author[0].image.includes('/cards/'), 'and it is not a card');
+  assert.ok(meta(html, 'og:image').includes('/cards/'), 'while the page itself carries one');
 });
 
 test('a hook pointed at a partial that does not exist warns once and generates nothing', () => {
