@@ -11,6 +11,7 @@ import {
   read,
   exists,
   badtablesDir,
+  configuredDir,
   edgeDir,
   minimalDir,
   nsoffDir,
@@ -561,6 +562,62 @@ test('a $schema that is not an absolute URI is refused, and the default publishe
   );
   const doc = JSON.parse(read('.well-known/agent-skills/index.json', edgeDir));
   assert.equal(doc.$schema, 'https://schemas.agentskills.io/discovery/0.2.0/schema.json');
+});
+
+test('an accepted $schema is the one the index carries, not the shipped default', () => {
+  // The test above proves a REJECTED value is replaced. It cannot prove the
+  // accepted case, because the value it expects afterwards is the default --
+  // exactly what an emitter ignoring the key would also publish. So would
+  // every other build: they leave the key unset, and the two-language build's
+  // marker value belongs to a language that must never write this file.
+  //
+  // That gap reaches past this key. The default-language gate in
+  // home.agentskills.json is asserted THROUGH a per-language `$schema`: an
+  // emitter that ignored the key would publish the default whichever language
+  // wrote the file, so the marker would never appear and deleting the gate
+  // would change nothing the multilingual spec can see. This build is what
+  // keeps that assertion armed.
+  const doc = JSON.parse(read('.well-known/agent-skills/index.json', configuredDir));
+  assert.equal(doc.$schema, 'https://schemas.example.invalid/discovery/0.3.0/schema.json');
+  assert.equal(
+    warnCount(/Ignoring \[params.agent.skills_index\] schema/, 'configured'),
+    0,
+    'an absolute URI is accepted in silence',
+  );
+});
+
+// ---- The supporting-files disposition ----
+
+test('an unrecognized on_supporting_files keeps warn, the safer of the two', () => {
+  // The key takes 'warn' or 'omit', and everything else falls back to 'warn'.
+  // The fallback is invisible in the published tree BY DESIGN -- 'warn' is
+  // also the shipped default, so this build publishes exactly what it would
+  // publish with the key absent -- which is why nothing had ever executed it:
+  // baseline and the rest leave the key unset, and `strictskills` sets the one
+  // other accepted value.
+  //
+  // Both halves are asserted, because each catches a different failure. A
+  // deleted guard leaves the unrecognized value in place, where it compares
+  // unequal to "omit" and behaves as 'warn' with nothing said -- caught by the
+  // warning. A fallback pointed at the STRICTER value instead deletes a
+  // published entry over a typo -- caught by the entry.
+  assert.equal(
+    warnCount(/Ignoring \[params.agent.skills_index\] on_supporting_files "delete"/, 'edge'),
+    1,
+  );
+
+  const names = JSON.parse(read('.well-known/agent-skills/index.json', edgeDir)).skills.map(
+    (s) => s.name,
+  );
+  assert.ok(
+    names.includes('fixture-multi'),
+    'the proven multi-file skill still publishes, which is what "warn" means',
+  );
+  assert.equal(
+    warnCount(/agent skill "fixture-multi" is a MULTI-FILE skill.*Publishing it anyway/, 'edge'),
+    1,
+    'and the disposition that published it is named in the warning',
+  );
 });
 
 // ---- Skill name uniqueness ----

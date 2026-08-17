@@ -293,6 +293,43 @@ export function parseDump(rel, dir) {
   };
 }
 
+// Every path the fixture origin was asked for, across every build of the run,
+// as a Set. `serve-origin.mjs` truncates its log before opening the socket and
+// appends one `<method> <path>` line per request; the method is dropped here
+// because `resources.GetRemote` issues nothing but GET.
+//
+// A SET, not a list, and deliberately not a count. The log spans all twenty-two
+// builds, so a per-build count is neither derivable from it nor stable --
+// request counts were measured varying run to run on one route. What IS stable,
+// and what the assertions built on this need, is whether a path was EVER asked
+// for: a guard that refuses to probe a candidate and a budget that stops after
+// four both claim exactly that, and a published tree cannot show it.
+//
+// The path is fixed by the origin rather than passed in by a runner, so there
+// is one place to keep it in step rather than three.
+const ORIGIN_REQUEST_LOG = resolve(moduleRoot, 'test/fixture-origin-requests.log');
+
+export function originRequestedPaths() {
+  if (!existsSync(ORIGIN_REQUEST_LOG)) {
+    // Throwing rather than returning an empty set: an absent log makes every
+    // "was never requested" assertion pass while proving nothing, which is the
+    // exact failure the buildLog map above throws for.
+    throw new Error(
+      `${ORIGIN_REQUEST_LOG} is missing. The fixture origin writes it as it starts, so the builds ran without one; drive the suite through run-tests.sh or run-tests.cmd.`,
+    );
+  }
+  const paths = readFileSync(ORIGIN_REQUEST_LOG, 'utf8')
+    .split(/\r?\n/)
+    .filter((line) => line !== '')
+    .map((line) => line.slice(line.indexOf(' ') + 1));
+  if (paths.length === 0) {
+    throw new Error(
+      `${ORIGIN_REQUEST_LOG} is empty, so no build fetched anything from the origin.`,
+    );
+  }
+  return new Set(paths);
+}
+
 export function buildLog(which = 'baseline') {
   const keys = {
     baseline: 'HUGO_BUILD_LOG',

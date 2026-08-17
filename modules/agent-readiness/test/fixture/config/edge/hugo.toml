@@ -40,6 +40,12 @@
 #      consumer's wording, under their chosen heading, and no `## Start here`
 #      at all. Every other build proves the opposite half, that the heading
 #      appears with no consumer configuration whatsoever.
+#
+#   7. The two [params.agent.skills_index] scalars written wrong: a `$schema`
+#      that is not an absolute URI, and an `on_supporting_files` outside the
+#      key's two-value vocabulary. Every other build leaves both at their
+#      shipped values or sets a valid one, so neither fallback has anywhere
+#      else to execute.
 baseURL = 'https://example.org/docs/'
 
 [params]
@@ -55,6 +61,17 @@ baseURL = 'https://example.org/docs/'
     # stands in for it and the substitution is named.
     [params.agent.skills_index]
       schema = 'agent-skills/0.2.0'
+
+      # A disposition outside the key's two-value vocabulary, and the third
+      # thing a consumer writes after 'warn' and 'omit'. It falls back to the
+      # SAFER value, 'warn', which is also the shipped default -- so the
+      # fallback publishes exactly the bytes this build would publish with the
+      # key absent, and only the warning distinguishes a working guard from a
+      # deleted one. That is why the assertion reads both the warning and the
+      # entry the disposition governs: a fallback silently switched to 'omit'
+      # would delete `fixture-multi` from this index while the warning still
+      # fired.
+      on_supporting_files = 'delete'
 
     [params.agent.license]
       # Deliberately no `name`. The llms.txt line is composed as [name](url),
