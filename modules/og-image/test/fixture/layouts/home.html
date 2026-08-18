@@ -9,13 +9,13 @@
         "path" (printf "%v" .Path)
         "kind" (printf "%v" .Kind)
         "section" (printf "%v" .Section)
-        "lang" .Language.Lang
+        "lang" .Language.Name
         "url" .RelPermalink
-        "sidecar" (path.Join "cards" .Language.Lang (printf "%v" .Path) "payload.json")) -}}
+        "sidecar" (path.Join "cards" .Language.Name (printf "%v" .Path) "payload.json")) -}}
   {{- end -}}
   {{- $inventory := resources.FromString
-      (path.Join "inventory" site.Language.Lang "pages.json")
-      (jsonify (dict "lang" site.Language.Lang "pages" $items)) -}}
+      (path.Join "inventory" site.Language.Name "pages.json")
+      (jsonify (dict "lang" site.Language.Name "pages" $items)) -}}
   {{- $publishedInventory := $inventory.RelPermalink -}}
 
   {{/* Cards composed for a page of ANOTHER language while THIS language is
@@ -25,7 +25,7 @@
        the page's own language give different answers. */}}
   {{- $cross := slice -}}
   {{- range $other := hugo.Sites -}}
-    {{- if ne $other.Language.Lang site.Language.Lang -}}
+    {{- if ne $other.Language.Name site.Language.Name -}}
       {{- range $foreign := $other.Pages -}}
         {{- $urls := slice -}}
         {{/* A variant no other caller uses, so the memo cannot hand back a
@@ -44,15 +44,15 @@
         {{- $cross = $cross | append (dict
             "path" (printf "%v" $foreign.Path)
             "kind" (printf "%v" $foreign.Kind)
-            "lang" $foreign.Language.Lang
-            "rendered_by" site.Language.Lang
+            "lang" $foreign.Language.Name
+            "rendered_by" site.Language.Name
             "cards" $urls) -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}
   {{- $crossFile := resources.FromString
-      (path.Join "crosslang" site.Language.Lang "pages.json")
-      (jsonify (dict "rendered_by" site.Language.Lang "pages" $cross)) -}}
+      (path.Join "crosslang" site.Language.Name "pages.json")
+      (jsonify (dict "rendered_by" site.Language.Name "pages" $cross)) -}}
   {{- $publishedCross := $crossFile.RelPermalink -}}
 
   <h1>{{ .Title }}</h1>

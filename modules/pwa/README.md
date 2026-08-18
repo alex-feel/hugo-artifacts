@@ -139,7 +139,7 @@ If you are already on a subpath and were compensating by hand -- writing `sw_pat
 | `scope` | string | `"/"` | URL prefix scope for the PWA install. Site-root-relative: normalized against `baseURL`, and NOT language-prefixed (a multilingual site that wants a per-language app sets this explicitly). |
 | `start_url` | string | `"/"` | Launch URL. Set to `"/?source=pwa"` for analytics discrimination. Site-root-relative: normalized against `baseURL`. |
 | `id` | string | `"/"` | Stable PWA identity per W3C. **Set once, never change** (changing breaks reinstalls). Site-root-relative: normalized against `baseURL` -- see [Paths and subpath deployments](#paths-and-subpath-deployments-baseurl-with-a-path) for why, and for how to pin a historical value. |
-| `lang` | string | `""` | BCP47 language tag. Falls back to `site.Language.Lang`. |
+| `lang` | string | `""` | BCP47 language tag. Falls back to `site.Language.Name`. |
 | `dir` | string | `""` | Text direction (`ltr`, `rtl`, `auto`). |
 | `categories` | array | `[]` | Optional W3C category tags (see [W3C Manifest spec](https://w3c.github.io/manifest/)). Must be a LIST: the member is typed as a sequence, so a single value written for it (`categories = "news"` rather than `["news"]`) is ignored with one build warning rather than published as a JSON string a validator rejects. |
 

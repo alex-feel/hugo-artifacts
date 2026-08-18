@@ -115,6 +115,14 @@ jobs:
         shell: bash
         run: npm run check:pins
 
+      - name: Templates call no retired Hugo language method
+        shell: bash
+        # The one deprecation class no build can report: `.Lang` is retired in
+        # Hugo's documentation while its code says nothing, so a suite grepping
+        # its build log for a deprecation stays green over a template that uses
+        # it. This step is where that spelling is caught.
+        run: npm run check:hugo-api
+
       - name: Hugo mod graph (standalone modules)
         shell: bash
         run: |
@@ -294,12 +302,13 @@ jobs:
             run: bash run-tests.sh
           # The SECOND url-retirement row runs the same suite at the module's
           # declared hugoVersion floor. Both documents it publishes rest on
-          # Hugo behaviors the documentation does not describe -- that output
-          # formats render one at a time across the whole site and that a
-          # non-zero weight orders those passes, that a root-published format on
-          # a multilingual site is written by the last language to render, and
-          # how a suffix-less format's template is named -- so the only way to
-          # know they hold at the version the module promises is to build there.
+          # Hugo behaviors the documentation does not describe -- that a
+          # language renders its output formats one at a time and a non-zero
+          # weight orders those passes, that a root-published format is written
+          # by the last language to render where the languages share a domain
+          # and once per host where each has its own, and how a suffix-less
+          # format's template is named -- so the only way to know they hold at
+          # the version the module promises is to build there.
           # A floor nothing runs at is a promise to consumers that nothing
           # checks.
           - name: url-retirement (at the declared Hugo floor)

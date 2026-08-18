@@ -47,7 +47,7 @@
     "key" "params.pwa.manifest.id") -}}
 {{- $display := $cfg.display -}}
 {{- $displayOverride := $cfg.display_override -}}
-{{- $lang := $cfg.lang | default site.Language.Lang -}}
+{{- $lang := $cfg.lang | default site.Language.Name -}}
 {{- $dir := $cfg.dir -}}
 {{- $categories := $cfg.categories -}}
 
