@@ -11,7 +11,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check:pins": "bash scripts/check-module-pins.sh",
-    "check": "npm run lint && npm run format:check && npm run lint:md && npm run check:pins"
+    "check:hugo-api": "bash scripts/check-deprecated-hugo-api.sh",
+    "check": "npm run lint && npm run format:check && npm run lint:md && npm run check:pins && npm run check:hugo-api"
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",

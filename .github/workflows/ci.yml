@@ -115,6 +115,14 @@ jobs:
         shell: bash
         run: npm run check:pins
 
+      - name: Templates call no retired Hugo language method
+        shell: bash
+        # The one deprecation class no build can report: `.Lang` is retired in
+        # Hugo's documentation while its code says nothing, so a suite grepping
+        # its build log for a deprecation stays green over a template that uses
+        # it. This step is where that spelling is caught.
+        run: npm run check:hugo-api
+
       - name: Hugo mod graph (standalone modules)
         shell: bash
         run: |
