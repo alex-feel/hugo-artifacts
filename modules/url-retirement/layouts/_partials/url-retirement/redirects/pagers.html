@@ -36,8 +36,22 @@
   /_redirects is one file that cannot hold two answers; redirects/lines.html
   reports a site that sets those per language.
 
+  On a MULTIHOST site the walk narrows to the rendering one, for the reason
+  redirects/aliases.html gives: each host publishes its own /_redirects at its
+  own root, so another language's pager rule names a URL that host does not
+  serve. Narrowing also removes a dependence on build order that no site could
+  have seen. Registrations live in the build-global hugo.Store, and each site
+  renders completely before the next one begins (measured at Hugo v0.164.0), so
+  a whole-deployment walk gives the FIRST host a file missing every language
+  that had not rendered yet and the last host a file carrying all of them --
+  output decided by the language weights. Reading only the rendering language's
+  own registrations is complete by construction, because that language's html
+  pass precedes both documents.
+
   Context (dict):
-  - .cfg (dict) Resolved configuration from url-retirement/config.html, for the
+  - .page (Page) The page rendering the document; names the host on a multihost
+    site.
+  - .cfg  (dict) Resolved configuration from url-retirement/config.html, for the
     language rendering the document.
 
   Return value: slice of dicts with `from`, `to` and `status`. Unsorted and
@@ -46,12 +60,18 @@
   One terminal return.
 */}}
 
+{{- $page := .page -}}
 {{- $cfg := .cfg -}}
 {{- $status := $cfg.redirects.status -}}
 {{- $mode := $cfg.redirects.trailing_slash -}}
 {{- $rules := slice -}}
 
-{{- range $site := hugo.Sites -}}
+{{- $sites := hugo.Sites -}}
+{{- if hugo.IsMultihost -}}
+  {{- $sites = slice $page.Site -}}
+{{- end -}}
+
+{{- range $site := $sites -}}
   {{- $lang := $site.Language.Name -}}
   {{- $registered := hugo.Store.GetSortedMapValues (printf "url-retirement:pager-firsts:%s" $lang) -}}
   {{- with $registered -}}

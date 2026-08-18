@@ -9,6 +9,26 @@
   `.Site.AllPages` was deprecated in Hugo v0.156.0, and `.Page.Sites` in the
   same release.
 
+  A MULTIHOST site is the one deployment where that whole-deployment walk is
+  wrong, so the site list narrows to the rendering one. There every language
+  carries its own baseURL and Hugo publishes it into its own directory, which is
+  that host's root, and `root = true` writes a separate /_redirects into each of
+  them -- so each file describes ONE host, and a rule built from another
+  language's page names a URL that host does not serve.
+
+  The alias then needs one more correction, because the two sides of a rule come
+  back in different frames of reference. Measured at Hugo v0.164.0: under
+  multihost `.Aliases` carries the language's PUBLISH-DIRECTORY segment for
+  every language, the default one included -- a page whose front matter says
+  `/old-post-one/` reports `/en/old-post-one` even though that site's
+  `.LanguagePrefix` is empty -- while `.RelPermalink` of the same page carries
+  no such segment. The stub Hugo would publish for that alias lands at
+  `en/old-post-one/index.html` inside the publish directory, which the English
+  host serves at /old-post-one/, so the segment names a directory rather than a
+  URL anyone requests. It is therefore stripped, and only when it is actually
+  present, so an alias that legitimately begins with the language's own name
+  keeps every segment the site wrote.
+
   The page a rule points AT is captured with `{{ $p := . }}`, never read as `$`.
   Inside a range, `$` stays bound to the template's top-level context -- the home
   page rendering the document -- so a rule written with `$.RelPermalink` sends
@@ -34,13 +54,23 @@
   One terminal return.
 */}}
 
+{{- $page := .page -}}
 {{- $cfg := .cfg -}}
 {{- $status := $cfg.redirects.status -}}
 {{- $mode := $cfg.redirects.trailing_slash -}}
 {{- $rules := slice -}}
 
-{{- range $site := hugo.Sites -}}
+{{- $sites := hugo.Sites -}}
+{{- if hugo.IsMultihost -}}
+  {{- $sites = slice $page.Site -}}
+{{- end -}}
+
+{{- range $site := $sites -}}
   {{- $base := strings.TrimSuffix "/" (urls.Parse $site.BaseURL).Path -}}
+  {{- $published := "" -}}
+  {{- if hugo.IsMultihost -}}
+    {{- $published = printf "/%s" $site.Language.Name -}}
+  {{- end -}}
   {{- range $p := $site.Pages -}}
     {{- with $p.Aliases -}}
       {{- $target := partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" $p.RelPermalink) -}}
@@ -51,7 +81,13 @@
         {{- if findRE `\s` $alias -}}
           {{- errorf "[url-retirement] Alias %q on %s contains whitespace, which ends a field in the _redirects format. Remove the whitespace from the alias." $alias $p.Path -}}
         {{- else -}}
-          {{- $from := partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" $alias) -}}
+          {{- $retired := $alias -}}
+          {{- with $published -}}
+            {{- if or (eq $retired .) (hasPrefix $retired (printf "%s/" .)) -}}
+              {{- $retired = strings.TrimPrefix . $retired -}}
+            {{- end -}}
+          {{- end -}}
+          {{- $from := partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" $retired) -}}
           {{- range $spelling := partial "url-retirement/lib/spellings.html" (dict "url" $from "mode" $mode) -}}
             {{- $rules = $rules | append (dict "from" $spelling "to" $target "status" $status) -}}
           {{- end -}}

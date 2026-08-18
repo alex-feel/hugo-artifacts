@@ -20,8 +20,11 @@
   # every language therefore renders the same path, and the last language to
   # render wins -- which is harmless only because home.redirects builds the
   # whole file from every language through `.Sites`, so all of them emit
-  # identical bytes. isPlainText switches to text/template so Go's HTML
-  # auto-escaping cannot mangle a URL. notAlternative keeps the file out of
+  # identical bytes. A multihost site is the exception: every language has its
+  # own publish root there, so `root` resolves to a DIFFERENT path per language
+  # and each host receives its own file, which the redirect producers build from
+  # the rendering language alone. isPlainText switches to text/template so Go's
+  # HTML auto-escaping cannot mangle a URL. notAlternative keeps the file out of
   # .AlternativeOutputFormats: it is a host configuration file, not a
   # representation of the home page.
   [outputFormats.redirects]
@@ -41,11 +44,11 @@
   # could only ever be complete for whichever language rendered last.
   #
   # `weight` is load-bearing and must stay ABOVE the html format's 10. Hugo
-  # renders one output format at a time across the whole site, and pager URLs
-  # are registered by the site's own list templates during the html pass; a
-  # manifest rendered before that pass would publish an empty pager set. A
-  # non-zero weight also sorts this format ahead of every zero-weight one,
-  # which costs nothing because the manifest reads no other format's output.
+  # renders one output format at a time within a language, and pager URLs are
+  # registered by the site's own list templates during the html pass; a manifest
+  # rendered before that pass would publish an empty pager set. A non-zero
+  # weight also sorts this format ahead of every zero-weight one, which costs
+  # nothing because the manifest reads no other format's output.
   [outputFormats.urlmanifest]
     mediaType = 'text/plain'
     baseName = 'url-manifest'

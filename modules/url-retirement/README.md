@@ -125,7 +125,7 @@ Nothing here needs configuring. The module reads the shape off the default site 
 
 One dimension only: Hugo mints the same redirect for a default role and a default version, and `disableDefaultSiteRedirect` covers all three, but a site using those dimensions has a URL surface this module does not describe.
 
-The last row of the table is a limit rather than a feature. A multihost site -- one giving each language its own `baseURL` -- gets no redirect from Hugo and none from this module, but it is not otherwise supported: `/_redirects` is then published once per host and each copy carries every language's rules, which is wrong on all of them. Use the module on a shared-domain multilingual site.
+The last row is a limit on this one rule rather than on the module. A multihost site -- one giving each language its own `baseURL` -- gets no such redirect from Hugo and needs none, because every language is already served at its own host root; what it does get is described under `/_redirects` below.
 
 ## What gets published
 
@@ -150,6 +150,8 @@ A pager rule is emitted for every paginator your templates register, whatever `[
 Every retired URL appears in two spellings by default. Hugo's `.Aliases` returns a path without a trailing slash, while the stub it would have published lands at `<alias>/index.html`, so the URL your visitors and Google actually hold carries the slash. Netlify documents that it normalizes the difference when matching; Cloudflare's documentation does not say that it does. Set `trailing_slash` to `slash` or `bare` once you know your host's behavior -- Cloudflare Pages caps the file at 2,000 static rules.
 
 On a multilingual site the file is published once at the site root and contains every language's aliases, each pointing at its own translation, plus the one rule for the default site's redirect.
+
+On a **multihost** site there is no shared root to publish it to. Hugo gives every language its own publish root, so this file is written once per HOST, and each copy describes that host alone: its own pages' aliases, its own registered pagers, and its own `redirects` settings, which may legitimately differ from another language's. Retired URLs there are host-relative, because that is what the host serves -- an alias Hugo reports as `/de/alter-pfad` is served at `/alter-pfad` on the German host, and the rule says so. Nothing needs configuring for this; the module reads the shape off `hugo.IsMultihost`.
 
 ### `/url-manifest.txt`
 
@@ -182,6 +184,8 @@ comm -23 live.txt built.txt   # URLs production serves that this build no longer
 
 One manifest per language means the path depends on where that language sits. A default language served at the root publishes `/url-manifest.txt` and the others `/<lang>/url-manifest.txt`; under `defaultContentLanguageInSubdir = true` there is no manifest at the root at all, and the check starts at `/<defaultLang>/url-manifest.txt`. Every manifest's header names its siblings, so one of them is enough to find the rest.
 
+On a multihost site each host publishes its own manifest at its own root, and the header names the others by their full URL rather than by a path, since a path on one host does not name a file on another.
+
 ## Parameters
 
 Every key lives under `[params.url_retirement]` and is overridable there; the shipped values are in `data/url-retirement/defaults.toml`, where each one is documented beside its reason. There is deliberately no front-matter tier: both documents describe the whole site, and a single page cannot hold an opinion about a site-wide file without every other page contradicting it.
@@ -206,7 +210,7 @@ The boolean check is two-sided on purpose. Matching only the true spellings woul
 
 The one exception is deliberate. An alias containing whitespace is a build ERROR naming both the alias and the page, because whitespace ends a field in this file format: Hugo neither sanitizes nor rejects such an alias, and the alternative to failing is publishing a rule that redirects somewhere nobody asked for.
 
-On a multilingual site, `redirects` settings that resolve differently per language are reported once. `/_redirects` is published at the site root, so whichever language renders last would decide the file's contents; keep those keys in the site-wide table rather than inside `[languages.<lang>]`.
+On a multilingual site, `redirects` settings that resolve differently per language are reported once. `/_redirects` is published at the site root, so whichever language renders last would decide the file's contents; keep those keys in the site-wide table rather than inside `[languages.<lang>]`. A multihost site is exempt: each host has its own copy of the file, so a per-language `status` or `trailing_slash` is a real choice rather than a collision, and nothing is reported.
 
 ## What the manifest cannot see
 

@@ -24,9 +24,20 @@
   the first call per page and output format, and a module that made that call
   would silently replace your filtered, sized collection with the default one.
 
-  Ordering is safe by construction. Hugo renders one output format at a time
-  across the whole site, and both documents are declared so they render after
-  the html pass, so every registration is already recorded when they are built.
+  Ordering is safe by construction for the registrations a document actually
+  reads. Within one language Hugo renders one output format at a time, and both
+  documents are declared so they render after the html pass, so every
+  registration THAT language made is already recorded when they are built.
+
+  Across languages it is weaker than it looks, which matters to one reader only.
+  Each language renders completely before the next one begins -- measured at
+  Hugo v0.164.0 -- so a document reading another language's registrations reads
+  what that language had recorded by then, which is nothing at all when it has
+  not rendered yet. /_redirects is the one document that ever wanted them, and
+  on a shared-domain site the last language to render overwrites the file with a
+  complete copy. A multihost site has no such overwrite, because each host keeps
+  its own file, so redirects/pagers.html reads only the rendering language's
+  registrations there.
 
   Three things are recorded, all scoped by language because the store is
   build-global: every pager URL, for the manifest; the list page itself, from

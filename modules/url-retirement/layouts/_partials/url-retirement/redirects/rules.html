@@ -19,6 +19,13 @@
   would leave the file unsorted, and sorted order is what puts claimants of one
   URL next to each other so a single walk finds them.
 
+  The conflict walk needs no multihost arm of its own, and the reason is worth
+  stating because a reader looks for one here. A conflict is two rules claiming
+  one source path IN ONE FILE, and on a multihost site each host publishes its
+  own; the producers narrow to the rendering host accordingly, so this set never
+  mixes two hosts and two hosts retiring the same path to their own separate
+  replacements are not in conflict at all.
+
   Context (dict):
   - .page (Page) The page rendering the document, for diagnostics.
   - .cfg  (dict) Resolved configuration from url-retirement/config.html.
@@ -38,7 +45,7 @@
 {{- range $r := partial "url-retirement/redirects/aliases.html" (dict "page" $page "cfg" $cfg) -}}
   {{- $rules = $rules | append $r -}}
 {{- end -}}
-{{- range $r := partial "url-retirement/redirects/pagers.html" (dict "cfg" $cfg) -}}
+{{- range $r := partial "url-retirement/redirects/pagers.html" (dict "page" $page "cfg" $cfg) -}}
   {{- $rules = $rules | append $r -}}
 {{- end -}}
 {{- range $r := partial "url-retirement/redirects/language-root.html" (dict "cfg" $cfg) -}}
