@@ -4,7 +4,10 @@
   Purpose: builds every line of /_redirects -- the site's hand-written rules
   verbatim, then the generated rules: one per alias of every page of every
   language, and one per registered paginator for the first pager Hugo stops
-  publishing -- and RETURNS them. It prints nothing, which is not a style
+  publishing -- and RETURNS them. On a multihost site the generated rules cover
+  the rendering language alone, because Hugo gives that language its own host
+  and writes it its own copy of this file; redirects/aliases.html carries the
+  reasoning. It prints nothing, which is not a style
   preference: a partial named .html is parsed as an HTML template, so anything
   it emits is HTML-escaped before it reaches a plain-text output format, and a
   manifest of URLs would arrive carrying &#34; and &amp;. A returned value
@@ -43,15 +46,24 @@
      pagination_path decides the shape of ONE language's pager URLs, Hugo's own
      pagination.path is a per-language setting, and redirects/pagers.html reads
      it per language accordingly. Adding it here would report a site for
-     localizing a URL segment Hugo invites it to localize. */}}
-{{- $signature := printf "enable=%v redirects=%v rules=%q status=%s trailing_slash=%s"
-    $cfg.enable $cfg.redirects.enable $cfg.redirects.rules $cfg.redirects.status $cfg.redirects.trailing_slash -}}
-{{- hugo.Store.SetInMap "url-retirement:redirects-signature" $cfg.lang $signature -}}
-{{- $signatures := uniq (hugo.Store.GetSortedMapValues "url-retirement:redirects-signature") -}}
-{{- if gt (len $signatures) 1 -}}
-  {{- partial "url-retirement/lib/warn.html" (dict
-      "key" "url-retirement:warn:divergent-redirects-config"
-      "message" (printf "[url-retirement] params.url_retirement.redirects resolves differently per language (%s). /_redirects is published once at the site root, so whichever language renders last decides its contents. Move these settings out of the [languages.<lang>] tables into the site-wide [params.url_retirement] table." (delimit $signatures "; "))) -}}
+     localizing a URL segment Hugo invites it to localize.
+
+     A MULTIHOST site is exempt, premise and all: there every language has its
+     own baseURL and Hugo gives it its own publish root, so `root = true` writes
+     a SEPARATE file per host and no language's render overwrites another's.
+     Settings that differ per language are then exactly what each host's own
+     file should carry, and reporting them would tell a site to remove a
+     difference its deployment shape invites. */}}
+{{- if not hugo.IsMultihost -}}
+  {{- $signature := printf "enable=%v redirects=%v rules=%q status=%s trailing_slash=%s"
+      $cfg.enable $cfg.redirects.enable $cfg.redirects.rules $cfg.redirects.status $cfg.redirects.trailing_slash -}}
+  {{- hugo.Store.SetInMap "url-retirement:redirects-signature" $cfg.lang $signature -}}
+  {{- $signatures := uniq (hugo.Store.GetSortedMapValues "url-retirement:redirects-signature") -}}
+  {{- if gt (len $signatures) 1 -}}
+    {{- partial "url-retirement/lib/warn.html" (dict
+        "key" "url-retirement:warn:divergent-redirects-config"
+        "message" (printf "[url-retirement] params.url_retirement.redirects resolves differently per language (%s). /_redirects is published once at the site root, so whichever language renders last decides its contents. Move these settings out of the [languages.<lang>] tables into the site-wide [params.url_retirement] table." (delimit $signatures "; "))) -}}
+  {{- end -}}
 {{- end -}}
 
 {{- if and $cfg.enable $cfg.redirects.enable -}}

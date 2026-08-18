@@ -1,7 +1,7 @@
 @echo off
-rem Builds the fixture site FIFTEEN TIMES with hugo (a BUILD, not a server: no
+rem Builds the fixture site SIXTEEN TIMES with hugo (a BUILD, not a server: no
 rem port binding, and a finite build exits by itself) and runs the Node
-rem build-output assertion suite against the fourteen trees that succeed. Windows
+rem build-output assertion suite against the fifteen trees that succeed. Windows
 rem mirror of run-tests.sh: pre-launch process check, then a hard fail on any
 rem deprecation or error output in any build log.
 rem
@@ -18,7 +18,9 @@ rem twice; the `multilingual` environment is the only shape in which one
 rem _redirects file is written by two languages, `multilingual-partial` the
 rem only one where a sibling exists but publishes nothing, and
 rem `multilingual-subdir` the only one that moves the default language into its
-rem own directory, which reverses the root redirect; `pagerpath` renames
+rem own directory, which reverses the root redirect, and `multihost` the only
+rem one giving each language its own baseURL, where /_redirects is written once
+rem per host rather than once for the deployment; `pagerpath` renames
 rem the pagination segment without telling the module, so a rule carrying that
 rem name was derived from a pager URL rather than read from configuration;
 rem `ugly` is the only build in which the URL Hugo reports for a page and the
@@ -43,6 +45,7 @@ set LOG_PARTIAL=%~dp0hugo-build-partial.log
 set LOG_CONFLICT=%~dp0hugo-build-conflict.log
 set LOG_MULTIPARTIAL=%~dp0hugo-build-multilingual-partial.log
 set LOG_MULTISUBDIR=%~dp0hugo-build-multilingual-subdir.log
+set LOG_MULTIHOST=%~dp0hugo-build-multihost.log
 set LOG_OFF=%~dp0hugo-build-off.log
 set LOG_MULTILINGUAL=%~dp0hugo-build-multilingual.log
 set LOG_SUBPATH=%~dp0hugo-build-subpath.log
@@ -129,6 +132,13 @@ if errorlevel 1 (
   popd
   exit /b 1
 )
+hugo -e multihost --logLevel info --cleanDestinationDir --destination public\multihost > "%LOG_MULTIHOST%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(multihost^):
+  type "%LOG_MULTIHOST%"
+  popd
+  exit /b 1
+)
 hugo -e subpath --logLevel info --cleanDestinationDir --destination public\subpath > "%LOG_SUBPATH%" 2>&1
 if errorlevel 1 (
   echo hugo build failed ^(subpath^):
@@ -168,7 +178,7 @@ if not errorlevel 1 (
 )
 popd
 
-for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_DEGRADED%" "%LOG_SHAPES%" "%LOG_PARTIAL%" "%LOG_CONFLICT%" "%LOG_OFF%" "%LOG_MULTILINGUAL%" "%LOG_MULTIPARTIAL%" "%LOG_MULTISUBDIR%" "%LOG_SUBPATH%" "%LOG_CANONIFY%" "%LOG_PAGERPATH%" "%LOG_UGLY%") do (
+for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_DEGRADED%" "%LOG_SHAPES%" "%LOG_PARTIAL%" "%LOG_CONFLICT%" "%LOG_OFF%" "%LOG_MULTILINGUAL%" "%LOG_MULTIPARTIAL%" "%LOG_MULTISUBDIR%" "%LOG_MULTIHOST%" "%LOG_SUBPATH%" "%LOG_CANONIFY%" "%LOG_PAGERPATH%" "%LOG_UGLY%") do (
   findstr /I "deprecat" %%L >nul 2>&1
   if not errorlevel 1 (
     echo Hugo reported deprecations in %%L:
@@ -186,7 +196,7 @@ for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_DEGRADED%" "%LOG_SHAPES%" 
 rem Every build except `degraded` is gated on warnings: the happy path is
 rem silent, and producing one diagnostic per fault is the only thing the
 rem degraded build exists to demonstrate.
-for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_PARTIAL%" "%LOG_OFF%" "%LOG_MULTILINGUAL%" "%LOG_MULTIPARTIAL%" "%LOG_MULTISUBDIR%" "%LOG_SUBPATH%" "%LOG_CANONIFY%" "%LOG_PAGERPATH%" "%LOG_UGLY%") do (
+for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_PARTIAL%" "%LOG_OFF%" "%LOG_MULTILINGUAL%" "%LOG_MULTIPARTIAL%" "%LOG_MULTISUBDIR%" "%LOG_MULTIHOST%" "%LOG_SUBPATH%" "%LOG_CANONIFY%" "%LOG_PAGERPATH%" "%LOG_UGLY%") do (
   findstr /C:"WARN" %%L >nul 2>&1
   if not errorlevel 1 (
     echo A build that must warn about nothing did: %%L
@@ -205,6 +215,7 @@ set FIXTURE_PUBLIC_PARTIAL=%~dp0fixture\public\partial
 set FIXTURE_PUBLIC_CONFLICT=%~dp0fixture\public\conflict
 set FIXTURE_PUBLIC_MULTIPARTIAL=%~dp0fixture\public\multilingual-partial
 set FIXTURE_PUBLIC_MULTISUBDIR=%~dp0fixture\public\multilingual-subdir
+set FIXTURE_PUBLIC_MULTIHOST=%~dp0fixture\public\multihost
 set FIXTURE_PUBLIC_OFF=%~dp0fixture\public\off
 set FIXTURE_PUBLIC_MULTILINGUAL=%~dp0fixture\public\multilingual
 set FIXTURE_PUBLIC_SUBPATH=%~dp0fixture\public\subpath
@@ -219,6 +230,7 @@ set HUGO_BUILD_LOG_PARTIAL=%LOG_PARTIAL%
 set HUGO_BUILD_LOG_CONFLICT=%LOG_CONFLICT%
 set HUGO_BUILD_LOG_MULTIPARTIAL=%LOG_MULTIPARTIAL%
 set HUGO_BUILD_LOG_MULTISUBDIR=%LOG_MULTISUBDIR%
+set HUGO_BUILD_LOG_MULTIHOST=%LOG_MULTIHOST%
 set HUGO_BUILD_LOG_OFF=%LOG_OFF%
 set HUGO_BUILD_LOG_MULTILINGUAL=%LOG_MULTILINGUAL%
 set HUGO_BUILD_LOG_SUBPATH=%LOG_SUBPATH%

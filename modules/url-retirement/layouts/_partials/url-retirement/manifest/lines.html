@@ -79,14 +79,27 @@
        the manifest switched on -- a per-language `manifest.enable = false` is
        invisible in the format wiring. Naming a file that was never written
        breaks the one discovery mechanism this header exists to provide, so both
-       are checked rather than the cheaper one. */}}
+       are checked rather than the cheaper one.
+
+       A sibling on ANOTHER HOST is named absolutely, and only .Permalink can do
+       it. Under multihost every language has its own baseURL and its own
+       publish root, so a foreign manifest's .RelPermalink is /url-manifest.txt
+       -- measured at Hugo v0.164.0, and identical to the path this host serves
+       its OWN manifest at, which turns the one line that exists to point
+       somewhere else into a line pointing back here. .Permalink carries that
+       language's host, which is the only form a checker starting on this host
+       can follow. */}}
   {{- $siblings := slice -}}
   {{- range $s := hugo.Sites -}}
     {{- if ne $s.Language.Name $cfg.lang -}}
       {{- with $s.Home.OutputFormats.Get "urlmanifest" -}}
         {{- $scfg := partial "url-retirement/config.html" (dict "page" $s.Home) -}}
         {{- if and $scfg.enable $scfg.manifest.enable -}}
-          {{- $siblings = $siblings | append (partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" .RelPermalink)) -}}
+          {{- if hugo.IsMultihost -}}
+            {{- $siblings = $siblings | append .Permalink -}}
+          {{- else -}}
+            {{- $siblings = $siblings | append (partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" .RelPermalink)) -}}
+          {{- end -}}
         {{- end -}}
       {{- end -}}
     {{- end -}}

@@ -1,6 +1,6 @@
 # url-retirement module test suite
 
-Build-output assertions over the two documents this module publishes. The runner builds `./fixture` fifteen times and the specs read the published bytes; nothing is mocked, and no assertion is made against a template.
+Build-output assertions over the two documents this module publishes. The runner builds `./fixture` sixteen times and the specs read the published bytes; nothing is mocked, and no assertion is made against a template.
 
 ## Prerequisites
 
@@ -15,7 +15,7 @@ run-tests.cmd              # Windows
 
 Either script refuses to start while a `hugo` process is running, removes `fixture/public`, builds every environment, and fails on any deprecation or error in any build log. Every build except `degraded`, `degraded-shapes` and `conflict` must also be silent: a warning there is a failure, and those three exist to produce the diagnostics the specs read.
 
-## The fifteen builds
+## The sixteen builds
 
 | Environment | Why it cannot be merged into another |
 | --- | --- |
@@ -29,6 +29,7 @@ Either script refuses to start while a `hugo` process is running, removes `fixtu
 | `multilingual` | The only shape in which one `_redirects` file is written by two languages and each manifest has a sibling to name. German also localizes `pagination.path` and paginates nothing past one pager, which is the only case where the first-pager segment comes from configuration rather than from a pager URL -- English, in the same build, derives its own. |
 | `multilingual-partial` | The second language wires the format but switches its manifest off, so the sibling the first language's header would name is never written. Only a per-language read of the configuration can see this; the format wiring is identical in both. |
 | `multilingual-subdir` | The default language moved into its own directory, which reverses the redirect Hugo runs between the site root and that language: `/` -> `/en/` instead of `/en/` -> `/`. It is the only build in which the retired URL is the site root, and therefore the only one that exercises the single-spelling case -- the bare form of `/` is the empty string, which no host matches. |
+| `multihost` | A baseURL per language, so Hugo gives each one its own publish root and `root = true` resolves to a different path per language. The only build in which `/_redirects` is written once per HOST rather than once for the deployment, and therefore the only one in which a rule can be right for the file it landed in and wrong for the host serving it. It is also the only build where two languages legitimately resolve different `redirects` settings, and the only one carrying both a baseURL path and the language publish directory Hugo prefixes onto every alias -- German serves from `/docs`, so the two are different strings and a rule has to drop one while keeping the other. German keeps weight 1 and renders first, which is what makes the build check completeness rather than luck. |
 | `subpath` | A baseURL carrying a path: the only shape in which a rule that keeps the base segment and one that drops it are different bytes. Two languages, because the default site's redirect is the one generated rule whose source path is built rather than read off a page, and this is the only build where it has a base segment to carry. |
 | `canonify` | The same baseURL and the same two languages with `canonifyURLs`, under which `.RelPermalink` stops carrying that segment on its own. Paired with `subpath`, which it must match byte for byte. |
 | `pagerpath` | `[pagination] path` renamed with nothing telling the module about it. Everywhere else the segment the module derives and the one it ships as a default are the same word, so this is the only build in which a rule proves the derivation happened -- and the only one where a single-pager list can be shown taking the segment another list in its language named. |
@@ -50,6 +51,7 @@ Either script refuses to start while a `hugo` process is running, removes `fixtu
 | `09-subpath.spec.js` | Both sides of every rule carry the base segment -- including the default site's redirect, whose source path the module builds rather than reads -- every manifest URL carries it, and the subpath and canonified builds are byte-identical. |
 | `10-readme.spec.js` | Every key the data file ships is documented in the module README, derived from the data file so a new key cannot arrive undocumented. |
 | `11-validation.spec.js` | The validation surface the README promises: a misspelled boolean, a table where a path belongs and an `extra` entry that is not server-relative are each reported once and each leaves the default standing; one document switches off without taking the other; three pages claiming one alias produce one diagnostic naming all three; and a language publishing no manifest is not named as a sibling. |
+| `12-multihost.spec.js` | One redirect map per host, each carrying its own language's aliases and pagers and none of the other's, with the publish directory Hugo prefixes onto an alias dropped from both languages -- the default one included -- and a baseURL path kept on both sides of every rule. Then the first-rendering host being complete, each host's own pagination segment and redirect status, no divergence diagnostic, no default-site redirect, no rule made inert by a published file, and per-host manifests naming their siblings by full URL and listing exactly what their own host wrote. |
 
 ## Re-running one spec
 

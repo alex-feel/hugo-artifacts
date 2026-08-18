@@ -1,0 +1,53 @@
+# Every language on its own host, which is the one deployment where `root =
+# true` resolves to a different path per language and Hugo writes a SEPARATE
+# /_redirects into each of them instead of one file the last render overwrites.
+# Each copy therefore describes ONE host, and a rule built from another
+# language's page names a URL that host does not serve -- which no other build
+# here can show, because everywhere else the languages share a webroot and a
+# rule for any of them is correct in the one file they share.
+#
+# German serves from a PATH rather than a domain root, so this is also the only
+# build carrying both segments a multihost rule has to get right at once and
+# carrying them as different strings: the baseURL's own `/docs`, which every
+# rule keeps, and the `/de` publish directory Hugo puts in front of that
+# language's aliases, which no host ever serves and every rule drops. A pair of
+# domain-root hosts would leave the second one invisible.
+#
+# German also sets its own redirect status while English leaves the default.
+# Two languages resolving different redirect settings is reported on a
+# shared-domain site, where one file cannot hold both answers; here each host
+# has its own file, so the difference is legitimate and the build must stay
+# silent about it.
+#
+# German keeps weight 1 and so renders FIRST, which is what makes this build
+# check completeness rather than luck: pager URLs are recorded in the
+# build-global store during each language's own html pass, so a file assembled
+# from every language would leave the first host missing everything English had
+# not registered yet.
+
+defaultContentLanguage = 'en'
+
+[languages]
+
+  [languages.de]
+    baseURL = 'https://de.url-retirement.example/docs/'
+    weight = 1
+    title = 'URL-Stilllegung'
+    contentDir = 'content-de'
+
+    # Restated rather than inherited: a language's [pagination] table REPLACES
+    # the site-wide one instead of merging with it.
+    [languages.de.pagination]
+      path = 'seite'
+      pagerSize = 2
+      disableAliases = true
+
+    [languages.de.params.url_retirement.redirects]
+      pagination_path = 'seite'
+      status = '308'
+
+  [languages.en]
+    baseURL = 'https://en.url-retirement.example/'
+    weight = 2
+    title = 'URL Retirement Fixture'
+    contentDir = 'content'

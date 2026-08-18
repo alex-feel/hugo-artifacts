@@ -45,6 +45,11 @@ export const multiSubdirDir = dir(
   'FIXTURE_PUBLIC_MULTISUBDIR',
   'fixture/public/multilingual-subdir',
 );
+// A baseURL per language, so each one is published into its own directory,
+// which is that host's root: the only build in which /_redirects is written
+// once PER HOST rather than once for the deployment. German additionally serves
+// from a path, and sets its own redirect status.
+export const multihostDir = dir('FIXTURE_PUBLIC_MULTIHOST', 'fixture/public/multihost');
 // A baseURL carrying a path: the only shape in which a rule that keeps the base
 // segment and one that drops it are different bytes.
 export const subpathDir = dir('FIXTURE_PUBLIC_SUBPATH', 'fixture/public/subpath');
@@ -69,6 +74,7 @@ const LOG_KEYS = {
   off: 'HUGO_BUILD_LOG_OFF',
   multilingual: 'HUGO_BUILD_LOG_MULTILINGUAL',
   multiSubdir: 'HUGO_BUILD_LOG_MULTISUBDIR',
+  multihost: 'HUGO_BUILD_LOG_MULTIHOST',
   subpath: 'HUGO_BUILD_LOG_SUBPATH',
   canonify: 'HUGO_BUILD_LOG_CANONIFY',
   pagerpath: 'HUGO_BUILD_LOG_PAGERPATH',
