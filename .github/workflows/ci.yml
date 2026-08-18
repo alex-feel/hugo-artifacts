@@ -302,12 +302,13 @@ jobs:
             run: bash run-tests.sh
           # The SECOND url-retirement row runs the same suite at the module's
           # declared hugoVersion floor. Both documents it publishes rest on
-          # Hugo behaviors the documentation does not describe -- that output
-          # formats render one at a time across the whole site and that a
-          # non-zero weight orders those passes, that a root-published format on
-          # a multilingual site is written by the last language to render, and
-          # how a suffix-less format's template is named -- so the only way to
-          # know they hold at the version the module promises is to build there.
+          # Hugo behaviors the documentation does not describe -- that a
+          # language renders its output formats one at a time and a non-zero
+          # weight orders those passes, that a root-published format is written
+          # by the last language to render where the languages share a domain
+          # and once per host where each has its own, and how a suffix-less
+          # format's template is named -- so the only way to know they hold at
+          # the version the module promises is to build there.
           # A floor nothing runs at is a promise to consumers that nothing
           # checks.
           - name: url-retirement (at the declared Hugo floor)
