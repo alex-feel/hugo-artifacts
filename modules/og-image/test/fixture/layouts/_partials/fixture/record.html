@@ -94,7 +94,7 @@
     "path" (printf "%v" $page.Path)
     "kind" (printf "%v" $page.Kind)
     "section" (printf "%v" $page.Section)
-    "lang" $page.Language.Lang
+    "lang" $page.Language.Name
     "url" $page.RelPermalink
     "mode" $mode
     "title" (printf "%v" $page.Title)
@@ -116,6 +116,6 @@
 {{/* Reading .RelPermalink is what publishes the resource, so the assignment
      is the publish and its value is deliberately unused. */}}
 {{- $sidecar := resources.FromString
-    (path.Join "cards" $page.Language.Lang (printf "%v" $page.Path) "payload.json")
+    (path.Join "cards" $page.Language.Name (printf "%v" $page.Path) "payload.json")
     (jsonify $payload) -}}
 {{- $published := $sidecar.RelPermalink -}}

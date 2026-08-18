@@ -47,7 +47,7 @@
 */}}
 
 {{- $page := .page -}}
-{{- $lang := $page.Language.Lang -}}
+{{- $lang := $page.Language.Name -}}
 {{- $where := printf "%v" $page.Path -}}
 
 {{/* Tier 1: the data files, which a site can override with its own
