@@ -1,6 +1,6 @@
 # Every value here is wrong on purpose: an unknown status, an unknown
 # trailing-slash mode, a rules path naming no file, a pagination segment
-# carrying a path separator, and a list key given a table. Each must warn once
+# carrying a path separator, and both list keys given a table. Each must warn once
 # and leave the shipped default standing.
 [url_retirement]
 
@@ -13,3 +13,6 @@
   [url_retirement.manifest]
     [url_retirement.manifest.extra]
       not = 'a list'
+
+    [url_retirement.manifest.exclude]
+      not = 'a list either'

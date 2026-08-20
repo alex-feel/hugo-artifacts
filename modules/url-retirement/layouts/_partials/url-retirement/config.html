@@ -26,8 +26,8 @@
   - .page (Page) The page carrying the document being rendered.
 
   Return value: dict with enable, redirects (enable, rules, status,
-  trailing_slash, pagination_path), manifest (enable, output_formats, extra)
-  and lang.
+  trailing_slash, pagination_path), manifest (enable, output_formats, extra,
+  exclude) and lang.
 
   One terminal return.
 */}}
@@ -224,29 +224,36 @@
 {{- end -}}
 {{- $redirects = merge $redirects (dict "pagination_path" $pagerPath) -}}
 
-{{/* ---- manifest.extra: a list of URLs. A bare string is accepted as a
-     one-element list, because writing one value where a list is expected is a
-     plausible thing to mean; `range` over a string raises and `delimit` walks
-     it byte by byte, so the shape has to be settled here rather than downstream.
-     A table names no URL and is dropped. ---- */}}
-{{- $extra := slice -}}
-{{- $rawExtra := index (index $sub "manifest") "extra" -}}
-{{- if reflect.IsSlice $rawExtra -}}
-  {{- range $rawExtra -}}
-    {{- with partial "url-retirement/lib/extra-url.html" . -}}
-      {{- $extra = $extra | append . -}}
+{{/* ---- manifest.extra and manifest.exclude: two lists of URLs, one adding to
+     the manifest and one subtracting from it, checked identically because they
+     hold identically-shaped values. A bare string is accepted as a one-element
+     list, because writing one value where a list is expected is a plausible
+     thing to mean; `range` over a string raises and `delimit` walks it byte by
+     byte, so the shape has to be settled here rather than downstream. A table
+     names no URL and is dropped. ---- */}}
+{{- range $setting := slice "extra" "exclude" -}}
+  {{- $paths := slice -}}
+  {{- $raw := index (index $sub "manifest") $setting -}}
+  {{- $consequence := cond (eq $setting "exclude")
+      "Nothing is left out of /url-manifest.txt."
+      "No extra URLs are listed in /url-manifest.txt." -}}
+  {{- if reflect.IsSlice $raw -}}
+    {{- range $raw -}}
+      {{- with partial "url-retirement/lib/manifest-path.html" (dict "setting" $setting "value" .) -}}
+        {{- $paths = $paths | append . -}}
+      {{- end -}}
     {{- end -}}
+  {{- else if and (ne $raw nil) (not (reflect.IsMap $raw)) (ne (printf "%T" $raw) "bool") -}}
+    {{- with partial "url-retirement/lib/manifest-path.html" (dict "setting" $setting "value" $raw) -}}
+      {{- $paths = $paths | append . -}}
+    {{- end -}}
+  {{- else if ne $raw nil -}}
+    {{- partial "url-retirement/lib/warn.html" (dict
+        "key" (printf "url-retirement:warn:%s-shape:%v" $setting $raw)
+        "message" (printf "[url-retirement] Ignoring url_retirement.manifest.%s: it expects a list of URLs but was given %q. %s" $setting (printf "%v" $raw) $consequence)) -}}
   {{- end -}}
-{{- else if and (ne $rawExtra nil) (not (reflect.IsMap $rawExtra)) (ne (printf "%T" $rawExtra) "bool") -}}
-  {{- with partial "url-retirement/lib/extra-url.html" $rawExtra -}}
-    {{- $extra = $extra | append . -}}
-  {{- end -}}
-{{- else if ne $rawExtra nil -}}
-  {{- partial "url-retirement/lib/warn.html" (dict
-      "key" (printf "url-retirement:warn:extra-shape:%v" $rawExtra)
-      "message" (printf "[url-retirement] Ignoring url_retirement.manifest.extra: it expects a list of URLs but was given %q. No extra URLs are listed in /url-manifest.txt." (printf "%v" $rawExtra))) -}}
+  {{- $manifest = merge $manifest (dict $setting $paths) -}}
 {{- end -}}
-{{- $manifest = merge $manifest (dict "extra" $extra) -}}
 
 {{- $opts = merge $opts (dict "redirects" $redirects "manifest" $manifest) -}}
 

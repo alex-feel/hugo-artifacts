@@ -180,15 +180,18 @@ test('each manifest names its sibling by its own host', () => {
 
 // The manifest body is asserted against a WALK of that host's own tree rather
 // than a remembered list, exactly as the single-host manifest is: every URL the
-// host publishes is listed, and nothing else. The sitemap is the one class the
-// module cannot see, and its own header says so.
+// host publishes and serves is listed, and nothing else. Two are left out for
+// the two reasons 03-manifest.spec.js states -- the sitemap the module cannot
+// see, and the redirect map it can see and no host serves -- and here each host
+// has a copy of the redirect map of its own.
 test('each manifest lists exactly what its own host publishes', () => {
+  const notListed = ['/sitemap.xml', '/_redirects'];
   for (const [host, base] of [
     ['de', '/docs'],
     ['en', ''],
   ]) {
     const expected = publishedUrls(join(multihostDir, host))
-      .filter((url) => url !== '/sitemap.xml')
+      .filter((url) => !notListed.includes(url))
       .map((u) => `${base}${u}`)
       .sort();
     assert.deepEqual(

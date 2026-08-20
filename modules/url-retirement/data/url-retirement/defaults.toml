@@ -101,6 +101,24 @@ enable = true
   # [languages.<lang>.params.url_retirement.manifest] to scope it to one.
   extra = []
 
+  # URLs to leave OUT of the manifest, for what the build publishes but no host
+  # serves: a control file your site renders through an output format of its
+  # own, such as a _headers map or a _routes.json. Those hosts read such a file
+  # at deploy time and answer 404 at its path, so a manifest listing it carries
+  # a URL that can never be checked against production -- which is the same
+  # defect as claiming a URL the build never published. The redirect map THIS
+  # module renders is already left out for that reason and needs no entry here.
+  #
+  # Entries are exact server-relative paths, the same shape `extra` takes, and
+  # they are subtracted last: a path named in both keys is left out. An entry
+  # matching nothing is not reported, because each language has its own manifest
+  # and a path under one language's prefix legitimately matches nothing in
+  # another's.
+  #
+  # A site-wide value applies to every language's manifest; put a list inside
+  # [languages.<lang>.params.url_retirement.manifest] to scope it to one.
+  exclude = []
+
   # The manifest carries NO build timestamp, and that is deliberate rather than
   # an omission: its whole purpose is to be compared against the copy production
   # is serving, and a stamp would make every build differ from every other one

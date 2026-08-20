@@ -22,8 +22,15 @@ const FAULTS = [
     match: /Ignoring url_retirement\.redirects\.pagination_path value "seite\/1"/,
   },
   {
-    what: 'a table given to a key that expects a list',
+    what: 'a table given to the key that adds URLs',
     match: /Ignoring url_retirement\.manifest\.extra/,
+  },
+  {
+    // The subtracting key fails silently on its own: a rejected exclusion
+    // removes nothing, and a manifest that still carries every URL looks
+    // exactly like one where the exclusion was never asked for.
+    what: 'a table given to the key that removes URLs',
+    match: /Ignoring url_retirement\.manifest\.exclude/,
   },
   {
     what: 'a rules path naming no file',
