@@ -71,10 +71,13 @@ test('the manifest lists itself and leaves out the redirect map', () => {
   );
 });
 
+// Both key names end at a word boundary, because a header naming a key that
+// does not exist sends the reader to a setting they cannot use, and an
+// unanchored match reads `manifest.excluded` as `manifest.exclude` and passes.
 test('the header names the classes the module cannot enumerate', () => {
   const header = manifest(baselineDir).header.join('\n');
   assert.match(header, /static\//);
-  assert.match(header, /url_retirement\.manifest\.extra/);
+  assert.match(header, /url_retirement\.manifest\.extra\b/);
 });
 
 // An omission nobody can account for reads as a bug in the module, and the file
@@ -84,7 +87,7 @@ test('and states what it leaves out on purpose, plus how a site leaves out its o
   const header = manifest(baselineDir).header.join('\n');
   assert.match(header, /publishes and a host serves/);
   assert.match(header, /consumes at deploy time/);
-  assert.match(header, /url_retirement\.manifest\.exclude/);
+  assert.match(header, /url_retirement\.manifest\.exclude\b/);
 });
 
 // A stamp would make every build differ from every other one in a line that
