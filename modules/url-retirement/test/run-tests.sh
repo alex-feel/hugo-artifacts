@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Builds the fixture site SIXTEEN TIMES with hugo (a BUILD, not a server: no
+# Builds the fixture site EIGHTEEN TIMES with hugo (a BUILD, not a server: no
 # port binding, and a finite build exits by itself) and runs the Node
-# build-output assertion suite against the fifteen trees that succeed.
+# build-output assertion suite against the seventeen trees that succeed.
 #
 # Each environment earns its place by a distinction no other one can make. The
 # default environment omits [params.url_retirement] entirely, so it is the only
@@ -41,6 +41,16 @@
 # same word. The `ugly` environment is the only one in which the URL Hugo
 # reports for a page and the URL it serves it at come apart, which is what makes
 # a first-pager rule built by string concatenation visibly wrong.
+# The `html-last` and `html-missing` environments are the only two that change
+# the ORDER and the MEMBERSHIP of the home page's output format list, which is
+# what decides the URL other pages, canonicals and sitemap entries use for it.
+# html-last is the only build in which the manifest format's weight reaches a
+# URL at all: a weight below html's 10 moves that build's sitemap entry for the
+# home page onto /url-manifest.txt and leaves every other build's alone.
+# html-missing is the only build in which the home page has no html output, so
+# every URL for it becomes this module's own document -- the state the module
+# README tells a consumer to avoid, and the one that shows the assertions about
+# the other two builds are capable of failing.
 # The `subpath` and `canonify` environments are a PAIR and neither is redundant:
 # a baseURL carrying a path is the only shape in which a rule that keeps the
 # base segment and one that drops it are different bytes, and canonifyURLs is
@@ -71,12 +81,14 @@ LOG_SUBPATH="$HERE/hugo-build-subpath.log"
 LOG_CANONIFY="$HERE/hugo-build-canonify.log"
 LOG_PAGERPATH="$HERE/hugo-build-pagerpath.log"
 LOG_UGLY="$HERE/hugo-build-ugly.log"
+LOG_HTMLLAST="$HERE/hugo-build-html-last.log"
+LOG_HTMLMISSING="$HERE/hugo-build-html-missing.log"
 LOG_HOSTILE="$HERE/hugo-build-hostile.log"
 
 # The logs are retained after a successful run so the documented re-run recipe
 # can read them; they are gitignored at the repo root. Only an interrupt
 # discards them mid-run.
-trap 'rm -f "$LOG_BASELINE" "$LOG_CONFIGURED" "$LOG_DEGRADED" "$LOG_SHAPES" "$LOG_PARTIAL" "$LOG_CONFLICT" "$LOG_OFF" "$LOG_MULTILINGUAL" "$LOG_MULTIPARTIAL" "$LOG_MULTISUBDIR" "$LOG_MULTIHOST" "$LOG_SUBPATH" "$LOG_CANONIFY" "$LOG_PAGERPATH" "$LOG_UGLY" "$LOG_HOSTILE"' INT TERM
+trap 'rm -f "$LOG_BASELINE" "$LOG_CONFIGURED" "$LOG_DEGRADED" "$LOG_SHAPES" "$LOG_PARTIAL" "$LOG_CONFLICT" "$LOG_OFF" "$LOG_MULTILINGUAL" "$LOG_MULTIPARTIAL" "$LOG_MULTISUBDIR" "$LOG_MULTIHOST" "$LOG_SUBPATH" "$LOG_CANONIFY" "$LOG_PAGERPATH" "$LOG_UGLY" "$LOG_HTMLLAST" "$LOG_HTMLMISSING" "$LOG_HOSTILE"' INT TERM
 
 # `pgrep -x` matches the process NAME, the semantic twin of the tasklist
 # IMAGENAME filter below. `-f` would match the whole command line, and this
@@ -156,6 +168,8 @@ build subpath public/subpath "$LOG_SUBPATH" strict
 build canonify public/canonify "$LOG_CANONIFY" strict
 build pagerpath public/pagerpath "$LOG_PAGERPATH" strict
 build ugly public/ugly "$LOG_UGLY" strict
+build html-last public/html-last "$LOG_HTMLLAST" strict
+build html-missing public/html-missing "$LOG_HTMLMISSING" strict
 build_must_fail hostile public/hostile "$LOG_HOSTILE"
 
 export FIXTURE_DIR
@@ -176,6 +190,8 @@ export FIXTURE_PUBLIC_SUBPATH="$FIXTURE_DIR/public/subpath"
 export FIXTURE_PUBLIC_CANONIFY="$FIXTURE_DIR/public/canonify"
 export FIXTURE_PUBLIC_PAGERPATH="$FIXTURE_DIR/public/pagerpath"
 export FIXTURE_PUBLIC_UGLY="$FIXTURE_DIR/public/ugly"
+export FIXTURE_PUBLIC_HTMLLAST="$FIXTURE_DIR/public/html-last"
+export FIXTURE_PUBLIC_HTMLMISSING="$FIXTURE_DIR/public/html-missing"
 export HUGO_BUILD_LOG_BASELINE="$LOG_BASELINE"
 export HUGO_BUILD_LOG_CONFIGURED="$LOG_CONFIGURED"
 export HUGO_BUILD_LOG_DEGRADED="$LOG_DEGRADED"
@@ -191,6 +207,8 @@ export HUGO_BUILD_LOG_SUBPATH="$LOG_SUBPATH"
 export HUGO_BUILD_LOG_CANONIFY="$LOG_CANONIFY"
 export HUGO_BUILD_LOG_PAGERPATH="$LOG_PAGERPATH"
 export HUGO_BUILD_LOG_UGLY="$LOG_UGLY"
+export HUGO_BUILD_LOG_HTMLLAST="$LOG_HTMLLAST"
+export HUGO_BUILD_LOG_HTMLMISSING="$LOG_HTMLMISSING"
 export HUGO_BUILD_LOG_HOSTILE="$LOG_HOSTILE"
 HUGO_VERSION="$(hugo version | sed -E 's/^hugo v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
 export HUGO_VERSION

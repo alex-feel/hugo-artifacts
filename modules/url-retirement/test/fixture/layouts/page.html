@@ -1,3 +1,10 @@
 <!DOCTYPE html>
 <html lang="{{ site.Language.Name }}"><head><title>{{ .Title }}</title></head>
-<body><h1>{{ .Title }}</h1>{{ .Content }}</body></html>
+<body>
+{{/* The most ordinary link a site has, and the one that moves when something
+     other than the html format supplies the home page's URL: this page asks a
+     FOREIGN page for its URL, which is where the rule that picks the format
+     applies. A page asking for its OWN URL inside an html template is answered
+     by the html format itself and can never see the difference. */}}
+<nav><a href="{{ site.Home.RelPermalink }}">{{ site.Title }}</a></nav>
+<h1>{{ .Title }}</h1>{{ .Content }}</body></html>

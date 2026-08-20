@@ -62,6 +62,13 @@ export const pagerpathDir = dir('FIXTURE_PUBLIC_PAGERPATH', 'fixture/public/page
 // uglyURLs: the only build in which the URL Hugo reports for a page and the URL
 // it serves that page at come apart.
 export const uglyDir = dir('FIXTURE_PUBLIC_UGLY', 'fixture/public/ugly');
+// The home page's output formats listed with html LAST rather than first: the
+// one shape in which Hugo's documented rule for a page's URL and Hugo's
+// behavior disagree.
+export const htmlLastDir = dir('FIXTURE_PUBLIC_HTMLLAST', 'fixture/public/html-last');
+// The same list with html absent altogether, which is the only build where the
+// home page's URL is not the html one.
+export const htmlMissingDir = dir('FIXTURE_PUBLIC_HTMLMISSING', 'fixture/public/html-missing');
 
 const LOG_KEYS = {
   baseline: 'HUGO_BUILD_LOG_BASELINE',
@@ -79,6 +86,8 @@ const LOG_KEYS = {
   canonify: 'HUGO_BUILD_LOG_CANONIFY',
   pagerpath: 'HUGO_BUILD_LOG_PAGERPATH',
   ugly: 'HUGO_BUILD_LOG_UGLY',
+  htmlLast: 'HUGO_BUILD_LOG_HTMLLAST',
+  htmlMissing: 'HUGO_BUILD_LOG_HTMLMISSING',
   hostile: 'HUGO_BUILD_LOG_HOSTILE',
 };
 

@@ -1,0 +1,16 @@
+# The same three formats as the default build with html LAST instead of first.
+# Two things are visible only here. Hugo's documentation says the first entry of
+# this list is the page's primary output format and the source of `.Permalink`;
+# measured at v0.164.0 the html format supplies the home page's URL from the end
+# of the list exactly as it does from the front. And the manifest format's
+# weight, which every other build shows only through the pager URLs the html
+# pass registers, reaches a URL in this one: with a weight below html's 10 the
+# sitemap here offers /url-manifest.txt as the home page while the default
+# build's sitemap still reads /, so this is the build that catches such a change
+# before a consumer's search engine does.
+#
+# Nothing else is restated. An environment overlay merges key by key, and this
+# list is the only key the build changes -- the retired URLs, the pagination and
+# the three alias switches all come from config/_default.
+[outputs]
+  home = ['urlmanifest', 'redirects', 'html']
