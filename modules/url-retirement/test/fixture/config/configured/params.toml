@@ -7,3 +7,10 @@
 
   [url_retirement.manifest]
     extra = ['/sitemap.xml', '/legacy/hand-copied.html']
+
+    # One entry per way a URL can reach the manifest, because the subtraction
+    # runs on the finished set and a version of it that ran earlier would still
+    # remove the first of these: a page's secondary output format, a pager the
+    # site registered during the html pass, and a path the `extra` list above
+    # claims -- which also settles which key wins when both name one path.
+    exclude = ['/posts/index.xml', '/posts/page/2/', '/legacy/hand-copied.html']

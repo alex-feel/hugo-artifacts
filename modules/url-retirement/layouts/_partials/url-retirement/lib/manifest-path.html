@@ -1,0 +1,55 @@
+{{/*
+  url-retirement/lib/manifest-path.html -- INTERNAL (lib tier).
+
+  Purpose: validates ONE entry of url_retirement.manifest.extra or of
+  url_retirement.manifest.exclude before it reaches the manifest. Both keys hold
+  the same thing -- a server-relative path naming a URL -- so both are checked
+  here, and the diagnostic names whichever key carried the entry.
+
+  The container's shape is checked by config.html; this checks each ELEMENT,
+  which is the half that matters downstream. An `extra` element is handed to
+  lib/prefix-url.html, whose documented precondition is a server-relative path
+  beginning with "/" -- it prepends the baseURL's path segment with no
+  separator, because a path that starts with "/" already carries one. An entry
+  that is a nested table, or a bare word, or an absolute URL therefore does not
+  merely look wrong: it is published as `map[...]`, as `/docsno-slash.html`, or
+  as `/docshttps://elsewhere.example/`, in a document whose whole job is to be
+  diffed byte for byte against production. An `exclude` element is compared
+  against those same normalized paths, so a malformed one silently matches
+  nothing, which is the quieter half of the same fault: the site believes a URL
+  was removed and the manifest still carries it.
+
+  So the rejection is at the edge, once, with a diagnostic, rather than in the
+  places the value is later used.
+
+  Expected context (dict):
+  - .setting (string) "extra" or "exclude", naming the key in the diagnostic
+    and choosing what the reader is told the rejection costs them.
+  - .value   (any)    The raw element, of any type at all.
+
+  Return value: the trimmed path when it is usable, "" when it is not. The
+  caller skips the empty string. One terminal return.
+*/}}
+
+{{- $setting := .setting -}}
+{{- $value := .value -}}
+{{- $consequence := cond (eq $setting "exclude")
+    "Nothing is left out of /url-manifest.txt for it."
+    "It is left out of /url-manifest.txt." -}}
+
+{{- $out := "" -}}
+{{- if or (reflect.IsMap $value) (reflect.IsSlice $value) (eq (printf "%T" $value) "bool") -}}
+  {{- partial "url-retirement/lib/warn.html" (dict
+      "key" (printf "url-retirement:warn:%s-element-shape:%v" $setting $value)
+      "message" (printf "[url-retirement] Ignoring the url_retirement.manifest.%s entry %q: an entry is one URL written as a single value. %s" $setting (printf "%v" $value) $consequence)) -}}
+{{- else -}}
+  {{- $candidate := trim (printf "%v" $value) " \t\n\r" -}}
+  {{- if and $candidate (not (hasPrefix $candidate "/")) -}}
+    {{- partial "url-retirement/lib/warn.html" (dict
+        "key" (printf "url-retirement:warn:%s-element-path:%s" $setting $candidate)
+        "message" (printf "[url-retirement] Ignoring the url_retirement.manifest.%s entry %q: entries are server-relative paths and must start with \"/\". %s" $setting $candidate $consequence)) -}}
+  {{- else -}}
+    {{- $out = $candidate -}}
+  {{- end -}}
+{{- end -}}
+{{- return $out -}}

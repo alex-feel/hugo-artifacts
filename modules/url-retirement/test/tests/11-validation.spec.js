@@ -46,6 +46,17 @@ const SHAPE_FAULTS = [
     what: 'a manifest.extra entry that is an absolute URL',
     match: /Ignoring the url_retirement\.manifest\.extra entry "https:\/\/elsewhere\.example\/x"/,
   },
+  // The same two faults on the subtracting key, where the diagnostic is the
+  // ONLY signal: a malformed exclusion matches no URL, so the manifest it was
+  // meant to shorten comes out exactly as it would have anyway.
+  {
+    what: 'a manifest.exclude entry that is not server-relative',
+    match: /Ignoring the url_retirement\.manifest\.exclude entry "no-leading-slash-either\.html"/,
+  },
+  {
+    what: 'a manifest.exclude entry that is an absolute URL',
+    match: /Ignoring the url_retirement\.manifest\.exclude entry "https:\/\/elsewhere\.example\/y"/,
+  },
 ];
 
 for (const fault of SHAPE_FAULTS) {
@@ -64,6 +75,23 @@ test('and nothing else is reported', () => {
 test('an unrecognized boolean leaves both documents publishing', () => {
   assert.ok(redirectRules(shapesDir).length > 0);
   assert.ok(manifest(shapesDir).urls.length > 0);
+});
+
+// The two keys hold the same shape and share one validator, so the message is
+// the only place their difference can be stated -- and a reader who is told the
+// entry "is left out of /url-manifest.txt" when it was an EXCLUSION has been
+// told the opposite of what happened.
+test('an exclude diagnostic says what that rejection cost, not what an extra one would', () => {
+  const lines = moduleWarnings('shapes').filter((l) => l.includes('manifest.exclude entry'));
+  assert.equal(lines.length, 2, 'the exclude faults are not both reported');
+  for (const line of lines) assert.match(line, /Nothing is left out of \/url-manifest\.txt for it/);
+});
+
+test('a rejected manifest.exclude entry removes nothing', () => {
+  assert.ok(
+    manifest(shapesDir).urls.includes('/posts/index.xml'),
+    'a URL left the manifest on the strength of a rejected exclusion',
+  );
 });
 
 test('a rejected manifest.extra entry is dropped and an accepted one is kept', () => {

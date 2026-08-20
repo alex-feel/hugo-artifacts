@@ -27,6 +27,12 @@
   # HTML auto-escaping cannot mangle a URL. notAlternative keeps the file out of
   # .AlternativeOutputFormats: it is a host configuration file, not a
   # representation of the home page.
+  #
+  # Being a host configuration file has a second consequence, in the other
+  # document: /url-manifest.txt deliberately does not list this one. Every host
+  # that reads this file consumes it at deploy time and answers 404 at its path,
+  # so a manifest meant to be compared against what production serves would
+  # otherwise carry one line that can never match.
   [outputFormats.redirects]
     mediaType = 'text/x-url-retirement'
     baseName = '_redirects'

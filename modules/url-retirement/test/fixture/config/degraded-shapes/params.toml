@@ -17,3 +17,8 @@
   [url_retirement.manifest]
     output_formats = 'maybe'
     extra = ['/kept.html', 'no-leading-slash.html', 'https://elsewhere.example/x']
+    # The same two element faults on the subtracting key. A malformed entry
+    # there fails quietly on its own -- it matches no URL and removes nothing --
+    # so the diagnostic is the only thing that tells a site its exclusion never
+    # took effect.
+    exclude = ['no-leading-slash-either.html', 'https://elsewhere.example/y']
