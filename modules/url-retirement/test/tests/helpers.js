@@ -69,6 +69,19 @@ export const htmlLastDir = dir('FIXTURE_PUBLIC_HTMLLAST', 'fixture/public/html-l
 // The same list with html absent altogether, which is the only build where the
 // home page's URL is not the html one.
 export const htmlMissingDir = dir('FIXTURE_PUBLIC_HTMLMISSING', 'fixture/public/html-missing');
+// The prescribed list with the manifest format weighted below html's 10, so its
+// pass runs first: half of what it takes to move a page's URL, and the build
+// that shows half is not enough.
+export const renderEarlyDir = dir('FIXTURE_PUBLIC_RENDEREARLY', 'fixture/public/render-early');
+// Both halves at once, and the only build in which something this module
+// publishes takes over a URL Hugo hands outward.
+export const renderEarlyLastDir = dir(
+  'FIXTURE_PUBLIC_RENDEREARLYLAST',
+  'fixture/public/render-early-html-last',
+);
+// A multilingual site listing html after this module's formats, where the URLs
+// the MODULE derives for a page can be told apart from the ones Hugo reports.
+export const derivedDir = dir('FIXTURE_PUBLIC_DERIVED', 'fixture/public/derived-urls');
 
 const LOG_KEYS = {
   baseline: 'HUGO_BUILD_LOG_BASELINE',
@@ -88,6 +101,9 @@ const LOG_KEYS = {
   ugly: 'HUGO_BUILD_LOG_UGLY',
   htmlLast: 'HUGO_BUILD_LOG_HTMLLAST',
   htmlMissing: 'HUGO_BUILD_LOG_HTMLMISSING',
+  renderEarly: 'HUGO_BUILD_LOG_RENDEREARLY',
+  renderEarlyLast: 'HUGO_BUILD_LOG_RENDEREARLYLAST',
+  derived: 'HUGO_BUILD_LOG_DERIVED',
   hostile: 'HUGO_BUILD_LOG_HOSTILE',
 };
 

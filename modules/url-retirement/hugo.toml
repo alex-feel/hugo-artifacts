@@ -62,9 +62,10 @@
   # canonical still reads /, so a plain-text listing is what search engines are
   # told the front page is, and the front page itself is in no sitemap. Why the
   # sitemap alone follows the weight is undetermined; staying above 10 is what
-  # avoids it, which is the same rule the pager registration needs.
-  # 13-primary-output-format.spec.js builds both shapes and holds this to the
-  # published bytes rather than to the paragraph.
+  # avoids it, which is the same rule the pager registration needs. The suite
+  # builds a site that violates this rule -- this format below 10 and listed
+  # ahead of html -- and asserts what it costs, so the rule is kept by a build
+  # rather than by this paragraph.
   [outputFormats.urlmanifest]
     mediaType = 'text/plain'
     baseName = 'url-manifest'

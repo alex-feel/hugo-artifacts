@@ -50,7 +50,11 @@
         {{- end -}}
       {{- end -}}
     {{- else -}}
-      {{- with $p.RelPermalink -}}
+      {{/* Through lib/page-url.html rather than off .RelPermalink, because this
+           document renders in a format that is not permalinkable: on a site
+           that lists this module's formats ahead of html, a page asked for its
+           own URL here answers with the manifest's. */}}
+      {{- with partial "url-retirement/lib/page-url.html" (dict "page" $p) -}}
         {{- $urls = $urls | append (partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" .)) -}}
       {{- end -}}
     {{- end -}}

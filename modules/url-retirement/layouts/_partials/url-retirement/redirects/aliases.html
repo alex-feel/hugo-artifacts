@@ -29,6 +29,12 @@
   present, so an alias that legitimately begins with the language's own name
   keeps every segment the site wrote.
 
+  The URL a rule points at comes from lib/page-url.html rather than straight
+  from `.RelPermalink`. This document renders in a format that is not
+  permalinkable, and a page asked for its own URL there answers with the first
+  entry of its own `[outputs]` list -- so on a site that lists this module's
+  formats ahead of html, a retired URL would be pointed at /url-manifest.txt.
+
   The page a rule points AT is captured with `{{ $p := . }}`, never read as `$`.
   Inside a range, `$` stays bound to the template's top-level context -- the home
   page rendering the document -- so a rule written with `$.RelPermalink` sends
@@ -73,7 +79,7 @@
   {{- end -}}
   {{- range $p := $site.Pages -}}
     {{- with $p.Aliases -}}
-      {{- $target := partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" $p.RelPermalink) -}}
+      {{- $target := partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" (partial "url-retirement/lib/page-url.html" (dict "page" $p))) -}}
       {{- if findRE `\s` $target -}}
         {{- errorf "[url-retirement] The URL of %s is %q, which contains whitespace and cannot be written as a redirect target. Give the page a URL without spaces, or remove its aliases." $p.Path $target -}}
       {{- end -}}

@@ -52,9 +52,9 @@ disableDefaultSiteRedirect = true
   #    inert, so this list is the only place the wiring can happen -- and the
   #    list REPLACES Hugo's default rather than adding to it, so restate every
   #    format you already publish. Keep `html` among them, wherever you put it:
-  #    a home page with no html output takes its URL from the first format the
-  #    list has left, so every link to your front page, its canonical and its
-  #    sitemap entry would name this module's document instead of the page.
+  #    a home page with no html output publishes no page at all, and takes its
+  #    URL from the first format the list has left -- so every link to your
+  #    front page and its sitemap entry would name this module's document.
   home = ['html', 'rss', 'redirects', 'urlmanifest']
 
 [params.url_retirement]
@@ -239,6 +239,7 @@ modules/url-retirement/
 │   │       ├── config.html
 │   │       ├── lib/
 │   │       │   ├── extra-url.html
+│   │       │   ├── page-url.html
 │   │       │   ├── prefix-url.html
 │   │       │   ├── spellings.html
 │   │       │   ├── warn-emit.html
