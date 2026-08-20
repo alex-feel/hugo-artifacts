@@ -51,7 +51,10 @@ disableDefaultSiteRedirect = true
   # 4. Wire both formats onto the home page. A module's own [outputs] table is
   #    inert, so this list is the only place the wiring can happen -- and the
   #    list REPLACES Hugo's default rather than adding to it, so restate every
-  #    format you already publish.
+  #    format you already publish. Keep `html` among them, wherever you put it:
+  #    a home page with no html output takes its URL from the first format the
+  #    list has left, so every link to your front page, its canonical and its
+  #    sitemap entry would name this module's document instead of the page.
   home = ['html', 'rss', 'redirects', 'urlmanifest']
 
 [params.url_retirement]
