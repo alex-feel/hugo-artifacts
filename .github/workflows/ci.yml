@@ -306,9 +306,12 @@ jobs:
           # language renders its output formats one at a time and a non-zero
           # weight orders those passes, that a root-published format is written
           # by the last language to render where the languages share a domain
-          # and once per host where each has its own, and how a suffix-less
-          # format's template is named -- so the only way to know they hold at
-          # the version the module promises is to build there.
+          # and once per host where each has its own, how a suffix-less
+          # format's template is named, and which of a page's output formats
+          # supplies the URL other pages and the sitemap carry for it, where
+          # the documentation states a different rule than the builds show --
+          # so the only way to know they hold at the version the module
+          # promises is to build there.
           # A floor nothing runs at is a promise to consumers that nothing
           # checks.
           - name: url-retirement (at the declared Hugo floor)
