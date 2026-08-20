@@ -49,6 +49,23 @@
   # rendered before that pass would publish an empty pager set. A non-zero
   # weight also sorts this format ahead of every zero-weight one, which costs
   # nothing because the manifest reads no other format's output.
+  #
+  # The weight decides a second thing, less obviously: which format supplies
+  # the URL of the page it is wired onto. Hugo's documentation says the first
+  # entry of a site's `[outputs]` list is the page's primary output format and
+  # the source of `.Permalink`, and measured at v0.164.0 that is not what
+  # happens. With this weight above html's 10, every URL for the home page is
+  # the html one wherever html sits in that list -- the page's own canonical,
+  # the link any other page carries to it, and the sitemap's entry for it.
+  # Below 10, on a site that lists this format ahead of html, the SITEMAP alone
+  # moves: it offers /url-manifest.txt as the home page while the page's own
+  # canonical still reads /, so a plain-text listing is what search engines are
+  # told the front page is, and the front page itself is in no sitemap. Why the
+  # sitemap alone follows the weight is undetermined; staying above 10 is what
+  # avoids it, which is the same rule the pager registration needs. The suite
+  # builds a site that violates this rule -- this format below 10 and listed
+  # ahead of html -- and asserts what it costs, so the rule is kept by a build
+  # rather than by this paragraph.
   [outputFormats.urlmanifest]
     mediaType = 'text/plain'
     baseName = 'url-manifest'

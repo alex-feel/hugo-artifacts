@@ -1,5 +1,9 @@
 <!DOCTYPE html>
-<html lang="{{ site.Language.Name }}"><head><title>{{ .Title }}</title></head>
+<html lang="{{ site.Language.Name }}"><head><title>{{ .Title }}</title>
+{{/* What a consuming site puts in its head, and the reason it is here: this
+     page publishes three output formats, and a canonical naming one of the
+     other two would point every search engine at a host control file. */}}
+<link rel="canonical" href="{{ .Permalink }}"></head>
 <body><h1>{{ .Title }}</h1>
 {{/* The home page paginates as well as the sections, because the first pager
      of a paginated home page is /page/1/ -- the one registration whose list

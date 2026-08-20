@@ -1,0 +1,47 @@
+# A site that lists html AFTER this module's formats, in the one shape where
+# every URL the module derives for a page can be read back out of what it
+# publishes: a redirect target, the default site's redirect, and a manifest
+# listing one URL per page.
+#
+# The module's two documents render in formats that are not permalinkable, and a
+# page asked for its own URL there answers with the first entry of its own
+# `[outputs]` list rather than with its html URL. Every other build in this
+# suite lists html first, where the two answers are the same string, so this is
+# the only one that can tell lib/page-url.html doing its job from the module
+# reading .RelPermalink straight -- which produced `/ -> /en/url-manifest.txt`
+# and a manifest naming the manifest as its own home page.
+#
+# It needs the language dimension because the default site's redirect exists
+# only on a multilingual site, and the subdirectory shape because that is the
+# arm whose target is a language home rather than the site root. It carries its
+# own English content so the home page can hold an alias: the shared content
+# directory feeds ten other builds whose rule sets are asserted exactly, and a
+# home alias there would change every one of them.
+defaultContentLanguageInSubdir = true
+
+defaultContentLanguage = 'en'
+
+[languages]
+
+  [languages.en]
+    weight = 1
+    title = 'URL Retirement Fixture'
+    contentDir = 'content-derived'
+
+  [languages.de]
+    weight = 2
+    title = 'URL-Stilllegung'
+    contentDir = 'content-de'
+
+[outputs]
+  home = ['urlmanifest', 'redirects', 'html']
+
+[params]
+
+  [params.url_retirement]
+
+    # One URL per page rather than one per output format, which is the mode in
+    # which the manifest has to name the page ITSELF and therefore the mode
+    # where reading the wrong URL shows.
+    [params.url_retirement.manifest]
+      output_formats = false

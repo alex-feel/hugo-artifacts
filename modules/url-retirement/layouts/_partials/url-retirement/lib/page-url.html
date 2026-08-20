@@ -1,0 +1,43 @@
+{{/*
+  url-retirement/lib/page-url.html -- INTERNAL (lib tier).
+
+  Purpose: returns the URL that IS the page -- the one a redirect should land on
+  and the one a manifest should list for it -- rather than whatever URL the
+  output format currently rendering happens to resolve that page to.
+
+  The difference is invisible on most sites and silent where it is not.
+  Measured at Hugo v0.164.0: inside the template of a format that is not
+  `permalinkable`, which both documents this module publishes are, a page's
+  .RelPermalink is the URL of the FIRST entry in that page's own `[outputs]`
+  list rather than the URL of its html representation. Every site that lists
+  html first -- which is every example in this module's README -- is answered
+  identically either way. A site that lists this module's formats AHEAD of html
+  is not: rules and manifest lines would name /url-manifest.txt as its home
+  page, while that page's own canonical, every link to it and the sitemap all
+  still say /. Asking the page for its html output format instead is right on
+  both, and costs the first kind of site nothing.
+
+  A page with NO html output keeps its own .RelPermalink, because there is no
+  html URL to name -- the site published no page there, and the first format in
+  the list is what it actually serves at that address.
+
+  A caller running inside the HTML pass does not need this: a page asking for
+  its own URL there is answered by the html format itself, which is why
+  register-pagers.html reads .RelPermalink directly.
+
+  Expected context (dict):
+  - .page (Page) The page whose URL is wanted.
+
+  Return value: string, a server-relative path, in the same frame of reference
+  .RelPermalink uses -- so a caller still puts it through lib/prefix-url.html
+  exactly as it did the raw value.
+
+  One terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $url := $page.RelPermalink -}}
+{{- with $page.OutputFormats.Get "html" -}}
+  {{- $url = .RelPermalink -}}
+{{- end -}}
+{{- return $url -}}

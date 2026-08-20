@@ -1,0 +1,19 @@
+# The manifest format weighted BELOW html's 10, so its pass runs before the
+# html one, with the output list left exactly as config/_default writes it --
+# html first. Half of the pair that moves a page's URL, on its own, and the
+# build that shows half is not enough: everything here reads the same as
+# baseline except the manifest, which loses the pager URLs the html pass would
+# have registered for it.
+#
+# The format is restated IN FULL rather than overridden key by key. Measured at
+# v0.164.0: a site config naming only `weight` under an output format a module
+# declared replaces the declaration rather than merging into it, and the build
+# then warns that no layout file matches the format -- the media type and the
+# base name are gone with it.
+[outputFormats]
+  [outputFormats.urlmanifest]
+    mediaType = 'text/plain'
+    baseName = 'url-manifest'
+    isPlainText = true
+    notAlternative = true
+    weight = 5

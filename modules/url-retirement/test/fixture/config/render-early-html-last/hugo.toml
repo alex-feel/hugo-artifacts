@@ -1,0 +1,22 @@
+# Both halves at once: the manifest format weighted below html's 10 AND listed
+# ahead of html. It is the only build in which anything this module publishes
+# takes over a URL Hugo hands to the outside world -- the sitemap's entry for
+# the home page becomes /url-manifest.txt here, while the page's own canonical
+# and every link to it still read /. Neither `render-early` nor `html-last`
+# shows it, which is what makes all three builds necessary rather than two.
+#
+# The weight this build sets is the one the module's own hugo.toml forbids, and
+# the comment beside that weight points here: the rule "stay above html's 10" is
+# kept honest by a build that violates it and shows the cost.
+#
+# The format is restated in full for the reason config/render-early gives.
+[outputFormats]
+  [outputFormats.urlmanifest]
+    mediaType = 'text/plain'
+    baseName = 'url-manifest'
+    isPlainText = true
+    notAlternative = true
+    weight = 5
+
+[outputs]
+  home = ['urlmanifest', 'redirects', 'html']

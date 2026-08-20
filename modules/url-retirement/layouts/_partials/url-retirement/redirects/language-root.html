@@ -34,6 +34,12 @@
     own name is the only template-readable source for that segment, since the
     prefix that would otherwise carry it is precisely what is empty here.
 
+  The target comes from lib/page-url.html rather than straight from the home
+  page's `.RelPermalink`, for the reason that partial documents: this document
+  renders in a format that is not permalinkable, so a site listing this module's
+  formats ahead of html would have the site root redirected to
+  /<lang>/url-manifest.txt instead of to its own home page.
+
   Only the LANGUAGE dimension is modeled. Hugo mints the same redirect for the
   default role and the default version, and `disableDefaultSiteRedirect`
   governs all three, but a site using those dimensions has a URL surface this
@@ -66,7 +72,7 @@
   {{- with $retired -}}
     {{- $base := strings.TrimSuffix "/" (urls.Parse $default.BaseURL).Path -}}
     {{- $from := partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" .) -}}
-    {{- $to := partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" $default.Home.RelPermalink) -}}
+    {{- $to := partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" (partial "url-retirement/lib/page-url.html" (dict "page" $default.Home))) -}}
     {{- range $spelling := partial "url-retirement/lib/spellings.html" (dict "url" $from "mode" $cfg.redirects.trailing_slash) -}}
       {{- $rules = $rules | append (dict "from" $spelling "to" $to "status" $cfg.redirects.status) -}}
     {{- end -}}

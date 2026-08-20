@@ -1,7 +1,7 @@
 @echo off
-rem Builds the fixture site SIXTEEN TIMES with hugo (a BUILD, not a server: no
+rem Builds the fixture site TWENTY-ONE TIMES with hugo (a BUILD, not a server: no
 rem port binding, and a finite build exits by itself) and runs the Node
-rem build-output assertion suite against the fifteen trees that succeed. Windows
+rem build-output assertion suite against the twenty trees that succeed. Windows
 rem mirror of run-tests.sh: pre-launch process check, then a hard fail on any
 rem deprecation or error output in any build log.
 rem
@@ -24,7 +24,15 @@ rem per host rather than once for the deployment; `pagerpath` renames
 rem the pagination segment without telling the module, so a rule carrying that
 rem name was derived from a pager URL rather than read from configuration;
 rem `ugly` is the only build in which the URL Hugo reports for a page and the
-rem URL it serves that page at come apart; `subpath`
+rem URL it serves that page at come apart; `html-last`, `render-early`,
+rem `render-early-html-last`, `html-missing` and `derived-urls` change the
+rem order, the membership or the render pass of the home page's output format
+rem list -- html-last and render-early each move nothing on their own,
+rem render-early-html-last is the only build where the sitemap's entry for the
+rem home page becomes this module's document, html-missing is the only one
+rem where the home page has no html output at all, and derived-urls is the only
+rem one that can tell the URLs the module derives from the ones Hugo reports;
+rem `subpath`
 rem and `canonify` are a PAIR that must agree byte for byte, which a
 rem root-baseURL build cannot check; and the `hostile` environment is the only
 rem build that MUST FAIL, because its content carries an alias containing
@@ -52,6 +60,11 @@ set LOG_SUBPATH=%~dp0hugo-build-subpath.log
 set LOG_CANONIFY=%~dp0hugo-build-canonify.log
 set LOG_PAGERPATH=%~dp0hugo-build-pagerpath.log
 set LOG_UGLY=%~dp0hugo-build-ugly.log
+set LOG_HTMLLAST=%~dp0hugo-build-html-last.log
+set LOG_HTMLMISSING=%~dp0hugo-build-html-missing.log
+set LOG_RENDEREARLY=%~dp0hugo-build-render-early.log
+set LOG_RENDEREARLYLAST=%~dp0hugo-build-render-early-html-last.log
+set LOG_DERIVED=%~dp0hugo-build-derived-urls.log
 set LOG_HOSTILE=%~dp0hugo-build-hostile.log
 
 rem The destination is REMOVED, not merely cleaned: --cleanDestinationDir only
@@ -167,6 +180,41 @@ if errorlevel 1 (
   popd
   exit /b 1
 )
+hugo -e html-last --logLevel info --cleanDestinationDir --destination public\html-last > "%LOG_HTMLLAST%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(html-last^):
+  type "%LOG_HTMLLAST%"
+  popd
+  exit /b 1
+)
+hugo -e html-missing --logLevel info --cleanDestinationDir --destination public\html-missing > "%LOG_HTMLMISSING%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(html-missing^):
+  type "%LOG_HTMLMISSING%"
+  popd
+  exit /b 1
+)
+hugo -e render-early --logLevel info --cleanDestinationDir --destination public\render-early > "%LOG_RENDEREARLY%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(render-early^):
+  type "%LOG_RENDEREARLY%"
+  popd
+  exit /b 1
+)
+hugo -e render-early-html-last --logLevel info --cleanDestinationDir --destination public\render-early-html-last > "%LOG_RENDEREARLYLAST%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(render-early-html-last^):
+  type "%LOG_RENDEREARLYLAST%"
+  popd
+  exit /b 1
+)
+hugo -e derived-urls --logLevel info --cleanDestinationDir --destination public\derived-urls > "%LOG_DERIVED%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(derived-urls^):
+  type "%LOG_DERIVED%"
+  popd
+  exit /b 1
+)
 rem The hostile build MUST fail: its content carries an alias containing
 rem whitespace, and publishing that rule would corrupt the file format.
 hugo -e hostile --logLevel info --cleanDestinationDir --destination public\hostile > "%LOG_HOSTILE%" 2>&1
@@ -178,7 +226,7 @@ if not errorlevel 1 (
 )
 popd
 
-for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_DEGRADED%" "%LOG_SHAPES%" "%LOG_PARTIAL%" "%LOG_CONFLICT%" "%LOG_OFF%" "%LOG_MULTILINGUAL%" "%LOG_MULTIPARTIAL%" "%LOG_MULTISUBDIR%" "%LOG_MULTIHOST%" "%LOG_SUBPATH%" "%LOG_CANONIFY%" "%LOG_PAGERPATH%" "%LOG_UGLY%") do (
+for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_DEGRADED%" "%LOG_SHAPES%" "%LOG_PARTIAL%" "%LOG_CONFLICT%" "%LOG_OFF%" "%LOG_MULTILINGUAL%" "%LOG_MULTIPARTIAL%" "%LOG_MULTISUBDIR%" "%LOG_MULTIHOST%" "%LOG_SUBPATH%" "%LOG_CANONIFY%" "%LOG_PAGERPATH%" "%LOG_UGLY%" "%LOG_HTMLLAST%" "%LOG_HTMLMISSING%" "%LOG_RENDEREARLY%" "%LOG_RENDEREARLYLAST%" "%LOG_DERIVED%") do (
   findstr /I "deprecat" %%L >nul 2>&1
   if not errorlevel 1 (
     echo Hugo reported deprecations in %%L:
@@ -196,7 +244,7 @@ for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_DEGRADED%" "%LOG_SHAPES%" 
 rem Every build except `degraded` is gated on warnings: the happy path is
 rem silent, and producing one diagnostic per fault is the only thing the
 rem degraded build exists to demonstrate.
-for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_PARTIAL%" "%LOG_OFF%" "%LOG_MULTILINGUAL%" "%LOG_MULTIPARTIAL%" "%LOG_MULTISUBDIR%" "%LOG_MULTIHOST%" "%LOG_SUBPATH%" "%LOG_CANONIFY%" "%LOG_PAGERPATH%" "%LOG_UGLY%") do (
+for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_PARTIAL%" "%LOG_OFF%" "%LOG_MULTILINGUAL%" "%LOG_MULTIPARTIAL%" "%LOG_MULTISUBDIR%" "%LOG_MULTIHOST%" "%LOG_SUBPATH%" "%LOG_CANONIFY%" "%LOG_PAGERPATH%" "%LOG_UGLY%" "%LOG_HTMLLAST%" "%LOG_HTMLMISSING%" "%LOG_RENDEREARLY%" "%LOG_RENDEREARLYLAST%" "%LOG_DERIVED%") do (
   findstr /C:"WARN" %%L >nul 2>&1
   if not errorlevel 1 (
     echo A build that must warn about nothing did: %%L
@@ -222,6 +270,11 @@ set FIXTURE_PUBLIC_SUBPATH=%~dp0fixture\public\subpath
 set FIXTURE_PUBLIC_CANONIFY=%~dp0fixture\public\canonify
 set FIXTURE_PUBLIC_PAGERPATH=%~dp0fixture\public\pagerpath
 set FIXTURE_PUBLIC_UGLY=%~dp0fixture\public\ugly
+set FIXTURE_PUBLIC_HTMLLAST=%~dp0fixture\public\html-last
+set FIXTURE_PUBLIC_HTMLMISSING=%~dp0fixture\public\html-missing
+set FIXTURE_PUBLIC_RENDEREARLY=%~dp0fixture\public\render-early
+set FIXTURE_PUBLIC_RENDEREARLYLAST=%~dp0fixture\public\render-early-html-last
+set FIXTURE_PUBLIC_DERIVED=%~dp0fixture\public\derived-urls
 set HUGO_BUILD_LOG_BASELINE=%LOG_BASELINE%
 set HUGO_BUILD_LOG_CONFIGURED=%LOG_CONFIGURED%
 set HUGO_BUILD_LOG_DEGRADED=%LOG_DEGRADED%
@@ -237,6 +290,11 @@ set HUGO_BUILD_LOG_SUBPATH=%LOG_SUBPATH%
 set HUGO_BUILD_LOG_CANONIFY=%LOG_CANONIFY%
 set HUGO_BUILD_LOG_PAGERPATH=%LOG_PAGERPATH%
 set HUGO_BUILD_LOG_UGLY=%LOG_UGLY%
+set HUGO_BUILD_LOG_HTMLLAST=%LOG_HTMLLAST%
+set HUGO_BUILD_LOG_HTMLMISSING=%LOG_HTMLMISSING%
+set HUGO_BUILD_LOG_RENDEREARLY=%LOG_RENDEREARLY%
+set HUGO_BUILD_LOG_RENDEREARLYLAST=%LOG_RENDEREARLYLAST%
+set HUGO_BUILD_LOG_DERIVED=%LOG_DERIVED%
 set HUGO_BUILD_LOG_HOSTILE=%LOG_HOSTILE%
 for /f "tokens=2 delims=v " %%v in ('hugo version') do (
   set HUGO_VERSION_RAW=%%v

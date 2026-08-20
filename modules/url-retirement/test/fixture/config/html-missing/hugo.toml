@@ -1,0 +1,15 @@
+# The home page wired for this module's two documents and NOTHING else, which
+# is the mistake Hugo's own list semantics invite: `[outputs]` REPLACES the
+# default list rather than adding to it, so a site that pastes a module's block
+# over its own drops html without being told.
+#
+# It is the only build in which the home page has no html output at all, and so
+# the only one where EVERY URL for that page moves rather than the sitemap entry
+# alone: the first format the list has left supplies it, and both the link every
+# page carries to the home page and the sitemap's entry for it become
+# /url-manifest.txt, a plain-text document. That is what makes the assertions in
+# 13-primary-output-format.spec.js falsifiable rather than a restatement of a
+# build that could never differ, and it is the shape the module README tells a
+# consumer to avoid.
+[outputs]
+  home = ['urlmanifest', 'redirects']
