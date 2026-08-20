@@ -28,6 +28,10 @@
 // do not is undetermined; these builds record the behavior rather than explain
 // it.
 //
+// Every row above is a build this suite runs, and every one of them passes at
+// the module's declared floor, v0.160.0, as well as at v0.164.0 -- so the
+// behavior is not a property of one release.
+//
 // The canonical is asserted because it is what a consuming site publishes, but
 // it is the least sensitive of the three: html is `permalinkable`, so a page
 // asking for its own URL inside an html template is answered by the html format
