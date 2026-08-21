@@ -123,6 +123,14 @@ jobs:
         # it. This step is where that spelling is caught.
         run: npm run check:hugo-api
 
+      - name: Templates read no map out of a Hugo store
+        shell: bash
+        # A map a store hands to a template is the live one, so reading it while
+        # a page rendering beside this one writes it aborts the whole build with
+        # a Go runtime fatal error -- nondeterministically, which is why no
+        # suite can be relied on to catch it.
+        run: npm run check:store-maps
+
       - name: Hugo mod graph (standalone modules)
         shell: bash
         run: |

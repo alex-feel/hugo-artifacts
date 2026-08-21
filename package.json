@@ -12,7 +12,8 @@
     "format:check": "prettier --check .",
     "check:pins": "bash scripts/check-module-pins.sh",
     "check:hugo-api": "bash scripts/check-deprecated-hugo-api.sh",
-    "check": "npm run lint && npm run format:check && npm run lint:md && npm run check:pins && npm run check:hugo-api"
+    "check:store-maps": "bash scripts/check-store-map-reads.sh",
+    "check": "npm run lint && npm run format:check && npm run lint:md && npm run check:pins && npm run check:hugo-api && npm run check:store-maps"
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",
