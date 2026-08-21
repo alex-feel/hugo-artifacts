@@ -24,6 +24,7 @@ import {decodePng, hex, inkBands, pixel, sniffPng} from './lib/raster.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const testRoot = resolve(here, '..');
+const modulesRoot = resolve(testRoot, '..');
 const fixtureDir = join(testRoot, 'fixture');
 const publicDir = resolve(process.env.FIXTURE_PUBLIC ?? join(fixtureDir, 'public'));
 
@@ -61,6 +62,17 @@ const documents = (dir = publicDir, out = []) => {
   }
   return out;
 };
+
+// The two halves of the card story that only the output directory tells. A tag
+// names one card; the directory says how many the build actually wrote, and the
+// gap between them is a file a site pays to deploy and nothing ever requests.
+const cardFiles = () => readdirSync(join(publicDir, 'og')).sort();
+
+const cardNames = () =>
+  documents()
+    .map((html) => meta(html, 'og:image'))
+    .filter(isCardUrl)
+    .map((url) => url.slice(`${BASE_URL}/og/`.length));
 
 test('a generated card outranks the site banner as og:image', () => {
   // The fixture configures BOTH keys. `image_partial` alone could not show the
@@ -167,11 +179,50 @@ test('each carded page carries its own card', () => {
   // pages -- would still publish a card everywhere and satisfy every
   // assertion above. This fixture contains no two pages with identical drawn
   // text, so every card URL in the tree must be distinct.
-  const cards = documents()
-    .map((html) => meta(html, 'og:image'))
-    .filter(isCardUrl);
+  const cards = cardNames();
   assert.ok(cards.length >= 3, 'the fixture must publish more than a couple of cards');
   assert.equal(new Set(cards).size, cards.length, `card URLs must be unique: ${cards.join(', ')}`);
+});
+
+test('at the default canvas each card is published once and nothing beside it', () => {
+  // The og short-circuit, read off the output directory rather than off a tag.
+  // The seo module crops whatever the hook returns to 1200x630 and skips the
+  // crop for an image that already measures exactly that, so at og-image's own
+  // default canvas the composed card IS the file og:image names. Without the
+  // skip every carded page ships two files holding the same pixels: the
+  // composed card, which og-image publishes by reading its URL to materialize
+  // the transformation, and seo's crop, which is what the tag would name. That
+  // is what a non-default canvas still costs, where the skip correctly does not
+  // fire and this fixture's four cards publish as eight files.
+  //
+  // A set equality rather than a count, because the two ways this can fail are
+  // opposite: an extra file is a duplicate nothing requests, and a missing one
+  // is a tag pointing at nothing. Only the pair catches both.
+  assert.deepEqual(cardFiles(), [...new Set(cardNames())].sort());
+});
+
+test('the og-image README describes the pairing this build demonstrates', () => {
+  // A reader wiring the two modules meets that paragraph rather than this
+  // fixture, and a paragraph describing a crop that no longer happens sends
+  // them to change a canvas size to avoid a cost they were never paying. The
+  // assertion above catches the behavior drifting; this one catches the prose
+  // drifting away from it, which is the direction nothing else here can see.
+  const text = readFileSync(join(modulesRoot, 'og-image', 'README.md'), 'utf8');
+  const sectionAt = text.indexOf('### Wired to the seo module');
+  assert.notEqual(sectionAt, -1, 'the og-image README must document the seo wiring');
+  const section = text.slice(sectionAt);
+  const paragraph = section.slice(0, section.indexOf('\n### '));
+  // Each phrase carries one load-bearing half of the claim: what the seo
+  // module does, what the default therefore costs, and what moving off it
+  // costs. A paragraph that keeps only the first two stops saying the one
+  // thing it exists to say.
+  assert.match(paragraph, /skips the crop/, 'the README must state the seo module skips the crop');
+  assert.match(paragraph, /published once/, 'the README must state the default-canvas outcome');
+  assert.match(
+    paragraph,
+    /still published beside it/,
+    'the README must state what moving off the default canvas costs',
+  );
 });
 
 test("og-image's own image-tag renderer stands down where the seo module owns the head", () => {
