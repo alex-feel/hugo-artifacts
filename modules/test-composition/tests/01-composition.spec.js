@@ -255,6 +255,29 @@ test('every URL the manifest lists is a file this build wrote', () => {
     assert.ok(existsSync(servedFile(url)), `${url} is listed but no file was published for it`);
 });
 
+// The mirror of the assertion above, and the direction that fails SILENTLY: a
+// wrong answer from any module's hook removes a URL production really serves,
+// and the coverage check the manifest exists for then stops seeing it. Nothing
+// in the tree comparison catches that, because a short manifest is consistent
+// with itself.
+test('and every module document the build serves is listed', () => {
+  const urls = manifestUrls();
+  for (const url of [
+    '/',
+    '/index.md',
+    '/llms.txt',
+    '/llms-index.txt',
+    '/about.md',
+    '/searchindex.json',
+    '/opensearch.xml',
+    '/manifest.webmanifest',
+    '/url-manifest.txt',
+  ]) {
+    assert.ok(existsSync(servedFile(url)), `${url} must be published for this to mean anything`);
+    assert.ok(urls.includes(url), `${url} is served but missing from the manifest`);
+  }
+});
+
 test('a page the twin renderer excludes keeps its own URL and loses its twin', () => {
   // The fixture's search page is excluded by agent-readiness's own
   // exclude_search_page tier, so the markdown format is wired on it and
