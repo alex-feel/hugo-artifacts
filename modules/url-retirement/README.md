@@ -356,14 +356,14 @@ An `extra` entry earns its place when nothing else in the build can see the URL.
 That silence is the problem, because the two cases look identical and behave differently. A redundant entry keeps the URL in the file on the day the registration stops arriving -- exactly the disappearance this document exists to surface -- and your coverage check goes on passing. So the build says so, once per entry:
 
 ```text
-WARN  [url-retirement] /sw.js is named in url_retirement.manifest.extra, and every language that publishes a manifest already reaches that URL without it ...
+WARN  [url-retirement] /sw.js is named in url_retirement.manifest.extra, and every language whose list names it already reaches that URL without it ...
 ```
 
 Delete the line it names. Nothing about the published manifest changes, and the next time that URL really does go missing, you hear about it.
 
-On a multilingual site the message waits for every language that NAMES the entry. `extra` is ordinarily site-wide while each language renders its own manifest, so one entry can be redundant for one language and the only thing carrying its URL for another; such an entry is not reported, because deleting it would strip the URL from the language that needed it. An entry scoped to one language under `[languages.<lang>.params.url_retirement.manifest]` is answered for by that language alone, and a language that publishes no manifest answers for nothing.
+On a multilingual site the message waits for every language whose list names the entry -- which is what the wording above means and why it does not say every language. `extra` is ordinarily site-wide while each language renders its own manifest, so one entry can be redundant for one language and the only thing carrying its URL for another; such an entry is not reported, because deleting it would strip the URL from the language that needed it. An entry scoped to one language under `[languages.<lang>.params.url_retirement.manifest]` is answered for by that language alone, and a language that publishes no manifest answers for nothing.
 
-An entry `manifest.exclude` also names is never reported either: the exclusion subtracts last and decides the outcome, so the entry is holding nothing up and removing it would change nothing.
+An entry `manifest.exclude` also names is never reported either: the exclusion subtracts last and decides the outcome, so the entry is holding nothing up and removing it would change nothing. A language that excludes an entry the rest of the site names is not one the message waits for, since it answers for nothing.
 
 ## Module structure
 

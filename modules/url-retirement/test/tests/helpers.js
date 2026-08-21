@@ -97,6 +97,13 @@ export const extraRedundantDir = dir(
 // redundant for both and the other only for German -- the case a per-language
 // check would report on a site whose list is correct.
 export const multiExtraDir = dir('FIXTURE_PUBLIC_MULTIEXTRA', 'fixture/public/multilingual-extra');
+// Two languages where the extra list belongs to ONE of them, so the number of
+// languages that must answer for an entry is smaller than the number publishing
+// a manifest -- the only build in which the two counts differ.
+export const perLangExtraDir = dir(
+  'FIXTURE_PUBLIC_PERLANGEXTRA',
+  'fixture/public/extra-per-language',
+);
 
 const LOG_KEYS = {
   baseline: 'HUGO_BUILD_LOG_BASELINE',
@@ -122,6 +129,7 @@ const LOG_KEYS = {
   unpublished: 'HUGO_BUILD_LOG_UNPUBLISHED',
   extraRedundant: 'HUGO_BUILD_LOG_EXTRAREDUNDANT',
   multiExtra: 'HUGO_BUILD_LOG_MULTIEXTRA',
+  perLangExtra: 'HUGO_BUILD_LOG_PERLANGEXTRA',
   hostile: 'HUGO_BUILD_LOG_HOSTILE',
 };
 

@@ -39,13 +39,14 @@
   keeps the map inside the store: a map handed out to a template and read there
   is a build-aborting race, and lib/record-url.html carries that measurement.
 
-  An entry that url_retirement.manifest.exclude also names is skipped. That
-  entry is not redundant -- the site asked for the path to be left out, and
-  exclude subtracts last -- so reporting it would prescribe removing a line that
-  is doing exactly what it says.
+  An entry that url_retirement.manifest.exclude also names is skipped, in the
+  language that excludes it and in the namer count alike. That entry is not
+  redundant -- the site asked for the path to be left out, and exclude subtracts
+  last -- so reporting it would prescribe removing a line that is doing exactly
+  what it says, and counting a language that skipped it would wait forever for a
+  verdict that language never records.
 
   Context (dict):
-  - .page       (Page)   The home page rendering this language's manifest.
   - .cfg        (dict)   This language's resolved config.
   - .base       (string) The baseURL path segment, for normalizing entries.
   - .from_build (slice)  Every URL this language's manifest reached WITHOUT the
@@ -56,12 +57,25 @@
   Return value: none. Side effect: at most one warning per entry per build.
 */}}
 
-{{- $page := .page -}}
 {{- $cfg := .cfg -}}
 {{- $base := .base -}}
 {{- $fromBuild := .from_build -}}
 {{- $excluded := .excluded -}}
 {{- $lang := $cfg.lang -}}
+
+{{/* Every language that publishes a manifest, resolved ONCE for this pass
+     rather than once per entry: the set is a property of the build, and
+     resolving a site's whole configuration inside the entry loop would repeat
+     that work for every line of the list. */}}
+{{- $answering := slice -}}
+{{- range $s := hugo.Sites -}}
+  {{- with $s.Home.OutputFormats.Get "urlmanifest" -}}
+    {{- $scfg := partial "url-retirement/config.html" (dict "page" $s.Home) -}}
+    {{- if and $scfg.enable $scfg.manifest.enable -}}
+      {{- $answering = $answering | append $scfg.manifest -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
 
 {{- range $entry := $cfg.manifest.extra -}}
   {{- $url := partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" $entry) -}}
@@ -72,18 +86,21 @@
     {{- $key := printf "url-retirement:extra-redundant:%v" $entry -}}
     {{- hugo.Store.SetInMap $key $lang (in $fromBuild $url) -}}
 
-    {{/* Every language that publishes a manifest AND names this entry. Both
-         halves are read from the resolved config rather than the raw params,
-         so a per-language list and a site-wide one are counted the same way. */}}
+    {{/* A NAMER is a language that publishes a manifest, names this entry, and
+         does not also exclude it -- all three read from the resolved config, so
+         a per-language list and a site-wide one are counted the same way. The
+         exclusion half is what keeps the tally reachable: a language that
+         excludes the entry skips the block above and records no verdict, so
+         counting it as a namer would hold the count one short forever and
+         silence the entry on every build.
+
+         This language always counts itself: it is rendering its own manifest
+         from its own list and reached this line without excluding the entry, so
+         the guard below is structural insurance rather than a live branch. */}}
     {{- $namers := 0 -}}
-    {{- range $s := hugo.Sites -}}
-      {{- with $s.Home.OutputFormats.Get "urlmanifest" -}}
-        {{- $scfg := partial "url-retirement/config.html" (dict "page" $s.Home) -}}
-        {{- if and $scfg.enable $scfg.manifest.enable -}}
-          {{- if in $scfg.manifest.extra $entry -}}
-            {{- $namers = add $namers 1 -}}
-          {{- end -}}
-        {{- end -}}
+    {{- range $m := $answering -}}
+      {{- if and (in $m.extra $entry) (not (in $m.exclude $entry)) -}}
+        {{- $namers = add $namers 1 -}}
       {{- end -}}
     {{- end -}}
 
@@ -96,7 +113,7 @@
     {{- if and (gt $namers 0) (eq (len $verdicts) $namers) (eq $redundant $namers) -}}
       {{- partial "url-retirement/lib/warn.html" (dict
           "key" (printf "url-retirement:warn:extra-redundant:%v" $entry)
-          "message" (printf "[url-retirement] %v is named in url_retirement.manifest.extra, and every language that publishes a manifest already reaches that URL without it -- a module registered it, or the owner of the output format that wrote it answered for it -- so the entry changes nothing this build publishes. Remove it: an entry that duplicates a live registration cannot be told from one that is the only thing carrying its URL, so if that registration ever stops arriving, the entry keeps the URL in the file and the loss is reported nowhere." $entry)) -}}
+          "message" (printf "[url-retirement] %v is named in url_retirement.manifest.extra, and every language whose list names it already reaches that URL without it -- a module registered it, or the owner of the output format that wrote it answered for it -- so the entry changes nothing this build publishes. Remove it: an entry that duplicates a live registration cannot be told from one that is the only thing carrying its URL, so if that registration ever stops arriving, the entry keeps the URL in the file and the loss is reported nowhere." $entry)) -}}
     {{- end -}}
 
   {{- end -}}

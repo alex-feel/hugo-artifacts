@@ -33,3 +33,11 @@ defaultContentLanguage = 'en'
     weight = 2
     title = 'URL-Stilllegung'
     contentDir = 'content-de'
+
+    # German excludes one of the site-wide `extra` entries, which is the only
+    # shape in which a language NAMES an entry and never answers for it: its own
+    # exclusion decides the outcome, so it records no verdict. Params merge key
+    # by key, so naming `exclude` here leaves the site-wide `extra` list in force
+    # for German.
+    [languages.de.params.url_retirement.manifest]
+      exclude = ['/probe/also-published-by-url-read.txt']

@@ -176,7 +176,7 @@
        the diagnostic skips an entry the site also excludes, and it changes no
        line of the document either way. */}}
   {{- partial "url-retirement/manifest/redundant-extra.html" (dict
-      "page" $page "cfg" $cfg "base" $base "from_build" $fromBuild "excluded" $excluded) -}}
+      "cfg" $cfg "base" $base "from_build" $fromBuild "excluded" $excluded) -}}
 
   {{- $sorted := slice -}}
   {{- with $urls -}}
