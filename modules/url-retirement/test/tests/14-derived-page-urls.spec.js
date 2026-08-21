@@ -71,12 +71,16 @@ test('no rule in the file points at a document this module publishes', () => {
 // there passes even when the module names the manifest as well, because the
 // home page's own URL reaches the manifest a second way -- the pager
 // registration records it during the html pass, where the URL is right.
+// The registered URL belongs to no page and carries no language segment: it
+// names a file the asset pipeline published at the publish root, which both
+// languages of a shared-domain site are served from.
 test('the manifest lists exactly one URL per page of this language', () => {
   assert.deepEqual(manifest(derivedDir, 'en/url-manifest.txt').urls, [
     '/en/',
     '/en/posts/',
     '/en/posts/post-one/',
     '/en/tags/',
+    '/probe/published-by-url-read.txt',
   ]);
 });
 

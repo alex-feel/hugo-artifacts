@@ -1,7 +1,7 @@
 @echo off
-rem Builds the fixture site TWENTY-ONE TIMES with hugo (a BUILD, not a server: no
+rem Builds the fixture site TWENTY-TWO TIMES with hugo (a BUILD, not a server: no
 rem port binding, and a finite build exits by itself) and runs the Node
-rem build-output assertion suite against the twenty trees that succeed. Windows
+rem build-output assertion suite against the twenty-one trees that succeed. Windows
 rem mirror of run-tests.sh: pre-launch process check, then a hard fail on any
 rem deprecation or error output in any build log.
 rem
@@ -29,7 +29,10 @@ rem `render-early-html-last`, `html-missing` and `derived-urls` change the
 rem order, the membership or the render pass of the home page's output format
 rem list -- html-last and render-early each move nothing on their own,
 rem render-early-html-last is the only build where the sitemap's entry for the
-rem home page becomes this module's document, html-missing is the only one
+rem home page becomes this module's document, the two render-early builds are
+rem the only ones writing the manifest before anything can register a URL for
+rem it, so every registration is refused with a diagnostic instead of vanishing,
+rem html-missing is the only one
 rem where the home page has no html output at all, and derived-urls is the only
 rem one that can tell the URLs the module derives from the ones Hugo reports;
 rem `subpath`
@@ -249,10 +252,13 @@ for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_DEGRADED%" "%LOG_SHAPES%" 
   )
 )
 
-rem Every build except `degraded` is gated on warnings: the happy path is
-rem silent, and producing one diagnostic per fault is the only thing the
-rem degraded build exists to demonstrate.
-for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_PARTIAL%" "%LOG_OFF%" "%LOG_MULTILINGUAL%" "%LOG_MULTIPARTIAL%" "%LOG_MULTISUBDIR%" "%LOG_MULTIHOST%" "%LOG_SUBPATH%" "%LOG_CANONIFY%" "%LOG_PAGERPATH%" "%LOG_UGLY%" "%LOG_HTMLLAST%" "%LOG_HTMLMISSING%" "%LOG_RENDEREARLY%" "%LOG_RENDEREARLYLAST%" "%LOG_DERIVED%") do (
+rem The builds whose whole point is a diagnostic are exempt from the warning
+rem gate: the two degraded environments and `conflict` produce one per fault,
+rem `unpublished` reports a hook that answers wrongly, and the two render-early
+rem environments weight the manifest ahead of html, which leaves every
+rem registration too late to be listed. Everywhere else the happy path is
+rem silent.
+for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_PARTIAL%" "%LOG_OFF%" "%LOG_MULTILINGUAL%" "%LOG_MULTIPARTIAL%" "%LOG_MULTISUBDIR%" "%LOG_MULTIHOST%" "%LOG_SUBPATH%" "%LOG_CANONIFY%" "%LOG_PAGERPATH%" "%LOG_UGLY%" "%LOG_HTMLLAST%" "%LOG_HTMLMISSING%" "%LOG_DERIVED%") do (
   findstr /C:"WARN" %%L >nul 2>&1
   if not errorlevel 1 (
     echo A build that must warn about nothing did: %%L

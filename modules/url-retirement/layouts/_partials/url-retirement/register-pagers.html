@@ -27,7 +27,11 @@
   Ordering is safe by construction for the registrations a document actually
   reads. Within one language Hugo renders one output format at a time, and both
   documents are declared so they render after the html pass, so every
-  registration THAT language made is already recorded when they are built.
+  registration THAT language made is already recorded when they are built. A
+  site that weights the urlmanifest format below html's inverts that, and the
+  pager URLs then reach a manifest already written: lib/record-url.html refuses
+  such a registration with one warning per URL rather than accepting it into a
+  map nothing reads again.
 
   Across languages it is weaker than it looks, which matters to one reader only.
   Each language renders completely before the next one begins -- measured at
@@ -40,8 +44,11 @@
   registrations there.
 
   Three things are recorded, all scoped by language because the store is
-  build-global: every pager URL, for the manifest; the list page itself, from
-  which /_redirects builds the first-pager rule; and the pagination URL segment,
+  build-global: every pager URL, for the manifest, through the same
+  lib/record-url.html that register-url.html uses, so a pager URL and a URL a
+  module registers are one kind of thing to everything downstream; the list page
+  itself, from which /_redirects builds the first-pager rule; and the pagination
+  URL segment,
   DERIVED from the second pager's URL. That derivation is the only way the
   module can learn the segment: Hugo's pagination.path is configurable and
   localizable, and site.Config exposes the services and privacy blocks alone.
@@ -70,10 +77,9 @@
     {{- $lang := $page.Language.Name -}}
     {{- $pagers := $attempt.Value -}}
 
-    {{- $key := printf "url-retirement:pagers:%s" $lang -}}
     {{- range $pager := $pagers -}}
       {{- with $pager.URL -}}
-        {{- hugo.Store.SetInMap $key . . -}}
+        {{- partial "url-retirement/lib/record-url.html" (dict "page" $page "url" .) -}}
       {{- end -}}
     {{- end -}}
 

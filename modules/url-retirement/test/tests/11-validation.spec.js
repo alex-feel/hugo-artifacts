@@ -57,6 +57,43 @@ const SHAPE_FAULTS = [
     what: 'a manifest.exclude entry that is an absolute URL',
     match: /Ignoring the url_retirement\.manifest\.exclude entry "https:\/\/elsewhere\.example\/y"/,
   },
+  // The same discipline for the CALL rather than for a configured value. A
+  // module author registering a URL cannot get these wrong through
+  // configuration -- no key can express passing no page, or a table where a URL
+  // belongs -- so the fixture makes the malformed calls itself. Each has to be
+  // reported on its own terms: told only that "nothing was recorded", an author
+  // has no way to tell a missing page from a mistyped path.
+  {
+    what: 'a registration made without a page',
+    match: /register-url\.html was called without a page/,
+  },
+  {
+    what: 'a registration naming no URL at all',
+    match: /register-url\.html was called on \S+ with neither \.url nor \.urls/,
+  },
+  {
+    what: 'a registration whose .urls is not a list',
+    match: /Ignoring the \.urls value "map\[not:a list\]"/,
+  },
+  {
+    what: 'a registration whose URL is a table',
+    match: /Ignoring the URL "map\[not:a url\]" passed to register-url\.html/,
+  },
+  // A boolean is the sharpest of the three shapes: it is truthy, so a check
+  // written as "is there a value" accepts it and publishes the word `true` as a
+  // path.
+  {
+    what: 'a registration whose URL is a boolean',
+    match: /Ignoring the URL "true" passed to register-url\.html/,
+  },
+  {
+    what: 'a registration whose URL is empty',
+    match: /Ignoring an empty URL passed to register-url\.html/,
+  },
+  {
+    what: 'a registration whose URL is not server-relative',
+    match: /Ignoring the URL "no-leading-slash\.txt" passed to register-url\.html/,
+  },
 ];
 
 for (const fault of SHAPE_FAULTS) {

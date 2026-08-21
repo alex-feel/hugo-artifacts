@@ -55,10 +55,32 @@ test('a hook answering with text instead of a boolean removes nothing', () => {
 });
 
 test('and the refusal is reported exactly once, naming the hook', () => {
-  const lines = moduleWarnings('unpublished');
+  const lines = moduleWarnings('unpublished').filter((l) => l.includes('publication hook'));
   assert.equal(lines.length, 1, `expected exactly one diagnostic, got ${lines.length}`);
   assert.match(lines[0], /url-retirement\/publishes\/badtwin\.html\b/);
   assert.match(lines[0], /must return true or false/);
+});
+
+// The other thing this environment is now the only one to hold: a format's own
+// template registering a URL. `twin` carries no weight, so its pass runs after
+// the weight-100 manifest, and a registration arriving there is the one way the
+// mechanism can lose a URL without anybody noticing.
+test('a registration made from a format own pass is refused rather than lost', () => {
+  const lines = moduleWarnings('unpublished').filter((l) => l.includes('was registered for'));
+  assert.equal(lines.length, 1, `expected exactly one diagnostic, got ${lines.length}`);
+  assert.match(lines[0], /\/probe\/registered-too-late\.txt\b/);
+  assert.match(lines[0], /had already been written/);
+  assert.ok(
+    !urls().includes('/probe/registered-too-late.txt'),
+    'a URL registered after the manifest was written is listed in it',
+  );
+});
+
+// Two faults, two diagnostics, and nothing else: a warning class that started
+// firing here would otherwise hide inside a filter above.
+test('and this build says exactly those two things', () => {
+  const lines = moduleWarnings('unpublished');
+  assert.equal(lines.length, 2, `expected exactly two diagnostics, got ${lines.join(' | ')}`);
 });
 
 // build.render = link: Hugo writes no document for the page and still reports

@@ -20,7 +20,7 @@
 // hold it to the union of what those modules define.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {existsSync, readFileSync} from 'node:fs';
+import {existsSync, readdirSync, readFileSync} from 'node:fs';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
@@ -302,6 +302,62 @@ test('a site-level document withheld for want of content is not listed either', 
   const url = '/.well-known/agent-skills/index.json';
   assert.ok(!existsSync(servedFile(url)), 'the fixture premise changed');
   assert.ok(!manifestUrls().includes(url), 'a document that was never written is listed');
+});
+
+// The other direction of the same problem, and the one no hook can reach. The
+// manifest is built by crossing pages with their output formats, so a URL that
+// belongs to no page is invisible to it however correct every hook is: the pwa
+// module's offline page carries build.list = never and is therefore in no page
+// collection at all, and its service worker is not a page but a Resource. Both
+// are stable URLs a real deployment serves, and a 404 at either one is a defect
+// -- silently, since the registry meant to catch it cannot see them.
+test('a URL no page carries is listed because the module that published it said so', () => {
+  const urls = manifestUrls();
+  const sitemap = published('sitemap.xml');
+  for (const url of ['/offline/', '/sw.js']) {
+    assert.ok(existsSync(servedFile(url)), `${url} must be published for this to mean anything`);
+    assert.ok(urls.includes(url), `${url} is served but missing from the manifest`);
+    // The sitemap is the page walk's own projection, so a URL it does not carry
+    // is one nothing but a registration could have put in the manifest.
+    assert.ok(!sitemap.includes(url), `${url} is reachable by walking pages after all`);
+  }
+});
+
+// And the URLs deliberately left out. A fingerprinted name changes with its own
+// contents, so listing one would report a retirement and a new URL on every
+// rebuild in the one document whose only use is showing what really changed.
+// The pwa module publishes such scripts beside the worker it does register,
+// which is what makes this a decision rather than an oversight.
+test('and a content-addressed URL is deliberately not', () => {
+  const hashed = readdirSync(join(publicDir, 'pwa')).filter((name) => name.endsWith('.js'));
+  assert.ok(hashed.length > 0, 'the fixture publishes no fingerprinted script to check');
+  const urls = manifestUrls();
+  for (const name of hashed) {
+    assert.match(name, /\.[0-9a-f]{40,}\.js$/, `${name} does not look content-addressed`);
+    assert.ok(!urls.includes(`/pwa/${name}`), `the content-addressed /pwa/${name} is listed`);
+  }
+});
+
+test('and the registrations behind those two URLs come from the owning module', () => {
+  // White-box for the same reason the hook assertion below is: the manifest
+  // would look identical if this fixture had registered the URLs itself, and
+  // then it would prove nothing about what a consumer gets for free.
+  for (const rel of ['layouts/offline/single.html', 'layouts/_partials/pwa/service-worker.html']) {
+    const source = readFileSync(join(modulesRoot, 'pwa', rel), 'utf8');
+    assert.match(
+      source,
+      /url-retirement\/register-url\.html/,
+      `modules/pwa/${rel} must register the URL it publishes`,
+    );
+  }
+  const fixtureTemplates = readdirSync(join(fixtureDir, 'layouts'), {recursive: true})
+    .filter((name) => String(name).endsWith('.html'))
+    .map((name) => readFileSync(join(fixtureDir, 'layouts', String(name)), 'utf8'));
+  assert.deepEqual(
+    fixtureTemplates.filter((source) => source.includes('register-url.html')),
+    [],
+    'the fixture registers a URL itself, so it proves nothing about the module',
+  );
 });
 
 test('the answers behind those omissions come from the owning modules', () => {

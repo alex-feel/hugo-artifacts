@@ -14,5 +14,34 @@
      beside it, and half the shape would go unbuilt. */}}
 {{ $paginator := .Paginate site.RegularPages }}
 {{ partial "url-retirement/register-pagers.html" (dict "page" . "paginator" $paginator) }}
+{{/* What a module publishing outside the page graph does, in the smallest form
+     that is still the real thing: reading a Resource's .RelPermalink is what
+     writes the file, so the URL is registered from the same expression that
+     materialized it and never from an intention to publish. The guard is the
+     one a module writes -- with the _partials/ prefix and the .html suffix,
+     because the pre-v0.146 spelling silently returns false. */}}
+{{ with resources.Get "probe/published-by-url-read.txt" }}
+  {{ with .RelPermalink }}
+    {{ if templates.Exists "_partials/url-retirement/register-url.html" }}
+      {{ partial "url-retirement/register-url.html" (dict "page" $ "url" .) }}
+    {{ end }}
+  {{ end }}
+{{ end }}
+{{/* Every way the call itself can be malformed, made only in the environment
+     that exists to collect diagnostics. These are written as CALLS rather than
+     driven from configuration because a call is what a module author gets
+     wrong: no configuration can express passing no page, or a table where a
+     URL belongs. Each one has to be reported and each has to leave the rest of
+     the build standing, which is what the environment's exact warning count
+     proves. */}}
+{{ if eq hugo.Environment "degraded-shapes" }}
+  {{ partial "url-retirement/register-url.html" (dict "url" "/called-without-a-page.txt") }}
+  {{ partial "url-retirement/register-url.html" (dict "page" $) }}
+  {{ partial "url-retirement/register-url.html" (dict "page" $ "urls" (dict "not" "a list")) }}
+  {{ partial "url-retirement/register-url.html" (dict "page" $ "url" (dict "not" "a url")) }}
+  {{ partial "url-retirement/register-url.html" (dict "page" $ "url" true) }}
+  {{ partial "url-retirement/register-url.html" (dict "page" $ "url" "") }}
+  {{ partial "url-retirement/register-url.html" (dict "page" $ "url" "no-leading-slash.txt") }}
+{{ end }}
 <ul>{{ range $paginator.Pages }}<li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>{{ end }}</ul>
 </body></html>

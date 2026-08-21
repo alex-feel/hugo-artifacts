@@ -1,0 +1,5 @@
+An asset published only because a template read its URL, which is the shape of
+every file the asset pipeline puts on a site: a Resource rather than a Page,
+absent from site.Pages and from every page's output formats, and reachable by
+nothing the manifest walks. The home template reads its .RelPermalink -- which
+is what publishes it -- and registers the URL that read returned.
