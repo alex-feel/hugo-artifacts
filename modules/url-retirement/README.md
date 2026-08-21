@@ -242,14 +242,29 @@ One file this module publishes is deliberately absent from it: `/_redirects` its
 Your deployment check then diffs the live manifest against the built one, instead of diffing sitemaps:
 
 ```bash
-curl -fsS https://example.org/url-manifest.txt | grep -v '^#' | sort > live.txt
+curl -fsS https://example.org/url-manifest.txt > live-raw.txt || exit 1   # a fetch that failed is not an empty manifest
+grep -v '^#' live-raw.txt | sort > live.txt
 grep -v '^#' public/url-manifest.txt | sort > built.txt
 comm -23 live.txt built.txt   # URLs production serves that this build no longer publishes
 ```
 
+The fetch stands on its own line for the reason its comment gives. Piped straight into the filter it fails in the worst direction: `curl` writes nothing, the pipeline still exits 0 because the status of a piped command is discarded, and `comm -23` then prints nothing -- so a check that never fetched anything reports a clean run.
+
 One manifest per language means the path depends on where that language sits. A default language served at the root publishes `/url-manifest.txt` and the others `/<lang>/url-manifest.txt`; under `defaultContentLanguageInSubdir = true` there is no manifest at the root at all, and the check starts at `/<defaultLang>/url-manifest.txt`. Every manifest's header names its siblings, so one of them is enough to find the rest.
 
 On a multihost site each host publishes its own manifest at its own root, and the header names the others by their full URL rather than by a path, since a path on one host does not name a file on another.
+
+#### Reading the first comparison
+
+Three conditions make that comparison report something no URL was retired for, and each is worth knowing before the first run rather than after it. Two are on the PRODUCTION side and leave no trace in the built tree, because nothing there is wrong; the third is on the build side and names itself in the build log.
+
+**Moving the pin across `723e4a3` reports `/_redirects` once.** Before that commit the module listed its own redirect map, so production is still serving a manifest that names it while this build no longer does. Neither half of the comment applies: the map is left out because a host READS it rather than serving it, as described above, and this build still writes the file. It is not a retirement and needs no rule, and it stops appearing once the new manifest is deployed.
+
+**Adopting the check for the first time has nothing to compare against.** Production is not serving a manifest yet, so the fetch fails and the guard above stops the run there -- correctly, since a comparison needs both sides. One deploy ends the condition, and until then the built manifest is the only copy there is.
+
+**An `extra` entry the shape rule now rejects leaves the built manifest too.** Entries are server-relative paths, and `caae6df` extended that check to two shapes it had been letting through: a protocol-relative `//host/path`, and an entry carrying whitespace. Such an entry was published before and is not now, so it turns up in the same output. It is on the build side rather than production's, the build names it in a warning, and unlike the two above it stays until the entry is fixed.
+
+**A later narrowing would produce the same shape.** The two documents in that diff come from different builds of this module as well as from different content, so a line in the output has three possible sources: the URL really stopped being published and needs a rule; what the manifest lists narrowed while the build still publishes the URL; or your own configuration stopped being accepted. Only the first is a retirement, and the built tree settles which one it is -- a URL this build still publishes was not retired, whatever the two manifests say about it.
 
 ## Parameters
 
