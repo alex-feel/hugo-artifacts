@@ -40,11 +40,12 @@
     the page's own language home; the same enabled-means-bytes reasoning,
     and likewise per-language.
   - skills: ALL FOUR gates of home.agentskills.json, evaluated against the
-    DEFAULT site. The gates live in lib/skills-index-url.html -- shared
-    with the llms.txt `## Optional` auto-entry in llms.html, so the two
-    callers cannot drift apart -- and that partial returns the index URL
-    only when the file actually publishes, resolving the default-site
-    config and the skills slice once per build.
+    DEFAULT site. The gates live in lib/skills-entries.html, which resolves
+    the default-site config and the skills slice once per build; this file
+    and the llms.txt `## Optional` auto-entry in llms.html both read that
+    answer through lib/skills-index-url.html, which adds only the URL, so
+    the two callers cannot drift apart and the entry is present only when
+    the file actually publishes.
 
   Expected context: the current Page, or a dict whose "page" key is the
   current Page plus an optional "args" map of call-site config overrides

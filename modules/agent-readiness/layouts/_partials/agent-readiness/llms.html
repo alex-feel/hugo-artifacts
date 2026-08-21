@@ -402,12 +402,13 @@
          file is otherwise reachable only by well-known-path convention, so
          llms.txt is where an agent actually discovers it; the entry is
          DERIVED from module state, and no consumer action is needed.
-         lib/skills-index-url.html carries the four publish gates shared with
-         surfaces.html, so a zero-skills or unwired build appends nothing here
-         -- no entry, no warning. A consumer who already lists the index in
-         [[params.agent.llms.optional]] keeps their own wording: the URLs are
-         compared after absolutization, and a match suppresses the derived
-         entry rather than doubling it. */}}
+         lib/skills-entries.html carries the four publish gates, and this
+         entry and surfaces.html both reach them through the same
+         lib/skills-index-url.html, so a zero-skills or unwired build appends
+         nothing here -- no entry, no warning. A consumer who already lists
+         the index in [[params.agent.llms.optional]] keeps their own wording:
+         the URLs are compared after absolutization, and a match suppresses
+         the derived entry rather than doubling it. */}}
   {{- with partial "agent-readiness/lib/skills-index-url.html" (dict "page" $page) -}}
     {{- if not (in $optionalUrls .) -}}
       {{- $item := printf "- %s" (partial "agent-readiness/lib/markdown-link.html" (dict "name" $cfg.i18n.skills_entry_name "url" .)) -}}
