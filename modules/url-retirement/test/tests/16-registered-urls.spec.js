@@ -25,10 +25,28 @@ import {
 } from './helpers.js';
 
 const PROBE = '/probe/published-by-url-read.txt';
+// The list form of the call, carrying the two kinds of URL a site has to name
+// itself: a second asset the pipeline published when a template read its URL,
+// and a file copied verbatim out of static/, which Hugo exposes to no template
+// at all so its path can only be a literal.
+const LISTED = ['/probe/also-published-by-url-read.txt', '/probe/copied-verbatim.txt'];
 
 test('the registered URL names a file this build wrote', () => {
   assert.ok(docExists(baselineDir, 'probe/published-by-url-read.txt'));
   assert.ok(manifest(baselineDir).urls.includes(PROBE), 'a registered URL is missing');
+});
+
+// One call, several URLs. Hugo's `append` flattens a slice argument, so a
+// version of the partial that accumulated candidates with it would take a list
+// passed to the single-URL key apart and register its elements silently -- and
+// the mirror of that mistake, losing the .urls list entirely, publishes two
+// files nothing lists.
+test('and a call passing a list registers every URL in it', () => {
+  const {urls} = manifest(baselineDir);
+  for (const url of LISTED) {
+    assert.ok(docExists(baselineDir, url.slice(1)), `${url} must be published to mean anything`);
+    assert.ok(urls.includes(url), `${url} was registered in a list and is missing`);
+  }
 });
 
 // Why it needed registering at all. The page walk is the manifest's only other

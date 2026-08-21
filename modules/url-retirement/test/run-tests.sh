@@ -18,7 +18,7 @@
 # that shows a disabled module writing nothing at all while the site around it
 # builds normally, and `partial` is its counterpart, switching ONE document off
 # and leaving the other publishing. The `conflict` environment is the only one
-# whose content has two pages claiming the same retired URL, which is a
+# whose content has three pages claiming the same retired URL, which is a
 # diagnostic no other build can produce, and `degraded-shapes` holds the faults
 # that cannot share a key with the ones in `degraded`. The `multilingual`
 # environment is the only shape in which one _redirects file is written by two

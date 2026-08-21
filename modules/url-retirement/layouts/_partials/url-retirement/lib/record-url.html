@@ -19,7 +19,13 @@
   So the manifest sets url-retirement:manifest-rendered:<lang> as it renders,
   and this partial reads it: a registration made after that point is refused
   with one warning naming the URL, rather than accepted into a map nothing will
-  read again. Measured at Hugo v0.164.0: a template rendering in a zero-weight
+  read again. The warning claims exactly what the sentinel entails -- that the
+  registration could not reach the document -- and not that the URL is absent
+  from it, because a URL can arrive by the page walk as well: a list page
+  registers its own URL alongside its pagers, and that URL is in site.Pages
+  too. A URL this language ALREADY recorded in time is not warned about at all,
+  because a repeated registration of a URL that did reach the manifest is a
+  caller doing nothing wrong. Measured at Hugo v0.164.0: a template rendering in a zero-weight
   format's pass reads the sentinel the weight-100 document set, while every
   html-pass template reads it as absent, so an in-time caller is never warned.
   The key carries the language because hugo.Store is build-global and each
@@ -37,9 +43,14 @@
   compared against what a host serves. The leading segment is therefore stripped
   when it belongs to ANOTHER site's baseURL, leaving a path relative to the
   publish root, and lib/prefix-url.html puts the rendering language's own
-  segment back when the manifest reads it. Nothing is stripped unless the build
-  is multihost, where every site has a baseURL of its own; a shared-domain build
-  has one segment for every language and never reaches this.
+  segment back when the manifest reads it. At most ONE segment is stripped, and
+  nothing is stripped unless the build is multihost, where every site has a
+  baseURL of its own; a shared-domain build has one segment for every language
+  and never reaches this. The residual ambiguity is worth naming: on a multihost
+  build, a URL of THIS host whose own first segment happens to spell another
+  host's baseURL path is indistinguishable from a URL minted for that host, and
+  is rewritten. A host serving from the domain root beside a sibling served from
+  /docs/, publishing its own /docs/ directory, is the shape that reaches it.
 
   The recorded map is keyed BY THE URL, which makes a repeated registration of
   the same URL idempotent, and SetInMap rather than Add because Add silently
@@ -59,18 +70,27 @@
 
 {{- if hugo.IsMultihost -}}
   {{- $base := strings.TrimSuffix "/" (urls.Parse $page.Site.BaseURL).Path -}}
+  {{- $stripped := false -}}
   {{- range $s := hugo.Sites -}}
     {{- $other := strings.TrimSuffix "/" (urls.Parse $s.BaseURL).Path -}}
-    {{- if and $other (ne $other $base) (hasPrefix $url (printf "%s/" $other)) -}}
+    {{- if and (not $stripped) $other (ne $other $base) (hasPrefix $url (printf "%s/" $other)) -}}
       {{- $url = strings.TrimPrefix $other $url -}}
+      {{- $stripped = true -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
 
-{{- if hugo.Store.Get (printf "url-retirement:manifest-rendered:%s" $lang) -}}
+{{- $key := printf "url-retirement:registered:%s" $lang -}}
+{{- $recorded := hugo.Store.Get $key -}}
+
+{{- if and (reflect.IsMap $recorded) (ne (index $recorded $url) nil) -}}
+  {{/* Already recorded for this language, in time. Repeating a registration is
+       what a partial called once per page does, and there is nothing to say
+       about it. */}}
+{{- else if hugo.Store.Get (printf "url-retirement:manifest-rendered:%s" $lang) -}}
   {{- partial "url-retirement/lib/warn.html" (dict
       "key" (printf "url-retirement:warn:registered-late:%s:%s" $lang $url)
-      "message" (printf "[url-retirement] %s was registered for language %q after that language's /url-manifest.txt had already been written, so the manifest does not list it. A registration reaches the manifest only from a pass that renders BEFORE it: keep the urlmanifest output format's weight above the html format's, and register from a template that renders during the html pass rather than from one that renders in an output format's own pass." $url $lang)) -}}
+      "message" (printf "[url-retirement] %s was registered for language %q after that language's /url-manifest.txt had already been written, so the registration could not reach it. A registration reaches the manifest only from a pass that renders BEFORE it: keep the urlmanifest output format's weight above the html format's, and register from a template that renders during the html pass rather than from one that renders in an output format's own pass." $url $lang)) -}}
 {{- else -}}
-  {{- hugo.Store.SetInMap (printf "url-retirement:registered:%s" $lang) $url $url -}}
+  {{- hugo.Store.SetInMap $key $url $url -}}
 {{- end -}}

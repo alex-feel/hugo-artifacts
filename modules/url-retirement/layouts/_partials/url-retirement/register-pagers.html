@@ -62,12 +62,20 @@
   Return value: none. Side effect: the pager URLs are recorded for this build.
 */}}
 
-{{- $page := .page -}}
-{{- if not (reflect.IsPage $page) -}}
+{{- /* The context is read for named keys, so a caller that passed the page
+       itself -- the shape every other partial in this module takes -- would
+       raise out of a module rather than degrade, which is the one thing this
+       module never does to a consuming build. */ -}}
+{{- if not (reflect.IsMap .) -}}
+  {{- partial "url-retirement/lib/warn.html" (dict
+      "key" "url-retirement:warn:register-no-dict"
+      "message" (printf "[url-retirement] register-pagers.html was called with a %s instead of a context dict: pass (dict \"page\" . \"paginator\" $paginator). No pager URLs were recorded." (printf "%T" .))) -}}
+{{- else if not (reflect.IsPage .page) -}}
   {{- partial "url-retirement/lib/warn.html" (dict
       "key" "url-retirement:warn:register-no-page"
       "message" "[url-retirement] register-pagers.html was called without a page: pass (dict \"page\" . \"paginator\" $paginator). No pager URLs were recorded.") -}}
 {{- else -}}
+  {{- $page := .page -}}
   {{- $attempt := try (.paginator.Pagers) -}}
   {{- with $attempt.Err -}}
     {{- partial "url-retirement/lib/warn.html" (dict

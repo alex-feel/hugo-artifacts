@@ -38,38 +38,67 @@ const SHAPE_FAULTS = [
     what: 'a table given to the pagination segment',
     match: /Ignoring url_retirement\.redirects\.pagination_path.*map\[not:a segment\]/,
   },
+  // Each regex pins the value AND the clause that names the fault, because the
+  // messages share a prefix through the colon: a guard that stopped firing
+  // would let the next arm answer in its place with the same quoted value, and
+  // a regex ending at the colon would still match.
   {
     what: 'a manifest.extra entry that is not server-relative',
-    match: /Ignoring the url_retirement\.manifest\.extra entry "no-leading-slash\.html"/,
+    match: /extra entry "no-leading-slash\.html".*entries are server-relative/,
   },
   {
     what: 'a manifest.extra entry that is an absolute URL',
-    match: /Ignoring the url_retirement\.manifest\.extra entry "https:\/\/elsewhere\.example\/x"/,
+    match: /extra entry "https:\/\/elsewhere\.example\/x".*entries are server-relative/,
   },
-  // The same two faults on the subtracting key, where the diagnostic is the
-  // ONLY signal: a malformed exclusion matches no URL, so the manifest it was
-  // meant to shorten comes out exactly as it would have anyway.
+  {
+    what: 'a manifest.extra entry that is a protocol-relative URL',
+    match: /extra entry "\/\/elsewhere\.example\/z".*protocol-relative URL naming another host/,
+  },
+  // An empty entry passes a leading-slash test only by never reaching one, and
+  // dropping it in silence would leave the site believing the URL it meant to
+  // name is covered.
+  {
+    what: 'an empty manifest.extra entry',
+    match: /Ignoring an empty url_retirement\.manifest\.extra entry/,
+  },
+  // The same faults on the subtracting key, where the diagnostic is the ONLY
+  // signal: a malformed exclusion matches no URL, so the manifest it was meant
+  // to shorten comes out exactly as it would have anyway.
   {
     what: 'a manifest.exclude entry that is not server-relative',
-    match: /Ignoring the url_retirement\.manifest\.exclude entry "no-leading-slash-either\.html"/,
+    match: /exclude entry "no-leading-slash-either\.html".*entries are server-relative/,
   },
   {
     what: 'a manifest.exclude entry that is an absolute URL',
-    match: /Ignoring the url_retirement\.manifest\.exclude entry "https:\/\/elsewhere\.example\/y"/,
+    match: /exclude entry "https:\/\/elsewhere\.example\/y".*entries are server-relative/,
+  },
+  // Whitespace is fatal to the file format rather than merely wrong: the
+  // manifest promises one URL per line, and every reader of it splits on
+  // newlines.
+  {
+    what: 'a manifest.exclude entry carrying whitespace',
+    match: /exclude entry "\/has a space\.html".*may not contain whitespace/,
   },
   // The same discipline for the CALL rather than for a configured value. A
   // module author registering a URL cannot get these wrong through
   // configuration -- no key can express passing no page, or a table where a URL
   // belongs -- so the fixture makes the malformed calls itself. Each has to be
   // reported on its own terms: told only that "nothing was recorded", an author
-  // has no way to tell a missing page from a mistyped path.
+  // has no way to tell a missing page from a mistyped path. The first is the
+  // fault of passing the page the way every other partial in this module takes
+  // it: reading a named key off a page RAISES, and a module that raises stops a
+  // consuming build.
+  {
+    what: 'a registration made with no context dict at all',
+    match: /register-url\.html was called with a string instead of a context dict/,
+  },
   {
     what: 'a registration made without a page',
     match: /register-url\.html was called without a page/,
   },
   {
     what: 'a registration naming no URL at all',
-    match: /register-url\.html was called on \S+ with neither \.url nor \.urls/,
+    match: /register-url\.html was called on .+? with neither \.url nor \.urls/,
   },
   {
     what: 'a registration whose .urls is not a list',
@@ -77,14 +106,20 @@ const SHAPE_FAULTS = [
   },
   {
     what: 'a registration whose URL is a table',
-    match: /Ignoring the URL "map\[not:a url\]" passed to register-url\.html/,
+    match: /Ignoring the URL "map\[not:a url\]".*a URL is one path written as a single value/,
   },
-  // A boolean is the sharpest of the three shapes: it is truthy, so a check
-  // written as "is there a value" accepts it and publishes the word `true` as a
-  // path.
+  // A boolean is the sharpest of the shapes: it is truthy, so a check written
+  // as "is there a value" accepts it and publishes the word `true` as a path.
   {
     what: 'a registration whose URL is a boolean',
-    match: /Ignoring the URL "true" passed to register-url\.html/,
+    match: /Ignoring the URL "true".*a URL is one path written as a single value/,
+  },
+  // A list handed to the single-URL key. Hugo's `append` flattens a slice
+  // argument into its elements, so a version of this partial that accumulated
+  // candidates with it would take the list apart and register both silently.
+  {
+    what: 'a registration whose .url is a list',
+    match: /Ignoring the URL "\[\/a\.txt \/b\.txt\]".*a URL is one path written as a single value/,
   },
   {
     what: 'a registration whose URL is empty',
@@ -92,7 +127,16 @@ const SHAPE_FAULTS = [
   },
   {
     what: 'a registration whose URL is not server-relative',
-    match: /Ignoring the URL "no-leading-slash\.txt" passed to register-url\.html/,
+    match: /Ignoring the URL "no-leading-slash\.txt".*must start with "\/"/,
+  },
+  {
+    what: 'a registration whose URL is protocol-relative',
+    match:
+      /Ignoring the URL "\/\/elsewhere\.example\/x".*protocol-relative URL naming another host/,
+  },
+  {
+    what: 'a registration whose URL carries whitespace',
+    match: /Ignoring the URL "\/has a space\.txt".*may not contain whitespace/,
   },
 ];
 
@@ -120,7 +164,7 @@ test('an unrecognized boolean leaves both documents publishing', () => {
 // told the opposite of what happened.
 test('an exclude diagnostic says what that rejection cost, not what an extra one would', () => {
   const lines = moduleWarnings('shapes').filter((l) => l.includes('manifest.exclude entry'));
-  assert.equal(lines.length, 2, 'the exclude faults are not both reported');
+  assert.equal(lines.length, 3, 'the exclude faults are not all reported');
   for (const line of lines) assert.match(line, /Nothing is left out of \/url-manifest\.txt for it/);
 });
 

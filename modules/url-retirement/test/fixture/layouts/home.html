@@ -27,6 +27,17 @@
     {{ end }}
   {{ end }}
 {{ end }}
+{{/* The list form of the same call, and the two things it carries are the two
+     kinds of URL a site has to name itself: a second asset the pipeline
+     published when this template read its URL, and a file copied verbatim out
+     of static/, whose path the site knows and no template can discover. */}}
+{{ with resources.Get "probe/also-published-by-url-read.txt" }}
+  {{ with .RelPermalink }}
+    {{ if templates.Exists "_partials/url-retirement/register-url.html" }}
+      {{ partial "url-retirement/register-url.html" (dict "page" $ "urls" (slice . "/probe/copied-verbatim.txt")) }}
+    {{ end }}
+  {{ end }}
+{{ end }}
 {{/* Every way the call itself can be malformed, made only in the environment
      that exists to collect diagnostics. These are written as CALLS rather than
      driven from configuration because a call is what a module author gets
@@ -42,6 +53,10 @@
   {{ partial "url-retirement/register-url.html" (dict "page" $ "url" true) }}
   {{ partial "url-retirement/register-url.html" (dict "page" $ "url" "") }}
   {{ partial "url-retirement/register-url.html" (dict "page" $ "url" "no-leading-slash.txt") }}
+  {{ partial "url-retirement/register-url.html" (dict "page" $ "url" "//elsewhere.example/x") }}
+  {{ partial "url-retirement/register-url.html" (dict "page" $ "url" "/has a space.txt") }}
+  {{ partial "url-retirement/register-url.html" (dict "page" $ "url" (slice "/a.txt" "/b.txt")) }}
+  {{ partial "url-retirement/register-url.html" "not a context dict" }}
 {{ end }}
 <ul>{{ range $paginator.Pages }}<li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>{{ end }}</ul>
 </body></html>

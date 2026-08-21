@@ -7,13 +7,16 @@
   here, and the diagnostic names whichever key carried the entry.
 
   The container's shape is checked by config.html; this checks each ELEMENT,
-  which is the half that matters downstream. An `extra` element is handed to
-  lib/prefix-url.html, whose documented precondition is a server-relative path
-  beginning with "/" -- it prepends the baseURL's path segment with no
-  separator, because a path that starts with "/" already carries one. An entry
-  that is a nested table, or a bare word, or an absolute URL therefore does not
-  merely look wrong: it is published as `map[...]`, as `/docsno-slash.html`, or
-  as `/docshttps://elsewhere.example/`, in a document whose whole job is to be
+  which is the half that matters downstream. The rule itself lives in
+  lib/url-shape.html, shared with the registration path so a URL configured and
+  a URL registered are held to one standard; this file is the half that says
+  what a REJECTION cost the site, which the rule cannot know.
+
+  An `extra` element is handed to lib/prefix-url.html, whose documented
+  precondition is a server-relative path beginning with "/". An entry that is a
+  nested table, or a bare word, or an absolute URL therefore does not merely
+  look wrong: it is published as `map[...]`, as `/docsno-slash.html`, or as
+  `/docshttps://elsewhere.example/`, in a document whose whole job is to be
   diffed byte for byte against production. An `exclude` element is compared
   against those same normalized paths, so a malformed one silently matches
   nothing, which is the quieter half of the same fault: the site believes a URL
@@ -37,19 +40,26 @@
     "Nothing is left out of /url-manifest.txt for it."
     "It is left out of /url-manifest.txt." -}}
 
-{{- $out := "" -}}
-{{- if or (reflect.IsMap $value) (reflect.IsSlice $value) (eq (printf "%T" $value) "bool") -}}
-  {{- partial "url-retirement/lib/warn.html" (dict
-      "key" (printf "url-retirement:warn:%s-element-shape:%v" $setting $value)
-      "message" (printf "[url-retirement] Ignoring the url_retirement.manifest.%s entry %q: an entry is one URL written as a single value. %s" $setting (printf "%v" $value) $consequence)) -}}
-{{- else -}}
-  {{- $candidate := trim (printf "%v" $value) " \t\n\r" -}}
-  {{- if and $candidate (not (hasPrefix $candidate "/")) -}}
+{{- $checked := partial "url-retirement/lib/url-shape.html" (dict "value" $value) -}}
+{{- $reasons := dict
+    "shape" "an entry is one URL written as a single value"
+    "relative" "entries are server-relative paths and must start with \"/\""
+    "network-path" "a value beginning with \"//\" is a protocol-relative URL naming another host, not a path on this site"
+    "whitespace" "a URL in this document may not contain whitespace, because the file carries one URL per line" -}}
+
+{{- with $checked.fault -}}
+  {{- if eq . "empty" -}}
+    {{/* Reported rather than dropped in silence: an empty entry is a key the
+         site filled in from something that resolved to nothing, and the value
+         it meant to name is exactly what a reader would go looking for. */}}
     {{- partial "url-retirement/lib/warn.html" (dict
-        "key" (printf "url-retirement:warn:%s-element-path:%s" $setting $candidate)
-        "message" (printf "[url-retirement] Ignoring the url_retirement.manifest.%s entry %q: entries are server-relative paths and must start with \"/\". %s" $setting $candidate $consequence)) -}}
+        "key" (printf "url-retirement:warn:%s-element-empty" $setting)
+        "message" (printf "[url-retirement] Ignoring an empty url_retirement.manifest.%s entry. %s" $setting $consequence)) -}}
   {{- else -}}
-    {{- $out = $candidate -}}
+    {{- partial "url-retirement/lib/warn.html" (dict
+        "key" (printf "url-retirement:warn:%s-element-%s:%v" $setting . $value)
+        "message" (printf "[url-retirement] Ignoring the url_retirement.manifest.%s entry %q: %s. %s" $setting (printf "%v" $value) (index $reasons .) $consequence)) -}}
   {{- end -}}
 {{- end -}}
-{{- return $out -}}
+
+{{- return $checked.path -}}

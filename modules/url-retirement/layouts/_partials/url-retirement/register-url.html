@@ -5,16 +5,19 @@
   reach, so /url-manifest.txt lists it. Call it from the template that PUBLISHES
   the URL, guarded so a site without this module pays nothing:
 
-    {{ $sw := resources.Get "js/sw.js" | js.Build $opts }}
-    {{ with $sw.RelPermalink }}
-      {{ if templates.Exists "_partials/url-retirement/register-url.html" }}
-        {{ partial "url-retirement/register-url.html" (dict "page" $page "url" .) }}
+    {{ $page := . }}
+    {{ with resources.Get "js/sw.js" }}
+      {{ with (. | js.Build $opts).RelPermalink }}
+        {{ if templates.Exists "_partials/url-retirement/register-url.html" }}
+          {{ partial "url-retirement/register-url.html" (dict "page" $page "url" .) }}
+        {{ end }}
       {{ end }}
     {{ end }}
 
-  The guard takes a path under layouts/ WITH the .html suffix, which `partial`
-  itself does not need, and the pre-v0.146 `partials/` spelling silently returns
-  false.
+  The page is captured BEFORE the `with` blocks because each of them rebinds the
+  dot to the resource. The guard takes a path under layouts/ WITH the .html
+  suffix, which `partial` itself does not need, and the pre-v0.146 `partials/`
+  spelling silently returns false.
 
   Why the publisher has to make this call. The manifest is built by crossing
   every page in site.Pages with its output formats, and several things a build
@@ -46,12 +49,12 @@
 
   ORDERING. Hugo renders one output format at a time within a language, positive
   weights ascending and then every zero-weight format, so /url-manifest.txt at
-  weight 100 sees registrations made during the html pass (weight 10) and none
-  made afterwards. Register from a template that renders in the html pass -- a
-  layout, or a partial the consumer's <head> reaches. A registration made from
-  an output format's own template arrives after the manifest was written; it is
-  refused with a warning naming the URL rather than silently dropped, but it is
-  still not listed.
+  weight 100 sees registrations made during any pass that renders before it and
+  none made afterwards. The html format is weight 10, so an html-pass template
+  is always in time; a format carrying no weight renders after every weighted
+  one, so a registration made from its own template is not. A registration that
+  arrives too late is refused with a warning naming the URL rather than silently
+  dropped, but it is still not recorded.
 
   Expected context (dict):
   - .page (Page)   The page being rendered; names the language whose manifest
@@ -63,25 +66,39 @@
   Return value: none. Side effect: the URLs are recorded for this build.
 */}}
 
-{{- $page := .page -}}
-{{- if not (reflect.IsPage $page) -}}
+{{- /* The context is read for named keys, so a caller that passed the page
+       itself -- the shape every other partial in this module takes -- would
+       raise out of a module rather than degrade, which is the one thing this
+       module never does to a consuming build.
+
+       Every action in this file is whitespace-trimmed, this comment included:
+       the partial renders into whatever the caller is rendering, and one stray
+       newline in a plain-text output format is the difference between Hugo
+       writing no file and writing one. */ -}}
+{{- if not (reflect.IsMap .) -}}
+  {{- partial "url-retirement/lib/warn.html" (dict
+      "key" "url-retirement:warn:register-url-no-dict"
+      "message" (printf "[url-retirement] register-url.html was called with a %s instead of a context dict: pass (dict \"page\" . \"url\" $url). No URL was recorded." (printf "%T" .))) -}}
+{{- else if not (reflect.IsPage .page) -}}
   {{- partial "url-retirement/lib/warn.html" (dict
       "key" "url-retirement:warn:register-url-no-page"
       "message" "[url-retirement] register-url.html was called without a page: pass (dict \"page\" . \"url\" $url). No URL was recorded.") -}}
 {{- else -}}
 
-  {{/* Both keys are collected raw and validated as ELEMENTS below, because a
-       caller that passes one URL where a list belongs -- or the reverse -- is
-       the plausible mistake, and `range` over a string raises while `with`
-       treats a table as present. */}}
-  {{- $raw := slice -}}
+  {{- $page := .page -}}
+
+  {{/* Each candidate is wrapped rather than appended raw, because `append`
+       flattens a slice argument into its elements: a list passed to .url would
+       otherwise be silently accepted as several URLs, which is the opposite of
+       the rejection the shape check exists to make. */}}
+  {{- $candidates := slice -}}
   {{- if ne .url nil -}}
-    {{- $raw = $raw | append .url -}}
+    {{- $candidates = $candidates | append (dict "v" .url) -}}
   {{- end -}}
   {{- $many := .urls -}}
   {{- if reflect.IsSlice $many -}}
     {{- range $many -}}
-      {{- $raw = $raw | append . -}}
+      {{- $candidates = $candidates | append (dict "v" .) -}}
     {{- end -}}
   {{- else if ne $many nil -}}
     {{- partial "url-retirement/lib/warn.html" (dict
@@ -99,32 +116,30 @@
         "message" (printf "[url-retirement] register-url.html was called on %s with neither .url nor .urls: pass (dict \"page\" . \"url\" $url), or .urls for several. No URL was recorded for this page." $page.Path)) -}}
   {{- end -}}
 
-  {{/* An entry is rejected at the edge rather than downstream, because
-       lib/prefix-url.html documents a server-relative path as its precondition:
-       a table reaches the file as `map[...]`, a bare word as `/docsno-slash`,
-       and an absolute URL as `/docshttps://elsewhere.example/`, in a document
-       compared byte for byte against production. */}}
-  {{- range $u := $raw -}}
-    {{- $url := "" -}}
-    {{- if or (reflect.IsMap $u) (reflect.IsSlice $u) (eq (printf "%T" $u) "bool") -}}
-      {{- partial "url-retirement/lib/warn.html" (dict
-          "key" (printf "url-retirement:warn:register-url-shape:%v" $u)
-          "message" (printf "[url-retirement] Ignoring the URL %q passed to register-url.html on %s: a URL is one path written as a single value. It is not listed in /url-manifest.txt." (printf "%v" $u) $page.Path)) -}}
-    {{- else -}}
-      {{- $cand := trim (printf "%v" $u) " \t\n\r" -}}
-      {{- if not $cand -}}
+  {{/* The rule is lib/url-shape.html's, shared with the configured `extra` and
+       `exclude` entries so a URL registered and a URL configured are held to one
+       standard; only the wording is this file's, because the audience is
+       whoever wrote the CALL rather than whoever wrote the configuration. */}}
+  {{- $reasons := dict
+      "shape" "a URL is one path written as a single value"
+      "relative" "a registered URL is server-relative and must start with \"/\". Pass .RelPermalink rather than .Permalink"
+      "network-path" "a value beginning with \"//\" is a protocol-relative URL naming another host, not a path this site serves"
+      "whitespace" "a registered URL may not contain whitespace, because /url-manifest.txt carries one URL per line" -}}
+
+  {{- range $c := $candidates -}}
+    {{- $checked := partial "url-retirement/lib/url-shape.html" (dict "value" $c.v) -}}
+    {{- with $checked.fault -}}
+      {{- if eq . "empty" -}}
         {{- partial "url-retirement/lib/warn.html" (dict
             "key" (printf "url-retirement:warn:register-url-empty:%v" $page.Path)
             "message" (printf "[url-retirement] Ignoring an empty URL passed to register-url.html on %s. A resource whose URL is empty was never published, so registering it would name a path nothing serves." $page.Path)) -}}
-      {{- else if not (hasPrefix $cand "/") -}}
-        {{- partial "url-retirement/lib/warn.html" (dict
-            "key" (printf "url-retirement:warn:register-url-path:%s" $cand)
-            "message" (printf "[url-retirement] Ignoring the URL %q passed to register-url.html on %s: a registered URL is server-relative and must start with \"/\". Pass .RelPermalink rather than .Permalink. It is not listed in /url-manifest.txt." $cand $page.Path)) -}}
       {{- else -}}
-        {{- $url = $cand -}}
+        {{- partial "url-retirement/lib/warn.html" (dict
+            "key" (printf "url-retirement:warn:register-url-%s:%v" . $c.v)
+            "message" (printf "[url-retirement] Ignoring the URL %q passed to register-url.html on %s: %s. It is not listed in /url-manifest.txt." (printf "%v" $c.v) $page.Path (index $reasons .))) -}}
       {{- end -}}
     {{- end -}}
-    {{- with $url -}}
+    {{- with $checked.path -}}
       {{- partial "url-retirement/lib/record-url.html" (dict "page" $page "url" .) -}}
     {{- end -}}
   {{- end -}}
