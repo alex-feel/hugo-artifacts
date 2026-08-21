@@ -1,0 +1,39 @@
+# Two languages where the `extra` list belongs to ONE of them, which is the
+# configuration the namer count exists for and the one a site-wide list cannot
+# stand in for.
+#
+# A language's own [languages.<lang>.params...] list REPLACES the site-wide one
+# rather than merging with it, so scoping a list to German is how a site names a
+# path that only German publishes. The count of languages that must answer for
+# such an entry is ONE, and a rule that waited for every language publishing a
+# manifest would wait forever: English never names the entry and never records a
+# verdict for it.
+#
+# German also carries an entry it does NOT reach, so the build proves the scoped
+# list is read rather than merely reached: one of its two entries is reported
+# and the other is not.
+#
+# The weights put German last for the same reason `multilingual-extra` puts it
+# last: the language that answers is the one rendering when the count closes,
+# and a rule reading only the language in front of it would be indistinguishable
+# here if English answered second.
+defaultContentLanguage = 'en'
+
+[languages]
+
+  [languages.en]
+    weight = 1
+    title = 'URL Retirement Fixture'
+    contentDir = 'content'
+
+  [languages.de]
+    weight = 2
+    title = 'URL-Stilllegung'
+    contentDir = 'content-de'
+
+    # Scoped to German alone. The first path is one German's own page walk
+    # reaches, so the entry is redundant for the only language that names it and
+    # is reported. The second is a legacy path nothing in this build publishes,
+    # so it is the only thing carrying its URL and stays unreported.
+    [languages.de.params.url_retirement.manifest]
+      extra = ['/de/posts/', '/legacy/de-hand-copied.html']

@@ -140,6 +140,11 @@
     {{- $urls = $urls | append (partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" (printf "%v" .))) -}}
   {{- end -}}
 
+  {{/* Held before the `extra` list joins it, because it is the answer to
+       "would this URL be here anyway" -- which is the question manifest/
+       redundant-extra.html asks below, once every language has answered it. */}}
+  {{- $fromBuild := $urls -}}
+
   {{- range $cfg.manifest.extra -}}
     {{- $urls = $urls | append (partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" .)) -}}
   {{- end -}}
@@ -155,11 +160,23 @@
        An entry matching nothing is deliberately NOT reported. Every language
        renders its own manifest, so a path under one language's prefix matches
        nothing in another language's file, and a per-language diagnostic would
-       fire on every multilingual site that uses the key exactly right. */}}
+       fire on every multilingual site that uses the key exactly right. An
+       `extra` entry meets the same objection and answers it rather than
+       avoiding it -- redundant-extra.html waits for every language that names
+       the entry -- but an unmatched `exclude` entry is not the same evidence:
+       matching nothing is what a correctly scoped entry looks like from the
+       other language, while a URL the build reaches on its own is a fact about
+       the build that holds whichever language is asking. */}}
   {{- $excluded := slice -}}
   {{- range $cfg.manifest.exclude -}}
     {{- $excluded = $excluded | append (partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" .)) -}}
   {{- end -}}
+
+  {{/* Asked after `excluded` is normalized and before the lines are assembled:
+       the diagnostic skips an entry the site also excludes, and it changes no
+       line of the document either way. */}}
+  {{- partial "url-retirement/manifest/redundant-extra.html" (dict
+      "cfg" $cfg "base" $base "from_build" $fromBuild "excluded" $excluded) -}}
 
   {{- $sorted := slice -}}
   {{- with $urls -}}

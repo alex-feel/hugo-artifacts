@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Builds the fixture site TWENTY-TWO TIMES with hugo (a BUILD, not a server: no
+# Builds the fixture site TWENTY-FIVE TIMES with hugo (a BUILD, not a server: no
 # port binding, and a finite build exits by itself) and runs the Node
-# build-output assertion suite against the twenty-one trees that succeed.
+# build-output assertion suite against the twenty-four trees that succeed.
 #
 # Each environment earns its place by a distinction no other one can make. The
 # default environment omits [params.url_retirement] entirely, so it is the only
@@ -96,12 +96,15 @@ LOG_RENDEREARLY="$HERE/hugo-build-render-early.log"
 LOG_RENDEREARLYLAST="$HERE/hugo-build-render-early-html-last.log"
 LOG_DERIVED="$HERE/hugo-build-derived-urls.log"
 LOG_UNPUBLISHED="$HERE/hugo-build-unpublished.log"
+LOG_EXTRAREDUNDANT="$HERE/hugo-build-extra-redundant.log"
+LOG_MULTIEXTRA="$HERE/hugo-build-multilingual-extra.log"
+LOG_PERLANGEXTRA="$HERE/hugo-build-extra-per-language.log"
 LOG_HOSTILE="$HERE/hugo-build-hostile.log"
 
 # The logs are retained after a successful run so the documented re-run recipe
 # can read them; they are gitignored at the repo root. Only an interrupt
 # discards them mid-run.
-trap 'rm -f "$LOG_BASELINE" "$LOG_CONFIGURED" "$LOG_DEGRADED" "$LOG_SHAPES" "$LOG_PARTIAL" "$LOG_CONFLICT" "$LOG_OFF" "$LOG_MULTILINGUAL" "$LOG_MULTIPARTIAL" "$LOG_MULTISUBDIR" "$LOG_MULTIHOST" "$LOG_SUBPATH" "$LOG_CANONIFY" "$LOG_PAGERPATH" "$LOG_UGLY" "$LOG_HTMLLAST" "$LOG_HTMLMISSING" "$LOG_RENDEREARLY" "$LOG_RENDEREARLYLAST" "$LOG_DERIVED" "$LOG_UNPUBLISHED" "$LOG_HOSTILE"' INT TERM
+trap 'rm -f "$LOG_BASELINE" "$LOG_CONFIGURED" "$LOG_DEGRADED" "$LOG_SHAPES" "$LOG_PARTIAL" "$LOG_CONFLICT" "$LOG_OFF" "$LOG_MULTILINGUAL" "$LOG_MULTIPARTIAL" "$LOG_MULTISUBDIR" "$LOG_MULTIHOST" "$LOG_SUBPATH" "$LOG_CANONIFY" "$LOG_PAGERPATH" "$LOG_UGLY" "$LOG_HTMLLAST" "$LOG_HTMLMISSING" "$LOG_RENDEREARLY" "$LOG_RENDEREARLYLAST" "$LOG_DERIVED" "$LOG_UNPUBLISHED" "$LOG_EXTRAREDUNDANT" "$LOG_MULTIEXTRA" "$LOG_PERLANGEXTRA" "$LOG_HOSTILE"' INT TERM
 
 # `pgrep -x` matches the process NAME, the semantic twin of the tasklist
 # IMAGENAME filter below. `-f` would match the whole command line, and this
@@ -150,7 +153,8 @@ build() { # build <environment> <destination> <log> [strict]
   fi
   # The happy path is SILENT. The exempt builds are the ones whose whole point
   # is a diagnostic: the two degraded environments and `conflict` produce one
-  # per fault, `unpublished` reports a hook that answers wrongly, and the two
+  # per fault, `unpublished` reports a hook that answers wrongly, the three
+  # extra-list environments each report a redundant entry, and the two
   # render-early environments weight the manifest ahead of html, which is the
   # misconfiguration that leaves every registration too late to be listed.
   if [ "$strict" = "strict" ] && grep -q "WARN" "$log"; then
@@ -190,6 +194,14 @@ build render-early public/render-early "$LOG_RENDEREARLY"
 build render-early-html-last public/render-early-html-last "$LOG_RENDEREARLYLAST"
 build derived-urls public/derived-urls "$LOG_DERIVED" strict
 build unpublished public/unpublished "$LOG_UNPUBLISHED"
+# Two builds whose subject is one diagnostic, so neither is held to the silent
+# log gate. `extra-redundant` names one redundant entry and one load-bearing one
+# on a single-language site; `multilingual-extra` asks the same question of a
+# build with two languages, where one entry is redundant for both and the other
+# only for German, which is the case the diagnostic must pass over.
+build extra-redundant public/extra-redundant "$LOG_EXTRAREDUNDANT"
+build multilingual-extra public/multilingual-extra "$LOG_MULTIEXTRA"
+build extra-per-language public/extra-per-language "$LOG_PERLANGEXTRA"
 build_must_fail hostile public/hostile "$LOG_HOSTILE"
 
 export FIXTURE_DIR
@@ -216,6 +228,9 @@ export FIXTURE_PUBLIC_RENDEREARLY="$FIXTURE_DIR/public/render-early"
 export FIXTURE_PUBLIC_RENDEREARLYLAST="$FIXTURE_DIR/public/render-early-html-last"
 export FIXTURE_PUBLIC_DERIVED="$FIXTURE_DIR/public/derived-urls"
 export FIXTURE_PUBLIC_UNPUBLISHED="$FIXTURE_DIR/public/unpublished"
+export FIXTURE_PUBLIC_EXTRAREDUNDANT="$FIXTURE_DIR/public/extra-redundant"
+export FIXTURE_PUBLIC_MULTIEXTRA="$FIXTURE_DIR/public/multilingual-extra"
+export FIXTURE_PUBLIC_PERLANGEXTRA="$FIXTURE_DIR/public/extra-per-language"
 export HUGO_BUILD_LOG_BASELINE="$LOG_BASELINE"
 export HUGO_BUILD_LOG_CONFIGURED="$LOG_CONFIGURED"
 export HUGO_BUILD_LOG_DEGRADED="$LOG_DEGRADED"
@@ -237,6 +252,9 @@ export HUGO_BUILD_LOG_RENDEREARLY="$LOG_RENDEREARLY"
 export HUGO_BUILD_LOG_RENDEREARLYLAST="$LOG_RENDEREARLYLAST"
 export HUGO_BUILD_LOG_DERIVED="$LOG_DERIVED"
 export HUGO_BUILD_LOG_UNPUBLISHED="$LOG_UNPUBLISHED"
+export HUGO_BUILD_LOG_EXTRAREDUNDANT="$LOG_EXTRAREDUNDANT"
+export HUGO_BUILD_LOG_MULTIEXTRA="$LOG_MULTIEXTRA"
+export HUGO_BUILD_LOG_PERLANGEXTRA="$LOG_PERLANGEXTRA"
 export HUGO_BUILD_LOG_HOSTILE="$LOG_HOSTILE"
 HUGO_VERSION="$(hugo version | sed -E 's/^hugo v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
 export HUGO_VERSION

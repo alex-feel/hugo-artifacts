@@ -1,0 +1,29 @@
+# The environment for the redundant-`extra` diagnostic, on a site with ONE
+# language, where every entry is answered for by that language alone.
+#
+# It carries one entry of each kind, because a diagnostic that simply named
+# every entry in the list would satisfy an environment holding only the
+# redundant one. The fixture's home page registers the first URL from the
+# expression that published it, so the build reaches that URL without this
+# list; nothing in the build can see the second -- Hugo exposes the sitemap's
+# publication to no template -- so the entry is the only thing carrying it.
+# Exactly one of the two is reported.
+#
+# This is also where two arrival paths claiming ONE URL is proven: the first
+# entry names a path a template also registers, the set is deduplicated after
+# sorting, and a version of that step running per arrival path rather than
+# across them would publish the line twice in a document compared line by line
+# against production.
+[url_retirement]
+
+  [url_retirement.manifest]
+    extra = ['/probe/also-published-by-url-read.txt', '/sitemap.xml', '/probe/copied-verbatim.txt']
+
+    # The third `extra` entry is ALSO excluded, and that pair is the one shape
+    # in which a redundant entry must stay unreported. Exclusion subtracts last
+    # and wins, so the path is absent from the file however many ways it
+    # arrived: the entry is not holding anything up and removing it would change
+    # nothing, which makes "this entry is redundant, delete it" advice about a
+    # line that is already doing what the site asked. The path is registered by
+    # the fixture's home page, so without this key it would be reported.
+    exclude = ['/probe/copied-verbatim.txt']

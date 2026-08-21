@@ -1,0 +1,43 @@
+# Two languages, both publishing a manifest, for the one question a
+# single-language build cannot ask: whether the redundant-`extra` diagnostic
+# waits for every language that names an entry before it says anything.
+#
+# `extra` is site-wide here, so both languages name both entries and the two
+# arms are decided by the URLs alone -- which is the shape a site actually
+# writes, and the shape in which a per-language check would report a list that
+# is correct.
+#
+# THE WEIGHTS ARE LOAD-BEARING. Hugo renders languages in weight order, so
+# English renders first and German last -- which means the language that finds
+# the German section redundant is the LAST one to answer. A rule that reported
+# whatever the language in front of it found would fire there, and the test that
+# this entry is passed over would fail. Swap these weights and the German arm
+# still passes while proving nothing.
+#
+# The language table is restated rather than shared with the `multilingual`
+# environment, as every multilingual environment in this fixture restates it:
+# Hugo environments do not chain, and each of these builds turns one knob that
+# the others must not carry. Nothing here localizes the pagination segment,
+# because this build is about the manifest's `extra` list and a localized
+# segment would only add a second reason for its files to differ.
+defaultContentLanguage = 'en'
+
+[languages]
+
+  [languages.en]
+    weight = 1
+    title = 'URL Retirement Fixture'
+    contentDir = 'content'
+
+  [languages.de]
+    weight = 2
+    title = 'URL-Stilllegung'
+    contentDir = 'content-de'
+
+    # German excludes one of the site-wide `extra` entries, which is the only
+    # shape in which a language NAMES an entry and never answers for it: its own
+    # exclusion decides the outcome, so it records no verdict. Params merge key
+    # by key, so naming `exclude` here leaves the site-wide `extra` list in force
+    # for German.
+    [languages.de.params.url_retirement.manifest]
+      exclude = ['/probe/also-published-by-url-read.txt']

@@ -99,6 +99,13 @@ enable = true
   #
   # A site-wide value appears in every language's manifest; put a list inside
   # [languages.<lang>.params.url_retirement.manifest] to scope it to one.
+  #
+  # An entry naming a URL the build reaches on its own IS reported, once, so a
+  # line that stopped being load-bearing -- a module update began registering
+  # the same URL -- does not sit here indistinguishable from one that is still
+  # the only thing carrying its path. The report waits for every language that
+  # names the entry, so an entry redundant for one language and load-bearing for
+  # another is passed over, and an entry `exclude` also names is left alone.
   extra = []
 
   # URLs to leave OUT of the manifest, for what the build publishes but no host
