@@ -1,0 +1,35 @@
+{{/*
+  url-retirement/publishes/searchindex.html -- PUBLIC ANSWER (hook tier).
+
+  Purpose: answers the url-retirement module's publication question for the
+  `searchindex` output format this module owns -- does this build publish
+  /searchindex.json for this page's language?
+
+  A wired format is not a published document. home.searchindex.json emits
+  nothing when the module's master switch is off, and Hugo then publishes no
+  file while still reporting the format in .OutputFormats with a resolving
+  .RelPermalink, silently, at every log level -- so a site that wires the
+  format and switches the module off would otherwise put a URL production
+  answers 404 for into a document meant to be diffed against production.
+  url-retirement asks whoever owns a format; this module owns this one, and
+  the contract lives in url-retirement/lib/publishes.html.
+
+  The gate below is the producer's own single gate, read from the same
+  search/config.html the producer reads and tested the same way -- a bare `if`
+  on the resolved value, so this answer and the producer's `{{ if $cfg.enable }}`
+  agree on every value the two could ever see, boolean or not. A site that
+  imports this module without url-retirement never renders this partial.
+
+  Expected context (dict), as url-retirement/lib/publishes.html passes it:
+  - .page   (Page)
+  - .format (OutputFormat) -- unused; the file name selects the format.
+
+  Return value: boolean. One terminal return.
+*/}}
+
+{{- $cfg := partial "search/config.html" (dict "page" .page "args" dict) -}}
+{{- $out := false -}}
+{{- if $cfg.enable -}}
+  {{- $out = true -}}
+{{- end -}}
+{{- return $out -}}

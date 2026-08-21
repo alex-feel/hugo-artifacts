@@ -1,0 +1,49 @@
+# A site whose pages wire output formats that do NOT publish a document for
+# every page, which is the shape in which "the formats a page has" and "the
+# documents a page publishes" come apart.
+#
+# Hugo decides publication on the rendered BYTE LENGTH and reports the decision
+# nowhere: a template emitting the empty string makes it write no file, the page
+# keeps listing the format, .RelPermalink keeps resolving to the path nothing
+# was written to, and the log is silent at every level. So the manifest asks the
+# format's owner through layouts/_partials/url-retirement/publishes/<name>.html,
+# and this fixture ships two of those hooks to build both arms of that contract:
+#
+# - `twin` answers properly, with a boolean, so the page it says NO for loses
+#   its line while every other page keeps one.
+# - `badtwin` answers the way a hook author gets it wrong -- rendering instead
+#   of returning -- so its answer arrives as text rather than a boolean. Its
+#   URLs must all stay listed and the module must say so once, because reading
+#   that empty render as `false` would delete live URLs from the registry a
+#   coverage check trusts, silently, which is the one direction this document
+#   cannot afford to fail in.
+#
+# The content directory is its own: the shared one feeds eleven other builds
+# whose URL sets are asserted exactly, and a page carrying `build.render` there
+# would change every one of them.
+contentDir = 'content-unpublished'
+
+[mediaTypes]
+
+  # One media type for both fixture formats. Sharing it is deliberate: it is
+  # also the shape in which Hugo silently borrows a same-suffix template for a
+  # format that has none, so the two templates below being separate files is
+  # what keeps each format rendering its own.
+  [mediaTypes."text/x-url-retirement-fixture"]
+    suffixes = ['ptxt']
+
+[outputFormats]
+
+  [outputFormats.twin]
+    mediaType = 'text/x-url-retirement-fixture'
+    baseName = 'index'
+    isPlainText = true
+
+  [outputFormats.badtwin]
+    mediaType = 'text/x-url-retirement-fixture'
+    baseName = 'bad'
+    isPlainText = true
+
+[outputs]
+  home = ['html', 'redirects', 'urlmanifest']
+  page = ['html', 'twin', 'badtwin']

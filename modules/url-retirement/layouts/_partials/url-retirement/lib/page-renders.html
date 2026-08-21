@@ -1,0 +1,41 @@
+{{/*
+  url-retirement/lib/page-renders.html -- INTERNAL (lib tier).
+
+  Purpose: reports whether Hugo writes any document at all for this page, so
+  the manifest never names a URL the build does not publish.
+
+  Hugo's `build.render` front-matter option (the key that replaced the removed
+  `_build` in v0.145.0) has one value this has to read: `link`. Measured at
+  v0.164.0 and at v0.160.0, such a page stays in .Site.Pages, keeps a resolving
+  .RelPermalink and still reports the html format in .OutputFormats, while Hugo
+  writes no file for it -- so every URL it contributes is one production answers
+  404 for. `never` and `false` need no guard of their own, because they leave
+  .RelPermalink and .OutputFormats empty and the callers' own `with` already
+  drops them; they are named below so the next reader does not have to
+  re-measure that.
+
+  Only the values Hugo documents as not rendering are treated as not rendering.
+  An unrecognized value keeps the page listed, because a URL wrongly listed is
+  a false alarm a human sees, while a URL wrongly dropped is a hole in the very
+  registry a coverage check trusts.
+
+  The redirect map deliberately does NOT consult this. A rule whose target is a
+  `link` page is the site's own arrangement -- it asked for a URL that exists
+  without a document behind it -- and dropping the rule would strand the
+  retired URL the rule exists to catch, which is the failure this module was
+  written to prevent.
+
+  Expected context (dict):
+  - .page (Page)
+
+  Return value: boolean. One terminal return.
+*/}}
+
+{{- $out := true -}}
+{{- $build := .page.Params.build -}}
+{{- if reflect.IsMap $build -}}
+  {{- if in (slice "link" "never" "false") (lower (printf "%v" (index $build "render"))) -}}
+    {{- $out = false -}}
+  {{- end -}}
+{{- end -}}
+{{- return $out -}}

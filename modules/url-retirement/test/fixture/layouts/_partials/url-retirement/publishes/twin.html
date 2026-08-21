@@ -1,0 +1,10 @@
+{{- /*
+  A publication hook written the way the contract asks: it returns a BOOLEAN,
+  and it decides on the same front-matter key page.twin.ptxt renders on, so the
+  answer cannot disagree with the file.
+
+  This is the arm where the manifest has to LOSE a line: the page carrying
+  `twin: false` publishes no twin, and its /silent/index.ptxt must not appear
+  in a document that promises what the build publishes.
+*/ -}}
+{{- return (ne .page.Params.twin false) -}}

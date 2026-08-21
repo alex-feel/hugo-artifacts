@@ -11,10 +11,13 @@
   published URLs they are), every pager URL the site registered through
   register-pagers.html, and whatever url_retirement.manifest.extra names.
 
-  What it cannot list, and says so in its own header: files copied verbatim from
-  static/, which Hugo exposes to no template, and the site-level documents whose
-  publication is decided by settings no template can read (sitemap.xml,
-  robots.txt, 404.html). `extra` exists for exactly those.
+  What it cannot list, and says so in its own header, is everything no template
+  can enumerate: files copied verbatim from static/, whatever the asset pipeline
+  publishes (a fingerprinted script, a processed image), a page kept out of
+  every page collection by build.list = never -- which is how a module ships a
+  page a site never lists, so `.Site.Pages` cannot see it -- and the site-level
+  documents whose publication is decided by settings no template can read
+  (sitemap.xml, robots.txt, 404.html). `extra` exists for exactly those.
 
   What it DELIBERATELY leaves out, and also says so in its own header: the
   redirect map this module renders. Hugo publishes it, so a walk of the build
@@ -28,11 +31,18 @@
   output format is the same case with a different owner, and
   url_retirement.manifest.exclude is how the consumer names it.
 
-  One caveat worth knowing rather than hiding: .OutputFormats reports the
-  formats CONFIGURED for a page, and a format with no matching template
-  publishes nothing while still appearing there. Hugo warns loudly for that case
-  ("found no layout file for ..."), so the condition is visible at build time
-  rather than only here.
+  What it does NOT take on trust: .OutputFormats, which reports the formats
+  CONFIGURED for a page rather than the documents published for it. Hugo
+  decides publication on the rendered BYTE LENGTH -- a template emitting the
+  empty string publishes no file -- and reports that nowhere: the format stays
+  listed, .RelPermalink keeps resolving to the path nothing was written to, and
+  the log is silent at every level including --logLevel debug. Hugo's
+  "found no layout file for ..." warning does not cover it either; measured at
+  v0.164.0 and at v0.160.0, that one fires only for a format with no template
+  of a matching SUFFIX, and Hugo silently borrows another template when one
+  exists. So lib/publishes.html asks the format's owner, and
+  lib/page-renders.html drops a page Hugo writes no document for at all. A
+  format nobody answers for is listed as wired, which the header says.
 
   Context (dict):
   - .page (Page) The home page rendering the document.
@@ -55,27 +65,37 @@
   {{- $base := strings.TrimSuffix "/" (urls.Parse $page.Site.BaseURL).Path -}}
   {{- $urls := slice -}}
   {{- range $p := $page.Site.Pages -}}
-    {{- if $cfg.manifest.output_formats -}}
-      {{/* The module's own redirect map is skipped rather than listed: every
-           host it targets consumes that file at deploy time and serves nothing
-           at its path, so listing it puts a URL nobody can fetch in a document
-           whose purpose is to be compared against what production serves. The
-           name is lowercased before comparing so the case Hugo reports for a
-           format cannot decide whether the line is emitted. */}}
-      {{- range $f := $p.OutputFormats -}}
-        {{- if ne (lower $f.Name) "redirects" -}}
-          {{- with $f.RelPermalink -}}
-            {{- $urls = $urls | append (partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" .)) -}}
+    {{/* A page Hugo renders no document for contributes nothing in either
+         mode, however much of it .OutputFormats and .RelPermalink still
+         report. */}}
+    {{- if partial "url-retirement/lib/page-renders.html" (dict "page" $p) -}}
+      {{- if $cfg.manifest.output_formats -}}
+        {{/* The module's own redirect map is skipped rather than listed: every
+             host it targets consumes that file at deploy time and serves
+             nothing at its path, so listing it puts a URL nobody can fetch in
+             a document whose purpose is to be compared against what production
+             serves. The name is lowercased before comparing so the case Hugo
+             reports for a format cannot decide whether the line is emitted.
+             That skip answers "published but never served"; lib/publishes.html
+             answers the different question of whether anything was published
+             at all. */}}
+        {{- range $f := $p.OutputFormats -}}
+          {{- if ne (lower $f.Name) "redirects" -}}
+            {{- if partial "url-retirement/lib/publishes.html" (dict "page" $p "format" $f) -}}
+              {{- with $f.RelPermalink -}}
+                {{- $urls = $urls | append (partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" .)) -}}
+              {{- end -}}
+            {{- end -}}
           {{- end -}}
         {{- end -}}
-      {{- end -}}
-    {{- else -}}
-      {{/* Through lib/page-url.html rather than off .RelPermalink, because this
-           document renders in a format that is not permalinkable: on a site
-           that lists this module's formats ahead of html, a page asked for its
-           own URL here answers with the manifest's. */}}
-      {{- with partial "url-retirement/lib/page-url.html" (dict "page" $p) -}}
-        {{- $urls = $urls | append (partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" .)) -}}
+      {{- else -}}
+        {{/* Through lib/page-url.html rather than off .RelPermalink, because
+             this document renders in a format that is not permalinkable: on a
+             site that lists this module's formats ahead of html, a page asked
+             for its own URL here answers with the manifest's. */}}
+        {{- with partial "url-retirement/lib/page-url.html" (dict "page" $p) -}}
+          {{- $urls = $urls | append (partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" .)) -}}
+        {{- end -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}
@@ -158,12 +178,19 @@
   {{- $lines = slice
       (printf "# Every URL this build publishes and a host serves, for language %q, sorted, one per line." $cfg.lang)
       "# Generated by the url-retirement Hugo module. Lines starting with # are comments."
-      "# Not listed: files copied verbatim from static/, which Hugo exposes to no"
-      "# template; any document whose publication is decided by a setting no"
-      "# template can read; the redirect map this module publishes, which every"
-      "# host that reads it consumes at deploy time and serves at no URL; and"
-      "# whatever url_retirement.manifest.exclude names. Name what is missing in"
-      "# url_retirement.manifest.extra." -}}
+      "# Not listed, because no template can enumerate them: files copied"
+      "# verbatim from static/, anything the asset pipeline publishes (a"
+      "# fingerprinted script, a processed image), a page kept out of every page"
+      "# collection by build.list = never, and any document whose publication is"
+      "# decided by a setting no template can read. Also not listed: the"
+      "# redirect map this module publishes, which every host that reads it"
+      "# consumes at deploy time and serves at no URL, and whatever"
+      "# url_retirement.manifest.exclude names. Name what is missing in"
+      "# url_retirement.manifest.extra."
+      "# One class can still be over-listed: an output format renders nothing"
+      "# for some pages and Hugo publishes no file, which it reports nowhere,"
+      "# so the format's owner answers for it through a publication hook. A"
+      "# format nobody answers for is listed as wired." -}}
   {{- with $siblings -}}
     {{- $lines = $lines | append (printf "# Other languages: %s" (delimit . ", ")) -}}
   {{- end -}}

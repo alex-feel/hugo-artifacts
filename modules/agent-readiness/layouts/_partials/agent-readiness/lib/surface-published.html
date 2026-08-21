@@ -1,0 +1,29 @@
+{{/*
+  agent-readiness/lib/surface-published.html -- INTERNAL (lib tier).
+
+  Purpose: reports whether ONE site-level surface of this module publishes a
+  document in this build, by asking the module's own public enumeration.
+
+  agent-readiness/surfaces.html already answers "which site-level surfaces does
+  this site actually PUBLISH", reproducing each producer's own gates through
+  the same lib resolvers the producers use, so nothing here restates a gate and
+  nothing can drift from what the renderers do. This partial is the boolean
+  projection of that answer for one key, which is the shape the
+  url-retirement publication hooks need.
+
+  Expected context (dict):
+  - .page (Page)
+  - .key  (string) One of the surface keys surfaces.html documents: "llms",
+    "llms_index", "facts", "skills".
+
+  Return value: boolean. One terminal return.
+*/}}
+
+{{- $key := .key -}}
+{{- $out := false -}}
+{{- range partial "agent-readiness/surfaces.html" (dict "page" .page) -}}
+  {{- if eq .key $key -}}
+    {{- $out = true -}}
+  {{- end -}}
+{{- end -}}
+{{- return $out -}}

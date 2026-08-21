@@ -1,0 +1,26 @@
+{{/*
+  url-retirement/publishes/llmstxt.html -- PUBLIC ANSWER (hook tier).
+
+  Purpose: answers the url-retirement module's publication question for the
+  `llmstxt` output format this module owns -- does this build publish /llms.txt
+  for this page's language?
+
+  A wired format is not a published document: this module's producer emits
+  nothing when the master switch or the surface switch is off, and Hugo then
+  publishes no file while still reporting the format in .OutputFormats with a
+  resolving .RelPermalink. url-retirement asks whoever owns a format; this
+  module owns this one. See url-retirement/lib/publishes.html for the contract
+  and agent-readiness/publishes/markdown.html for the fuller reasoning.
+
+  The answer comes from agent-readiness/surfaces.html through
+  agent-readiness/lib/surface-published.html, so it reproduces no gate of its
+  own and cannot drift from what the producer does.
+
+  Expected context (dict), as url-retirement/lib/publishes.html passes it:
+  - .page   (Page)
+  - .format (OutputFormat) -- unused; the file name selects the format.
+
+  Return value: boolean. One terminal return.
+*/}}
+
+{{- return (partial "agent-readiness/lib/surface-published.html" (dict "page" .page "key" "llms")) -}}

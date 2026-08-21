@@ -82,6 +82,10 @@ export const renderEarlyLastDir = dir(
 // A multilingual site listing html after this module's formats, where the URLs
 // the MODULE derives for a page can be told apart from the ones Hugo reports.
 export const derivedDir = dir('FIXTURE_PUBLIC_DERIVED', 'fixture/public/derived-urls');
+// Formats wired on pages that publish no document for them, plus a page Hugo
+// renders nothing for at all: the build where what a page HAS and what a page
+// PUBLISHES come apart, and the only one that exercises the publication hooks.
+export const unpublishedDir = dir('FIXTURE_PUBLIC_UNPUBLISHED', 'fixture/public/unpublished');
 
 const LOG_KEYS = {
   baseline: 'HUGO_BUILD_LOG_BASELINE',
@@ -104,6 +108,7 @@ const LOG_KEYS = {
   renderEarly: 'HUGO_BUILD_LOG_RENDEREARLY',
   renderEarlyLast: 'HUGO_BUILD_LOG_RENDEREARLYLAST',
   derived: 'HUGO_BUILD_LOG_DERIVED',
+  unpublished: 'HUGO_BUILD_LOG_UNPUBLISHED',
   hostile: 'HUGO_BUILD_LOG_HOSTILE',
 };
 

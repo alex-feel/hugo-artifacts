@@ -1,0 +1,27 @@
+{{/*
+  url-retirement/publishes/agentskills.html -- PUBLIC ANSWER (hook tier).
+
+  Purpose: answers the url-retirement module's publication question for the
+  `agentskills` output format this module owns -- does this build publish
+  /.well-known/agent-skills/index.json?
+
+  This is the format where a wired-but-unpublished URL is the DEFAULT rather
+  than a misconfiguration: home.agentskills.json emits nothing at all when no
+  skill resolves, deliberately, because an empty index at a .well-known path
+  claims a capability that does not exist. A site that wires the format and
+  configures no skills therefore has the format listed on its home page, a
+  resolving .RelPermalink, and no file -- and Hugo reports none of that.
+
+  The answer comes from agent-readiness/surfaces.html through
+  agent-readiness/lib/surface-published.html, which evaluates all four of the
+  producer's gates via the same lib/skills-index-url.html the producer's own
+  siblings use, so it reproduces no gate of its own and cannot drift.
+
+  Expected context (dict), as url-retirement/lib/publishes.html passes it:
+  - .page   (Page)
+  - .format (OutputFormat) -- unused; the file name selects the format.
+
+  Return value: boolean. One terminal return.
+*/}}
+
+{{- return (partial "agent-readiness/lib/surface-published.html" (dict "page" .page "key" "skills")) -}}

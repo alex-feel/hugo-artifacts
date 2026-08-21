@@ -1,0 +1,62 @@
+{{/*
+  url-retirement/lib/publishes.html -- INTERNAL (lib tier).
+
+  Purpose: reports whether one page publishes a document in one output format,
+  by asking whoever owns that format.
+
+  WHY IT HAS TO ASK. .OutputFormats reports the formats CONFIGURED for a page,
+  not the documents published for it, and Hugo decides publication on the
+  rendered BYTE LENGTH: measured at v0.164.0 and at v0.160.0, a template that
+  emits the empty string makes Hugo write no file, one that emits a single
+  space makes it write one. Nothing reports the difference. The page keeps
+  listing the format, .RelPermalink keeps resolving to the path no file was
+  written to, and the build log is silent at every level including
+  --logLevel debug. No method on a Page or on an OutputFormat exposes it
+  either. The only party that knows a format published nothing for a page is
+  the template that decided to emit nothing, so this is where it says so.
+
+  THE CONTRACT. A module or a site owning an output format whose template
+  renders nothing for some pages ships one file:
+
+      layouts/_partials/url-retirement/publishes/<format-name>.html
+
+  named for the output format, lowercased. It receives
+  (dict "page" PAGE "format" OUTPUTFORMAT) and returns TRUE when that page
+  publishes a document in that format. A format with no such file is listed as
+  wired, exactly as before, so a consumer that adds nothing keeps the previous
+  behavior and a hook can only ever REMOVE lines the build does not write.
+
+  The hook must return a BOOLEAN through `return`. A partial that prints its
+  answer instead of returning one hands back the text it rendered, an empty
+  render would then read as false, and a live URL would disappear from the
+  registry a coverage check trusts -- silently, which is the one failure
+  direction this document cannot afford. A non-boolean answer is therefore
+  refused with one warning per format, and the URL stays listed.
+
+  A site that overrides the format's template with one of its own also owns the
+  answer, and overrides the hook the same way: project layouts win over a
+  module's.
+
+  Expected context (dict):
+  - .page   (Page)
+  - .format (OutputFormat) as .OutputFormats yields it.
+
+  Return value: boolean. One terminal return.
+*/}}
+
+{{- $name := lower .format.Name -}}
+{{- $hook := printf "url-retirement/publishes/%s.html" $name -}}
+{{- $out := true -}}
+
+{{- if templates.Exists (printf "_partials/%s" $hook) -}}
+  {{- $answer := partial $hook (dict "page" .page "format" .format) -}}
+  {{- if eq (printf "%T" $answer) "bool" -}}
+    {{- $out = $answer -}}
+  {{- else -}}
+    {{- partial "url-retirement/lib/warn.html" (dict
+        "key" (printf "url-retirement:warn:publishes-hook-shape:%s" $name)
+        "message" (printf "[url-retirement] Ignoring the %s publication hook: it must return true or false through `return` but answered %q. Every %s URL stays listed in /url-manifest.txt." $hook (printf "%v" $answer) $name)) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $out -}}
