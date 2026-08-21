@@ -54,3 +54,23 @@ test('the README documents all three stub switches a consumer has to set', () =>
 test('the README states that the module cannot set them itself', () => {
   assert.match(readme(), /\[outputs\]/, 'the outputs wiring step is undocumented');
 });
+
+// The README prescribes one deployment check, and the shape of its fetch decides
+// what a site sees before its first deploy. Piped into the filter, a failed fetch
+// leaves an empty file, the pipeline still exits 0 because the status of a piped
+// command is discarded, and the comparison then reports a clean run against a
+// manifest it never fetched. Both directions are asserted: the recipe has to be
+// there, and its fetch has to stand on its own so the failure is the run's.
+test('the prescribed check cannot pass against a fetch it failed to make', () => {
+  // The fenced block that carries the comparison, so a failure prints the recipe
+  // rather than the whole README.
+  const recipe = readme()
+    .split(/```/)
+    .find((block) => block.includes('comm -23 live.txt built.txt'));
+  assert.ok(recipe, 'the comparison recipe is gone');
+  assert.match(
+    recipe,
+    /curl -fsS [^\n|]*url-manifest\.txt >/,
+    'the live manifest is fetched into a pipe, which discards the failure',
+  );
+});
