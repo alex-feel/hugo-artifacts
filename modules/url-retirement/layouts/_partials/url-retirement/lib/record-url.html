@@ -50,6 +50,17 @@
   the same URL idempotent, and SetInMap rather than Add because Add silently
   loses updates under the concurrent within-pass page rendering.
 
+  WHETHER A URL IS ALREADY RECORDED IS ASKED OF A SENTINEL, never of that map,
+  and the difference is a crash. hugo.Store.Get hands back the LIVE map rather
+  than a copy, so reading it from a template -- `index`, `range`, a field access
+  -- runs a Go map read outside the store's own lock while a page rendering
+  beside this one writes the same map through SetInMap. The Go runtime aborts
+  the process for that: `fatal error: concurrent map read and map write`,
+  mid-render, exit 1, on a build that succeeds the next time it is run. A
+  per-URL scalar key answers the same question and never lets the map escape
+  into the template layer. Two callers racing on the sentinel is harmless, since
+  both write the same URL to the same map key.
+
   Expected context (dict):
   - .page (Page)   The page being rendered; names the language.
   - .url  (string) A server-relative URL, already validated by the caller.
@@ -65,9 +76,9 @@
 {{- $url = partial "url-retirement/lib/host-frame.html" (dict "page" $page "url" $url) -}}
 
 {{- $key := printf "url-retirement:registered:%s" $lang -}}
-{{- $recorded := hugo.Store.Get $key -}}
+{{- $recordedKey := printf "url-retirement:recorded:%s:%s" $lang $url -}}
 
-{{- if and (reflect.IsMap $recorded) (ne (index $recorded $url) nil) -}}
+{{- if hugo.Store.Get $recordedKey -}}
   {{/* Already recorded for this language, in time. Repeating a registration is
        what a partial called once per page does, and there is nothing to say
        about it. */}}
@@ -77,4 +88,5 @@
       "message" (printf "[url-retirement] %s was registered for language %q after that language's /url-manifest.txt had already been written, so the registration could not reach it. A registration reaches the manifest only from a pass that renders BEFORE it: the urlmanifest format carries weight 100, so any format weighted below that is in time -- the html format at weight 10 included -- while a format carrying no weight renders after every weighted one and is not. Where the publishing template cannot choose which pass reaches it, the format's owner answers through a url-retirement/writes/<format-name>.html hook instead, which this document asks in its own pass. Where the site owns the URL, name it in url_retirement.manifest.extra." $url $lang)) -}}
 {{- else -}}
   {{- hugo.Store.SetInMap $key $url $url -}}
+  {{- hugo.Store.Set $recordedKey true -}}
 {{- end -}}
