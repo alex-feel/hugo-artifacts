@@ -296,6 +296,14 @@ Shipped glyphs: `search` and `close` -- inline SVGs using `stroke="currentColor"
 
 The Playwright suite under [`test/`](test/) validates the module against the multilingual fixture site in `test/fixture` (index shape and filters, index serialization of the authored front matter characters, the configuration-shape matrix, pagination, per-language configuration, the no-JavaScript baseline, enhancement and lazy loading, English and Russian recall, the modal and inline keyboard models, live regions, robustness against hostile payloads, caching, and the event contract); see [`test/README.md`](test/README.md) for how to run it. Repository CI verifies `go.mod` parsing, the standalone `hugo mod graph`, and the lint suite; the Playwright suite runs locally.
 
+## Publication answers
+
+Both documents this module ships can publish NOTHING: `/searchindex.json` follows the master switch, and `/opensearch.xml` is opt-in and off by default. Hugo publishes no file for a template that renders no bytes, and it reports that nowhere -- the output format stays listed on the home page with a resolving `.RelPermalink`, at every log level.
+
+So a site that also imports [`url-retirement`](../url-retirement/README.md) gets an answer rather than a guess. This module ships one small partial per format it owns, under `layouts/_partials/url-retirement/publishes/`, and that module's `/url-manifest.txt` asks them instead of trusting `.OutputFormats`: `searchindex` and `opensearch`. Each answer reads the same `search/config.html` its producer reads and tests it the same way, so it cannot drift from what the templates actually do.
+
+A site importing this module WITHOUT `url-retirement` pays nothing: no template calls those partials and Hugo never renders them.
+
 ## Module Structure
 
 ```text
@@ -331,6 +339,10 @@ modules/search/
 │   ├── _shortcodes/
 │   │   └── search.html
 │   └── _partials/
+│       ├── url-retirement/
+│       │   └── publishes/              # answers the url-retirement manifest. See "Publication answers".
+│       │       ├── searchindex.html
+│       │       └── opensearch.html
 │       └── search/
 │           ├── page.html               # PUBLIC ENTRY: dedicated page surface
 │           ├── modal.html              # PUBLIC ENTRY: command-palette modal

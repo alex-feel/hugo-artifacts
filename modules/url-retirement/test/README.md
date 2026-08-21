@@ -1,6 +1,6 @@
 # url-retirement module test suite
 
-Build-output assertions over the two documents this module publishes. The runner builds `./fixture` twenty-one times and the specs read the published bytes; nothing is mocked, and no assertion is made against a template.
+Build-output assertions over the two documents this module publishes. The runner builds `./fixture` twenty-two times and the specs read the published bytes; nothing is mocked, and no assertion is made against a template.
 
 ## Prerequisites
 
@@ -13,9 +13,9 @@ bash run-tests.sh          # macOS, Linux, Git Bash
 run-tests.cmd              # Windows
 ```
 
-Either script refuses to start while a `hugo` process is running, removes `fixture/public`, builds every environment, and fails on any deprecation or error in any build log. Every build except `degraded`, `degraded-shapes` and `conflict` must also be silent: a warning there is a failure, and those three exist to produce the diagnostics the specs read.
+Either script refuses to start while a `hugo` process is running, removes `fixture/public`, builds every environment, and fails on any deprecation or error in any build log. Every build except `degraded`, `degraded-shapes`, `conflict` and `unpublished` must also be silent: a warning there is a failure, and those four exist to produce the diagnostics the specs read.
 
-## The twenty-one builds
+## The twenty-two builds
 
 | Environment | Why it cannot be merged into another |
 | --- | --- |
@@ -39,6 +39,7 @@ Either script refuses to start while a `hugo` process is running, removes `fixtu
 | `render-early-html-last` | Both levers at once, and the only build in this suite where a document this module publishes takes over a URL Hugo hands to the outside world: the sitemap's entry for the home page becomes `/url-manifest.txt` while the page's own canonical and every link to it still read `/`. It is the build that keeps the module's own `weight = 100` honest, by showing what a value below it costs. |
 | `html-missing` | The same list with html dropped altogether, which is what Hugo's replace-not-append list semantics invite. The only build in which the home page has no html output at all, so every URL for it moves rather than the sitemap entry alone: the first format left supplies it and every link to the home page names `/url-manifest.txt`. It is the state the module README tells a consumer to avoid, and it is what makes the assertions on the builds above capable of failing. |
 | `derived-urls` | A multilingual site with its default language in a subdirectory, listing html after this module's formats, holding its own English content so its home page can carry an alias. The only build that can tell the URLs the MODULE derives for a page -- a redirect target, the default site's redirect, a manifest listing one URL per page -- from the ones Hugo reports for it, because everywhere else html leads the list and the two are the same string. Its own content directory is not a convenience: the shared one feeds ten builds whose rule sets are asserted exactly, and a home alias there would appear in all of them. |
+| `unpublished` | Pages wiring output formats that publish no document for every page, which is the only shape in which what a page HAS and what a page PUBLISHES come apart. It carries both arms of the publication-hook contract -- a hook answering properly, whose page loses its line, and one answering with text instead of a boolean, whose URLs must all survive and produce exactly one diagnostic -- plus a page carrying `build.render = link`, which Hugo gives a resolving URL and no document. Its own content directory, for the same reason `derived-urls` has one: a page carrying `build.render` in the shared tree would change every build that asserts a URL set exactly. |
 | `hostile` | The only build that MUST FAIL: its content carries an alias containing whitespace, which would silently corrupt the file format. |
 
 ## What the specs cover
@@ -59,6 +60,7 @@ Either script refuses to start while a `hugo` process is running, removes `fixtu
 | `12-multihost.spec.js` | One redirect map per host, each carrying its own language's aliases and pagers and none of the other's, with the publish directory Hugo prefixes onto an alias dropped from both languages -- the default one included -- and a baseURL path kept on both sides of every rule. Then the first-rendering host being complete, each host's own pagination segment and redirect status, no divergence diagnostic, no default-site redirect, no rule made inert by a published file, and per-host manifests naming their siblings by full URL and listing exactly what their own host wrote. |
 | `13-primary-output-format.spec.js` | Which output format supplies the home page's URL, over the five builds whose output lists or weights differ: the canonical, the link every regular page carries to the home page and the sitemap's entry for it stay on the html URL where html merely moves to the end of the list and where the manifest merely renders first, the sitemap alone moves where both hold at once, and a list with no html leaves no page at the site root while the link and the sitemap entry move onto the manifest. Both early-rendering builds are also shown to have rendered early, so an override that never reached Hugo cannot pass for a measurement. |
 | `14-derived-page-urls.spec.js` | The URLs the module itself derives on a site that lists html after its formats: the default site's redirect lands on the language home, an alias of the home page lands on the home page, an alias of a regular page is unmoved, no rule targets a document the module publishes, and a one-URL-per-page manifest names the page rather than the manifest. |
+| `15-unpublished-formats.spec.js` | The gap between a WIRED output format and a PUBLISHED document: a page whose format rendered nothing loses that line while the same format on a page that did publish keeps it, a hook answering with text instead of a boolean removes nothing and is reported exactly once, a page carrying `build.render = link` contributes no URL though Hugo still reports a resolving one, and the header names the class that can still be over-listed. The whole set is also asserted against a walk of the tree, so the environment proves the manifest and the build agree rather than only that the intended lines moved. |
 
 ## What a future output format inherits from this
 

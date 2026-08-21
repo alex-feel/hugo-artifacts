@@ -230,6 +230,83 @@ test('the search module reaches that stamp by DELEGATION, not by coincidence', (
   assert.equal(attr('data-agent-resolved'), attr('data-agent-store'));
 });
 
+// A module owns the templates of the output formats it ships, and several of
+// them publish NOTHING on purpose -- a twin withheld from an excluded page, an
+// Agent Skills index withheld when no skill resolves. Hugo publishes no file
+// for a zero-byte render and reports that nowhere: the format stays listed on
+// the page with a resolving .RelPermalink, at every log level. So the manifest
+// asks the owner through _partials/url-retirement/publishes/<format>.html, and
+// the answer has to cross a module boundary to arrive.
+//
+// No single-module suite can see this. url-retirement's own fixture ships its
+// hooks itself, and agent-readiness's fixture has no manifest to correct.
+const manifestUrls = () =>
+  published('url-manifest.txt')
+    .split(/\r?\n/)
+    .filter((line) => line !== '' && !line.startsWith('#'));
+
+const servedFile = (url) =>
+  url.endsWith('/') ? join(publicDir, url.slice(1), 'index.html') : join(publicDir, url.slice(1));
+
+test('every URL the manifest lists is a file this build wrote', () => {
+  const urls = manifestUrls();
+  assert.ok(urls.length > 5, 'the manifest must list something for this to mean anything');
+  for (const url of urls)
+    assert.ok(existsSync(servedFile(url)), `${url} is listed but no file was published for it`);
+});
+
+test('a page the twin renderer excludes keeps its own URL and loses its twin', () => {
+  // The fixture's search page is excluded by agent-readiness's own
+  // exclude_search_page tier, so the markdown format is wired on it and
+  // publishes nothing.
+  assert.ok(existsSync(join(publicDir, 'search', 'index.html')), 'the fixture premise changed');
+  assert.ok(!existsSync(join(publicDir, 'search', 'index.md')), 'the fixture premise changed');
+  const urls = manifestUrls();
+  assert.ok(urls.includes('/search/'), 'the page itself was dropped with its twin');
+  assert.ok(!urls.includes('/search/index.md'), 'a twin that was never written is listed');
+});
+
+test('and the pages that do publish a twin keep theirs', () => {
+  const urls = manifestUrls();
+  for (const url of ['/index.md', '/blog/index.md', '/blog/post/index.md'])
+    assert.ok(urls.includes(url), `${url} is published but missing from the manifest`);
+});
+
+test('a site-level document withheld for want of content is not listed either', () => {
+  // agent-readiness withholds the Agent Skills index outright when no skill
+  // resolves -- an empty index at a .well-known path claims a capability that
+  // does not exist -- and this fixture configures none.
+  const url = '/.well-known/agent-skills/index.json';
+  assert.ok(!existsSync(servedFile(url)), 'the fixture premise changed');
+  assert.ok(!manifestUrls().includes(url), 'a document that was never written is listed');
+});
+
+test('the answers behind those omissions come from the owning modules', () => {
+  // White-box, because the behavioral assertions above would also pass if the
+  // fixture answered for the formats itself: the files that decide them live
+  // in the modules that OWN the formats, and nowhere else.
+  for (const [moduleName, format] of [
+    ['agent-readiness', 'markdown'],
+    ['agent-readiness', 'agentskills'],
+    ['search', 'searchindex'],
+  ]) {
+    const hook = join(
+      modulesRoot,
+      moduleName,
+      'layouts',
+      '_partials',
+      'url-retirement',
+      'publishes',
+      `${format}.html`,
+    );
+    assert.ok(existsSync(hook), `${moduleName} must answer for the ${format} format it owns`);
+  }
+  assert.ok(
+    !existsSync(join(fixtureDir, 'layouts', '_partials', 'url-retirement')),
+    'the fixture must not answer for any format, or it proves nothing about modules',
+  );
+});
+
 test('the combined build reports no warning, error or deprecation line', () => {
   // Every module in the chain degrades by warning rather than failing, so a
   // silent composition regression surfaces here first: an exit-0 build whose

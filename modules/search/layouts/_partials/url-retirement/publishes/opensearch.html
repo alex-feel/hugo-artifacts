@@ -1,0 +1,39 @@
+{{/*
+  url-retirement/publishes/opensearch.html -- PUBLIC ANSWER (hook tier).
+
+  Purpose: answers the url-retirement module's publication question for the
+  `opensearch` output format this module owns -- does this build publish
+  /opensearch.xml?
+
+  A wired format is not a published document. home.opensearch.xml emits
+  nothing when the master switch or the opensearch switch is off, and Hugo
+  then publishes no file while still reporting the format in .OutputFormats
+  with a resolving .RelPermalink, silently, at every log level.
+  url-retirement asks whoever owns a format; this module owns this one, and
+  the contract lives in url-retirement/lib/publishes.html.
+
+  The two gates below are the producer's own, read from the same
+  search/config.html the producer reads and tested the same way -- bare `if`s
+  on the resolved values, so this answer and the producer's own condition agree
+  on every value the two could ever see, boolean or not. The producer's THIRD
+  gate,
+  site.Language.IsDefault, is deliberately not reproduced: this format sets
+  root = true, so every language resolves the same /opensearch.xml the
+  default language writes, and the document a non-default language's manifest
+  names is the one that exists.
+
+  Expected context (dict), as url-retirement/lib/publishes.html passes it:
+  - .page   (Page)
+  - .format (OutputFormat) -- unused; the file name selects the format.
+
+  Return value: boolean. One terminal return.
+*/}}
+
+{{- $cfg := partial "search/config.html" (dict "page" .page "args" dict) -}}
+{{- $out := false -}}
+{{- if $cfg.enable -}}
+  {{- if $cfg.opensearch.enable -}}
+    {{- $out = true -}}
+  {{- end -}}
+{{- end -}}
+{{- return $out -}}

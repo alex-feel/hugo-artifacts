@@ -1,0 +1,10 @@
+{{- /*
+  A publication hook written the way a hook author gets it wrong: it RENDERS
+  instead of returning, so what reaches the module is the text it printed
+  rather than a boolean. Printing nothing is the dangerous shape of that
+  mistake -- an empty render reads as false to anything that does not check the
+  type, which would delete every badtwin URL from the manifest even though the
+  build wrote all of them.
+
+  The module must refuse the answer, keep the URLs, and say so exactly once.
+*/ -}}

@@ -1,0 +1,9 @@
+{{- /*
+  The `badtwin` format's producer, wired only by the `unpublished` environment.
+
+  It publishes for EVERY page, unconditionally. The fault this format exists to
+  exercise is not in the producer but in its hook, which answers with text
+  instead of a boolean: every one of these URLs is written, so every one of them
+  has to survive an answer the module refuses.
+*/ -}}
+BADTWIN {{ .Title }}

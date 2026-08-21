@@ -1,0 +1,12 @@
+{{- /*
+  The `twin` format's producer, wired only by the `unpublished` environment.
+
+  It renders NOTHING for a page carrying `twin: false`, which is how a wired
+  format and a published document come apart: Hugo writes no file for a
+  zero-byte render, reports that nowhere, and keeps reporting the format on the
+  page with a resolving .RelPermalink. Its answer to the manifest lives beside
+  it in _partials/url-retirement/publishes/twin.html.
+*/ -}}
+{{- if ne .Params.twin false -}}
+TWIN {{ .Title }}
+{{ end -}}

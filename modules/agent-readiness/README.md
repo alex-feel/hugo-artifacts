@@ -902,6 +902,14 @@ The module deliberately owns **no identity record, resolver, or validator**. A p
 
 The module ships no `llms-full.txt` -- the documentation platforms' full-CONTENT document, which duplicates page bodies the twins already publish at stable URLs and carries real drift cost with no confirmed consumer. The [complete LINK index](#the-complete-index-llms-indextxt) it does ship is a different artifact and the drift objection does not reach it: it comes from the same page walk as the compact file, so there are no two copies of anything to fall out of step. The module also ships no taxonomy or term twins, no `Accept`-header content negotiation, no CSS, and no JavaScript.
 
+## Publication answers
+
+Every surface this module ships is deliberately allowed to publish NOTHING: a twin is withheld for an excluded page, `/llms-index.txt` and `/about.md` follow their own switches, and the Agent Skills index is withheld outright when no skill resolves, because an empty index at a `.well-known` path claims a capability that does not exist. Hugo publishes no file for a template that renders no bytes, and it reports that nowhere -- the output format stays listed on the page with a resolving `.RelPermalink`, at every log level.
+
+So a site that also imports [`url-retirement`](../url-retirement/README.md) gets an answer rather than a guess. This module ships one small partial per format it owns, under `layouts/_partials/url-retirement/publishes/`, and that module's `/url-manifest.txt` asks them instead of trusting `.OutputFormats`: `markdown`, `llmstxt`, `llmsindex`, `agentfacts` and `agentskills`. Each answer delegates to `agent-readiness/surfaces.html` or `agent-readiness/twin-url.html` -- the same public resolvers a consumer would call -- so it can never drift from what the renderers actually do.
+
+A site importing this module WITHOUT `url-retirement` pays nothing: no template calls those partials and Hugo never renders them. A site that replaces one of the twin or surface templates with a template of its own owns the answer too, and overrides the matching file the same way, because project layouts win over a module's.
+
 ## Module Structure
 
 ```text
@@ -923,6 +931,13 @@ modules/agent-readiness/
 │   ├── home.agentfacts.md
 │   ├── home.agentskills.json
 │   └── _partials/
+│       ├── url-retirement/
+│       │   └── publishes/      # answers the url-retirement manifest. See "Publication answers".
+│       │       ├── markdown.html
+│       │       ├── llmstxt.html
+│       │       ├── llmsindex.html
+│       │       ├── agentfacts.html
+│       │       └── agentskills.html
 │       └── agent-readiness/
 │           ├── config.html
 │           ├── page-list.html
@@ -958,6 +973,7 @@ modules/agent-readiness/
 │               ├── skill-references.html
 │               ├── skill-siblings.html
 │               ├── skills-index-url.html
+│               ├── surface-published.html
 │               └── warn.html
 ├── test/                       # Validation suite: twenty-two Hugo fixture builds plus Node build-output assertions. See test/README.md.
 ├── go.mod

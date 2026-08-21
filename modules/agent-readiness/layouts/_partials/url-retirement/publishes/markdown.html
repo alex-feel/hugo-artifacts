@@ -1,0 +1,40 @@
+{{/*
+  url-retirement/publishes/markdown.html -- PUBLIC ANSWER (hook tier).
+
+  Purpose: this module owns the `markdown` output format's templates, so it
+  answers the url-retirement module's publication question for that format:
+  does THIS page publish a Markdown twin?
+
+  Why the file lives here rather than in url-retirement: .OutputFormats reports
+  the formats a site WIRED for a page, and markdown-page.html emits nothing at
+  all for a page the membership filter excludes, which makes Hugo publish no
+  file for it. Hugo reports that nowhere, so a manifest built from
+  .OutputFormats alone names a URL that answers 404 on exactly the pages this
+  module deliberately withholds -- the same trap twin-url.html was written to
+  keep consumers out of. url-retirement asks whoever owns a format; for
+  `markdown` on a site that imports this module, that is this module.
+
+  The answer delegates to agent-readiness/twin-url.html, the module's public
+  resolver, which consults the SAME membership implementation the renderer
+  consumes, so the answer cannot drift from what the twin actually does. Every
+  empty case that resolver documents -- the master switch, the twin surface
+  switch, the per-page `agent: false` opt-out, the dedicated search page, a
+  noindex robots value, a section outside a non-empty allow-list, an unwired
+  format, a kind that never gets a twin -- therefore drops that page's twin URL
+  from the manifest rather than listing it.
+
+  A site that imports this module WITHOUT url-retirement pays nothing: nothing
+  calls this partial and Hugo never renders it. A site that replaces
+  layouts/page.markdown.md with a template of its own owns the answer too, and
+  overrides this file the same way, because project layouts win over a
+  module's.
+
+  Expected context (dict), as url-retirement/lib/publishes.html passes it:
+  - .page   (Page)
+  - .format (OutputFormat) -- unused here; this file answers for `markdown`
+    alone, which is the format its own name selects.
+
+  Return value: boolean. One terminal return.
+*/}}
+
+{{- return (ne (partial "agent-readiness/twin-url.html" (dict "page" .page)) "") -}}
