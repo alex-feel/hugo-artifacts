@@ -6,7 +6,12 @@
     trailing_slash = 'slash'
 
   [url_retirement.manifest]
-    extra = ['/sitemap.xml', '/legacy/hand-copied.html']
+    # The third entry names a URL a template ALSO registers, which is the one
+    # shape in which two arrival paths claim one path. The set is deduplicated
+    # after sorting, so the manifest must carry it exactly once -- and a version
+    # of that step that deduplicated per arrival path rather than across them
+    # would publish it twice, in a document compared line by line.
+    extra = ['/sitemap.xml', '/legacy/hand-copied.html', '/probe/also-published-by-url-read.txt']
 
     # One entry per way a URL can reach the manifest, because the subtraction
     # runs on the finished set and a version of it that ran earlier would still

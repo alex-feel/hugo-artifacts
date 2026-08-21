@@ -4,6 +4,9 @@
 // than an omission nobody notices.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {dirname, join} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {
   baselineDir,
   configuredDir,
@@ -47,6 +50,40 @@ test('the URLs are sorted and carry no duplicate', () => {
   const {urls} = manifest(baselineDir);
   assert.deepEqual(urls, [...urls].sort());
   assert.equal(new Set(urls).size, urls.length);
+});
+
+// The shape that test cannot reach: TWO arrival paths claiming one URL. A URL
+// arrives as a page's output format, as a pager the site registered, as a URL a
+// module registered for a file it published outside the page graph, as a
+// format owner's answer, or as an `extra` entry -- and the `configured`
+// environment names one path in `extra` that a template also registers. The
+// deduplication runs across the finished set rather than per arrival path, so
+// the line appears once; a version that deduplicated per path would publish it
+// twice, in a document compared line by line against production.
+test('a URL two arrival paths claim is listed exactly once', () => {
+  const url = '/probe/also-published-by-url-read.txt';
+
+  // Both premises, asserted rather than assumed -- with only one arrival path
+  // live, one line is what a broken deduplication would print too. The baseline
+  // environment configures no `extra` at all and still lists it, which is the
+  // registration arriving on its own; the `configured` environment's own
+  // configuration is read for the second claim.
+  assert.ok(
+    manifest(baselineDir).urls.includes(url),
+    'the fixture premise changed: nothing registers this URL any more',
+  );
+  const here = dirname(fileURLToPath(import.meta.url));
+  const configured = readFileSync(
+    join(here, '..', 'fixture', 'config', 'configured', 'params.toml'),
+    'utf8',
+  );
+  assert.match(configured, /extra = \[[^\]]*also-published-by-url-read\.txt/);
+
+  assert.equal(
+    manifest(configuredDir).urls.filter((line) => line === url).length,
+    1,
+    `${url} is claimed by both a registration and an extra entry and must be listed once`,
+  );
 });
 
 // A secondary output format is a published URL like any other. The fixture's
