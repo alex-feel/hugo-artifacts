@@ -47,6 +47,24 @@
   production build does not, such as a source map: a manifest that is
   structurally unequal to production's cannot be compared with it.
 
+  PASS .resource AND THAT RULE IS APPLIED FOR YOU. A caller that has a Resource
+  rather than a bare URL hands it over instead, and this partial registers its
+  .RelPermalink only when the resource is published under the name it came in
+  with -- when the base name of .RelPermalink is the base name of .Name. A Hugo
+  derivative is published under a name carrying a hash of its own contents
+  (measured at v0.164.0: a composed card whose source is card-base.png publishes
+  as card-base_hu_<hash>.png, while .Name still reports the source's name), so
+  the two come apart exactly where the URL is content-addressed. Pass a resource
+  whenever you have one: the check observes the name the build really wrote
+  rather than trusting a caller to know how its resource was produced, which is
+  knowledge a caller often does not have -- an image handed to a module by a
+  hook was processed somewhere the module never saw.
+
+  A resource that fails that check is skipped SILENTLY, alone among this
+  partial's refusals. It is not a mistake to be told about: a module resolving
+  images gets derived ones as a matter of course, and warning per page per image
+  would bury the diagnostics that do mean something under the ordinary case.
+
   ORDERING. Hugo renders one output format at a time within a language, positive
   weights ascending and then every zero-weight format, so /url-manifest.txt at
   weight 100 sees registrations made during any pass that renders before it and
@@ -56,12 +74,21 @@
   arrives too late is refused with a warning naming the URL rather than silently
   dropped, but it is still not recorded.
 
+  So this partial is for a template that KNOWS which pass reaches it. Where the
+  publication happens in whichever pass reaches a shared resolution first --
+  which is a property of the consuming site's configuration rather than of the
+  module -- registering is the wrong shape however carefully it is placed, and
+  the format's owner answers a url-retirement/writes/<format-name>.html hook
+  instead, which the manifest asks during its own pass. lib/writes.html carries
+  the contract and the measurement behind it.
+
   Expected context (dict):
   - .page (Page)   The page being rendered; names the language whose manifest
     the URL belongs to.
   - .url  (string) One server-relative URL, beginning with "/".
-  - .urls (slice)  Several of them, when one call publishes more than one. Pass
-    either key, or both.
+  - .urls (slice)  Several of them, when one call publishes more than one.
+  - .resource      One Resource, whose URL is registered only when it is
+    published under its own source name. Pass any one key, or several.
 
   Return value: none. Side effect: the URLs are recorded for this build.
 */}}
@@ -106,14 +133,26 @@
         "message" (printf "[url-retirement] Ignoring the .urls value %q passed to register-url.html on %s: it expects a list of URLs, and one URL goes in .url instead. Nothing it names is listed in /url-manifest.txt." (printf "%v" $many) $page.Path)) -}}
   {{- end -}}
 
-  {{/* Reported only when NEITHER key was supplied. A caller that passed a
-       misshapen .urls has already been told what was wrong with it, and being
-       told a second time that it passed nothing would send it looking for a
-       different mistake. */}}
-  {{- if and (eq .url nil) (eq .urls nil) -}}
+  {{/* A Resource is turned into a candidate here rather than by the caller,
+       so the content-addressed rule is applied once in this module instead of
+       being restated at every publish site that has one. Reading .RelPermalink
+       is what publishes the resource, and the caller has already read a URL off
+       it -- that read is why there is anything to register. */}}
+  {{- with .resource -}}
+    {{- $published := .RelPermalink -}}
+    {{- if eq (path.Base $published) (path.Base .Name) -}}
+      {{- $candidates = $candidates | append (dict "v" $published) -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* Reported only when NO key was supplied. A caller that passed a misshapen
+       .urls has already been told what was wrong with it, and being told a
+       second time that it passed nothing would send it looking for a different
+       mistake. */}}
+  {{- if and (eq .url nil) (eq .urls nil) (eq .resource nil) -}}
     {{- partial "url-retirement/lib/warn.html" (dict
         "key" (printf "url-retirement:warn:register-url-no-url:%v" $page.Path)
-        "message" (printf "[url-retirement] register-url.html was called on %s with neither .url nor .urls: pass (dict \"page\" . \"url\" $url), or .urls for several. No URL was recorded for this page." $page.Path)) -}}
+        "message" (printf "[url-retirement] register-url.html was called on %s with none of .url, .urls or .resource: pass (dict \"page\" . \"url\" $url), .urls for several, or .resource when you have the Resource itself. No URL was recorded for this page." $page.Path)) -}}
   {{- end -}}
 
   {{/* The rule is lib/url-shape.html's, shared with the configured `extra` and

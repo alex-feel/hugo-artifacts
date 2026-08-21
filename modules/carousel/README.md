@@ -386,6 +386,12 @@ npx playwright install chromium
 
 CI additionally verifies that `go.mod` parses and `hugo mod graph` resolves.
 
+## URLs this module publishes
+
+Reading a slide resource's URL is what WRITES that file, and it is a Resource rather than a Page, so no walk of `.Site.Pages` reaches one. Where a site also imports [`url-retirement`](../url-retirement/README.md), the standalone render registers each bundle slide it publishes, and those URLs appear in that module's `/url-manifest.txt` with nothing configured for it.
+
+Only the standalone render. Where [`images`](../images/README.md) is also imported, this module hands the slide to that one and reads no permalink of its own, so the registration follows whichever module actually published the file rather than being claimed twice. A site that does not import `url-retirement` is unaffected: the call sits behind `templates.Exists` and costs it nothing.
+
 ## Module Structure
 
 ```text

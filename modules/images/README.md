@@ -521,6 +521,12 @@ The modifier classes and custom properties live on the ROOT and custom propertie
 
 This module cannot build standalone -- Hugo builds require a consuming site. The [`test/`](test/) directory ships a fixture consuming site plus a Node build-output assertion suite (`node --test` parsing the built HTML and published files) with `run-tests.sh` / `run-tests.cmd` runners that hard-fail on any deprecation or error output from `hugo build --logLevel info`. The runners build the fixture THREE times: once at its domain-root baseURL, once through `test/subpath.toml` at `baseURL = "https://example.org/docs/"`, because Hugo discards the baseURL path for a value that already begins with `/` -- so the subpath build is the only one that can tell a correct `/static` path resolution from one that drops the path -- and once more through `test/canonify.toml`, which adds `canonifyURLs = true` on top of that subpath baseURL, because `canonifyURLs` makes `relURL` stop emitting the baseURL path altogether and only the HTML output format gets it back afterwards. Repository CI additionally verifies that the leaf `go.mod` files parse and that `hugo mod graph` resolves. See [`test/README.md`](test/README.md).
 
+## URLs this module publishes
+
+Reading a resolved resource's URL is what WRITES the file, and a resource is not a Page, so no walk of `.Site.Pages` reaches one. Where a site also imports [`url-retirement`](../url-retirement/README.md), this module registers the SOURCE it resolved -- the page-bundle or `assets/` file behind a shortcode call -- and those URLs appear in that module's `/url-manifest.txt` with nothing configured for it.
+
+Only the source. Every derivative this module produces is content-addressed, carrying a hash of its own contents, so listing one would report a retirement and a new URL on every rebuild; that module leaves them out by observing the published name. The `static/` branch registers nothing either, and for a different reason: it composes a path without reading any resource, so this module published nothing there -- Hugo copies a `static/` file whether or not anything referenced it, and a site that wants such a path listed names it in `url_retirement.manifest.extra`. A site that does not import that module is unaffected: the call sits behind `templates.Exists` and costs it nothing.
+
 ## Module Structure
 
 ```text

@@ -648,6 +648,12 @@ Sites carrying legacy `meta_*`-style front matter (`meta_title`, `meta_descripti
 - **Course and other non-shipped types:** Course is intentionally not a module-shipped type (the universal module stays universal). Keep Course (or Recipe, FAQPage, ...) JSON-LD via the `jsonld-extra` hook, returning a node whose `provider` references the module's `#organization` `@id` and whose `@id` the WebPage can reference -- it joins the same entity graph without a site fork.
 - **`.Scratch` cleanup:** any `.Scratch` usage inside the SEO partials you replace leaves with them (the module uses `hugo.Store` exclusively). Residual `.Scratch` in non-SEO partials is outside this module's scope; fix it separately.
 
+## URLs this module publishes
+
+Resolving an image to a URL is what WRITES that image, and an image is a Resource rather than a Page, so no walk of `.Site.Pages` reaches one. Where a site also imports [`url-retirement`](../url-retirement/README.md), this module therefore registers every image it publishes, and those URLs appear in that module's `/url-manifest.txt` with nothing configured for it -- so a deployment check covers them.
+
+Content-addressed URLs stay out, and that module decides which they are by observing the published name rather than trusting a claim: an og crop and a composed card carry a hash of their own contents and would report a retirement on every rebuild, while an SVG or a raster already measuring the og target is passed through under its own name and is listed. A site that disagrees with any line removes it with one `url_retirement.manifest.exclude` entry, and a site that does not import that module is unaffected -- the call sits behind `templates.Exists` and costs it nothing.
+
 ## Module Structure
 
 The module ships `layouts/` plus the two identity files, this README, and a `test/` directory carrying its validation suite; it needs no `assets/`, `static/`, `data/`, `i18n/`, `content/`, or `archetypes/` (SEO metadata is fully derived from consumer front matter and site params).

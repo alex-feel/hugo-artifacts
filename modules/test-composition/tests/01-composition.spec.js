@@ -338,6 +338,92 @@ test('and a content-addressed URL is deliberately not', () => {
   }
 });
 
+// The same arrival path, for the files a site's own CONTENT publishes. Four
+// modules read the URL of a resource here while rendering ordinary content, and
+// reading it is what writes the file: a page-bundle raster through the image
+// shortcode, a bundled SVG the seo module passes through uncropped, a global
+// icon asset the callout resolves, and a share image. None of the four is a
+// Page, so no walk of the page graph reaches any of them, and a consumer
+// configured none of them for the registry.
+const CONTENT_ASSET_URLS = [
+  '/blog/gallery/shot.png',
+  '/blog/gallery/card.svg',
+  '/icons/star.svg',
+  '/social/share-card.png',
+];
+
+test('a file a module published out of this site own content is listed too', () => {
+  const urls = manifestUrls();
+  const sitemap = published('sitemap.xml');
+  for (const url of CONTENT_ASSET_URLS) {
+    assert.ok(existsSync(servedFile(url)), `${url} must be published for this to mean anything`);
+    assert.ok(urls.includes(url), `${url} is served but missing from the manifest`);
+    assert.ok(!sitemap.includes(url), `${url} is reachable by walking pages after all`);
+  }
+});
+
+// The other half of that decision, and the one that makes it safe. These
+// modules publish DERIVATIVES of the same files -- a resized raster, a composed
+// card -- under names carrying a hash of their own contents, and every one of
+// them must stay out: a name that changes with its source would report a
+// retirement and a new URL on every rebuild. The set is derived by walking the
+// tree rather than listed here, so a new derivative cannot arrive unchecked.
+test('while every derivative they published is deliberately left out', () => {
+  const derived = readdirSync(publicDir, {recursive: true})
+    .map((name) => `/${String(name).split('\\').join('/')}`)
+    .filter((url) => /_hu_[0-9a-f]+/.test(url));
+  assert.ok(derived.length > 0, 'the fixture publishes no derivative to check');
+  const urls = manifestUrls();
+  for (const url of derived)
+    assert.ok(!urls.includes(url), `the content-addressed ${url} is listed`);
+});
+
+test('and those registrations come from the owning modules, not from the fixture', () => {
+  // White-box, for the same reason as the pwa assertion below: the manifest
+  // would look identical if this fixture had registered the URLs itself.
+  const owners = [
+    [join(modulesRoot, 'seo'), 'layouts/_partials/seo/lib/image-url.html'],
+    [join(modulesRoot, 'images'), 'layouts/_partials/images/resolve/source.html'],
+    [join(modulesRoot, 'social-share'), 'layouts/_partials/social-share/lib/register-url.html'],
+    [join(modulesRoot, 'carousel'), 'layouts/_partials/carousel/slides.html'],
+    [resolve(modulesRoot, '..', 'shortcodes', 'callout'), 'layouts/_shortcodes/callout.html'],
+  ];
+  for (const [root, rel] of owners) {
+    const source = readFileSync(join(root, rel), 'utf8');
+    assert.match(
+      source,
+      /url-retirement\/register-url\.html/,
+      `${rel} must register the URL it publishes`,
+    );
+  }
+});
+
+// The pull direction, which exists because a push cannot be placed reliably for
+// this format: the artifacts are copied by whichever caller first reaches a
+// shared resolution, and those callers sit in different render passes. The hook
+// file has to live in the module that OWNS the format, beside the publishes/
+// hook of the same name, and nowhere else.
+test('the side-file hook for a format lives in the module that owns it', () => {
+  assert.ok(
+    existsSync(
+      join(
+        modulesRoot,
+        'agent-readiness',
+        'layouts',
+        '_partials',
+        'url-retirement',
+        'writes',
+        'agentskills.html',
+      ),
+    ),
+    'agent-readiness must answer what else the agentskills format wrote',
+  );
+  assert.ok(
+    !existsSync(join(fixtureDir, 'layouts', '_partials', 'url-retirement')),
+    'the fixture must not answer for any format, or it proves nothing about modules',
+  );
+});
+
 test('and the registrations behind those two URLs come from the owning module', () => {
   // White-box for the same reason the hook assertion below is: the manifest
   // would look identical if this fixture had registered the URLs itself, and

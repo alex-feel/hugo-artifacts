@@ -908,6 +908,12 @@ Every surface this module ships is deliberately allowed to publish NOTHING: a tw
 
 So a site that also imports [`url-retirement`](../url-retirement/README.md) gets an answer rather than a guess. This module ships one small partial per format it owns, under `layouts/_partials/url-retirement/publishes/`, and that module's `/url-manifest.txt` asks them instead of trusting `.OutputFormats`: `markdown`, `llmstxt`, `llmsindex`, `agentfacts` and `agentskills`. Each answer delegates to `agent-readiness/surfaces.html` or `agent-readiness/twin-url.html` -- the same public resolvers a consumer would call -- so it can never drift from what the renderers actually do.
 
+The Agent Skills artifacts need a SECOND answer, and it is the only case in this repository that does. Each configured skill is republished as an artifact of its own -- `/.well-known/agent-skills/<name>/SKILL.md`, or `<name>.tar.gz` or `<name>.zip` for an archive -- keyed by the skill NAME, so those URLs are stable and a host really serves them, and none of them is a Page. The obvious mechanism, registering each one where it is published, cannot be placed reliably here: the artifacts are copied by whichever caller first reaches the shared skills resolution, and those callers sit in different render passes, so which one wins is decided by the CONSUMING SITE's configuration rather than by this module. Measured at Hugo v0.164.0, a registration placed at the copy was in time on every build at default settings and refused on every build under `url_retirement.manifest.output_formats = false`.
+
+So this module answers instead of registering: `layouts/_partials/url-retirement/writes/agentskills.html` returns the artifact URLs, and `/url-manifest.txt` asks it during its own render pass, where an answer cannot be late. The answer comes from the same resolution the index itself is built from, so it names exactly the artifacts this build wrote and cannot drift from them. That matters more than tidiness here: `/.well-known/agent-skills/index.json` IS reachable by the page walk and advertises each artifact with a SHA-256 digest, so an artifact that vanished from production without the registry noticing would leave a published, verifiable-looking pointer at a 404.
+
+On a MULTIHOST site the index publishes once per host rather than once for the deployment. Each host has its own publish root, so the `root = true` format resolves to a different file per host and there is nothing to overwrite -- and the artifacts are copied once for the build and land under every host's root, so a host without an index of its own would serve skill bodies that nothing on that host describes. On a shared domain the index is still emitted once, from the default language, because there every language targets one path.
+
 A site importing this module WITHOUT `url-retirement` pays nothing: no template calls those partials and Hugo never renders them. A site that replaces one of the twin or surface templates with a template of its own owns the answer too, and overrides the matching file the same way, because project layouts win over a module's.
 
 ## Module Structure
@@ -931,12 +937,14 @@ modules/agent-readiness/
 │   ├── home.agentfacts.md
 │   ├── home.agentskills.json
 │   └── _partials/
-│       ├── url-retirement/
-│       │   └── publishes/      # answers the url-retirement manifest. See "Publication answers".
-│       │       ├── markdown.html
-│       │       ├── llmstxt.html
-│       │       ├── llmsindex.html
-│       │       ├── agentfacts.html
+│       ├── url-retirement/     # answers the url-retirement manifest. See "Publication answers".
+│       │   ├── publishes/      # does this page publish a document in this format?
+│       │   │   ├── markdown.html
+│       │   │   ├── llmstxt.html
+│       │   │   ├── llmsindex.html
+│       │   │   ├── agentfacts.html
+│       │   │   └── agentskills.html
+│       │   └── writes/         # what else did this format write beside its document?
 │       │       └── agentskills.html
 │       └── agent-readiness/
 │           ├── config.html
@@ -972,10 +980,11 @@ modules/agent-readiness/
 │               ├── skill-frontmatter.html
 │               ├── skill-references.html
 │               ├── skill-siblings.html
+│               ├── skills-entries.html
 │               ├── skills-index-url.html
 │               ├── surface-published.html
 │               └── warn.html
-├── test/                       # Validation suite: twenty-two Hugo fixture builds plus Node build-output assertions. See test/README.md.
+├── test/                       # Validation suite: twenty-three Hugo fixture builds plus Node build-output assertions. See test/README.md.
 ├── go.mod
 ├── hugo.toml
 └── README.md

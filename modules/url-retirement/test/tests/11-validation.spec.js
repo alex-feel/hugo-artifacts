@@ -98,7 +98,7 @@ const SHAPE_FAULTS = [
   },
   {
     what: 'a registration naming no URL at all',
-    match: /register-url\.html was called on .+? with neither \.url nor \.urls/,
+    match: /register-url\.html was called on .+? with none of \.url, \.urls or \.resource/,
   },
   {
     what: 'a registration whose .urls is not a list',

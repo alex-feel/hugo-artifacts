@@ -1,0 +1,46 @@
+# The `multihost` environment exists for the OTHER half of the contract the
+# `multilingual` environment covers, and the two answers are opposite.
+#
+# The agent-skills index sets `root = true`. On a shared domain that pins ONE
+# published path for every language, so a second language rendering its own copy
+# would overwrite the first and the surviving file would describe the wrong
+# language's site -- which is what `multilingual` proves the gate prevents.
+#
+# Under multihost every language has its own baseURL and its own publish root,
+# so `root = true` resolves to a DIFFERENT file per host and there is nothing to
+# overwrite. Each host must emit its own, and the reason is not symmetry: the
+# artifacts a skill entry republishes are copied once for the build and land
+# under every host's root, so a host without an index serves skill bodies that
+# nothing on that host describes. A URL registry built per host would name an
+# index that host never wrote, in the one document whose job is being compared
+# against what that host serves.
+#
+# It is a separate environment rather than a change to the shared config for the
+# same reason `multilingual` is: adding a language doubles the published tree,
+# which would perturb the page counts, twin sets and warning tallies every other
+# build asserts on.
+[languages]
+
+  [languages.en]
+    baseURL = 'https://en.example.com/'
+    locale = 'en-US'
+    weight = 1
+
+  [languages.ru]
+    baseURL = 'https://ru.example.com/'
+    locale = 'ru-RU'
+    weight = 2
+    title = 'Фикстура agent-readiness'
+
+    # The same per-language marker the multilingual build uses, and here it
+    # answers the opposite question. There, one file survives and the marker
+    # says which language wrote it. Here there are two files, and the marker is
+    # how a copy that merely LOOKS per-host -- the default language's bytes
+    # published twice -- is told apart from one the Russian host really
+    # rendered.
+    [languages.ru.params]
+
+      [languages.ru.params.agent]
+
+        [languages.ru.params.agent.skills_index]
+          schema = 'https://example.invalid/RU-WROTE-THIS'

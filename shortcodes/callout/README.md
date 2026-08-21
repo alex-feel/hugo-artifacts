@@ -272,6 +272,12 @@ Custom (unknown) types have no default icon; supply one with `icon=` if you want
 
 To localize the default labels, add i18n strings keyed `callout.<type>` (preferred) or `<type>` -- for example `callout.warning = "Achtung"`. An i18n value is used verbatim (its casing is preserved), so translators control the exact display text. When no key matches, the label is the Title-cased type slug.
 
+## URLs this module publishes
+
+Resolving a custom icon to a URL is what WRITES that file, and it is a Resource rather than a Page, so no walk of `.Site.Pages` reaches it. Where a site also imports [`url-retirement`](../../modules/url-retirement/README.md), this module registers the icon it resolved and the URL appears in that module's `/url-manifest.txt` with nothing configured for it.
+
+Both icon sources are registered, the remote one included. A fetched icon is republished same-origin under a name Hugo derives from the URL rather than from the bytes -- measured at v0.164.0, two builds against deliberately different content at one URL published the same file name -- so it is a stable URL rather than a content-addressed one. A site that does not import that module is unaffected: the call sits behind `templates.Exists` and costs it nothing.
+
 ## Module Structure
 
 ```text

@@ -1,0 +1,12 @@
+{{- /*
+  A side-file hook written the way a hook author gets it wrong: it RENDERS
+  instead of returning, so what reaches the module is the text it printed rather
+  than a slice of URLs.
+
+  Printing nothing is the dangerous shape of that mistake. A caller that only
+  checked for truthiness would read the empty render as "no URLs" and move on,
+  and a caller that tried to make sense of it would have to guess how to turn
+  text into a list -- either way an answer that was never given would be treated
+  as one that was. The module must refuse it by TYPE, list nothing for this
+  format, and say so exactly once.
+*/ -}}

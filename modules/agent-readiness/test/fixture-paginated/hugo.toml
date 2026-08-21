@@ -44,7 +44,7 @@ locale = 'en-us'
 
   [security.http]
     mediaTypes = ['^application/gzip$', '^application/x-gzip$', '^application/zip$']
-    urls = ['^https?://127\.0\.0\.1:51313/']
+    urls = ['^https?://127\.0\.0\.1:1818/']
 
 [caches]
 
@@ -82,4 +82,4 @@ locale = 'en-us'
     # exists to assert something else entirely.
     [[params.agent.skills]]
       name = 'fixture-single'
-      source = 'http://127.0.0.1:51313/fixture-single/SKILL.md'
+      source = 'http://127.0.0.1:1818/fixture-single/SKILL.md'

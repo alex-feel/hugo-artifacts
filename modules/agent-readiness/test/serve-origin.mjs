@@ -64,10 +64,15 @@ const PID_FILE = resolve(here, 'origin.pid');
 const REQUEST_LOG = resolve(here, 'fixture-origin-requests.log');
 
 // The port is fixed because a Hugo configuration file cannot learn one at run
-// time, and the fixture's `source` URLs have to name it. 51313 is Hugo's own
-// 1313 offset out of the range anything else on a developer machine or a CI
-// runner is likely to hold.
-export const DEFAULT_PORT = 51313;
+// time, and the fixture's `source` URLs have to name it. It sits BELOW the
+// ephemeral range an operating system draws outbound source ports from
+// (49152-65535 on Windows), beside the ports the sibling suites' servers use.
+// A fixed port INSIDE that range is a suite that fails for a reason unrelated
+// to the code, and the failure does not look like a port collision: measured on
+// Windows, an ordinary outbound HTTPS connection held this suite's former port
+// as its own source port and the listen failed with EACCES rather than
+// EADDRINUSE, which reads like a permissions problem instead.
+export const DEFAULT_PORT = 1818;
 
 // A backstop against a leaked process: even if a runner dies between `serve`
 // and `stop`, the origin gives up on its own rather than holding the port

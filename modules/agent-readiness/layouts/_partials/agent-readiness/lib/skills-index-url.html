@@ -8,41 +8,38 @@
   the answer here keeps the two callers from ever drifting apart on the
   gate set.
 
-  PUBLISHED, not merely wired. The answer reproduces ALL FOUR gates of
-  home.agentskills.json, evaluated against the DEFAULT site: cfg.enable,
-  cfg.skills_index.enable, the agentskills format wired on the default
-  site's home, and a NON-EMPTY slice surviving the skills.html
-  validation-and-fetch resolution (zero surviving skills emit no file at
-  all). The format sets root = true and the emitter renders only from the
-  default language, so ONE file exists for the whole site at one URL --
-  which is why the gates read hugo.Sites.Default rather than the rendering
-  language: a language whose params differ from the default's must still
-  answer with what actually publishes. Both lookups are partialCached under
-  constant keys, so the whole build resolves the default-site config and
-  the skills slice once, however many callers ask.
+  PUBLISHED, not merely wired. Whether anything publishes is
+  lib/skills-entries.html's answer, which carries the gates and the shared
+  resolution cache; this partial adds only the URL, so the two projections of
+  one resolution cannot disagree about whether there is an index to name.
 
-  home.agentskills.json shares the skills cache key rather than calling the
-  resolver a second time. That resolution is not cheap and has not been for
-  some time: it fetches every configured source, parses each SKILL.md's front
-  matter, and probes the origin for the supporting files a body names. Two
-  independent calls would pay all of it twice for one identical answer.
+  WHICH HOST'S INDEX IT NAMES. The format sets root = true, which on a shared
+  domain pins ONE file for the whole site -- the default language emits it and
+  every language names it. Under multihost each host has its own publish root,
+  so each host publishes and serves a copy of its own, and naming the default
+  host's would send a reader of THIS host to another one. So the rendering
+  page's site supplies the URL there, when a caller passed a page; a caller
+  that passes none keeps the default site's answer, which is correct on every
+  shared-domain build and is the only answer available without one.
 
-  Expected context: none is read; pass an empty dict.
+  Expected context (dict):
+  - .page (Page) OPTIONAL. Only read on a multihost build, to name the host
+    now rendering rather than the default one.
 
   Return value: the index's ABSOLUTE Permalink (string) when the surface
   publishes, else "". ONE terminal return.
 */}}
 
+{{- $page := .page -}}
 {{- $url := "" -}}
 
-{{- $defaultHome := hugo.Sites.Default.Home -}}
-{{- $dcfg := partialCached "agent-readiness/config.html" (dict "page" $defaultHome "site_only" true) "agent-readiness:skills-index:default-cfg" -}}
-{{- if and $dcfg.enable $dcfg.skills_index.enable -}}
-  {{- with $defaultHome.OutputFormats.Get "agentskills" -}}
-    {{- $permalink := .Permalink -}}
-    {{- with partialCached "agent-readiness/skills.html" (dict "page" $defaultHome "cfg" $dcfg) "agent-readiness:skills-index:skills" -}}
-      {{- $url = $permalink -}}
-    {{- end -}}
+{{- with partial "agent-readiness/lib/skills-entries.html" dict -}}
+  {{- $home := hugo.Sites.Default.Home -}}
+  {{- if and hugo.IsMultihost (reflect.IsPage $page) -}}
+    {{- $home = $page.Site.Home -}}
+  {{- end -}}
+  {{- with $home.OutputFormats.Get "agentskills" -}}
+    {{- $url = .Permalink -}}
   {{- end -}}
 {{- end -}}
 

@@ -1,0 +1,21 @@
+# Applied on top of hugo.toml and skills.toml, for the build that switches
+# /url-manifest.txt to one URL per page.
+#
+# This is the build that separates the two ways a URL with no page can reach the
+# manifest, and it is the reason the side-file hook is a PULL rather than a
+# push. Measured at Hugo v0.164.0: with this setting on, a registration placed
+# where the skill artifacts are copied reached the manifest on every build; with
+# it off, the same registration was refused on every build, because the setting
+# decides whether the publication hook -- which is what triggers the copy early
+# -- runs at all. A pull does not depend on it: the manifest asks during its own
+# pass, and the artifacts are copied by the asking.
+#
+# So the assertion this build carries is small and load-bearing: the artifact
+# URLs are listed here too. Every push design fails it and the shipped design
+# passes it.
+[params]
+
+  [params.url_retirement]
+
+    [params.url_retirement.manifest]
+      output_formats = false

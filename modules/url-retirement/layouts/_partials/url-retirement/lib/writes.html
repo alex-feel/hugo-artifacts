@@ -1,0 +1,108 @@
+{{/*
+  url-retirement/lib/writes.html -- INTERNAL (lib tier).
+
+  Purpose: collects the URLs one page's output format writes BESIDES its own
+  document, by asking whoever owns that format.
+
+  WHY IT HAS TO ASK RATHER THAN BE TOLD. A template that publishes a file
+  outside the page graph can register it through register-url.html, and that is
+  the right shape whenever the template is reached from a pass that renders
+  before this document. It is not always reachable that way. A format's own
+  template renders in that format's pass, which for a zero-weight format is
+  after the weight-100 manifest; and where several callers in different passes
+  share one partialCached slot, whichever fires first does the publishing, so
+  which pass the publication happens in is a property of the SITE's
+  configuration rather than of the module. Measured at v0.164.0 on the Agent
+  Skills artifacts: a registration placed at the publication landed on every
+  build at default settings and was refused on every build under
+  url_retirement.manifest.output_formats = false, because that flag decides
+  whether the publication hook runs early. A registration that lands on one
+  configuration and is refused on another is not a mechanism; asking is.
+
+  So the manifest asks, during its own pass, and there is no registration to
+  arrive late. The direction of the question is what buys the determinism: a
+  pull happens when the asker is ready, a push when the answerer happens to run.
+
+  THE CONTRACT. A module or a site owning an output format that publishes files
+  besides the format's own document ships one file:
+
+      layouts/_partials/url-retirement/writes/<format-name>.html
+
+  named for the output format, lowercased, beside the publishes/ hook of the
+  same name. It receives (dict "page" PAGE "format" OUTPUTFORMAT) and returns a
+  SLICE of server-relative URLs -- `return slice` when it has none for this
+  page. A format with no such file contributes nothing, so a consumer that adds
+  nothing keeps the previous behavior.
+
+  It is asked only where lib/publishes.html answered true, because a format that
+  published no document for a page did not publish its side files either: one
+  resolution decides both.
+
+  WHAT A HOOK MAY NAME. Only what the build really wrote. This is the same
+  obligation register-url.html carries and for the same reason -- an answer is
+  an arrival path that can ADD a line no file backs -- with one difference that
+  makes it easier to honor: reading a Resource's URL is what publishes it, so a
+  hook that returns URLs it read has published them by reading them. A hook that
+  builds a path by string arithmetic instead is asserting rather than reporting,
+  and can name a 404. Content-addressed URLs stay out, exactly as they do
+  everywhere else in this document.
+
+  The hook must return a SLICE through `return`. A partial that prints its
+  answer hands back the text it rendered, which is not a slice; that is refused
+  with one warning per format and the format contributes nothing, rather than
+  the text being parsed into something that looks like a URL. Each element is
+  then held to lib/url-shape.html, the same rule an `extra` entry and a
+  registered URL are held to, and a malformed one is refused on its own without
+  taking its siblings with it.
+
+  Expected context (dict):
+  - .page   (Page)
+  - .format (OutputFormat) as .OutputFormats yields it.
+
+  A hook answers with the URL the build minted, and on a multihost site a file
+  published once for the whole build carries one host's baseURL path whatever
+  the rendering host is, so every answer goes through lib/host-frame.html before
+  it is returned -- the same treatment a registration gets, from the same rule.
+
+  Return value: slice of server-relative URL strings in this host's frame,
+  unprefixed -- the caller normalizes each one through lib/prefix-url.html like
+  every other arrival path. One terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $format := .format -}}
+{{- $name := lower $format.Name -}}
+{{- $hook := printf "url-retirement/writes/%s.html" $name -}}
+{{- $out := slice -}}
+
+{{- if templates.Exists (printf "_partials/%s" $hook) -}}
+  {{- $answer := partial $hook (dict "page" $page "format" $format) -}}
+  {{- if reflect.IsSlice $answer -}}
+
+    {{- $reasons := dict
+        "shape" "a URL is one path written as a single value"
+        "empty" "an empty value names no URL, and a resource whose URL is empty was never published"
+        "relative" "a URL here is server-relative and must start with \"/\". Return .RelPermalink rather than .Permalink"
+        "network-path" "a value beginning with \"//\" is a protocol-relative URL naming another host, not a path this site serves"
+        "whitespace" "a URL may not contain whitespace, because /url-manifest.txt carries one URL per line" -}}
+
+    {{- range $u := $answer -}}
+      {{- $checked := partial "url-retirement/lib/url-shape.html" (dict "value" $u) -}}
+      {{- with $checked.fault -}}
+        {{- partial "url-retirement/lib/warn.html" (dict
+            "key" (printf "url-retirement:warn:writes-hook-url-%s:%s:%v" . $name $u)
+            "message" (printf "[url-retirement] Ignoring a URL the %s hook returned for %s: it answered %q, and %s. That URL is not listed in /url-manifest.txt." $hook $page.Path (printf "%v" $u) (index $reasons .))) -}}
+      {{- end -}}
+      {{- with $checked.path -}}
+        {{- $out = $out | append (partial "url-retirement/lib/host-frame.html" (dict "page" $page "url" .)) -}}
+      {{- end -}}
+    {{- end -}}
+
+  {{- else -}}
+    {{- partial "url-retirement/lib/warn.html" (dict
+        "key" (printf "url-retirement:warn:writes-hook-shape:%s" $name)
+        "message" (printf "[url-retirement] Ignoring the %s hook: it must return a list of URLs through `return` -- `return slice` when it has none -- but answered %q. No %s side URL is listed in /url-manifest.txt." $hook (printf "%v" $answer) $name)) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $out -}}

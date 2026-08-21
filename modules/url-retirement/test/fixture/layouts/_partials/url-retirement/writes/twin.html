@@ -1,0 +1,26 @@
+{{- /*
+  A side-file hook answering properly: it returns a SLICE of URLs, so every
+  usable one is listed in /url-manifest.txt for the language being rendered.
+
+  It publishes the file it names, the way a real one does -- reading a global
+  resource's .RelPermalink is what writes it -- so the URL it hands back names a
+  file this build really wrote rather than a path it merely composed. That is
+  the whole obligation an answering module carries, and it is the reason the
+  answer can be trusted at all.
+
+  It also returns ONE malformed element on purpose: a value with no leading
+  slash, which is the shape that would otherwise be concatenated onto the
+  baseURL path with no separator. The module must refuse that element alone,
+  name it, and keep the good one, because a hook that returns several URLs must
+  not lose the whole answer to one bad entry.
+
+  This file is consulted only in the `unpublished` environment, which is the
+  only build wiring the `twin` output format; everywhere else nothing looks for
+  a hook by this name.
+*/ -}}
+{{- $urls := slice -}}
+{{- with resources.Get "probe/written-by-hook.txt" -}}
+  {{- $urls = $urls | append .RelPermalink -}}
+{{- end -}}
+{{- $urls = $urls | append "probe/no-leading-slash.txt" -}}
+{{- return $urls -}}

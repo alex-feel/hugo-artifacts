@@ -81,6 +81,9 @@ export const notwinsDir = resolve(process.env.FIXTURE_PUBLIC_NOTWINS ?? 'fixture
 export const multilingualDir = resolve(
   process.env.FIXTURE_PUBLIC_MULTILINGUAL ?? 'fixture/public/multilingual',
 );
+export const multihostDir = resolve(
+  process.env.FIXTURE_PUBLIC_MULTIHOST ?? 'fixture/public/multihost',
+);
 export const llmsoffDir = resolve(process.env.FIXTURE_PUBLIC_LLMSOFF ?? 'fixture/public/llmsoff');
 export const edgeDir = resolve(process.env.FIXTURE_PUBLIC_EDGE ?? 'fixture/public/edge');
 export const offDir = resolve(process.env.FIXTURE_PUBLIC_OFF ?? 'fixture/public/off');

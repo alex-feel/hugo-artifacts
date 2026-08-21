@@ -238,6 +238,21 @@
     {{- end -}}
     {{- if $res -}}
       {{- $iconResource = $res.RelPermalink -}}
+      {{/* Reading that URL is what writes the file, and no walk of .Site.Pages
+           can see it, so the sibling url-retirement module is told behind the
+           guard that costs a site without it nothing. Both branches above are
+           registered, including the remote one: measured at v0.164.0, a
+           resources.GetRemote resource is published as icon_<hash-of-the-URL>
+           and that name does NOT change when the bytes served at the URL do --
+           two builds against deliberately different content published the same
+           file name -- so it is a stable URL rather than a content-addressed
+           one. The resource is handed over rather than its URL because
+           url-retirement owns that distinction. The page is the RENDERING
+           language's home: what a registration picks is which language's
+           manifest the URL belongs to. */}}
+      {{- if templates.Exists "_partials/url-retirement/register-url.html" -}}
+        {{- partial "url-retirement/register-url.html" (dict "page" site.Home "resource" $res) -}}
+      {{- end -}}
     {{- else -}}
       {{- $iconMode = "none" -}}
       {{- $warnKey := printf "callout:warned-icon:%s" $iconStr -}}
