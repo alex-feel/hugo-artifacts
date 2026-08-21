@@ -1,9 +1,9 @@
 @echo off
-rem Builds the fixture site TWENTY-ONE TIMES with hugo (a BUILD, not a server: no
-rem port binding, and a finite build exits by itself) and runs the Node
-rem build-output assertion suite against the twenty trees that succeed. Windows
-rem mirror of run-tests.sh: pre-launch process check, then a hard fail on any
-rem deprecation or error output in any build log.
+rem Builds the fixture site TWENTY-TWO TIMES with hugo (a BUILD, not a server:
+rem no port binding, and a finite build exits by itself) and runs the Node
+rem build-output assertion suite against the twenty-one trees that succeed.
+rem Windows mirror of run-tests.sh: pre-launch process check, then a hard fail
+rem on any deprecation or error output in any build log.
 rem
 rem The default environment omits [params.url_retirement] entirely, so it is
 rem the only build that shows what a site that configured nothing gets; the
@@ -13,26 +13,28 @@ rem produce N distinct diagnostics; `degraded-shapes` holds the faults that
 rem cannot share a key with those; the `off` environment shows a disabled
 rem module writing nothing at all while the site around it builds normally and
 rem `partial` switches one document off while the other keeps publishing; the
-rem `conflict` environment is the only one whose content claims one retired URL
-rem twice; the `multilingual` environment is the only shape in which one
-rem _redirects file is written by two languages, `multilingual-partial` the
-rem only one where a sibling exists but publishes nothing, and
-rem `multilingual-subdir` the only one that moves the default language into its
-rem own directory, which reverses the root redirect, and `multihost` the only
-rem one giving each language its own baseURL, where /_redirects is written once
-rem per host rather than once for the deployment; `pagerpath` renames
-rem the pagination segment without telling the module, so a rule carrying that
-rem name was derived from a pager URL rather than read from configuration;
-rem `ugly` is the only build in which the URL Hugo reports for a page and the
-rem URL it serves that page at come apart; `html-last`, `render-early`,
-rem `render-early-html-last`, `html-missing` and `derived-urls` change the
-rem order, the membership or the render pass of the home page's output format
-rem list -- html-last and render-early each move nothing on their own,
-rem render-early-html-last is the only build where the sitemap's entry for the
-rem home page becomes this module's document, html-missing is the only one
-rem where the home page has no html output at all, and derived-urls is the only
-rem one that can tell the URLs the module derives from the ones Hugo reports;
-rem `subpath`
+rem `conflict` environment is the only one whose content has three pages
+rem claiming one retired URL; the `multilingual` environment is the only shape
+rem in which one _redirects file is written by two languages,
+rem `multilingual-partial` the only one where a sibling exists but publishes
+rem nothing, and `multilingual-subdir` the only one that moves the default
+rem language into its own directory, which reverses the root redirect, and
+rem `multihost` the only one giving each language its own baseURL, where
+rem /_redirects is written once per host rather than once for the deployment;
+rem `pagerpath` renames the pagination segment without telling the module, so
+rem a rule carrying that name was derived from a pager URL rather than read
+rem from configuration; `ugly` is the only build in which the URL Hugo reports
+rem for a page and the URL it serves that page at come apart; `html-last`,
+rem `render-early`, `render-early-html-last`, `html-missing` and
+rem `derived-urls` change the order, the membership or the render pass of the
+rem home page's output format list -- html-last and render-early each move
+rem nothing on their own, render-early-html-last is the only build where the
+rem sitemap's entry for the home page becomes this module's document, the two
+rem render-early builds are the only ones writing the manifest before anything
+rem can register a URL for it so that every registration is refused with a
+rem diagnostic instead of vanishing, html-missing is the only one where the
+rem home page has no html output at all, and derived-urls is the only one that
+rem can tell the URLs the module derives from the ones Hugo reports; `subpath`
 rem and `canonify` are a PAIR that must agree byte for byte, which a
 rem root-baseURL build cannot check; and the `hostile` environment is the only
 rem build that MUST FAIL, because its content carries an alias containing
@@ -249,10 +251,13 @@ for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_DEGRADED%" "%LOG_SHAPES%" 
   )
 )
 
-rem Every build except `degraded` is gated on warnings: the happy path is
-rem silent, and producing one diagnostic per fault is the only thing the
-rem degraded build exists to demonstrate.
-for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_PARTIAL%" "%LOG_OFF%" "%LOG_MULTILINGUAL%" "%LOG_MULTIPARTIAL%" "%LOG_MULTISUBDIR%" "%LOG_MULTIHOST%" "%LOG_SUBPATH%" "%LOG_CANONIFY%" "%LOG_PAGERPATH%" "%LOG_UGLY%" "%LOG_HTMLLAST%" "%LOG_HTMLMISSING%" "%LOG_RENDEREARLY%" "%LOG_RENDEREARLYLAST%" "%LOG_DERIVED%") do (
+rem The builds whose whole point is a diagnostic are exempt from the warning
+rem gate: the two degraded environments and `conflict` produce one per fault,
+rem `unpublished` reports a hook that answers wrongly, and the two render-early
+rem environments weight the manifest ahead of html, which leaves every
+rem registration too late to be listed. Everywhere else the happy path is
+rem silent.
+for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_PARTIAL%" "%LOG_OFF%" "%LOG_MULTILINGUAL%" "%LOG_MULTIPARTIAL%" "%LOG_MULTISUBDIR%" "%LOG_MULTIHOST%" "%LOG_SUBPATH%" "%LOG_CANONIFY%" "%LOG_PAGERPATH%" "%LOG_UGLY%" "%LOG_HTMLLAST%" "%LOG_HTMLMISSING%" "%LOG_DERIVED%") do (
   findstr /C:"WARN" %%L >nul 2>&1
   if not errorlevel 1 (
     echo A build that must warn about nothing did: %%L

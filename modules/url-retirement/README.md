@@ -114,7 +114,7 @@ Pager pages are reachable only through the paginator of the page that owns them.
 {{ partial "url-retirement/register-pagers.html" (dict "page" . "paginator" $paginator) }}
 ```
 
-Add it to every list template that paginates. The partial never calls `.Paginate` or `.Paginator` itself, so it cannot replace your filtered, sorted collection with the default one. Ordering is safe by construction: Hugo renders one output format at a time across the whole site, and both documents are declared so they render after the HTML pass, so every registration is already recorded when they are built.
+Add it to every list template that paginates. The partial never calls `.Paginate` or `.Paginator` itself, so it cannot replace your filtered, sorted collection with the default one. Ordering is safe by construction: Hugo renders one output format at a time within a language, and both documents are declared so they render after the HTML pass, so every registration that language made is already recorded when they are built. Weight this module's `urlmanifest` format below `html`'s and that inverts -- the manifest is written before any list page can register anything -- so every pager URL is refused with a warning naming it rather than quietly missing, the same diagnostic described under [Register URLs no page carries](#register-urls-no-page-carries).
 
 Registration feeds BOTH documents, which is why it is worth making even on a list short enough to fit one pager. `/url-manifest.txt` gains every pager URL, and `/_redirects` gains the rule for the FIRST one -- the `/blog/page/1/` that setting 3 above stops Hugo publishing. Hugo mints that URL for every list a template paginates, a one-pager section included, and it is in no page's `.Aliases`, so a list you never register keeps its pager URLs invisible to the manifest AND loses `/blog/page/1/` to a 404 the moment you adopt the module.
 
@@ -130,6 +130,31 @@ If you localize that segment, restate the whole block. A `[languages.<lang>.pagi
     pagerSize = 10
     disableAliases = true
 ```
+
+### Register URLs no page carries
+
+A build publishes things that are in no page collection and in no page's output formats, so the manifest cannot reach them however complete its walk is. A file the asset pipeline wrote is a Resource rather than a Page and exists only because some template read its URL. A page carrying `build.list = never` is in no collection at all, which is exactly how a module ships a page a site never lists. A file copied verbatim from `static/` is exposed to no template whatsoever. Omission is the SILENT direction for this document -- a URL missing from the registry is one whose disappearance from production the coverage check can never report -- so whoever publishes such a URL registers it:
+
+```go-html-template
+{{ $page := . }}
+{{ with resources.Get "js/sw.js" }}
+  {{ with (. | js.Build $opts).RelPermalink }}
+    {{ if templates.Exists "_partials/url-retirement/register-url.html" }}
+      {{ partial "url-retirement/register-url.html" (dict "page" $page "url" .) }}
+    {{ end }}
+  {{ end }}
+{{ end }}
+```
+
+The page is captured before the `with` blocks because each of them rebinds the dot, and the asset is reached through `with` rather than dereferenced, because a missing asset would otherwise take the build down inside a module. Pass `.url` for one URL, `.urls` for several, or both. Every entry is a server-relative path beginning with `/`, carrying no whitespace and not beginning with `//`, which names another host rather than a path on this site; anything else is reported and dropped, by the same rule that checks an `extra` entry. The guard takes a path under `layouts/` WITH the `.html` suffix, which `partial` itself does not need, and the pre-v0.146 `partials/` spelling silently returns false -- so a module calls this unconditionally and a site that does not import this one pays nothing for the call.
+
+Register what the build really WROTE, never what it intends to write. Every other line in the manifest is evidence that a file exists, and registration is the one arrival path that can ADD a line no file backs, which would put a URL production answers 404 for into the document written to be compared against production. Reading a Resource's `.RelPermalink` is what materializes it, so register the URL that read returned, where it returned it, and not from a branch that might publish nothing.
+
+Do NOT register a content-addressed URL -- a fingerprinted script, a processed image, anything carrying a hash of its own contents. Such a URL changes whenever its source does, by design, so listing it reports a retirement and a new URL on every rebuild in a file whose only use is showing what genuinely changed. The same goes for anything a development build publishes and a production build does not, a source map most of all: a manifest structurally unequal to production's cannot be diffed against it. Those URLs are left out deliberately, and the manifest header says so.
+
+Ordering is the one way a registration is lost, and this module tells you when it happens. Hugo renders one output format at a time within a language, positive weights ascending and then every zero-weight format, so `/url-manifest.txt` at weight 100 sees registrations made during any pass that renders before it and none made after. The `html` format is weight 10, so an html-pass template -- a layout, or a partial the consumer's `<head>` reaches -- is always in time; a format carrying no weight renders after every weighted one, so a registration made from its own template is not. A registration that arrives too late is refused with one warning naming the URL instead of vanishing into a map nothing reads again, and every registration on a site that weights this module's format below `html`'s is refused the same way, which is what that misconfiguration costs.
+
+[`pwa`](../pwa/README.md) is the module in this repository that registers what it publishes: its service worker, whose URL is deliberately stable so the browser update check can find it, and its offline page, which is the `build.list = never` case. The others do not yet, and two things make that harder than it looks for them: [`agent-readiness`](../agent-readiness/README.md) publishes its Agent Skills artifacts from a `partialCached` whose first caller varies by build, so a registration there would sometimes run in a pass too late to count, and [`images`](../images/README.md) and [`seo`](../seo/README.md) publish the consuming site's OWN assets from resolvers that a zero-weight format's pass can reach first. Until that is settled, a site importing those modules names what it needs in `manifest.extra` -- which is also the answer for what belongs to the site rather than to any module: a hand-placed file under `static/` your own templates do not register, and a document whose publication is decided by a setting no template can read.
 
 ### The default site's redirect
 
@@ -185,18 +210,21 @@ One per language, sorted, one URL per line, behind a `#` comment header:
 ```text
 # Every URL this build publishes and a host serves, for language "en", sorted, one per line.
 # Generated by the url-retirement Hugo module. Lines starting with # are comments.
-# Not listed, because no template can enumerate them: files copied verbatim
-# from static/, anything the asset pipeline publishes (a fingerprinted script,
-# a processed image), a page kept out of every page collection by
+# A URL no page carries is here only because something registered it:
+# a file copied verbatim from static/, anything the asset pipeline
+# publishes, a page kept out of every page collection by
 # build.list = never, and any document whose publication is decided by a
-# setting no template can read. Also not listed: the redirect map this module
-# publishes, which every host that reads it consumes at deploy time and serves
-# at no URL, and whatever url_retirement.manifest.exclude names. Name what is
-# missing in url_retirement.manifest.extra.
-# One class can still be over-listed: an output format renders nothing for some
-# pages and Hugo publishes no file, which it reports nowhere, so the format's
-# owner answers for it through a publication hook. A format nobody answers for
-# is listed as wired.
+# setting no template can read. The module that publishes one registers
+# it; name the rest in url_retirement.manifest.extra. A content-addressed
+# URL is left out on purpose: a fingerprinted name changes with its own
+# contents, so listing it would report a retirement on every rebuild.
+# Also not listed: the redirect map this module publishes, which every
+# host that reads it consumes at deploy time and serves at no URL, and
+# whatever url_retirement.manifest.exclude names.
+# One class can still be over-listed: an output format renders nothing
+# for some pages and Hugo publishes no file, which it reports nowhere,
+# so the format's owner answers for it through a publication hook. A
+# format nobody answers for is listed as wired.
 # Other languages: /de/url-manifest.txt
 # 19 URLs follow.
 /
@@ -205,7 +233,7 @@ One per language, sorted, one URL per line, behind a `#` comment header:
 /posts/page/2/
 ```
 
-It lists every page crossed with the output formats that page actually PUBLISHES -- a feed, a Markdown twin and a JSON representation are published URLs like any other -- plus every registered pager URL, plus whatever `manifest.extra` names, minus whatever `manifest.exclude` names. It carries no timestamp on purpose: the file exists to be compared against the copy production is serving, and a stamp would make every build differ in a line that says nothing about the URL surface.
+It lists every page crossed with the output formats that page actually PUBLISHES -- a feed, a Markdown twin and a JSON representation are published URLs like any other -- plus every URL registered for that language, whether by a list template registering its pagers or by a module registering what it published outside the page graph, plus whatever `manifest.extra` names, minus whatever `manifest.exclude` names. It carries no timestamp on purpose: the file exists to be compared against the copy production is serving, and a stamp would make every build differ in a line that says nothing about the URL surface.
 
 Published rather than merely wired, because the two come apart: a format whose template renders nothing for a page makes Hugo publish no file for it, and Hugo says so nowhere. See [Telling the manifest when a format publishes nothing](#telling-the-manifest-when-a-format-publishes-nothing). A page Hugo renders no document for at all -- `build.render` set to `link`, which keeps the URL without the document -- contributes nothing either, in this mode or with `manifest.output_formats = false`.
 
@@ -242,7 +270,7 @@ Every key lives under `[params.url_retirement]` and is overridable there; the sh
 
 ### Validation
 
-Every value is checked, and every rejected value warns once and leaves the shipped default standing: an unknown status, an unknown trailing-slash mode, a boolean written as anything other than a true or false spelling, a table given to a key that expects a list or a path, an `extra` or `exclude` entry that is not a server-relative path, a pagination segment carrying whitespace or a slash, a rules path that names no file, and a path the operating system rejects outright. The module never breaks a consuming build over its own configuration.
+Every value is checked, and every rejected value warns once and leaves the shipped default standing: an unknown status, an unknown trailing-slash mode, a boolean written as anything other than a true or false spelling, a table given to a key that expects a list or a path, a pagination segment carrying whitespace or a slash, a rules path that names no file, and a path the operating system rejects outright. An `extra` entry, an `exclude` entry and a registered URL are held to one rule, so each is rejected for the same reasons: it names no URL at all, it is empty, it does not begin with `/`, it begins with `//` and therefore names another host, or it carries whitespace, which the file format cannot survive because the manifest is one URL per line. A malformed registration is reported against the CALL that made it, naming the page, because whoever has to fix it wrote a template rather than a configuration file. The module never breaks a consuming build over its own configuration.
 
 The boolean check is two-sided on purpose. Matching only the true spellings would make `enable = 'yse'` resolve to false and switch a document off with no diagnostic at all, which is the loudest thing this module can do reached in the quietest possible way.
 
@@ -252,12 +280,12 @@ On a multilingual site, `redirects` settings that resolve differently per langua
 
 ## What the manifest cannot see
 
-Six classes. The first four are named in the file's own header rather than left for you to discover; the last two are stubs the installation instructions above switch off, and they appear only on a site that did not:
+Six classes, none of which the walk over pages can reach on its own. The first three get there when whoever published them registers the URL, and the fourth cannot be registered by anybody, because no template knows whether it was published; all four are named in the file's own header rather than left for you to discover. The last two are stubs the installation instructions above switch off, and they appear only on a site that did not:
 
-- **Files copied verbatim from `static/`.** Hugo exposes that directory to no template. If a retired URL of yours is a hand-placed HTML file there, name it in `manifest.extra`.
-- **Anything the asset pipeline publishes** -- a fingerprinted script, a processed image, a bundled worker. Those are resources rather than pages, reachable only from the template that built them. `manifest.extra` again, or leave them out: a fingerprinted URL changes with its contents by design, so a diff against production reports every rebuild as a change.
-- **A page kept out of every page collection** by `build.list = never`. Hugo publishes it and `site.Pages` cannot see it, which is exactly how a module ships a page a site never lists -- the `pwa` module's offline page is one. `manifest.extra` names it if your check should cover it.
-- **Documents whose publication is decided by settings no template can read** -- `sitemap.xml`, `robots.txt`, `404.html`. `site.Config` exposes only the privacy and services blocks, so the module cannot tell whether your site publishes them. `manifest.extra` again.
+- **Files copied verbatim from `static/`.** Hugo exposes that directory to no template, so nothing can enumerate it and nothing can confirm a given file was copied. Name a URL you care about in `manifest.extra`, or register it from one of your own templates if your site knows it published it.
+- **Anything the asset pipeline publishes** -- a bundled worker, a script, a processed image. Those are resources rather than pages, reachable only from the template that built them, and that template registers the URL it read. What stays out is the content-addressed half: a fingerprinted URL changes with its contents by design, so a diff against production would report every rebuild as a change. See [Register URLs no page carries](#register-urls-no-page-carries).
+- **A page kept out of every page collection** by `build.list = never`. Hugo publishes it and `site.Pages` cannot see it, which is exactly how a module ships a page a site never lists -- the [`pwa`](../pwa/README.md) module's offline page is one, and that module registers it from the template that renders it. A page of your own in that shape is yours to register or to name in `manifest.extra`.
+- **Documents whose publication is decided by settings no template can read** -- `sitemap.xml`, `robots.txt`, `404.html`. `site.Config` exposes only the privacy and services blocks, so no template can tell whether your site publishes them, which leaves registration nothing to be evidence of. `manifest.extra` is the only answer here.
 - **First-pager stubs, on a site that left `[pagination] disableAliases` at Hugo's default.** That setting is invisible for the same reason, so where it is off Hugo publishes `/blog/page/1/` and the manifest does not list it. Turning it on -- which the installation instructions above ask for -- removes the URL rather than the omission, and the generated rule takes over.
 - **The default site's redirect, on a site that left `disableDefaultSiteRedirect` at Hugo's default.** Same shape again: Hugo publishes the stub at `/<defaultLang>/` or at the site root, and the manifest lists neither, because that stub belongs to no page. Setting 2 above removes the URL, and the generated rule takes over.
 
@@ -280,7 +308,9 @@ modules/url-retirement/
 │   │       │   ├── page-url.html
 │   │       │   ├── prefix-url.html
 │   │       │   ├── publishes.html
+│   │       │   ├── record-url.html
 │   │       │   ├── spellings.html
+│   │       │   ├── url-shape.html
 │   │       │   ├── warn-emit.html
 │   │       │   └── warn.html
 │   │       ├── manifest/
@@ -291,7 +321,8 @@ modules/url-retirement/
 │   │       │   ├── lines.html
 │   │       │   ├── pagers.html
 │   │       │   └── rules.html
-│   │       └── register-pagers.html
+│   │       ├── register-pagers.html
+│   │       └── register-url.html
 │   ├── home.redirects
 │   └── home.urlmanifest.txt
 ├── go.mod

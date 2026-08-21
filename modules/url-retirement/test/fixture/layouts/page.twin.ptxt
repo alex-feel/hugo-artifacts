@@ -7,6 +7,20 @@
   page with a resolving .RelPermalink. Its answer to the manifest lives beside
   it in _partials/url-retirement/publishes/twin.html.
 */ -}}
+{{- /*
+  It also registers a URL from a format's OWN pass, which is the one way a
+  registration is lost. `twin` carries no weight, so it renders after the
+  weight-100 manifest, and the URL below is refused with a warning instead of
+  being accepted into a map nothing reads again. The path names no file in the
+  tree on purpose: if the refusal ever stopped working, the manifest would carry
+  a URL this build never wrote, and the assertion comparing the manifest against
+  the published tree would say so.
+
+  The call is outside the branch below and fully trimmed, so it changes the
+  rendered byte length of neither arm -- and a zero-byte render is exactly what
+  the `twin: false` page is here to produce.
+*/ -}}
+{{- partial "url-retirement/register-url.html" (dict "page" . "url" "/probe/registered-too-late.txt") -}}
 {{- if ne .Params.twin false -}}
 TWIN {{ .Title }}
 {{ end -}}

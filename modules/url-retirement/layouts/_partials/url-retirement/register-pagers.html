@@ -27,7 +27,11 @@
   Ordering is safe by construction for the registrations a document actually
   reads. Within one language Hugo renders one output format at a time, and both
   documents are declared so they render after the html pass, so every
-  registration THAT language made is already recorded when they are built.
+  registration THAT language made is already recorded when they are built. A
+  site that weights the urlmanifest format below html's inverts that, and the
+  pager URLs then reach a manifest already written: lib/record-url.html refuses
+  such a registration with one warning per URL rather than accepting it into a
+  map nothing reads again.
 
   Across languages it is weaker than it looks, which matters to one reader only.
   Each language renders completely before the next one begins -- measured at
@@ -40,8 +44,11 @@
   registrations there.
 
   Three things are recorded, all scoped by language because the store is
-  build-global: every pager URL, for the manifest; the list page itself, from
-  which /_redirects builds the first-pager rule; and the pagination URL segment,
+  build-global: every pager URL, for the manifest, through the same
+  lib/record-url.html that register-url.html uses, so a pager URL and a URL a
+  module registers are one kind of thing to everything downstream; the list page
+  itself, from which /_redirects builds the first-pager rule; and the pagination
+  URL segment,
   DERIVED from the second pager's URL. That derivation is the only way the
   module can learn the segment: Hugo's pagination.path is configurable and
   localizable, and site.Config exposes the services and privacy blocks alone.
@@ -55,12 +62,20 @@
   Return value: none. Side effect: the pager URLs are recorded for this build.
 */}}
 
-{{- $page := .page -}}
-{{- if not (reflect.IsPage $page) -}}
+{{- /* The context is read for named keys, so a caller that passed the page
+       itself -- the shape every other partial in this module takes -- would
+       raise out of a module rather than degrade, which is the one thing this
+       module never does to a consuming build. */ -}}
+{{- if not (reflect.IsMap .) -}}
+  {{- partial "url-retirement/lib/warn.html" (dict
+      "key" "url-retirement:warn:register-no-dict"
+      "message" (printf "[url-retirement] register-pagers.html was called with a %s instead of a context dict: pass (dict \"page\" . \"paginator\" $paginator). No pager URLs were recorded." (printf "%T" .))) -}}
+{{- else if not (reflect.IsPage .page) -}}
   {{- partial "url-retirement/lib/warn.html" (dict
       "key" "url-retirement:warn:register-no-page"
       "message" "[url-retirement] register-pagers.html was called without a page: pass (dict \"page\" . \"paginator\" $paginator). No pager URLs were recorded.") -}}
 {{- else -}}
+  {{- $page := .page -}}
   {{- $attempt := try (.paginator.Pagers) -}}
   {{- with $attempt.Err -}}
     {{- partial "url-retirement/lib/warn.html" (dict
@@ -70,10 +85,9 @@
     {{- $lang := $page.Language.Name -}}
     {{- $pagers := $attempt.Value -}}
 
-    {{- $key := printf "url-retirement:pagers:%s" $lang -}}
     {{- range $pager := $pagers -}}
       {{- with $pager.URL -}}
-        {{- hugo.Store.SetInMap $key . . -}}
+        {{- partial "url-retirement/lib/record-url.html" (dict "page" $page "url" .) -}}
       {{- end -}}
     {{- end -}}
 

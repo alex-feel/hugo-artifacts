@@ -17,6 +17,22 @@
 */}}
 
 {{ define "main" }}
+  {{- /* The page the content adapter creates carries build.list = "never", so
+         it is in no page collection, no sitemap and no feed -- which is what
+         lets a module ship a page a site never lists, and also what hides it
+         from any registry built by walking pages. A site that also imports
+         modules/url-retirement would leave the one URL its service worker
+         depends on out of its own coverage check, so this template registers
+         it: from the render itself, which is what publishes the document, and
+         through pwa/lib/resource-url.html for the spelling that survives
+         canonifyURLs. Only the URL of this document is registered, not the
+         page's other output formats, several of which publish nothing. A
+         consumer shadowing this layout takes the registration with it. */ -}}
+  {{- if templates.Exists "_partials/url-retirement/register-url.html" -}}
+    {{- partial "url-retirement/register-url.html" (dict
+        "page" .
+        "url" (partial "pwa/lib/resource-url.html" .)) -}}
+  {{- end -}}
   <article class="pwa-offline">
     <h1>{{ T "pwa_offline_title" | default "You are offline" }}</h1>
     <p>{{ T "pwa_offline_message" | default "This page is not available offline. Connect to the network and try again." }}</p>

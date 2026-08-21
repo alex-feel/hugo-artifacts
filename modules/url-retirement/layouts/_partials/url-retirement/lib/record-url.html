@@ -1,0 +1,96 @@
+{{/*
+  url-retirement/lib/record-url.html -- INTERNAL (lib tier).
+
+  Purpose: records ONE URL for one language's manifest, or says why it could
+  not. Both public registration partials funnel through here -- register-url.html
+  for a URL no page carries, register-pagers.html for a pager URL -- so the one
+  way a registration can be lost is diagnosed once, in one place, rather than
+  once per caller or not at all.
+
+  THE LOSS THIS EXISTS FOR. Hugo renders one output format at a time within a
+  language, positive weights ascending and then every zero-weight format, so
+  /url-manifest.txt at weight 100 sees whatever the html pass (weight 10)
+  recorded and nothing recorded afterwards. A registration that arrives late is
+  not an error Hugo reports: the store accepts it, the build exits 0, and the
+  URL is simply absent from a document whose whole purpose is to be complete.
+  That is the same silent omission the manifest exists to prevent, arriving
+  through the machinery meant to prevent it.
+
+  So the manifest sets url-retirement:manifest-rendered:<lang> as it renders,
+  and this partial reads it: a registration made after that point is refused
+  with one warning naming the URL, rather than accepted into a map nothing will
+  read again. The warning claims exactly what the sentinel entails -- that the
+  registration could not reach the document -- and not that the URL is absent
+  from it, because a URL can arrive by the page walk as well: a list page
+  registers its own URL alongside its pagers, and that URL is in site.Pages
+  too. A URL this language ALREADY recorded in time is not warned about at all,
+  because a repeated registration of a URL that did reach the manifest is a
+  caller doing nothing wrong. Measured at Hugo v0.164.0: a template rendering in a zero-weight
+  format's pass reads the sentinel the weight-100 document set, while every
+  html-pass template reads it as absent, so an in-time caller is never warned.
+  The key carries the language because hugo.Store is build-global and each
+  language renders completely before the next begins -- an unscoped sentinel
+  reads as set during every language's html pass but the first, which would warn
+  about every registration on a multilingual site that made none too late.
+
+  A URL MINTED FOR ANOTHER HOST IS PUT BACK IN THIS ONE'S FRAME. A global
+  resource is materialized once per build, so the URL Hugo reports for it
+  carries the baseURL of whichever site materialized it first -- measured at
+  v0.164.0 on a two-host build where one host serves from a path: both hosts
+  published the file at their own root and both read the SAME "/docs/..." URL
+  for it. Registered as it came, that URL would tell the host with no path
+  segment to fetch a path it answers 404 for, in the one document written to be
+  compared against what a host serves. The leading segment is therefore stripped
+  when it belongs to ANOTHER site's baseURL, leaving a path relative to the
+  publish root, and lib/prefix-url.html puts the rendering language's own
+  segment back when the manifest reads it. At most ONE segment is stripped, and
+  nothing is stripped unless the build is multihost, where every site has a
+  baseURL of its own; a shared-domain build has one segment for every language
+  and never reaches this. The residual ambiguity is worth naming: on a multihost
+  build, a URL of THIS host whose own first segment happens to spell another
+  host's baseURL path is indistinguishable from a URL minted for that host, and
+  is rewritten. A host serving from the domain root beside a sibling served from
+  /docs/, publishing its own /docs/ directory, is the shape that reaches it.
+
+  The recorded map is keyed BY THE URL, which makes a repeated registration of
+  the same URL idempotent, and SetInMap rather than Add because Add silently
+  loses updates under the concurrent within-pass page rendering.
+
+  Expected context (dict):
+  - .page (Page)   The page being rendered; names the language.
+  - .url  (string) A server-relative URL, already validated by the caller.
+
+  Return value: none. Side effect: the URL is recorded for this build, or one
+  warning is emitted for it.
+*/}}
+
+{{- $page := .page -}}
+{{- $url := .url -}}
+{{- $lang := $page.Language.Name -}}
+
+{{- if hugo.IsMultihost -}}
+  {{- $base := strings.TrimSuffix "/" (urls.Parse $page.Site.BaseURL).Path -}}
+  {{- $stripped := false -}}
+  {{- range $s := hugo.Sites -}}
+    {{- $other := strings.TrimSuffix "/" (urls.Parse $s.BaseURL).Path -}}
+    {{- if and (not $stripped) $other (ne $other $base) (hasPrefix $url (printf "%s/" $other)) -}}
+      {{- $url = strings.TrimPrefix $other $url -}}
+      {{- $stripped = true -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $key := printf "url-retirement:registered:%s" $lang -}}
+{{- $recorded := hugo.Store.Get $key -}}
+
+{{- if and (reflect.IsMap $recorded) (ne (index $recorded $url) nil) -}}
+  {{/* Already recorded for this language, in time. Repeating a registration is
+       what a partial called once per page does, and there is nothing to say
+       about it. */}}
+{{- else if hugo.Store.Get (printf "url-retirement:manifest-rendered:%s" $lang) -}}
+  {{- partial "url-retirement/lib/warn.html" (dict
+      "key" (printf "url-retirement:warn:registered-late:%s:%s" $lang $url)
+      "message" (printf "[url-retirement] %s was registered for language %q after that language's /url-manifest.txt had already been written, so the registration could not reach it. A registration reaches the manifest only from a pass that renders BEFORE it: keep the urlmanifest output format's weight above the html format's, and register from a template that renders during the html pass rather than from one that renders in an output format's own pass." $url $lang)) -}}
+{{- else -}}
+  {{- hugo.Store.SetInMap $key $url $url -}}
+{{- end -}}

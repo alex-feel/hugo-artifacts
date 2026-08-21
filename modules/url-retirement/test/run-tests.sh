@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Builds the fixture site TWENTY-ONE TIMES with hugo (a BUILD, not a server: no
+# Builds the fixture site TWENTY-TWO TIMES with hugo (a BUILD, not a server: no
 # port binding, and a finite build exits by itself) and runs the Node
-# build-output assertion suite against the twenty trees that succeed.
+# build-output assertion suite against the twenty-one trees that succeed.
 #
 # Each environment earns its place by a distinction no other one can make. The
 # default environment omits [params.url_retirement] entirely, so it is the only
@@ -18,7 +18,7 @@
 # that shows a disabled module writing nothing at all while the site around it
 # builds normally, and `partial` is its counterpart, switching ONE document off
 # and leaving the other publishing. The `conflict` environment is the only one
-# whose content has two pages claiming the same retired URL, which is a
+# whose content has three pages claiming the same retired URL, which is a
 # diagnostic no other build can produce, and `degraded-shapes` holds the faults
 # that cannot share a key with the ones in `degraded`. The `multilingual`
 # environment is the only shape in which one _redirects file is written by two
@@ -48,7 +48,11 @@
 # nothing moves; `render-early` keeps the list and weights the manifest below
 # html's 10, and nothing moves either; `render-early-html-last` does both, which
 # is the only build in which something this module publishes takes over a URL
-# Hugo hands outward -- the sitemap's entry for the home page. `html-missing`
+# Hugo hands outward -- the sitemap's entry for the home page. Those two are
+# also the only builds in which the manifest is written BEFORE anything can
+# register a URL for it, so every registration the html pass makes arrives too
+# late; the module says so once per URL instead of dropping them silently,
+# which is why neither build is held to the silent-log gate. `html-missing`
 # drops html from the list altogether, the only build in which the home page has
 # no html output at all and every URL for it becomes this module's document, and
 # the one that shows the assertions about the others are capable of failing.
@@ -144,8 +148,11 @@ build() { # build <environment> <destination> <log> [strict]
     grep "ERROR" "$log" >&2
     exit 1
   fi
-  # The happy path is SILENT. Only the degraded build is exempt, because
-  # producing one diagnostic per fault is the thing it exists to demonstrate.
+  # The happy path is SILENT. The exempt builds are the ones whose whole point
+  # is a diagnostic: the two degraded environments and `conflict` produce one
+  # per fault, `unpublished` reports a hook that answers wrongly, and the two
+  # render-early environments weight the manifest ahead of html, which is the
+  # misconfiguration that leaves every registration too late to be listed.
   if [ "$strict" = "strict" ] && grep -q "WARN" "$log"; then
     echo "The ${env_name:-default} build must warn about nothing:" >&2
     grep "WARN" "$log" >&2
@@ -179,8 +186,8 @@ build pagerpath public/pagerpath "$LOG_PAGERPATH" strict
 build ugly public/ugly "$LOG_UGLY" strict
 build html-last public/html-last "$LOG_HTMLLAST" strict
 build html-missing public/html-missing "$LOG_HTMLMISSING" strict
-build render-early public/render-early "$LOG_RENDEREARLY" strict
-build render-early-html-last public/render-early-html-last "$LOG_RENDEREARLYLAST" strict
+build render-early public/render-early "$LOG_RENDEREARLY"
+build render-early-html-last public/render-early-html-last "$LOG_RENDEREARLYLAST"
 build derived-urls public/derived-urls "$LOG_DERIVED" strict
 build unpublished public/unpublished "$LOG_UNPUBLISHED"
 build_must_fail hostile public/hostile "$LOG_HOSTILE"

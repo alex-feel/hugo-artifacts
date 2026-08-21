@@ -104,8 +104,8 @@ test('the manifest carries no timestamp', () => {
 //
 // The configured build excludes one entry of each way a URL reaches the file,
 // because the subtraction runs on the FINISHED set: a version of it that ran
-// while the page loop was still going would drop the feed and leave the pager
-// and the `extra` line standing.
+// while the page loop was still going would drop the feed and leave the pager,
+// the registered URL and the `extra` line standing.
 test('an excluded output format is gone while its page stays', () => {
   const {urls} = manifest(configuredDir);
   assert.ok(urls.includes('/posts/'), 'the page went with its feed');
@@ -129,10 +129,15 @@ test('a path named by both keys is left out, so exclude decides', () => {
   assert.ok(!urls.includes('/legacy/hand-copied.html'), 'the entry named by both keys survived');
 });
 
-// The exact set rather than the three absences: a subtraction that took more
+// The exact set rather than the four absences: a subtraction that took more
 // than it was given passes every assertion above.
 test('and the configured manifest is the tree minus exactly what was excluded', () => {
-  const excluded = ['/_redirects', '/posts/index.xml', '/posts/page/2/'];
+  const excluded = [
+    '/_redirects',
+    '/posts/index.xml',
+    '/posts/page/2/',
+    '/probe/published-by-url-read.txt',
+  ];
   const expected = publishedUrls(configuredDir)
     .filter((url) => !excluded.includes(url))
     .sort();

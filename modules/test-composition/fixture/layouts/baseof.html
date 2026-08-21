@@ -13,6 +13,13 @@
          observed. Calling it AFTER seo/head.html is deliberate -- a second tag
          would land where a reader of the head would see it last. */}}
     {{ partial "og-image/meta.html" . }}
+    {{/* The pwa module's head entry point, which is what builds and publishes
+         the service worker. Without this call the fixture mounts the module and
+         consumes only its output format and its content adapter, so /sw.js --
+         a stable URL a real deployment serves and no page carries -- is never
+         written, and the one URL class url-retirement's registration exists for
+         goes unbuilt here. */}}
+    {{ partial "pwa/head.html" . }}
   </head>
   <body>
     <header>{{ partial "search/modal.html" . }}</header>

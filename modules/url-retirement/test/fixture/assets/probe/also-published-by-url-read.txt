@@ -1,0 +1,4 @@
+A second asset published the same way as its sibling, so one call can register
+more than one URL and the .urls parameter is exercised by a build rather than
+only documented. Losing it would leave a published file out of the manifest,
+which is the failure the registration path exists to prevent.

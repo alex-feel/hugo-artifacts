@@ -16,9 +16,24 @@
 
   [url_retirement.manifest]
     output_formats = 'maybe'
-    extra = ['/kept.html', 'no-leading-slash.html', 'https://elsewhere.example/x']
-    # The same two element faults on the subtracting key. A malformed entry
-    # there fails quietly on its own -- it matches no URL and removes nothing --
-    # so the diagnostic is the only thing that tells a site its exclusion never
-    # took effect.
-    exclude = ['no-leading-slash-either.html', 'https://elsewhere.example/y']
+    # The last two pass a leading-slash test and are wrong anyway: `//host/path`
+    # is a protocol-relative URL naming somebody else's site, and an empty entry
+    # is a key the site filled from something that resolved to nothing, which
+    # dropped in silence would leave it believing the URL is covered.
+    extra = [
+      '/kept.html',
+      'no-leading-slash.html',
+      'https://elsewhere.example/x',
+      '//elsewhere.example/z',
+      '',
+    ]
+    # The same element faults on the subtracting key. A malformed entry there
+    # fails quietly on its own -- it matches no URL and removes nothing -- so
+    # the diagnostic is the only thing that tells a site its exclusion never
+    # took effect. The last one carries whitespace, which is fatal to the file
+    # format rather than merely wrong: /url-manifest.txt is one URL per line.
+    exclude = [
+      'no-leading-slash-either.html',
+      'https://elsewhere.example/y',
+      '/has a space.html',
+    ]

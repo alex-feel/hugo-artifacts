@@ -31,6 +31,7 @@
   Invoked from: pwa/head.html, gated on params.pwa.sw.enabled.
 */}}
 
+{{- $page := . -}}
 {{- $defaults := hugo.Data.pwa.defaults -}}
 {{- $params := site.Params.pwa | default dict -}}
 {{- $swParams := $params.sw | default dict -}}
@@ -121,6 +122,21 @@
   {{- $built := . | js.Build $opts -}}
   {{/* Touch RelPermalink to force resource publication. Output is a debug-only HTML comment that Hugo's --minify strips in production builds. */}}
   {{- printf "<!-- pwa-sw: %s -->" $built.RelPermalink | safeHTML -}}
+  {{/* The worker belongs to no page and is deliberately not fingerprinted, so
+       its URL is a stable one a site really serves that nothing walking pages
+       can enumerate -- exactly what a site importing modules/url-retirement
+       would otherwise leave out of its own URL registry, and a 404 here takes
+       the whole PWA down silently. Registered AFTER the read above, which is
+       what wrote the file, so the registration is evidence rather than an
+       intention, and through pwa/lib/resource-url.html for the spelling that
+       survives canonifyURLs. The guard leaves a site without that module
+       paying nothing; it needs the _partials/ prefix and the .html suffix
+       that `partial` itself does not take. */}}
+  {{- if templates.Exists "_partials/url-retirement/register-url.html" -}}
+    {{- partial "url-retirement/register-url.html" (dict
+        "page" $page
+        "url" (partial "pwa/lib/resource-url.html" $built)) -}}
+  {{- end -}}
 {{- else -}}
   {{- errorf "modules/pwa: assets/pwa/service-worker/index.ts not found -- is modules/pwa correctly imported and is the modules/workbox companion mounted?" -}}
 {{- end -}}

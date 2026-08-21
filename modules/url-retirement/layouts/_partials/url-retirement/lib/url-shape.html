@@ -1,0 +1,61 @@
+{{/*
+  url-retirement/lib/url-shape.html -- INTERNAL (lib tier).
+
+  Purpose: decides whether ONE value is usable as a URL in /url-manifest.txt,
+  and says which way it failed. It emits no diagnostic: a configured `extra`
+  entry and a registered URL fail the same way and are told about it in
+  different words, by different callers, to different audiences -- so the RULE
+  lives here once and each caller keeps its own message. Two copies of the rule
+  would drift, and the two this replaces already had: one silently dropped an
+  empty value while the other reported it.
+
+  What the manifest can carry is decided by what the document is. Every line is
+  fetched verbatim against production and compared byte for byte, and
+  lib/prefix-url.html documents a server-relative path as its precondition, so:
+
+  - A table, a list or a boolean names no URL at all. It would reach the file as
+    `map[...]` or as `true`, and a boolean is the sharpest of the three, because
+    it is truthy and passes any check written as "is there a value".
+  - An empty value is what an unpublished resource's URL looks like. Listing it
+    would put a bare prefix in the file; dropping it silently is worse, because
+    the caller believes it registered something.
+  - A value with no leading "/" is concatenated onto the baseURL path with no
+    separator, so `docs.html` becomes `/sitedocs.html`, and an absolute URL
+    becomes `/sitehttps://elsewhere.example/`.
+  - A value beginning with "//" is a protocol-relative URL naming ANOTHER HOST,
+    which passes a leading-slash test and points a coverage check at somebody
+    else's site.
+  - Whitespace ANYWHERE is fatal to the file format rather than merely wrong: a
+    newline inside a value writes two lines where the document promises one URL
+    per line, and every reader of it splits on newlines.
+
+  Expected context (dict):
+  - .value (any) The raw value, of any type at all.
+
+  Return value: dict with .path (the trimmed value, "" when unusable) and
+  .fault (one of "shape", "empty", "relative", "network-path", "whitespace", or
+  "" when the value is usable). One terminal return.
+*/}}
+
+{{- $value := .value -}}
+{{- $path := "" -}}
+{{- $fault := "" -}}
+
+{{- if or (reflect.IsMap $value) (reflect.IsSlice $value) (eq (printf "%T" $value) "bool") -}}
+  {{- $fault = "shape" -}}
+{{- else -}}
+  {{- $candidate := trim (printf "%v" $value) " \t\n\r" -}}
+  {{- if not $candidate -}}
+    {{- $fault = "empty" -}}
+  {{- else if findRE `\s` $candidate -}}
+    {{- $fault = "whitespace" -}}
+  {{- else if hasPrefix $candidate "//" -}}
+    {{- $fault = "network-path" -}}
+  {{- else if not (hasPrefix $candidate "/") -}}
+    {{- $fault = "relative" -}}
+  {{- else -}}
+    {{- $path = $candidate -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return dict "path" $path "fault" $fault -}}

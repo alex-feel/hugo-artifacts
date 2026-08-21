@@ -1,0 +1,5 @@
+A file copied verbatim out of static/. Hugo exposes that directory to no
+template, so nothing can enumerate it and no URL read can materialize it: the
+site knows the path and nothing else does. Registering it from the site's own
+template is the shape a consumer uses for its own files, and the manifest
+carries it beside the URLs a module registered.
