@@ -1,0 +1,103 @@
+{{/*
+  url-retirement/manifest/redundant-extra.html -- INTERNAL (document tier).
+
+  Purpose: tells a site, once, when an entry in url_retirement.manifest.extra
+  names a URL this build already reaches on its own.
+
+  WHY A REDUNDANT ENTRY IS WORTH A WORD. The manifest merges the registered set
+  and `extra` and then deduplicates, so a URL claimed by both is listed once and
+  the file is byte-identical either way. The cost is not the duplicate; it is
+  what the duplicate becomes. A site writes an `extra` line when nothing else
+  can see the URL, and a later module update makes the same URL arrive on its
+  own -- the line is now dead weight, indistinguishable from a load-bearing one,
+  and on the day the registration stops arriving it goes on holding the URL up
+  while the regression it is masking reports nothing. Both readings of that line
+  are then wrong, and the only way a site could learn which it is holding is to
+  empty the list and rebuild.
+
+  WHEN IT STAYS SILENT, and this is the whole difficulty. `extra` is ordinarily
+  site-wide while every language renders its own manifest, so one entry can be
+  redundant for one language and the only thing carrying the URL for another --
+  a shape a per-language check would report on a site using the key exactly
+  right. The module already declines to report an `exclude` entry matching
+  nothing for the same reason. So the question is asked of the whole build: each
+  language records its own verdict for the entry, and the diagnostic fires only
+  once every language that NAMES the entry has recorded one and all of them
+  found it redundant. Counting NAMERS rather than participating languages is
+  what keeps a per-language `extra` list working -- an entry scoped to one
+  language under [languages.<lang>.params] is answered for by that language
+  alone, and waiting for the others would silence it forever.
+
+  A language that publishes no manifest answers for nothing, so it is left out
+  of both counts: it never records a verdict, and an entry only it names is
+  never reported.
+
+  WHICH PASS DECIDES. Every language's manifest renders in its own pass and
+  Hugo renders one language completely before starting the next, so the last
+  namer to render sees every earlier verdict and is the one that warns. The
+  store is written with SetInMap and read back with GetSortedMapValues, which
+  keeps the map inside the store: a map handed out to a template and read there
+  is a build-aborting race, and lib/record-url.html carries that measurement.
+
+  An entry that url_retirement.manifest.exclude also names is skipped. That
+  entry is not redundant -- the site asked for the path to be left out, and
+  exclude subtracts last -- so reporting it would prescribe removing a line that
+  is doing exactly what it says.
+
+  Context (dict):
+  - .page       (Page)   The home page rendering this language's manifest.
+  - .cfg        (dict)   This language's resolved config.
+  - .base       (string) The baseURL path segment, for normalizing entries.
+  - .from_build (slice)  Every URL this language's manifest reached WITHOUT the
+    `extra` list: the page walk, the registrations, and the format owners'
+    answers, each already normalized.
+  - .excluded   (slice)  The normalized url_retirement.manifest.exclude set.
+
+  Return value: none. Side effect: at most one warning per entry per build.
+*/}}
+
+{{- $page := .page -}}
+{{- $cfg := .cfg -}}
+{{- $base := .base -}}
+{{- $fromBuild := .from_build -}}
+{{- $excluded := .excluded -}}
+{{- $lang := $cfg.lang -}}
+
+{{- range $entry := $cfg.manifest.extra -}}
+  {{- $url := partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" $entry) -}}
+  {{- if not (in $excluded $url) -}}
+
+    {{/* This language's own verdict, recorded before the count is read, so the
+         last namer to render reads its own answer along with the rest. */}}
+    {{- $key := printf "url-retirement:extra-redundant:%v" $entry -}}
+    {{- hugo.Store.SetInMap $key $lang (in $fromBuild $url) -}}
+
+    {{/* Every language that publishes a manifest AND names this entry. Both
+         halves are read from the resolved config rather than the raw params,
+         so a per-language list and a site-wide one are counted the same way. */}}
+    {{- $namers := 0 -}}
+    {{- range $s := hugo.Sites -}}
+      {{- with $s.Home.OutputFormats.Get "urlmanifest" -}}
+        {{- $scfg := partial "url-retirement/config.html" (dict "page" $s.Home) -}}
+        {{- if and $scfg.enable $scfg.manifest.enable -}}
+          {{- if in $scfg.manifest.extra $entry -}}
+            {{- $namers = add $namers 1 -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{- $verdicts := hugo.Store.GetSortedMapValues $key -}}
+    {{- $redundant := 0 -}}
+    {{- range $verdicts -}}
+      {{- if . -}}{{- $redundant = add $redundant 1 -}}{{- end -}}
+    {{- end -}}
+
+    {{- if and (gt $namers 0) (eq (len $verdicts) $namers) (eq $redundant $namers) -}}
+      {{- partial "url-retirement/lib/warn.html" (dict
+          "key" (printf "url-retirement:warn:extra-redundant:%v" $entry)
+          "message" (printf "[url-retirement] %v is named in url_retirement.manifest.extra, and every language that publishes a manifest already reaches that URL without it -- a module registered it, or the owner of the output format that wrote it answered for it -- so the entry changes nothing this build publishes. Remove it: an entry that duplicates a live registration cannot be told from one that is the only thing carrying its URL, so if that registration ever stops arriving, the entry keeps the URL in the file and the loss is reported nowhere." $entry)) -}}
+    {{- end -}}
+
+  {{- end -}}
+{{- end -}}

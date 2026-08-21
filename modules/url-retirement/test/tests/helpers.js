@@ -86,6 +86,17 @@ export const derivedDir = dir('FIXTURE_PUBLIC_DERIVED', 'fixture/public/derived-
 // renders nothing for at all: the build where what a page HAS and what a page
 // PUBLISHES come apart, and the only one that exercises the publication hooks.
 export const unpublishedDir = dir('FIXTURE_PUBLIC_UNPUBLISHED', 'fixture/public/unpublished');
+// One language, and an `extra` list holding one entry the build reaches on its
+// own beside one it does not: where the redundant-entry diagnostic is proven to
+// fire, and to fire for one of the two.
+export const extraRedundantDir = dir(
+  'FIXTURE_PUBLIC_EXTRAREDUNDANT',
+  'fixture/public/extra-redundant',
+);
+// The same question with two languages answering it, where one entry is
+// redundant for both and the other only for German -- the case a per-language
+// check would report on a site whose list is correct.
+export const multiExtraDir = dir('FIXTURE_PUBLIC_MULTIEXTRA', 'fixture/public/multilingual-extra');
 
 const LOG_KEYS = {
   baseline: 'HUGO_BUILD_LOG_BASELINE',
@@ -109,6 +120,8 @@ const LOG_KEYS = {
   renderEarlyLast: 'HUGO_BUILD_LOG_RENDEREARLYLAST',
   derived: 'HUGO_BUILD_LOG_DERIVED',
   unpublished: 'HUGO_BUILD_LOG_UNPUBLISHED',
+  extraRedundant: 'HUGO_BUILD_LOG_EXTRAREDUNDANT',
+  multiExtra: 'HUGO_BUILD_LOG_MULTIEXTRA',
   hostile: 'HUGO_BUILD_LOG_HOSTILE',
 };
 

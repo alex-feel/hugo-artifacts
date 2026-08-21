@@ -1,0 +1,19 @@
+# Two entries, one per arm of the rule, both named site-wide so both languages
+# answer for both.
+#
+# The first is registered by the fixture's home page, which renders once per
+# language, so every language that publishes a manifest reaches it without this
+# list: redundant everywhere, and reported once for the build rather than once
+# per language.
+#
+# The second is a German section's own URL. German reaches it through its page
+# walk while English never publishes it at all, so for English this entry is the
+# only thing carrying the path -- the shape the module must NOT report, and the
+# reason the question is asked of the whole build instead of one language's
+# file. A site listing a language-prefixed path in a site-wide `extra` is doing
+# nothing wrong, and hearing that the entry is redundant would send it to delete
+# the line that keeps the URL in the other language's manifest.
+[url_retirement]
+
+  [url_retirement.manifest]
+    extra = ['/probe/copied-verbatim.txt', '/de/posts/']

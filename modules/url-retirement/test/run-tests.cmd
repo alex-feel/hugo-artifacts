@@ -68,6 +68,8 @@ set LOG_RENDEREARLY=%~dp0hugo-build-render-early.log
 set LOG_RENDEREARLYLAST=%~dp0hugo-build-render-early-html-last.log
 set LOG_DERIVED=%~dp0hugo-build-derived-urls.log
 set LOG_UNPUBLISHED=%~dp0hugo-build-unpublished.log
+set LOG_EXTRAREDUNDANT=%~dp0hugo-build-extra-redundant.log
+set LOG_MULTIEXTRA=%~dp0hugo-build-multilingual-extra.log
 set LOG_HOSTILE=%~dp0hugo-build-hostile.log
 
 rem The destination is REMOVED, not merely cleaned: --cleanDestinationDir only
@@ -225,6 +227,24 @@ if errorlevel 1 (
   popd
   exit /b 1
 )
+rem Two builds whose subject is one diagnostic, so neither is held to the
+rem warning gate below: `extra-redundant` names one redundant `extra` entry
+rem and two that must stay unreported, and `multilingual-extra` asks the same
+rem question of a build with two languages.
+hugo -e extra-redundant --logLevel info --cleanDestinationDir --destination public\extra-redundant > "%LOG_EXTRAREDUNDANT%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(extra-redundant^):
+  type "%LOG_EXTRAREDUNDANT%"
+  popd
+  exit /b 1
+)
+hugo -e multilingual-extra --logLevel info --cleanDestinationDir --destination public\multilingual-extra > "%LOG_MULTIEXTRA%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(multilingual-extra^):
+  type "%LOG_MULTIEXTRA%"
+  popd
+  exit /b 1
+)
 rem The hostile build MUST fail: its content carries an alias containing
 rem whitespace, and publishing that rule would corrupt the file format.
 hugo -e hostile --logLevel info --cleanDestinationDir --destination public\hostile > "%LOG_HOSTILE%" 2>&1
@@ -236,7 +256,7 @@ if not errorlevel 1 (
 )
 popd
 
-for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_DEGRADED%" "%LOG_SHAPES%" "%LOG_PARTIAL%" "%LOG_CONFLICT%" "%LOG_OFF%" "%LOG_MULTILINGUAL%" "%LOG_MULTIPARTIAL%" "%LOG_MULTISUBDIR%" "%LOG_MULTIHOST%" "%LOG_SUBPATH%" "%LOG_CANONIFY%" "%LOG_PAGERPATH%" "%LOG_UGLY%" "%LOG_HTMLLAST%" "%LOG_HTMLMISSING%" "%LOG_RENDEREARLY%" "%LOG_RENDEREARLYLAST%" "%LOG_DERIVED%" "%LOG_UNPUBLISHED%") do (
+for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_DEGRADED%" "%LOG_SHAPES%" "%LOG_PARTIAL%" "%LOG_CONFLICT%" "%LOG_OFF%" "%LOG_MULTILINGUAL%" "%LOG_MULTIPARTIAL%" "%LOG_MULTISUBDIR%" "%LOG_MULTIHOST%" "%LOG_SUBPATH%" "%LOG_CANONIFY%" "%LOG_PAGERPATH%" "%LOG_UGLY%" "%LOG_HTMLLAST%" "%LOG_HTMLMISSING%" "%LOG_RENDEREARLY%" "%LOG_RENDEREARLYLAST%" "%LOG_DERIVED%" "%LOG_UNPUBLISHED%" "%LOG_EXTRAREDUNDANT%" "%LOG_MULTIEXTRA%") do (
   findstr /I "deprecat" %%L >nul 2>&1
   if not errorlevel 1 (
     echo Hugo reported deprecations in %%L:
@@ -253,7 +273,8 @@ for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_DEGRADED%" "%LOG_SHAPES%" 
 
 rem The builds whose whole point is a diagnostic are exempt from the warning
 rem gate: the two degraded environments and `conflict` produce one per fault,
-rem `unpublished` reports a hook that answers wrongly, and the two render-early
+rem `unpublished` reports a hook that answers wrongly, the two extra-list
+rem environments each report a redundant entry, and the two render-early
 rem environments weight the manifest ahead of html, which leaves every
 rem registration too late to be listed. Everywhere else the happy path is
 rem silent.
@@ -289,6 +310,8 @@ set FIXTURE_PUBLIC_RENDEREARLY=%~dp0fixture\public\render-early
 set FIXTURE_PUBLIC_RENDEREARLYLAST=%~dp0fixture\public\render-early-html-last
 set FIXTURE_PUBLIC_DERIVED=%~dp0fixture\public\derived-urls
 set FIXTURE_PUBLIC_UNPUBLISHED=%~dp0fixture\public\unpublished
+set FIXTURE_PUBLIC_EXTRAREDUNDANT=%~dp0fixture\public\extra-redundant
+set FIXTURE_PUBLIC_MULTIEXTRA=%~dp0fixture\public\multilingual-extra
 set HUGO_BUILD_LOG_BASELINE=%LOG_BASELINE%
 set HUGO_BUILD_LOG_CONFIGURED=%LOG_CONFIGURED%
 set HUGO_BUILD_LOG_DEGRADED=%LOG_DEGRADED%
@@ -310,6 +333,8 @@ set HUGO_BUILD_LOG_RENDEREARLY=%LOG_RENDEREARLY%
 set HUGO_BUILD_LOG_RENDEREARLYLAST=%LOG_RENDEREARLYLAST%
 set HUGO_BUILD_LOG_DERIVED=%LOG_DERIVED%
 set HUGO_BUILD_LOG_UNPUBLISHED=%LOG_UNPUBLISHED%
+set HUGO_BUILD_LOG_EXTRAREDUNDANT=%LOG_EXTRAREDUNDANT%
+set HUGO_BUILD_LOG_MULTIEXTRA=%LOG_MULTIEXTRA%
 set HUGO_BUILD_LOG_HOSTILE=%LOG_HOSTILE%
 for /f "tokens=2 delims=v " %%v in ('hugo version') do (
   set HUGO_VERSION_RAW=%%v

@@ -323,8 +323,8 @@ Every key lives under `[params.url_retirement]` and is overridable there; the sh
 | `redirects.pagination_path` | `'page'` | Your `[pagination] path`, for building the first-pager rule. Consulted only where the segment cannot be read off a pager URL: a language whose every registered list fits on one pager. |
 | `manifest.enable` | `true` | The manifest alone. |
 | `manifest.output_formats` | `true` | Whether to list a page's secondary output formats beside its primary URL. |
-| `manifest.extra` | `[]` | Extra URLs to list, for what Hugo publishes but exposes to no template. Each entry is a server-relative path beginning with `/`; anything else is reported and dropped. |
-| `manifest.exclude` | `[]` | URLs to leave out, for what the build publishes but no host serves: a control file your site renders through an output format of its own. Same entry shape as `extra`, subtracted last, so a path named by both keys is left out. An entry matching nothing is not reported, because each language has its own manifest. |
+| `manifest.extra` | `[]` | Extra URLs to list, for what Hugo publishes but exposes to no template. Each entry is a server-relative path beginning with `/`; anything else is reported and dropped. An entry naming a URL the build already reaches on its own is reported too -- see [When an `extra` entry stops being load-bearing](#when-an-extra-entry-stops-being-load-bearing). |
+| `manifest.exclude` | `[]` | URLs to leave out, for what the build publishes but no host serves: a control file your site renders through an output format of its own. Same entry shape as `extra`, subtracted last, so a path named by both keys is left out -- and a path named by both is never reported as a redundant `extra` entry either, since the exclusion is what decides the outcome. An entry matching nothing is not reported, because each language has its own manifest and matching nothing is what a correctly scoped entry looks like from the other one. |
 
 ### Validation
 
@@ -348,6 +348,22 @@ Six classes, none of which the walk over pages can reach on its own. The first t
 - **The default site's redirect, on a site that left `disableDefaultSiteRedirect` at Hugo's default.** Same shape again: Hugo publishes the stub at `/<defaultLang>/` or at the site root, and the manifest lists neither, because that stub belongs to no page. Setting 2 above removes the URL, and the generated rule takes over.
 
 The mirror of those omissions is the one thing the manifest can still list wrongly: a format wired on a page whose template publishes nothing for it. See [Telling the manifest when a format publishes nothing](#telling-the-manifest-when-a-format-publishes-nothing) for who answers that and how. Hugo's `found no layout file for ...` warning does not cover it -- measured at v0.164.0 and at v0.160.0, that warning fires only for a format with no template of a matching SUFFIX, and Hugo silently borrows another template when one exists.
+
+### When an `extra` entry stops being load-bearing
+
+An `extra` entry earns its place when nothing else in the build can see the URL. That can stop being true without your configuration changing at all: a module update starts registering the URL, or the owner of the output format that wrote it starts answering for it, and your line becomes a duplicate of an arrival path that is now live. The manifest is byte-identical either way, because the two paths are merged and deduplicated, so nothing about the file tells you which of your entries are still doing work.
+
+That silence is the problem, because the two cases look identical and behave differently. A redundant entry keeps the URL in the file on the day the registration stops arriving -- exactly the disappearance this document exists to surface -- and your coverage check goes on passing. So the build says so, once per entry:
+
+```text
+WARN  [url-retirement] /sw.js is named in url_retirement.manifest.extra, and every language that publishes a manifest already reaches that URL without it ...
+```
+
+Delete the line it names. Nothing about the published manifest changes, and the next time that URL really does go missing, you hear about it.
+
+On a multilingual site the message waits for every language that NAMES the entry. `extra` is ordinarily site-wide while each language renders its own manifest, so one entry can be redundant for one language and the only thing carrying its URL for another; such an entry is not reported, because deleting it would strip the URL from the language that needed it. An entry scoped to one language under `[languages.<lang>.params.url_retirement.manifest]` is answered for by that language alone, and a language that publishes no manifest answers for nothing.
+
+An entry `manifest.exclude` also names is never reported either: the exclusion subtracts last and decides the outcome, so the entry is holding nothing up and removing it would change nothing.
 
 ## Module structure
 
@@ -374,7 +390,8 @@ modules/url-retirement/
 │   │       │   ├── warn.html
 │   │       │   └── writes.html
 │   │       ├── manifest/
-│   │       │   └── lines.html
+│   │       │   ├── lines.html
+│   │       │   └── redundant-extra.html
 │   │       ├── redirects/
 │   │       │   ├── aliases.html
 │   │       │   ├── language-root.html

@@ -6,12 +6,14 @@
     trailing_slash = 'slash'
 
   [url_retirement.manifest]
-    # The third entry names a URL a template ALSO registers, which is the one
-    # shape in which two arrival paths claim one path. The set is deduplicated
-    # after sorting, so the manifest must carry it exactly once -- and a version
-    # of that step that deduplicated per arrival path rather than across them
-    # would publish it twice, in a document compared line by line.
-    extra = ['/sitemap.xml', '/legacy/hand-copied.html', '/probe/also-published-by-url-read.txt']
+    # Neither entry is reachable any other way -- Hugo exposes the sitemap's
+    # publication to no template, and nothing in this build publishes the legacy
+    # path -- so both are load-bearing and this build stays silent, which is
+    # what its place among the strict-log environments requires. A URL claimed
+    # by BOTH this list and a registration belongs to the `extra-redundant`
+    # environment instead: the module reports that overlap, and a diagnostic
+    # cannot land in a build held to silence.
+    extra = ['/sitemap.xml', '/legacy/hand-copied.html']
 
     # One entry per way a URL can reach the manifest, because the subtraction
     # runs on the finished set and a version of it that ran earlier would still
