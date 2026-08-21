@@ -226,9 +226,10 @@ test('notwins and off: every twin-url result is empty', () => {
 // ---- The llms.txt Agent Skills auto-entry ----
 //
 // llms.html appends the module's own index entry to `## Optional` when the
-// index actually publishes, through the same lib/skills-index-url.html gate
-// set surfaces.html reads, so these assertions and the surfaces assertions
-// above cannot drift apart.
+// index actually publishes, through the same lib/skills-index-url.html
+// surfaces.html reads -- which projects the gates lib/skills-entries.html
+// carries -- so these assertions and the surfaces assertions above cannot
+// drift apart.
 
 const AUTO_ENTRY =
   /^- \[Agent Skills index\]\(https:\/\/fixture\.example\/\.well-known\/agent-skills\/index\.json\): Machine-readable index of this site's published agent skills$/m;
