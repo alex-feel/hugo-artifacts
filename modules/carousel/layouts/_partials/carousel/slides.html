@@ -489,6 +489,20 @@
         {{- if $slide.isBundle }}
           {{- $srcURL = $slide.resource.RelPermalink }}
           {{- $fullURL = $slide.resource.Permalink }}
+          {{/* Reading those URLs is what writes the file, and no walk of
+               .Site.Pages can see it, so the sibling url-retirement module is
+               told behind the guard that costs a site without it nothing. Only
+               THIS branch registers: where modules/images is composed, the
+               branch above hands the slide to that module and reads no
+               permalink of its own, so images registers the same asset from its
+               own resolver and a second call here would be a second claim on
+               one file. The resource is handed over rather than its URL because
+               url-retirement owns the content-addressed rule; the page is the
+               RENDERING language's home, which names the manifest the URL
+               belongs to. */}}
+          {{- if templates.Exists "_partials/url-retirement/register-url.html" }}
+            {{- partial "url-retirement/register-url.html" (dict "page" site.Home "resource" $slide.resource) }}
+          {{- end }}
           {{- if reflect.IsImageResourceWithMeta $slide.resource }}
             {{- $width = $slide.resource.Width }}
             {{- $height = $slide.resource.Height }}

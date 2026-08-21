@@ -154,6 +154,19 @@
   {{- end -}}
 
   {{- if $r -}}
+    {{/* Reading the URL below is what writes the file, and no walk of
+         .Site.Pages can see it, so the sibling url-retirement module is told
+         behind a guard that costs a site without it nothing. The resource goes
+         over rather than the URL: that module leaves content-addressed URLs out
+         of the registry, and only it should own that rule. The page is the
+         RENDERING language's home, because what a registration picks is the
+         manifest it belongs to. The `static` branch below registers nothing --
+         it concatenates a path without reading any resource, so this module
+         published nothing there and Hugo copied the file whether or not
+         anything referenced it. */}}
+    {{- if templates.Exists "_partials/url-retirement/register-url.html" -}}
+      {{- partial "url-retirement/register-url.html" (dict "page" site.Home "resource" $r) -}}
+    {{- end -}}
     {{- $subtype := $r.MediaType.SubType -}}
     {{- $result = merge $result (dict
         "kind" $kind

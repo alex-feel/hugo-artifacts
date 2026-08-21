@@ -83,7 +83,10 @@
     {{- end -}}
   {{- end -}}
 
-  {{- with partial "agent-readiness/lib/skills-index-url.html" dict -}}
+  {{/* The page is passed so a multihost build names the index THIS host
+       publishes rather than the default host's; on a shared domain there is one
+       index and the page changes nothing. */}}
+  {{- with partial "agent-readiness/lib/skills-index-url.html" (dict "page" $page) -}}
     {{- $surfaces = $surfaces | append (dict "key" "skills" "url" . "label" $cfg.i18n.surface_skills) -}}
   {{- end -}}
 {{- end -}}

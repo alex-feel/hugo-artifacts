@@ -13,10 +13,18 @@
        every configured skill failing validation or its fetch, NO FILE IS
        EMITTED AT ALL. An empty JSON shell at a .well-known path is a claim
        of a capability that does not exist, and is worse than a 404.
-    4. site.Language.IsDefault -- this format sets root = true, which pins
-       ONE path for every language, so a non-default language would overwrite
-       the default language's file. A multilingual site emits the index once,
-       from the default language.
+    4. site.Language.IsDefault, on a SHARED DOMAIN -- this format sets
+       root = true, which pins ONE path for every language there, so a
+       non-default language would overwrite the default language's file. Such a
+       site emits the index once, from the default language.
+
+       Under MULTIHOST every language has its own publish root, so root = true
+       resolves to a different file per host and there is nothing to overwrite.
+       Each host emits its own, and must: the artifacts themselves are copied
+       once for the build and land under EVERY host's root, so a host without
+       the index would serve skill bodies that nothing on that host describes,
+       while /url-manifest.txt -- which lists a root = true document for every
+       language -- would name an index that host never wrote.
 
   THE `generated` KEY, emitted under cfg.skills_index.build_time (default
   true), is this build's timestamp from the same agent-readiness/build-time.html
@@ -72,14 +80,16 @@
 */ -}}
 {{- $page := . -}}
 {{- $cfg := partial "agent-readiness/config.html" (dict "page" . "site_only" true) -}}
-{{- if and $cfg.enable $cfg.skills_index.enable site.Language.IsDefault -}}
-  {{/* partialCached under the SAME key lib/skills-index-url.html uses, so the
-       validation, the fetches, the front-matter parse, the sibling probes and
-       the hashing all happen ONCE for the build however many callers ask.
-       Sharing the key is safe because this template renders only from the
-       default language, so the page and config it resolves are the ones that
-       partial resolves for itself. */}}
-  {{- $skills := partialCached "agent-readiness/skills.html" (dict "page" . "cfg" $cfg) "agent-readiness:skills-index:skills" -}}
+{{- if and $cfg.enable $cfg.skills_index.enable (or hugo.IsMultihost site.Language.IsDefault) -}}
+  {{/* Through lib/skills-entries.html, which resolves the slice against the
+       DEFAULT site under the shared cache key, so the validation, the fetches,
+       the front-matter parse, the sibling probes and the hashing all happen
+       ONCE for the build however many callers ask -- and so this template, the
+       surface enumeration and the url-retirement writes hook are three
+       projections of one resolution rather than three resolutions that could
+       disagree. The gates above stay this site's own, because a host that
+       switches the index off must not publish one. */}}
+  {{- $skills := partial "agent-readiness/lib/skills-entries.html" dict -}}
   {{- with $skills -}}
     {{/* `with` has rebound the dot to the skill slice, so the page the
          build-time partial is handed comes from the capture above. */}}

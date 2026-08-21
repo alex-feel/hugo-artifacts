@@ -1,0 +1,47 @@
+{{/*
+  url-retirement/writes/agentskills.html -- PUBLIC ANSWER (hook tier).
+
+  Purpose: answers the url-retirement module's side-file question for the
+  `agentskills` output format this module owns -- besides
+  /.well-known/agent-skills/index.json, what else did this format write?
+
+  It wrote one republished artifact per indexed skill:
+  /.well-known/agent-skills/<name>/SKILL.md for a skill distributed as a single
+  file, /.well-known/agent-skills/<name>.tar.gz or <name>.zip for one
+  distributed as an archive. Those are keyed by the skill NAME rather than by a
+  hash of their contents, so they are stable URLs a host really serves, and no
+  walk of .Site.Pages can see one: they are Resources, published because a
+  template read their URL.
+
+  WHY THIS MODULE ANSWERS RATHER THAN REGISTERS. The artifacts are copied by
+  whichever caller first populates the shared skills resolution, and those
+  callers sit in different render passes -- the format's own template, the
+  surface enumeration in the html pass, and url-retirement's own publication
+  hook inside the manifest's pass. Which one fires first is decided by the
+  consuming site's configuration, so a registration placed at the copy would
+  reach the manifest on some configurations and be refused on others: measured
+  at v0.164.0, in time on every build at default settings and refused on every
+  build under url_retirement.manifest.output_formats = false. Answering a
+  question the manifest asks during its own pass has no such dependency.
+
+  The answer is lib/skills-entries.html's, which is the same resolution
+  home.agentskills.json emits and lib/skills-index-url.html projects to the
+  index's URL, so this hook restates none of the producer's gates and cannot
+  drift from what was actually published. Each URL was READ from the copied
+  resource, and reading it is what published it, so every URL here names a file
+  this build wrote.
+
+  Expected context (dict), as url-retirement/lib/writes.html passes it:
+  - .page   (Page)
+  - .format (OutputFormat) -- unused; the file name selects the format.
+
+  Return value: slice of server-relative URLs. One terminal return.
+*/}}
+
+{{- $urls := slice -}}
+{{- range partial "agent-readiness/lib/skills-entries.html" dict -}}
+  {{- with .url -}}
+    {{- $urls = $urls | append . -}}
+  {{- end -}}
+{{- end -}}
+{{- return $urls -}}

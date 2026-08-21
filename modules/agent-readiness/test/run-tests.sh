@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Validates the shipped data files, starts the fixture ORIGIN, then builds
-# TWENTY-TWO fixture sites with hugo (builds, not servers: no port binding, and
-# a finite build exits by itself) and runs the Node build-output assertion
-# suite against all twenty-two.
+# TWENTY-THREE fixture sites with hugo (builds, not servers: no port binding,
+# and a finite build exits by itself) and runs the Node build-output assertion
+# suite against all twenty-three.
 #
 # The data-file check runs FIRST, before any build. That ordering is the
 # point: a malformed registry otherwise surfaces as an opaque Hugo failure at
 # some unrelated template, and the reader has to work backwards to it.
 #
-# The twenty-two builds:
+# The twenty-three builds:
 #   baseline   -- every content-license key unset, proving the license
 #                 surfaces are inert until a consumer opts in;
 #   configured -- the license table filled and both switches on, plus
@@ -21,8 +21,12 @@
 #   notwins    -- twins switched off site-wide while `markdown` stays wired in
 #                 [outputs], the only shape in which llms.txt and about.md can
 #                 be caught advertising twin URLs for files that do not exist;
-#   multilingual -- a two-language build, the only shape in which the
-#                 agent-skills index's default-language gate does anything;
+#   multilingual -- a two-language build on ONE domain, the only shape in which
+#                 the agent-skills index's default-language gate does anything;
+#   multihost  -- the same two languages on a domain each, where root = true
+#                 resolves per host and that gate must NOT fire: the artifacts
+#                 land under every host's root, so every host publishes an index
+#                 of its own or serves bodies nothing on it describes;
 #   llmsoff    -- llms.txt off while `llmstxt` stays wired, the counterpart of
 #                 notwins for the other pointed-at document;
 #   edge       -- a subpath baseURL plus the misconfigurations no other build
@@ -124,6 +128,7 @@ LOG_FILE_CONFIGURED="$HERE/hugo-build-configured.log"
 LOG_FILE_MINIMAL="$HERE/hugo-build-minimal.log"
 LOG_FILE_NOTWINS="$HERE/hugo-build-notwins.log"
 LOG_FILE_MULTILINGUAL="$HERE/hugo-build-multilingual.log"
+LOG_FILE_MULTIHOST="$HERE/hugo-build-multihost.log"
 LOG_FILE_LLMSOFF="$HERE/hugo-build-llmsoff.log"
 LOG_FILE_EDGE="$HERE/hugo-build-edge.log"
 LOG_FILE_OFF="$HERE/hugo-build-off.log"
@@ -151,7 +156,7 @@ ORIGIN_REQUEST_LOG="$HERE/fixture-origin-requests.log"
 # Fixed, because a Hugo configuration file cannot learn a port at run time and
 # the fixture's `source` URLs name this one. Kept in step with the value in
 # serve-origin.mjs and in fixture/config/_default/hugo.toml.
-ORIGIN_PORT=51313
+ORIGIN_PORT=1818
 
 # The logs are retained after a successful run so the documented re-run recipe
 # can read them; they are gitignored at the repo root. Only an interrupt
@@ -260,6 +265,7 @@ build "$FIXTURE_DIR" configured public/configured "$LOG_FILE_CONFIGURED"
 build "$FIXTURE_DIR" minimal public/minimal "$LOG_FILE_MINIMAL"
 build "$FIXTURE_DIR" notwins public/notwins "$LOG_FILE_NOTWINS"
 build "$FIXTURE_DIR" multilingual public/multilingual "$LOG_FILE_MULTILINGUAL"
+build "$FIXTURE_DIR" multihost public/multihost "$LOG_FILE_MULTIHOST"
 build "$FIXTURE_DIR" llmsoff public/llmsoff "$LOG_FILE_LLMSOFF"
 build "$FIXTURE_DIR" edge public/edge "$LOG_FILE_EDGE"
 build "$FIXTURE_DIR" off public/off "$LOG_FILE_OFF"
@@ -283,6 +289,7 @@ export FIXTURE_PUBLIC_CONFIGURED="$FIXTURE_DIR/public/configured"
 export FIXTURE_PUBLIC_MINIMAL="$FIXTURE_DIR/public/minimal"
 export FIXTURE_PUBLIC_NOTWINS="$FIXTURE_DIR/public/notwins"
 export FIXTURE_PUBLIC_MULTILINGUAL="$FIXTURE_DIR/public/multilingual"
+export FIXTURE_PUBLIC_MULTIHOST="$FIXTURE_DIR/public/multihost"
 export FIXTURE_PUBLIC_LLMSOFF="$FIXTURE_DIR/public/llmsoff"
 export FIXTURE_PUBLIC_EDGE="$FIXTURE_DIR/public/edge"
 export FIXTURE_PUBLIC_OFF="$FIXTURE_DIR/public/off"
@@ -305,6 +312,7 @@ export HUGO_BUILD_LOG_CONFIGURED="$LOG_FILE_CONFIGURED"
 export HUGO_BUILD_LOG_MINIMAL="$LOG_FILE_MINIMAL"
 export HUGO_BUILD_LOG_NOTWINS="$LOG_FILE_NOTWINS"
 export HUGO_BUILD_LOG_MULTILINGUAL="$LOG_FILE_MULTILINGUAL"
+export HUGO_BUILD_LOG_MULTIHOST="$LOG_FILE_MULTIHOST"
 export HUGO_BUILD_LOG_LLMSOFF="$LOG_FILE_LLMSOFF"
 export HUGO_BUILD_LOG_EDGE="$LOG_FILE_EDGE"
 export HUGO_BUILD_LOG_OFF="$LOG_FILE_OFF"

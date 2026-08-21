@@ -41,11 +41,13 @@
          the wrong resource (balanced bracket read as a character class). */}}
     {{- with .Resources.Get $value -}}
       {{- $image = .Permalink -}}
+      {{- partial "social-share/lib/register-url.html" (dict "resource" .) -}}
     {{- end -}}
   {{- end -}}
   {{- if not $image -}}
     {{- with resources.Get $value -}}
       {{- $image = .Permalink -}}
+      {{- partial "social-share/lib/register-url.html" (dict "resource" .) -}}
     {{- end -}}
   {{- end -}}
   {{- if not $image -}}

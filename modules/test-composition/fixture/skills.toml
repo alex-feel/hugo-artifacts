@@ -1,0 +1,56 @@
+# Applied on top of hugo.toml with `hugo --config hugo.toml,skills.toml`, for
+# the builds that need a configured agent skill.
+#
+# It is separate rather than merged into the base file because the base build
+# must keep showing what an UNCONFIGURED skills surface does: the agentskills
+# format stays wired in the merged home list while publishing no document, and
+# the manifest must not list a URL nothing wrote. That build is the only
+# coverage of that direction, and configuring a skill here would delete it.
+#
+# WHAT THESE BUILDS PROVE that no other build in this repository can. The
+# agent-readiness module republishes each configured skill as an artifact at a
+# stable, name-keyed URL, and no walk of .Site.Pages reaches one: the artifacts
+# are Resources, published because a template read their URL. They arrive in
+# /url-manifest.txt only because the manifest ASKS that module what else its
+# format wrote. A build with no skill configured has no artifact, so it can show
+# the hook file exists and nothing about what it answers.
+
+# The fetch is against this suite's own origin, served by serve-origin.mjs from
+# fixture-origin/. Hugo's DEFAULT security policy denies it -- the shipped
+# url patterns exclude IP-literal hosts and localhost -- so the allow-list below
+# is what makes a loopback fetch possible at all. It is a TEST HARNESS
+# affordance: a consuming site fetching a real origin needs no such block, and
+# copying this one would widen a security policy for no reason. Note also that
+# these builds therefore do NOT run under the default security posture the other
+# builds here run under, which is the price of proving the artifact chain.
+[security]
+
+  [security.http]
+    urls = ['^https?://127\.0\.0\.1:1919/']
+
+# Hugo caches a fetched remote resource FOREVER by default (maxAge = -1), keyed
+# by URL. This origin's URL never changes, so a cached body would outlive every
+# edit to fixture-origin/ and these builds would assert against bytes no longer
+# on disk. The origin is a loopback socket, so re-fetching costs nothing.
+[caches]
+
+  [caches.getresource]
+    maxAge = 0
+
+[params]
+
+  [params.agent]
+
+    # TWO entries, and the second one is not decoration. The published paths are
+    # keyed by the NAME, which is what makes them stable and therefore worth
+    # listing; with a single skill configured, an answer that named a constant
+    # URL would satisfy every assertion about the artifact and be
+    # indistinguishable from one derived from the resolution. Two make the set
+    # itself the thing that is checked.
+    [[params.agent.skills]]
+      name = 'composition-skill'
+      source = 'http://127.0.0.1:1919/composition-skill/SKILL.md'
+
+    [[params.agent.skills]]
+      name = 'second-skill'
+      source = 'http://127.0.0.1:1919/second-skill/SKILL.md'

@@ -18,6 +18,12 @@
   once and returns the same permalink, which is what lets og:image and
   twitter:image name the same image without a second copy.
 
+  Because this is where the publication happens, it is also where the sibling
+  url-retirement module is told about it, so a site importing both lists the
+  image in /url-manifest.txt without configuring anything. Content-addressed
+  URLs are left out by that module, so a crop and a composed card are not
+  listed while an SVG and a raster passed through unprocessed are.
+
   Returns: the absolute URL, or "" when the dict names no image. ONE terminal
   return.
 */}}
@@ -30,6 +36,23 @@
   {{- else -}}
     {{- with .resource -}}
       {{- $url = .Permalink -}}
+      {{/* Reading that URL is what wrote the file, and no walk of .Site.Pages
+           can see it -- an image is a Resource, not a Page -- so the sibling
+           url-retirement module is told, behind the guard that costs a site
+           without it nothing. The resource is handed over rather than its URL,
+           because that module applies the content-addressed rule and a
+           processed image must never enter a registry meant to be diffed
+           against production.
+
+           The page passed is the RENDERING language's home, deliberately, and
+           the global `site` is the right way to name it here: what a
+           registration picks is the manifest it belongs to, which is the one
+           this pass is building, and this partial is handed images belonging to
+           other pages -- an author's portrait among them -- whose own language
+           would be the wrong answer. */}}
+      {{- if templates.Exists "_partials/url-retirement/register-url.html" -}}
+        {{- partial "url-retirement/register-url.html" (dict "page" site.Home "resource" .) -}}
+      {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}

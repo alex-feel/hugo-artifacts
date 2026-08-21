@@ -1,0 +1,45 @@
+{{/*
+  agent-readiness/lib/skills-entries.html -- utility (LIB tier).
+
+  Purpose: the ONE answer to "which agent skills does this build actually
+  publish, and what did it publish for each of them". Everything that needs the
+  resolved slice reads it here: lib/skills-index-url.html projects it to the
+  index's own URL, and the url-retirement/writes/agentskills.html hook projects
+  it to the artifact URLs, so neither restates a gate and the two cannot drift
+  apart from each other or from home.agentskills.json.
+
+  PUBLISHED, not merely wired. The answer reproduces the gates of
+  home.agentskills.json that do not depend on the rendering language:
+  cfg.enable, cfg.skills_index.enable, the agentskills format wired on the
+  default site's home, and a NON-EMPTY slice surviving the skills.html
+  validation-and-fetch resolution (zero surviving skills emit no file at all).
+  The gates read hugo.Sites.Default because the artifacts are published once for
+  the whole build, so a language whose params differ from the default's must
+  still answer with what actually publishes.
+
+  Both lookups are partialCached under the SAME constant keys the producer uses,
+  so the whole build resolves the default-site config and the skills slice once
+  however many callers ask. That resolution is not cheap and has not been for
+  some time: it fetches every configured source, parses each SKILL.md's front
+  matter, and probes the origin for the supporting files a body names.
+
+  Expected context: none is read; pass an empty dict.
+
+  Return value: the resolved skill slice -- each entry a dict carrying .name,
+  .type, .description, .url and .digest -- or an empty slice when this build
+  publishes no index. ONE terminal return.
+*/}}
+
+{{- $entries := slice -}}
+
+{{- $defaultHome := hugo.Sites.Default.Home -}}
+{{- $dcfg := partialCached "agent-readiness/config.html" (dict "page" $defaultHome "site_only" true) "agent-readiness:skills-index:default-cfg" -}}
+{{- if and $dcfg.enable $dcfg.skills_index.enable -}}
+  {{- with $defaultHome.OutputFormats.Get "agentskills" -}}
+    {{- with partialCached "agent-readiness/skills.html" (dict "page" $defaultHome "cfg" $dcfg) "agent-readiness:skills-index:skills" -}}
+      {{- $entries = . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $entries -}}

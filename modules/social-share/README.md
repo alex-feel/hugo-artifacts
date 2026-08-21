@@ -293,6 +293,18 @@ Every icon is an inline SVG with `width="1em" height="1em"`, `fill`/`stroke="cur
 
 The module cannot build standalone; [`test/`](test/) contains a minimal consuming fixture site plus a Playwright suite that asserts exact intent hrefs (including a hostile-character encoding matrix), scheme handling, progressive-enhancement behavior, the copy flow, and the CustomEvent surface. The fixture is also built statically under two `baseURL` values that carry a path -- one with a scheme, one without -- because a domain root cannot tell a correct URL absolutization from a broken one, and a scheme-carrying one cannot tell a missing normalization from a doubled one. See [`test/README.md`](test/README.md). CI additionally verifies `go.mod` parses and `hugo mod graph` resolves.
 
+## Markdown output variant
+
+The module ships a second shortcode template, `layouts/_shortcodes/social-share.markdown.md`, that Hugo's output-format-aware template lookup selects automatically when a page renders to a `markdown` output format -- a Markdown twin produced with `.RenderShortcodes`, for example. It emits NOTHING, deliberately, and that is what it is for: without it Hugo falls back to the base HTML template in that pass, and the twin carries the whole sharing bar -- a `<nav>` landmark, a list, one link per network, inline SVG icons and BEM class hooks -- in a document whose contract is pure Markdown.
+
+A sharing bar has no Markdown representation for the same reason a lightbox or an image credit does not: it is an affordance offered to a human reading the page in a browser rather than content the page is about, and its targets are derived from the page's own URL rather than authored, so a twin that omits them loses nothing its reader can act on. Every parameter is accepted and ignored there, and nothing is warned about -- writing the shortcode in content is not a mistake.
+
+## URLs this module publishes
+
+Resolving the share image to a URL is what WRITES that file, and it is a Resource rather than a Page, so no walk of `.Site.Pages` reaches it. Where a site also imports [`url-retirement`](../url-retirement/README.md), this module registers the image it resolved -- from the page's own bundle or from `assets/` -- and the URL appears in that module's `/url-manifest.txt` with nothing configured for it. A value that resolves to neither, and is therefore already a URL this module did not publish, registers nothing.
+
+A site that does not import that module is unaffected: the call sits behind `templates.Exists` and costs it nothing.
+
 ## Module Structure
 
 ```text
@@ -311,7 +323,8 @@ modules/social-share/
 │       └── social-share.js                Progressive enhancement (reveal, share, copy, print, events)
 ├── layouts/
 │   ├── _shortcodes/
-│   │   └── social-share.html              In-content entry; dispatches to the partial
+│   │   ├── social-share.html              In-content entry; dispatches to the partial
+│   │   └── social-share.markdown.md       Markdown-pass variant; emits nothing (see "Markdown output variant")
 │   └── _partials/
 │       └── social-share/
 │           ├── share.html                 PUBLIC ENTRY: guard, resolve, render, script emission
@@ -322,6 +335,7 @@ modules/social-share/
 │           ├── icon.html                  Inline SVG glyphs (brand marks + action line art)
 │           └── lib/
 │               ├── absolute-url.html      Site-root-relative URL normalizer (keeps the baseURL path)
+│               ├── register-url.html      Tells url-retirement about a published share image, when present
 │               ├── resolve-image.html     Shared share-image value resolver (resource lookup, then URL)
 │               └── warn.html              Build-deduplicated warnf funnel
 └── test/                                  Fixture site + Playwright validation suite (see test/README.md)

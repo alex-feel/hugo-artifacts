@@ -1,0 +1,55 @@
+{{/*
+  url-retirement/lib/host-frame.html -- INTERNAL (lib tier).
+
+  Purpose: puts a URL that may have been minted for ANOTHER host back into the
+  frame of the host now rendering, and returns it unchanged everywhere else.
+
+  WHY A URL ARRIVES IN THE WRONG FRAME. A global resource is materialized once
+  per build, so the URL Hugo reports for it carries the baseURL of whichever
+  site materialized it first -- measured at v0.164.0 on a two-host build where
+  one host serves from a path: both hosts published the file at their own root
+  and both read the SAME "/docs/..." URL for it. Taken as it came, that URL
+  tells the host with no path segment to fetch a path it answers 404 for, in the
+  one document written to be compared against what a host serves.
+
+  Both arrival paths for a URL no page carries meet this, which is why the rule
+  lives here rather than in either of them: a registration through
+  register-url.html, and an answer to the writes hook the manifest asks. The
+  page-walk lines never do, because a page's own URL is resolved per language.
+
+  WHAT IT DOES. The leading segment is stripped when it belongs to another
+  site's baseURL, leaving a path relative to the publish root, and
+  lib/prefix-url.html puts the rendering language's own segment back when the
+  manifest reads it. At most ONE segment is stripped, and nothing is stripped
+  unless the build is multihost, where every site has a baseURL of its own; a
+  shared-domain build has one segment for every language and never reaches this.
+
+  The residual ambiguity is worth naming: on a multihost build, a URL of THIS
+  host whose own first segment happens to spell another host's baseURL path is
+  indistinguishable from a URL minted for that host, and is rewritten. A host
+  serving from the domain root beside a sibling served from /docs/, publishing
+  its own /docs/ directory, is the shape that reaches it.
+
+  Expected context (dict):
+  - .page (Page)   The page being rendered; names this host.
+  - .url  (string) A server-relative URL.
+
+  Return value: the URL in this host's frame. One terminal return.
+*/}}
+
+{{- $page := .page -}}
+{{- $url := .url -}}
+
+{{- if hugo.IsMultihost -}}
+  {{- $base := strings.TrimSuffix "/" (urls.Parse $page.Site.BaseURL).Path -}}
+  {{- $stripped := false -}}
+  {{- range $s := hugo.Sites -}}
+    {{- $other := strings.TrimSuffix "/" (urls.Parse $s.BaseURL).Path -}}
+    {{- if and (not $stripped) $other (ne $other $base) (hasPrefix $url (printf "%s/" $other)) -}}
+      {{- $url = strings.TrimPrefix $other $url -}}
+      {{- $stripped = true -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $url -}}

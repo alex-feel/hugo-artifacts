@@ -66,7 +66,7 @@ enableRobotsTXT = true
 
   [security.http]
     mediaTypes = ['^application/gzip$', '^application/x-gzip$', '^application/zip$']
-    urls = ['^https?://127\.0\.0\.1:51313/']
+    urls = ['^https?://127\.0\.0\.1:1818/']
 
 # Hugo caches a fetched remote resource FOREVER by default (maxAge = -1), keyed
 # by URL. The origin's URLs never change, so a cached body would outlive every
@@ -276,7 +276,7 @@ enableRobotsTXT = true
         url_field = 'href'
 
     # One entry per outcome the resolver can reach. Every source is served by
-    # test/serve-origin.mjs on 127.0.0.1:51313, so each build fetches real
+    # test/serve-origin.mjs on 127.0.0.1:1818, so each build fetches real
     # bytes over real HTTP -- the digest guarantee cannot be proven any other
     # way -- while nothing outside this repository can change what they are.
     #
@@ -291,7 +291,7 @@ enableRobotsTXT = true
     # index SHOULD carry anyway.
     [[params.agent.skills]]
       name = 'fixture-single'
-      source = 'http://127.0.0.1:51313/fixture-single/SKILL.md'
+      source = 'http://127.0.0.1:1818/fixture-single/SKILL.md'
 
     # Its body links references/GUIDE.md and that file really answers, so the
     # skill is PROVEN multi-file. The default disposition warns and publishes;
@@ -300,7 +300,7 @@ enableRobotsTXT = true
     [[params.agent.skills]]
       name = 'fixture-multi'
       description = 'A multi-file fixture skill whose supporting file really exists beside it, so the probe can prove what the body only suggests.'
-      source = 'http://127.0.0.1:51313/fixture-multi/SKILL.md'
+      source = 'http://127.0.0.1:1818/fixture-multi/SKILL.md'
 
     # Names a file that does not exist beside it. A nomination without a hit
     # must stay SILENT: this is the shape ordinary prose takes, and warning
@@ -311,7 +311,7 @@ enableRobotsTXT = true
     [[params.agent.skills]]
       name = 'fixture-lonely'
       description = 'A single-file fixture skill whose body mentions a file name that does not exist beside it, so a nomination without a hit stays silent.'
-      source = 'http://127.0.0.1:51313/fixture-lonely/SKILL.md'
+      source = 'http://127.0.0.1:1818/fixture-lonely/SKILL.md'
 
     # The archive path, both formats. The published extension is chosen from
     # the magic number rather than from the URL, so these two also prove that
@@ -320,20 +320,20 @@ enableRobotsTXT = true
       name = 'fixture-archive'
       type = 'archive'
       description = 'A fixture skill distributed as a gzip-compressed tar whose root is the skill directory.'
-      source = 'http://127.0.0.1:51313/archives/rooted.tar.gz'
+      source = 'http://127.0.0.1:1818/archives/rooted.tar.gz'
 
     [[params.agent.skills]]
       name = 'fixture-archive-zip'
       type = 'archive'
       description = 'A fixture skill distributed as a zip whose root is the skill directory.'
-      source = 'http://127.0.0.1:51313/archives/rooted.zip'
+      source = 'http://127.0.0.1:1818/archives/rooted.zip'
 
     # A description that paraphrases the skill's own: published, because the
     # convention makes matching a SHOULD, but warned about.
     [[params.agent.skills]]
       name = 'fixture-desc'
       description = 'A paraphrase of the description this skill actually declares.'
-      source = 'http://127.0.0.1:51313/fixture-desc/SKILL.md'
+      source = 'http://127.0.0.1:1818/fixture-desc/SKILL.md'
 
     # Six candidate references, none of which exists, against a probe budget
     # of four: the budget stops the search and the entry says so rather than
@@ -341,7 +341,7 @@ enableRobotsTXT = true
     [[params.agent.skills]]
       name = 'fixture-manyrefs'
       description = 'A fixture skill naming more absent files than one build is willing to check, so the probe budget runs out and says so.'
-      source = 'http://127.0.0.1:51313/fixture-manyrefs/SKILL.md'
+      source = 'http://127.0.0.1:1818/fixture-manyrefs/SKILL.md'
 
     # Its one candidate is answered with a 500. That is neither "the file is
     # there" nor "the file is absent", and collapsing it into either would let
@@ -349,7 +349,7 @@ enableRobotsTXT = true
     [[params.agent.skills]]
       name = 'fixture-flaky'
       description = 'A fixture skill whose sibling check is answered with a server error, so this build cannot tell a single-file skill from a multi-file one.'
-      source = 'http://127.0.0.1:51313/fixture-flaky/SKILL.md'
+      source = 'http://127.0.0.1:1818/fixture-flaky/SKILL.md'
 
     # References that climb out of the skill directory, by `..` and by a
     # leading slash. Neither can be carried in an archive, so both are
@@ -368,7 +368,7 @@ enableRobotsTXT = true
     [[params.agent.skills]]
       name = 'fixture-outside'
       description = 'A fixture skill referencing files that lie outside its own directory, which no archive may carry and no republished copy can resolve.'
-      source = 'http://127.0.0.1:51313/fixture-outside/SKILL.md'
+      source = 'http://127.0.0.1:1818/fixture-outside/SKILL.md'
 
     # The `..` guard alone. Its one reference resolves to /ESCAPE.md, outside
     # the skill directory, and the entry publishes with exactly one warning
@@ -379,7 +379,7 @@ enableRobotsTXT = true
     [[params.agent.skills]]
       name = 'fixture-outside-dotdot'
       description = 'A fixture skill whose one reference climbs out of its own directory with a traversal sequence, so nothing but the traversal guard decides its verdict.'
-      source = 'http://127.0.0.1:51313/fixture-outside-dotdot/SKILL.md'
+      source = 'http://127.0.0.1:1818/fixture-outside-dotdot/SKILL.md'
 
     # The leading-slash guard alone. Deleting it does NOT leave the reference
     # unguarded, which is the trap: path.Join folds an absolute candidate back
@@ -390,7 +390,7 @@ enableRobotsTXT = true
     [[params.agent.skills]]
       name = 'fixture-outside-abs'
       description = 'A fixture skill whose one reference is an absolute path from the origin root, so nothing but the leading-slash guard decides its verdict.'
-      source = 'http://127.0.0.1:51313/fixture-outside-abs/SKILL.md'
+      source = 'http://127.0.0.1:1818/fixture-outside-abs/SKILL.md'
 
     # The traversal guard's own BOUNDARY, which the two entries above cannot
     # reach: every other candidate in this corpus is either plainly inside its
@@ -408,7 +408,7 @@ enableRobotsTXT = true
     [[params.agent.skills]]
       name = 'fixture-prefix'
       description = "A fixture skill referencing a file in a sibling directory whose name starts with this one's, which is outside this skill and is told apart from inside it only by the separator."
-      source = 'http://127.0.0.1:51313/fixture-prefix/SKILL.md'
+      source = 'http://127.0.0.1:1818/fixture-prefix/SKILL.md'
 
     # A body linking back to itself. That probe always succeeds -- it is the
     # artifact just fetched -- so without the self-reference guard every
@@ -417,7 +417,7 @@ enableRobotsTXT = true
     [[params.agent.skills]]
       name = 'fixture-selfref'
       description = 'A single-file fixture skill whose body links back to itself, which must not be read as a supporting file.'
-      source = 'http://127.0.0.1:51313/fixture-selfref/SKILL.md'
+      source = 'http://127.0.0.1:1818/fixture-selfref/SKILL.md'
 
     # A query string makes the sibling check impossible: a sibling would be
     # requested WITHOUT it, and against a signed URL that 404s for the wrong
@@ -427,7 +427,7 @@ enableRobotsTXT = true
     [[params.agent.skills]]
       name = 'fixture-unverifiable'
       description = 'A fixture skill whose source URL carries a query string, so no sibling can be requested and the build knows nothing about its supporting files.'
-      source = 'http://127.0.0.1:51313/fixture-unverifiable/SKILL.md?token=abc'
+      source = 'http://127.0.0.1:1818/fixture-unverifiable/SKILL.md?token=abc'
 
     # An ordinary three-segment CDN path that happens to contain an `archive`
     # segment. It must be FETCHED and published: the forge refusal is anchored
@@ -437,7 +437,7 @@ enableRobotsTXT = true
       name = 'fixture-cdn-archive'
       type = 'archive'
       description = 'An archive whose ordinary CDN path contains an archive segment, which is not a forge endpoint.'
-      source = 'http://127.0.0.1:51313/cdn/skills/archive/skill.zip'
+      source = 'http://127.0.0.1:1818/cdn/skills/archive/skill.zip'
 
     # A zip whose root members are stored with a `./` prefix, which some zip
     # writers do. That IS the root, and counting separator-preceded
@@ -446,7 +446,7 @@ enableRobotsTXT = true
       name = 'fixture-archive-dot'
       type = 'archive'
       description = 'A fixture skill archive whose root member is stored with a ./ prefix, which is still the root.'
-      source = 'http://127.0.0.1:51313/archives/rooted-dot.zip'
+      source = 'http://127.0.0.1:1818/archives/rooted-dot.zip'
 
     # A wrapper-nested zip carrying ONE extra unseparated occurrence of the
     # name, in an uncompressed member's text. Counting cannot tell that from a
@@ -457,7 +457,7 @@ enableRobotsTXT = true
       name = 'fixture-archive-unclear'
       type = 'archive'
       description = 'An archive whose root SKILL.md cannot be confirmed from its raw bytes, which is published with a warning rather than trusted.'
-      source = 'http://127.0.0.1:51313/archives/unclear.zip'
+      source = 'http://127.0.0.1:1818/archives/unclear.zip'
 
     # ---- Refused ----
 
@@ -479,12 +479,12 @@ enableRobotsTXT = true
       name = 'fixture-weird-archive'
       type = 'archive'
       description = 'An archive served with a media type Hugo cannot resolve, whose remedy is the site security allow-list.'
-      source = 'http://127.0.0.1:51313/weird/archive'
+      source = 'http://127.0.0.1:1818/weird/archive'
 
     [[params.agent.skills]]
       name = 'fixture-weird-skill'
       description = 'A SKILL.md served with a media type Hugo cannot resolve, whose remedy is a URL Hugo can read one from.'
-      source = 'http://127.0.0.1:51313/weird/skill'
+      source = 'http://127.0.0.1:1818/weird/skill'
 
     # The front-matter name disagrees with the configured one. The published
     # parent directory IS the configured name, and the specification requires
@@ -492,17 +492,17 @@ enableRobotsTXT = true
     [[params.agent.skills]]
       name = 'fixture-mismatch'
       description = 'Its SKILL.md declares a different name, which the specification does not allow.'
-      source = 'http://127.0.0.1:51313/fixture-mismatch/SKILL.md'
+      source = 'http://127.0.0.1:1818/fixture-mismatch/SKILL.md'
 
     [[params.agent.skills]]
       name = 'fixture-plain'
       description = 'A Markdown document with no front matter at all, so it is not a SKILL.md.'
-      source = 'http://127.0.0.1:51313/fixture-plain/SKILL.md'
+      source = 'http://127.0.0.1:1818/fixture-plain/SKILL.md'
 
     [[params.agent.skills]]
       name = 'fixture-toml'
       description = 'TOML front matter, which the Agent Skills format does not allow.'
-      source = 'http://127.0.0.1:51313/fixture-toml/SKILL.md'
+      source = 'http://127.0.0.1:1818/fixture-toml/SKILL.md'
 
     # Malformed YAML. Parsed unguarded this aborts the entire build, which is
     # the one thing the module never does, so this entry is also the standing
@@ -510,7 +510,7 @@ enableRobotsTXT = true
     [[params.agent.skills]]
       name = 'fixture-broken'
       description = 'A front-matter block that is not valid YAML.'
-      source = 'http://127.0.0.1:51313/fixture-broken/SKILL.md'
+      source = 'http://127.0.0.1:1818/fixture-broken/SKILL.md'
 
     # A zip whose only SKILL.md lives inside a wrapper directory: exactly what
     # every forge source archive produces, and what a conforming client must
@@ -519,13 +519,13 @@ enableRobotsTXT = true
       name = 'fixture-nested-zip'
       type = 'archive'
       description = 'A zip whose SKILL.md is nested inside a wrapper directory.'
-      source = 'http://127.0.0.1:51313/archives/nested.zip'
+      source = 'http://127.0.0.1:1818/archives/nested.zip'
 
     [[params.agent.skills]]
       name = 'fixture-empty-zip'
       type = 'archive'
       description = 'A zip whose first record is its end-of-central-directory marker: no members at all.'
-      source = 'http://127.0.0.1:51313/archives/empty.zip'
+      source = 'http://127.0.0.1:1818/archives/empty.zip'
 
     # The third thing zip bytes can be that is not an archive this module may
     # publish: one volume of a SPLIT archive, marked by the spanning signature
@@ -537,7 +537,7 @@ enableRobotsTXT = true
       name = 'fixture-spanned-zip'
       type = 'archive'
       description = 'One volume of a split zip archive, which carries the spanning signature instead of a local file header.'
-      source = 'http://127.0.0.1:51313/archives/spanned.zip'
+      source = 'http://127.0.0.1:1818/archives/spanned.zip'
 
     # The same rooted.tar.gz, served with Content-Encoding: gzip. Hugo
     # decompresses it in transit, so a bare tar arrives -- and republishing
@@ -547,19 +547,19 @@ enableRobotsTXT = true
       name = 'fixture-encoded'
       type = 'archive'
       description = 'An archive the origin transfers with Content-Encoding: gzip, so it arrives decompressed.'
-      source = 'http://127.0.0.1:51313/encoded/archives/rooted.tar.gz'
+      source = 'http://127.0.0.1:1818/encoded/archives/rooted.tar.gz'
 
     # The two type/bytes disagreements, one in each direction.
     [[params.agent.skills]]
       name = 'fixture-markdown-as-archive'
       type = 'archive'
       description = 'Declared as an archive while the bytes are a SKILL.md.'
-      source = 'http://127.0.0.1:51313/fixture-single/SKILL.md'
+      source = 'http://127.0.0.1:1818/fixture-single/SKILL.md'
 
     [[params.agent.skills]]
       name = 'fixture-archive-as-skill'
       description = 'Declared as a single SKILL.md while the bytes are a gzip archive.'
-      source = 'http://127.0.0.1:51313/archives/rooted.tar.gz'
+      source = 'http://127.0.0.1:1818/archives/rooted.tar.gz'
 
     # A forge source-archive URL, refused on its SHAPE before any fetch --
     # the browser-facing spellings redirect to the generator, so the
@@ -577,25 +577,25 @@ enableRobotsTXT = true
       name = 'fixture-repo-archive'
       type = 'archive'
       description = 'A whole-repository source archive, which is always wrapper-nested.'
-      source = 'http://127.0.0.1:51313/group/project/-/archive/main/project-main.zip'
+      source = 'http://127.0.0.1:1818/group/project/-/archive/main/project-main.zip'
 
     [[params.agent.skills]]
       name = 'fixture-bad-type'
       type = 'tarball'
       description = 'A distribution type the convention does not define.'
-      source = 'http://127.0.0.1:51313/fixture-single/SKILL.md'
+      source = 'http://127.0.0.1:1818/fixture-single/SKILL.md'
 
     # GetRemote reports an HTTP 404 as an ABSENT resource rather than as a
     # failure, so the nil branch is what warns and omits.
     [[params.agent.skills]]
       name = 'unreachable-skill'
       description = 'Its source 404s, so the module warns once and omits it rather than guessing a digest.'
-      source = 'http://127.0.0.1:51313/fixture-single/no-such-file.md'
+      source = 'http://127.0.0.1:1818/fixture-single/no-such-file.md'
 
     [[params.agent.skills]]
       name = 'Invalid--Name'
       description = 'Its name breaks the field rules, so the module warns once and skips it.'
-      source = 'http://127.0.0.1:51313/fixture-single/SKILL.md'
+      source = 'http://127.0.0.1:1818/fixture-single/SKILL.md'
 
     # A valid, fetchable entry repeating an earlier name. One published path
     # would carry whichever artifact reached it first, and the later entry
@@ -604,4 +604,4 @@ enableRobotsTXT = true
     [[params.agent.skills]]
       name = 'fixture-single'
       description = 'A duplicate name, which must be refused so one artifact cannot answer to two entries.'
-      source = 'http://127.0.0.1:51313/fixture-desc/SKILL.md'
+      source = 'http://127.0.0.1:1818/fixture-desc/SKILL.md'

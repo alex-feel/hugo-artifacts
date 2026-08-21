@@ -17,6 +17,7 @@ import {
   exists,
   minimalDir,
   multilingualDir,
+  multihostDir,
   nobuildtimeDir,
   edgeDir,
   publicDir,
@@ -785,4 +786,47 @@ test('the index is emitted ONCE across a two-language build, from the default la
   // absence above is the gate working rather than the language being inert.
   assert.ok(exists('ru/llms.txt', multilingualDir), 'the ru language is genuinely built');
   assert.ok(exists('ru/about.md', multilingualDir));
+});
+
+// The same gate, on the site shape where it must NOT fire. Under multihost each
+// language has its own publish root, so root = true resolves to a different
+// file per host and there is nothing to overwrite -- and every host needs one,
+// because the artifacts a skill entry republishes are copied once for the build
+// and land under EVERY host's root. A host serving skill bodies with no index
+// describing them is the failure, and a URL registry built per host would name
+// an index that host never wrote.
+test('under multihost every host publishes an index of its own', () => {
+  for (const lang of ['en', 'ru']) {
+    assert.ok(
+      exists(`${lang}/${INDEX}`, multihostDir),
+      `the ${lang} host published no agent-skills index`,
+    );
+  }
+
+  // The load-bearing half. Two files existing is also what publishing the
+  // default language's bytes twice would look like, so the marker is what says
+  // the Russian host RENDERED its own: it carries the schema value only that
+  // language configures.
+  assert.equal(
+    JSON.parse(read(`en/${INDEX}`, multihostDir)).$schema,
+    'https://schemas.agentskills.io/discovery/0.2.0/schema.json',
+  );
+  assert.equal(
+    JSON.parse(read(`ru/${INDEX}`, multihostDir)).$schema,
+    'https://example.invalid/RU-WROTE-THIS',
+    'the ru host is serving the default host copy of the index',
+  );
+
+  // And the artifacts the index describes really are under both roots, which is
+  // what makes an index per host necessary rather than tidy.
+  for (const lang of ['en', 'ru']) {
+    const doc = JSON.parse(read(`${lang}/${INDEX}`, multihostDir));
+    assert.ok(doc.skills.length > 0, `the ${lang} index describes no skill`);
+    for (const skill of doc.skills) {
+      assert.ok(
+        exists(`${lang}${skill.url}`, multihostDir),
+        `${lang} advertises ${skill.url} and does not serve it`,
+      );
+    }
+  }
 });

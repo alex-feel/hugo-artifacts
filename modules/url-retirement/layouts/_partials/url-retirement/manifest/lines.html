@@ -10,8 +10,16 @@
   (so an RSS feed, a Markdown twin and a JSON representation each count as the
   published URLs they are), every URL registered for this language -- pager URLs
   through register-pagers.html, and whatever a module registered through
-  register-url.html for what it published outside the page graph -- and whatever
-  url_retirement.manifest.extra names.
+  register-url.html for what it published outside the page graph -- every URL a
+  format's owner names when this document ASKS it what else that format wrote,
+  through lib/writes.html, and whatever url_retirement.manifest.extra names.
+
+  Two directions, and the difference is which party can guarantee the timing. A
+  template reached from the html pass registers what it published and is always
+  in time. A format whose side files are published from whichever caller reaches
+  its resolution first cannot promise that, so this document asks instead, in
+  its own pass, where an answer cannot be late. lib/writes.html carries the
+  measurement that settled which case is which.
 
   What the page walk cannot REACH, and the header says so, is a file copied
   verbatim from static/, whatever the asset pipeline publishes (a script, a
@@ -72,34 +80,53 @@
          mode, however much of it .OutputFormats and .RelPermalink still
          report. */}}
     {{- if partial "url-retirement/lib/page-renders.html" (dict "page" $p) -}}
-      {{- if $cfg.manifest.output_formats -}}
-        {{/* The module's own redirect map is skipped rather than listed: every
-             host it targets consumes that file at deploy time and serves
-             nothing at its path, so listing it puts a URL nobody can fetch in
-             a document whose purpose is to be compared against what production
-             serves. The name is lowercased before comparing so the case Hugo
-             reports for a format cannot decide whether the line is emitted.
-             That skip answers "published but never served"; lib/publishes.html
-             answers the different question of whether anything was published
-             at all. */}}
-        {{- range $f := $p.OutputFormats -}}
-          {{- if ne (lower $f.Name) "redirects" -}}
-            {{- if partial "url-retirement/lib/publishes.html" (dict "page" $p "format" $f) -}}
+
+      {{/* The module's own redirect map is skipped rather than listed: every
+           host it targets consumes that file at deploy time and serves nothing
+           at its path, so listing it puts a URL nobody can fetch in a document
+           whose purpose is to be compared against what production serves. The
+           name is lowercased before comparing so the case Hugo reports for a
+           format cannot decide whether the line is emitted. That skip answers
+           "published but never served"; lib/publishes.html answers the
+           different question of whether anything was published at all.
+
+           This walk runs in BOTH modes, because the two questions asked inside
+           it are not the same question. Whether to list a page's own
+           per-format URLs is what output_formats governs; what ELSE a format
+           wrote is a fact about the build that the setting has no opinion on,
+           and a site that lists one URL per page still serves the files its
+           formats published beside their documents. */}}
+      {{- range $f := $p.OutputFormats -}}
+        {{- if ne (lower $f.Name) "redirects" -}}
+          {{- if partial "url-retirement/lib/publishes.html" (dict "page" $p "format" $f) -}}
+            {{- if $cfg.manifest.output_formats -}}
               {{- with $f.RelPermalink -}}
                 {{- $urls = $urls | append (partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" .)) -}}
               {{- end -}}
             {{- end -}}
+            {{/* Asked here, in this document's own pass, rather than waiting to
+                 be told: a format's side files are published wherever that
+                 format's owner happens to be reached from, which is a property
+                 of the consuming site's configuration. See lib/writes.html. */}}
+            {{- range partial "url-retirement/lib/writes.html" (dict "page" $p "format" $f) -}}
+              {{- $urls = $urls | append (partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" .)) -}}
+            {{- end -}}
           {{- end -}}
         {{- end -}}
-      {{- else -}}
-        {{/* Through lib/page-url.html rather than off .RelPermalink, because
-             this document renders in a format that is not permalinkable: on a
-             site that lists this module's formats ahead of html, a page asked
-             for its own URL here answers with the manifest's. */}}
+      {{- end -}}
+
+      {{/* Through lib/page-url.html rather than off .RelPermalink, because this
+           document renders in a format that is not permalinkable: on a site
+           that lists this module's formats ahead of html, a page asked for its
+           own URL here answers with the manifest's. Outside the publishes gate
+           above, because this line is the PAGE rather than any one format's
+           document, and a page Hugo renders at all has a URL. */}}
+      {{- if not $cfg.manifest.output_formats -}}
         {{- with partial "url-retirement/lib/page-url.html" (dict "page" $p) -}}
           {{- $urls = $urls | append (partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" .)) -}}
         {{- end -}}
       {{- end -}}
+
     {{- end -}}
   {{- end -}}
 
@@ -188,7 +215,9 @@
       "# publishes, a page kept out of every page collection by"
       "# build.list = never, and any document whose publication is decided by a"
       "# setting no template can read. The module that publishes one registers"
-      "# it; name the rest in url_retirement.manifest.extra. A content-addressed"
+      "# it, or answers for it when this document asks the owner of an output"
+      "# format what else that format wrote; name the rest in"
+      "# url_retirement.manifest.extra. A content-addressed"
       "# URL is left out on purpose: a fingerprinted name changes with its own"
       "# contents, so listing it would report a retirement on every rebuild."
       "# Also not listed: the redirect map this module publishes, which every"

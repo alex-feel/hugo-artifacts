@@ -76,11 +76,53 @@ test('a registration made from a format own pass is refused rather than lost', (
   );
 });
 
-// Two faults, two diagnostics, and nothing else: a warning class that started
+// The OTHER direction, and the reason it exists: the manifest ASKS the format's
+// owner what else that format wrote, during its own pass, so an answer cannot
+// arrive late the way the registration above did. `twin`'s hook publishes the
+// file it names by reading its URL, which is the obligation an answering module
+// carries -- an answer is the one arrival path that can add a line no file
+// backs.
+test('a side-file hook URL is listed, and names a file this build wrote', () => {
+  assert.ok(
+    docExists(unpublishedDir, 'probe/written-by-hook.txt'),
+    'the fixture premise changed: the hook published nothing',
+  );
+  assert.ok(
+    urls().includes('/probe/written-by-hook.txt'),
+    'a URL the format owner answered with is missing from the manifest',
+  );
+});
+
+// One bad element must not cost the good ones. A hook returning several URLs is
+// the ordinary case, and losing the whole answer to one typo would be the same
+// silent omission the document exists to prevent.
+test('one malformed element is refused alone, and the good one survives it', () => {
+  const lines = moduleWarnings('unpublished').filter((l) => l.includes('writes/twin.html'));
+  assert.equal(lines.length, 1, `expected exactly one diagnostic, got ${lines.length}`);
+  assert.match(lines[0], /probe\/no-leading-slash\.txt/);
+  assert.match(lines[0], /must start with "\/"/);
+  for (const url of urls())
+    assert.ok(!url.includes('no-leading-slash'), `${url} reached the manifest`);
+  assert.ok(urls().includes('/probe/written-by-hook.txt'), 'the good element was lost with it');
+});
+
+// The same mistake the badtwin publication hook makes, in the other hook
+// family: printing instead of returning. Refused by TYPE, because the empty
+// render is indistinguishable from an honest "no URLs" to anything that does
+// not check, and this format's own documents must stay listed either way.
+test('a side-file hook that renders instead of returning is refused by type, once', () => {
+  const lines = moduleWarnings('unpublished').filter((l) => l.includes('writes/badtwin.html'));
+  assert.equal(lines.length, 1, `expected exactly one diagnostic, got ${lines.length}`);
+  assert.match(lines[0], /must return a list of URLs/);
+  const written = publishedUrls(unpublishedDir).filter((url) => url.endsWith('/bad.ptxt'));
+  for (const url of written) assert.ok(urls().includes(url), `${url} was dropped with the answer`);
+});
+
+// Four faults, four diagnostics, and nothing else: a warning class that started
 // firing here would otherwise hide inside a filter above.
-test('and this build says exactly those two things', () => {
+test('and this build says exactly those four things', () => {
   const lines = moduleWarnings('unpublished');
-  assert.equal(lines.length, 2, `expected exactly two diagnostics, got ${lines.join(' | ')}`);
+  assert.equal(lines.length, 4, `expected exactly four diagnostics, got ${lines.join(' | ')}`);
 });
 
 // build.render = link: Hugo writes no document for the page and still reports

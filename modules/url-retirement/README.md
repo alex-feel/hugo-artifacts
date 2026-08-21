@@ -146,15 +146,56 @@ A build publishes things that are in no page collection and in no page's output 
 {{ end }}
 ```
 
-The page is captured before the `with` blocks because each of them rebinds the dot, and the asset is reached through `with` rather than dereferenced, because a missing asset would otherwise take the build down inside a module. Pass `.url` for one URL, `.urls` for several, or both. Every entry is a server-relative path beginning with `/`, carrying no whitespace and not beginning with `//`, which names another host rather than a path on this site; anything else is reported and dropped, by the same rule that checks an `extra` entry. The guard takes a path under `layouts/` WITH the `.html` suffix, which `partial` itself does not need, and the pre-v0.146 `partials/` spelling silently returns false -- so a module calls this unconditionally and a site that does not import this one pays nothing for the call.
+The page is captured before the `with` blocks because each of them rebinds the dot, and the asset is reached through `with` rather than dereferenced, because a missing asset would otherwise take the build down inside a module. Pass `.url` for one URL, `.urls` for several, or `.resource` when you have the Resource itself. Every entry is a server-relative path beginning with `/`, carrying no whitespace and not beginning with `//`, which names another host rather than a path on this site; anything else is reported and dropped, by the same rule that checks an `extra` entry. The guard takes a path under `layouts/` WITH the `.html` suffix, which `partial` itself does not need, and the pre-v0.146 `partials/` spelling silently returns false -- so a module calls this unconditionally and a site that does not import this one pays nothing for the call.
+
+Pass `.resource` wherever you have one, because the content-addressed rule below is then applied for you rather than by you:
+
+```go-html-template
+{{ with resources.Get $path }}
+  {{ $url = .Permalink }}
+  {{ if templates.Exists "_partials/url-retirement/register-url.html" }}
+    {{ partial "url-retirement/register-url.html" (dict "page" site.Home "resource" .) }}
+  {{ end }}
+{{ end }}
+```
+
+A resource is registered only when it is published under the name it came in with -- when the base name of its `.RelPermalink` is the base name of its `.Name`. Measured at Hugo v0.164.0, a derivative is published under a name carrying a hash of its own contents while `.Name` still reports the source's, so the two come apart exactly where the URL is content-addressed; a resource that fails the check is skipped silently, because a module resolving images meets derived ones as a matter of course and a warning per page per image would bury the diagnostics that mean something. The page passed is the RENDERING language's home, which is what `site.Home` names: a registration picks which language's manifest the URL belongs to, and that is the manifest the current pass is building.
 
 Register what the build really WROTE, never what it intends to write. Every other line in the manifest is evidence that a file exists, and registration is the one arrival path that can ADD a line no file backs, which would put a URL production answers 404 for into the document written to be compared against production. Reading a Resource's `.RelPermalink` is what materializes it, so register the URL that read returned, where it returned it, and not from a branch that might publish nothing.
 
 Do NOT register a content-addressed URL -- a fingerprinted script, a processed image, anything carrying a hash of its own contents. Such a URL changes whenever its source does, by design, so listing it reports a retirement and a new URL on every rebuild in a file whose only use is showing what genuinely changed. The same goes for anything a development build publishes and a production build does not, a source map most of all: a manifest structurally unequal to production's cannot be diffed against it. Those URLs are left out deliberately, and the manifest header says so.
 
-Ordering is the one way a registration is lost, and this module tells you when it happens. Hugo renders one output format at a time within a language, positive weights ascending and then every zero-weight format, so `/url-manifest.txt` at weight 100 sees registrations made during any pass that renders before it and none made after. The `html` format is weight 10, so an html-pass template -- a layout, or a partial the consumer's `<head>` reaches -- is always in time; a format carrying no weight renders after every weighted one, so a registration made from its own template is not. A registration that arrives too late is refused with one warning naming the URL instead of vanishing into a map nothing reads again, and every registration on a site that weights this module's format below `html`'s is refused the same way, which is what that misconfiguration costs.
+Ordering is the one way a registration is lost, and this module tells you when it happens. Hugo renders one output format at a time within a language, positive weights ascending and then every zero-weight format, so `/url-manifest.txt` at weight 100 sees registrations made during any pass that renders before it and none made after. The `html` format is weight 10, so an html-pass template -- a layout, or a partial the consumer's `<head>` reaches -- is always in time; a format carrying no weight renders after every weighted one, so a registration made from its own template is not. A registration that arrives too late is refused with one warning naming the URL instead of vanishing into a map nothing reads again, and every registration on a site that weights this module's format below `html`'s is refused the same way, which is what that misconfiguration costs. So this partial is for a template that KNOWS which pass reaches it; where that cannot be known, the format's owner answers a question instead, which is the next section.
 
-[`pwa`](../pwa/README.md) is the module in this repository that registers what it publishes: its service worker, whose URL is deliberately stable so the browser update check can find it, and its offline page, which is the `build.list = never` case. The others do not yet, and two things make that harder than it looks for them: [`agent-readiness`](../agent-readiness/README.md) publishes its Agent Skills artifacts from a `partialCached` whose first caller varies by build, so a registration there would sometimes run in a pass too late to count, and [`images`](../images/README.md) and [`seo`](../seo/README.md) publish the consuming site's OWN assets from resolvers that a zero-weight format's pass can reach first. Until that is settled, a site importing those modules names what it needs in `manifest.extra` -- which is also the answer for what belongs to the site rather than to any module: a hand-placed file under `static/` your own templates do not register, and a document whose publication is decided by a setting no template can read.
+Every module in this repository that publishes a URL outside the page graph now declares it, and which of the two mechanisms it uses is decided by ONE question: can the module guarantee which render pass reaches it? [`pwa`](../pwa/README.md) can -- its service worker and its `build.list = never` offline page are built from the html pass and nowhere else -- so it registers, and so do [`seo`](../seo/README.md), [`images`](../images/README.md), [`social-share`](../social-share/README.md), [`carousel`](../carousel/README.md) and [`callout`](../../shortcodes/callout/README.md), each at the line where it reads the URL of a resource. [`agent-readiness`](../agent-readiness/README.md) cannot: its Agent Skills artifacts are copied by whichever caller first reaches a shared resolution, and those callers sit in different passes, so it ANSWERS a question this document asks instead (see below).
+
+That a module publishes the consuming site's own file rather than one it ships makes no difference to which mechanism applies, and it is worth saying why. The resolver is the only party in the build that knows which resource materialized at which path -- it walked the page bundle, then `assets/`, then `static/`, chose a suffix, and decided not to process -- so a site restating that resolution in `manifest.extra` would be maintaining a copy of a rule that lives in the module, and a copy drifts. Ownership is untouched by the listing: `manifest.exclude` subtracts last, so a site that disagrees with any of it says so in one line, and a registration asserts nothing about who owns the URL.
+
+What stays yours: a hand-placed file under `static/` no template reads, and a document whose publication is decided by a setting no template can read. Both go in `manifest.extra`.
+
+### Answer for what an output format wrote besides its document
+
+A registration is a push, and a push needs a sender that knows when it runs. Where a file is published by whichever caller first reaches a shared resolution, that is exactly what the module does not know: which caller wins is decided by the CONSUMING SITE's configuration, so the same registration lands on one site and is refused on another. Measured at Hugo v0.164.0 on the Agent Skills artifacts, a registration placed where they are copied was in time on every build at default settings and refused on every build with `manifest.output_formats = false`, because that setting decides whether the publication hook -- which is what triggers the copy early -- runs at all.
+
+So for that case the manifest ASKS, during its own pass, where an answer cannot be late. A module or a site owning an output format that publishes files BESIDES the format's own document ships one file:
+
+```text
+layouts/_partials/url-retirement/writes/<format-name>.html
+```
+
+named for the output format, lowercased, beside the [`publishes/`](#telling-the-manifest-when-a-format-publishes-nothing) hook of the same name. It receives `(dict "page" PAGE "format" OUTPUTFORMAT)` and returns a SLICE of server-relative URLs -- `return slice` when it has none for this page:
+
+```go-html-template
+{{- $urls := slice -}}
+{{- range partial "my-module/lib/artifacts.html" dict -}}
+  {{- $urls = $urls | append .url -}}
+{{- end -}}
+{{- return $urls -}}
+```
+
+It is asked only where the `publishes/` hook answered true, because a format that published no document for a page did not publish its side files either: one resolution decides both. A format with no such file contributes nothing, so adding nothing keeps the previous behavior.
+
+The obligations are the registration's, for the same reasons: name only what the build really WROTE, and leave content-addressed URLs out. One is easier to honor here -- reading a Resource's URL is what publishes it, so a hook that returns URLs it read has published them by reading them, while a hook that builds a path by string arithmetic is asserting rather than reporting and can name a 404. The answer must arrive through `return` as a SLICE: a partial that prints instead hands back the text it rendered, which is refused by type with one warning per format, and each element is then held to the same shape rule an `extra` entry is, so one malformed URL is refused alone rather than costing the whole answer.
 
 ### The default site's redirect
 
@@ -215,7 +256,9 @@ One per language, sorted, one URL per line, behind a `#` comment header:
 # publishes, a page kept out of every page collection by
 # build.list = never, and any document whose publication is decided by a
 # setting no template can read. The module that publishes one registers
-# it; name the rest in url_retirement.manifest.extra. A content-addressed
+# it, or answers for it when this document asks the owner of an output
+# format what else that format wrote; name the rest in
+# url_retirement.manifest.extra. A content-addressed
 # URL is left out on purpose: a fingerprinted name changes with its own
 # contents, so listing it would report a retirement on every rebuild.
 # Also not listed: the redirect map this module publishes, which every
@@ -318,6 +361,7 @@ modules/url-retirement/
 │   │   └── url-retirement/
 │   │       ├── config.html
 │   │       ├── lib/
+│   │       │   ├── host-frame.html
 │   │       │   ├── manifest-path.html
 │   │       │   ├── page-renders.html
 │   │       │   ├── page-url.html
@@ -327,7 +371,8 @@ modules/url-retirement/
 │   │       │   ├── spellings.html
 │   │       │   ├── url-shape.html
 │   │       │   ├── warn-emit.html
-│   │       │   └── warn.html
+│   │       │   ├── warn.html
+│   │       │   └── writes.html
 │   │       ├── manifest/
 │   │       │   └── lines.html
 │   │       ├── redirects/

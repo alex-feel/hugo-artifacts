@@ -1,0 +1,33 @@
+{{/*
+  social-share/lib/register-url.html -- INTERNAL (lib tier).
+
+  Purpose: tells the sibling url-retirement module about an image this module
+  just published, so a site importing both lists it in /url-manifest.txt without
+  configuring anything.
+
+  Reading a resource's URL is what writes the file, and no walk of .Site.Pages
+  can see it -- an image is a Resource, not a Page -- so the publisher is the
+  only party that can name it. lib/resolve-image.html reads such a URL in two
+  branches, a page resource and a global one, and both come here rather than
+  repeating the guard: the sibling is OPTIONAL, and `templates.Exists` is what
+  keeps a site that imports only this module paying nothing. That path takes the
+  .html suffix `partial` itself does not need, and the pre-v0.146 `partials/`
+  spelling silently returns false.
+
+  The RESOURCE is handed over rather than its URL, because url-retirement owns
+  the rule that a content-addressed URL never enters a registry meant to be
+  diffed against production, and a module that restated that rule would drift
+  from it. The page is the RENDERING language's home: what a registration picks
+  is which language's manifest the URL belongs to, and that is the manifest this
+  pass is building.
+
+  Expected context (dict):
+  - .resource One Resource whose URL this module has just read.
+
+  Return value: none. Side effect: the URL is registered when the sibling module
+  is present, and nothing at all when it is not.
+*/}}
+
+{{- if templates.Exists "_partials/url-retirement/register-url.html" -}}
+  {{- partial "url-retirement/register-url.html" (dict "page" site.Home "resource" .resource) -}}
+{{- end -}}

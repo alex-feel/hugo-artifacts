@@ -78,6 +78,24 @@ disableAliases = true
   [[module.imports]]
     path = "github.com/alex-feel/hugo-artifacts/modules/url-retirement"
 
+  # The four content-side modules, here for one reason: each publishes a file
+  # belonging to THIS site -- a bundle image, a global asset, an icon -- by
+  # reading its URL, which no walk of .Site.Pages can see. Alone, each one's own
+  # suite can prove what it renders and nothing about what the registry learns;
+  # only a site holding them beside url-retirement can show the URL arriving in
+  # /url-manifest.txt with nothing configured for it.
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/images"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/social-share"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/modules/carousel"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/shortcodes/callout"
+
 [params]
 
   [params.seo]

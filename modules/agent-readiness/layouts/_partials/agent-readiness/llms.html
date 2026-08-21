@@ -408,7 +408,7 @@
          [[params.agent.llms.optional]] keeps their own wording: the URLs are
          compared after absolutization, and a match suppresses the derived
          entry rather than doubling it. */}}
-  {{- with partial "agent-readiness/lib/skills-index-url.html" dict -}}
+  {{- with partial "agent-readiness/lib/skills-index-url.html" (dict "page" $page) -}}
     {{- if not (in $optionalUrls .) -}}
       {{- $item := printf "- %s" (partial "agent-readiness/lib/markdown-link.html" (dict "name" $cfg.i18n.skills_entry_name "url" .)) -}}
       {{- $item = printf "%s: %s" $item (partial "agent-readiness/lib/inline.html" $cfg.i18n.skills_entry_note) -}}
