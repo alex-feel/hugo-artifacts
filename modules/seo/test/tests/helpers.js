@@ -36,6 +36,13 @@ export const multilingualDir = resolve(
 export const paginationDir = resolve(
   process.env.FIXTURE_PUBLIC_PAGINATION ?? 'fixture/public/pagination',
 );
+// The same environment under a baseURL that carries a PATH. Pagination and a
+// subpath deploy meet nowhere else, and seo/resolve/pager.html only claims the
+// pager URL while the pager URL still extends the page's own RelPermalink --
+// both of which change shape when the baseURL gains a path.
+export const paginationSubpathDir = resolve(
+  process.env.FIXTURE_PUBLIC_PAGINATION_SUBPATH ?? 'fixture/public/pagination-subpath',
+);
 // The baseline content published through the other JSON-LD container:
 // seo.jsonld_container = 'graph' collapses every page's nodes into one
 // <script> holding a @graph array, which is a serialization site no other
@@ -119,6 +126,7 @@ export function buildLog(which = 'baseline') {
     offswitch: 'HUGO_BUILD_LOG_OFFSWITCH',
     multilingual: 'HUGO_BUILD_LOG_MULTILINGUAL',
     pagination: 'HUGO_BUILD_LOG_PAGINATION',
+    'pagination-subpath': 'HUGO_BUILD_LOG_PAGINATION_SUBPATH',
     graph: 'HUGO_BUILD_LOG_GRAPH',
     sitename: 'HUGO_BUILD_LOG_SITENAME',
     generated: 'HUGO_BUILD_LOG_GENERATED',
