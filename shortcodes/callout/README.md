@@ -256,7 +256,7 @@ Because the module never bakes in a color, dark mode is entirely yours: redefine
 
 ### Icons
 
-Each first-class type ships a default inline SVG glyph in `layouts/_partials/callout/icon.html`. All icons use `width="1em" height="1em"` (scale with font size), `aria-hidden="true"`, a `24x24` viewBox, and `currentColor`, so they inherit the surrounding text color. No external icon font is required. The geometry is original line-art in the Lucide / Tabler / Octicons visual idiom.
+Each first-class type ships a default inline SVG glyph in `layouts/_partials/callout/icon.html`. All icons use `width="1em" height="1em"` (scale with font size), `aria-hidden="true"`, `focusable="false"`, a `24x24` viewBox, and `currentColor`, so they inherit the surrounding text color. No external icon font is required. The geometry is original line-art in the Lucide / Tabler / Octicons visual idiom.
 
 Override the icon per call with the `icon` parameter:
 
