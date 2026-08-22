@@ -34,10 +34,15 @@
 
   WHICH PASS DECIDES. Every language's manifest renders in its own pass and
   Hugo renders one language completely before starting the next, so the last
-  namer to render sees every earlier verdict and is the one that warns. The
-  store is written with SetInMap and read back with GetSortedMapValues, which
-  keeps the map inside the store: a map handed out to a template and read there
-  is a build-aborting race, and lib/record-url.html carries that measurement.
+  namer to render sees every earlier verdict and is the one that warns. That
+  ordering is also what makes the read below safe, and it is the whole of what
+  makes it safe: the store is written with SetInMap and read back with
+  GetSortedMapValues, which keeps the map inside the store but reads it AFTER
+  releasing the lock, so a write in flight during that read would abort the
+  build exactly as a template-level read of the map would. Nothing here writes
+  the key while another language reads it, which is what the marker at the call
+  records. lib/record-url.html carries the template-level half of the same
+  measurement.
 
   An entry that url_retirement.manifest.exclude also names is skipped, in the
   language that excludes it and in the namer count alike. That entry is not
@@ -104,6 +109,9 @@
       {{- end -}}
     {{- end -}}
 
+    {{/* no-concurrent-writer: this key is written on the line above and by the
+         other languages, each from its own manifest pass, and Hugo renders one
+         language completely before starting the next. */}}
     {{- $verdicts := hugo.Store.GetSortedMapValues $key -}}
     {{- $redundant := 0 -}}
     {{- range $verdicts -}}

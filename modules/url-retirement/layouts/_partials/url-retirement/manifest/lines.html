@@ -135,7 +135,14 @@
        for what it published outside the page graph. The store key carries the
        language because the store is build-global: without it, the second
        language's manifest would republish the first language's URLs as its
-       own. */}}
+       own.
+
+       no-concurrent-writer: every registration for this language is written
+       while its pages render, and this document is the only one in the
+       urlmanifest pass, which runs after them; Hugo renders one language
+       completely before starting the next, so no other language is writing
+       either. Both orderings are measured rather than documented, which is
+       what this marker exists to make visible if either ever changes. */}}
   {{- range hugo.Store.GetSortedMapValues (printf "url-retirement:registered:%s" $cfg.lang) -}}
     {{- $urls = $urls | append (partial "url-retirement/lib/prefix-url.html" (dict "base" $base "url" (printf "%v" .))) -}}
   {{- end -}}
