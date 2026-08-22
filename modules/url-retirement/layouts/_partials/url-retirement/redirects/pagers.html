@@ -73,13 +73,22 @@
 
 {{- range $site := $sites -}}
   {{- $lang := $site.Language.Name -}}
+  {{/* no-concurrent-writer: pager registration happens while a language renders
+       its pages, and this document renders in a later pass of the language it
+       belongs to; Hugo renders one language completely before starting the
+       next, so reading another language's key here meets either a finished map
+       or an empty one, never one being written. That is also why the last
+       language to render is the one whose file survives. */}}
   {{- $registered := hugo.Store.GetSortedMapValues (printf "url-retirement:pager-firsts:%s" $lang) -}}
   {{- with $registered -}}
     {{- $base := strings.TrimSuffix "/" (urls.Parse $site.BaseURL).Path -}}
 
     {{/* Evidence first, configuration second: a segment read off a real pager
          URL cannot be stale, while the configured one is a value the site
-         restates by hand. */}}
+         restates by hand.
+
+         no-concurrent-writer: written by the same registration pass as the key
+         above, and read here under the same language ordering. */}}
     {{- $derived := hugo.Store.GetSortedMapValues (printf "url-retirement:pager-path:%s" $lang) -}}
     {{- $segment := "" -}}
     {{- with $derived -}}

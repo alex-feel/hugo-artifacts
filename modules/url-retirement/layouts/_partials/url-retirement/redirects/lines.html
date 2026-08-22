@@ -58,6 +58,9 @@
   {{- $signature := printf "enable=%v redirects=%v rules=%q status=%s trailing_slash=%s"
       $cfg.enable $cfg.redirects.enable $cfg.redirects.rules $cfg.redirects.status $cfg.redirects.trailing_slash -}}
   {{- hugo.Store.SetInMap "url-retirement:redirects-signature" $cfg.lang $signature -}}
+  {{/* no-concurrent-writer: the only writers of this key are the line above and
+       the other languages rendering this same template, and Hugo renders one
+       language completely before starting the next. */}}
   {{- $signatures := uniq (hugo.Store.GetSortedMapValues "url-retirement:redirects-signature") -}}
   {{- if gt (len $signatures) 1 -}}
     {{- partial "url-retirement/lib/warn.html" (dict
