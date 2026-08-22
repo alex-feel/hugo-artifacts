@@ -92,6 +92,9 @@ test('every artifact URL is listed although no page carries one', () => {
   // The sitemap is the page walk's own projection, so a URL it does not carry
   // is one nothing but the format owner's answer could have put in the manifest.
   const sitemap = readFileSync(join(trees.skills, 'sitemap.xml'), 'utf8');
+  // An empty sitemap would satisfy the absence below without proving anything,
+  // so the walk has to be shown to have produced something first.
+  assert.ok(/<loc>/.test(sitemap), 'the sitemap lists nothing, so the absence proves nothing');
   assert.ok(!sitemap.includes(ARTIFACT), 'the artifact is reachable by walking pages after all');
   // And the document that points at them, which the page walk DOES reach.
   assert.ok(urls.includes(INDEX), 'the index the artifacts hang off is missing from the manifest');

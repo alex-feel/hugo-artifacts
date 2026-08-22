@@ -1,4 +1,18 @@
 {{ define "main" }}
   <h1>{{ .Title }}</h1>
   {{ .Content }}
+  {{/* The home page paginates only where the fixture asks for it. A home
+       paginated everywhere would move every one of the other builds, and only
+       the pagination environment asserts on pagers.
+
+       site.RegularPages rather than .Pages: home's .Pages is the section list,
+       which holds one entry in the paginated content directory and could never
+       produce a second pager. */}}
+  {{ if site.Params.fixture_paginate_lists }}
+    {{ $pager := .Paginate site.RegularPages 2 }}
+    <ul class="posts">
+      {{ range $pager.Pages }}<li>{{ .Title }}</li>{{ end }}
+    </ul>
+    {{ partial "fixture/pager-probe.html" (dict "pager" $pager "page" .) }}
+  {{ end }}
 {{ end }}

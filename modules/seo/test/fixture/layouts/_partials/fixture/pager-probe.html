@@ -1,0 +1,22 @@
+{{/*
+  fixture/pager-probe.html -- publishes the pager identity Hugo handed the list
+  template, so a spec can read the two values seo/resolve/pager.html compares
+  instead of inferring them from the module's output.
+
+  That resolver only claims the pager URL when `hasPrefix .URL
+  $page.RelPermalink` holds, and silently keeps the page permalink when it does
+  not. The guard is therefore invisible from the outside: a Hugo release that
+  changed either shape would turn the module's self-referencing URLs back into
+  pager-one URLs with nothing to say why. Publishing both values makes the
+  guard's own premise assertable.
+
+  Context (dict):
+  - .pager (Pager) The pager the list template built.
+  - .page  (Page)  The page being rendered.
+*/}}
+<p
+  class="pager-probe"
+  data-page-number="{{ .pager.PageNumber }}"
+  data-pager-url="{{ .pager.URL }}"
+  data-page-rel="{{ .page.RelPermalink }}"
+></p>

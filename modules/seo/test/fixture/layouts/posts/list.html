@@ -9,5 +9,5 @@
   <ul class="posts">
     {{ range $pager.Pages }}<li>{{ .Title }}</li>{{ end }}
   </ul>
-  <p class="pager-probe" data-page-number="{{ $pager.PageNumber }}" data-pager-url="{{ $pager.URL }}"></p>
+  {{ partial "fixture/pager-probe.html" (dict "pager" $pager "page" .) }}
 {{ end }}

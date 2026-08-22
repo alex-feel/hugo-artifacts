@@ -1,4 +1,16 @@
 {{ define "main" }}
   <h1>{{ .Title }}</h1>
   {{ .Content }}
+  {{/* Gated for the reason home.html states. In the pagination environment
+       this template serves the taxonomy and term kinds only -- the one section
+       that environment mounts has its own posts/list.html -- so this is where
+       those two kinds get a paginator at all. Everywhere else the param is
+       unset and the output is what it was. */}}
+  {{ if site.Params.fixture_paginate_lists }}
+    {{ $pager := .Paginate .Pages 2 }}
+    <ul class="posts">
+      {{ range $pager.Pages }}<li>{{ .Title }}</li>{{ end }}
+    </ul>
+    {{ partial "fixture/pager-probe.html" (dict "pager" $pager "page" .) }}
+  {{ end }}
 {{ end }}

@@ -35,8 +35,26 @@ defaultContentLanguage = 'en'
 
 [params]
 
+  # Turns on the paginators in layouts/home.html and layouts/list.html, which
+  # is what gives this environment a home pager, a taxonomy pager and a term
+  # pager beside the section pager posts/list.html already builds. Pagination
+  # is a property of FOUR page kinds and seo/resolve/pager.html gates on all
+  # four, so a suite that only ever paginated a section left three quarters of
+  # that gate rendering nowhere. The flag is read nowhere else, so the ten
+  # other builds keep the output they had.
+  fixture_paginate_lists = true
+
   [params.seo]
     # Environment builds other than the default are not production, and the
     # non-production default would force noindex onto every page, suppressing
     # the hreflang block this environment exists to inspect.
     allow_index_nonprod = true
+
+    # The documented opt-in that gives taxonomy and term lists a CollectionPage
+    # node; the default leaves them with a BreadcrumbList and nothing else. It
+    # is set HERE because this is the build where those two kinds paginate, so
+    # it is the only place their node can be checked for naming the pager URL
+    # rather than the pager-one URL -- and it is set at all because no build
+    # set it before, which left the whole true arm of webpage.html's list gate
+    # rendering nowhere.
+    webpage_on_lists = true

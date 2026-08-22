@@ -1,4 +1,4 @@
-/* global process */
+/* global process, URL */
 // Cross-module composition assertions.
 //
 // Every module the fixture imports is proven on its own by its own suite,
@@ -311,6 +311,26 @@ test('a site-level document withheld for want of content is not listed either', 
 // collection at all, and its service worker is not a page but a Resource. Both
 // are stable URLs a real deployment serves, and a 404 at either one is a defect
 // -- silently, since the registry meant to catch it cannot see them.
+// The positive control for every `!sitemap.includes(...)` below. Those read
+// the raw bytes, so an EMPTY or truncated sitemap satisfies all of them at
+// once and the registry checks they support go quietly vacuous -- reading
+// `published` only rules out the file being missing, never its being empty.
+// This suite carries no dependencies by design, so the control is not an XML
+// parse (the seo suite owns the well-formedness gate) but the substance: the
+// document really does list pages, every one of them was published, and every
+// one is in the manifest too, which is the containment the absence checks
+// below assume in the other direction.
+test('the sitemap lists pages this build published, which is what the absence checks rest on', () => {
+  const locs = [...published('sitemap.xml').matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+  assert.ok(locs.length > 0, 'the sitemap lists nothing at all');
+  const urls = manifestUrls();
+  for (const loc of locs) {
+    const url = new URL(loc).pathname;
+    assert.ok(existsSync(servedFile(url)), `the sitemap lists ${url}, which was never published`);
+    assert.ok(urls.includes(url), `the sitemap lists ${url} and the manifest does not`);
+  }
+});
+
 test('a URL no page carries is listed because the module that published it said so', () => {
   const urls = manifestUrls();
   const sitemap = published('sitemap.xml');

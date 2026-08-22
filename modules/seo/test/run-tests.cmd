@@ -1,7 +1,7 @@
 @echo off
-rem Builds the fixture site ELEVEN TIMES with hugo (a BUILD, not a server: no port
+rem Builds the fixture site TWELVE TIMES with hugo (a BUILD, not a server: no port
 rem binding, and a finite build exits by itself) and runs the Node
-rem build-output assertion suite against all eleven trees. Windows mirror of
+rem build-output assertion suite against all twelve trees. Windows mirror of
 rem run-tests.sh: pre-launch process check, then a hard fail on any
 rem deprecation or error output in any build log.
 rem
@@ -15,9 +15,12 @@ rem that used to stop the build or silently disable the module; the
 rem `multilingual` environment adds a second language whose params set a
 rem noindex robots baseline, the only shape that can tell a per-language
 rem params read from a rendering-language one; the `pagination` environment
-rem is a two-language site whose `posts` section is split across pagers, the
-rem only build in which a document is served from a URL that is not the page's
-rem own .Permalink; the `graph` environment republishes the baseline content
+rem is a two-language site that paginates all four kinds that can paginate --
+rem home, section, taxonomy and term -- and is the only build in which a
+rem document is served from a URL that is not the page's own .Permalink, built
+rem a second time under a baseURL carrying a path because the resolver's guard
+rem compares two shapes that both change there; the `graph` environment
+rem republishes the baseline content
 rem with `seo.jsonld_container = 'graph'`, the only build that reaches the
 rem @graph serialization site; the `sitename` environment gives the site and
 rem its publisher DIFFERENT names, the only shape that can tell the two ends
@@ -43,6 +46,7 @@ set LOG_FILE_BADTYPES=%~dp0hugo-build-badtypes.log
 set LOG_FILE_OFFSWITCH=%~dp0hugo-build-offswitch.log
 set LOG_FILE_MULTILINGUAL=%~dp0hugo-build-multilingual.log
 set LOG_FILE_PAGINATION=%~dp0hugo-build-pagination.log
+set LOG_FILE_PAGINATION_SUBPATH=%~dp0hugo-build-pagination-subpath.log
 set LOG_FILE_GRAPH=%~dp0hugo-build-graph.log
 set LOG_FILE_SITENAME=%~dp0hugo-build-sitename.log
 set LOG_FILE_GENERATED=%~dp0hugo-build-generated.log
@@ -98,6 +102,13 @@ if errorlevel 1 (
   popd
   exit /b 1
 )
+hugo -e pagination --logLevel info --cleanDestinationDir --destination public\pagination-subpath --baseURL "https://seo-fixture.example/docs/" > "%LOG_FILE_PAGINATION_SUBPATH%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(pagination-subpath^):
+  type "%LOG_FILE_PAGINATION_SUBPATH%"
+  popd
+  exit /b 1
+)
 hugo -e graph --logLevel info --cleanDestinationDir --destination public\graph > "%LOG_FILE_GRAPH%" 2>&1
 if errorlevel 1 (
   echo hugo build failed ^(graph^):
@@ -128,7 +139,7 @@ if errorlevel 1 (
 )
 popd
 
-for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_SUBPATH%" "%LOG_FILE_BADTYPES%" "%LOG_FILE_OFFSWITCH%" "%LOG_FILE_MULTILINGUAL%" "%LOG_FILE_PAGINATION%" "%LOG_FILE_GRAPH%" "%LOG_FILE_SITENAME%" "%LOG_FILE_GENERATED%" "%LOG_FILE_HOMETITLE%") do (
+for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_SUBPATH%" "%LOG_FILE_BADTYPES%" "%LOG_FILE_OFFSWITCH%" "%LOG_FILE_MULTILINGUAL%" "%LOG_FILE_PAGINATION%" "%LOG_FILE_PAGINATION_SUBPATH%" "%LOG_FILE_GRAPH%" "%LOG_FILE_SITENAME%" "%LOG_FILE_GENERATED%" "%LOG_FILE_HOMETITLE%") do (
   findstr /I "deprecat" %%L >nul 2>&1
   if not errorlevel 1 (
     echo Hugo reported deprecations in %%L:
@@ -150,6 +161,7 @@ set FIXTURE_PUBLIC_BADTYPES=%~dp0fixture\public\badtypes
 set FIXTURE_PUBLIC_OFFSWITCH=%~dp0fixture\public\offswitch
 set FIXTURE_PUBLIC_MULTILINGUAL=%~dp0fixture\public\multilingual
 set FIXTURE_PUBLIC_PAGINATION=%~dp0fixture\public\pagination
+set FIXTURE_PUBLIC_PAGINATION_SUBPATH=%~dp0fixture\public\pagination-subpath
 set FIXTURE_PUBLIC_GRAPH=%~dp0fixture\public\graph
 set FIXTURE_PUBLIC_SITENAME=%~dp0fixture\public\sitename
 set FIXTURE_PUBLIC_GENERATED=%~dp0fixture\public\generated
@@ -161,6 +173,7 @@ set HUGO_BUILD_LOG_BADTYPES=%LOG_FILE_BADTYPES%
 set HUGO_BUILD_LOG_OFFSWITCH=%LOG_FILE_OFFSWITCH%
 set HUGO_BUILD_LOG_MULTILINGUAL=%LOG_FILE_MULTILINGUAL%
 set HUGO_BUILD_LOG_PAGINATION=%LOG_FILE_PAGINATION%
+set HUGO_BUILD_LOG_PAGINATION_SUBPATH=%LOG_FILE_PAGINATION_SUBPATH%
 set HUGO_BUILD_LOG_GRAPH=%LOG_FILE_GRAPH%
 set HUGO_BUILD_LOG_SITENAME=%LOG_FILE_SITENAME%
 set HUGO_BUILD_LOG_GENERATED=%LOG_FILE_GENERATED%
