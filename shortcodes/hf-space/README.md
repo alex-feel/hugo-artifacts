@@ -307,7 +307,7 @@ To remap the gradient to your own category hues instead of the Hub palette:
 
 ### Icons
 
-All icons (heart, chip, external-link, clock) are inline SVGs using `fill="currentColor"` (inherits text color), `aria-hidden="true"`, and `width="1em" height="1em"` (scales with font size). No external icon font is required. The Hugging Face brand mark is emitted as the 🤗 emoji inside `.hf-space__brand`, and the Space's own emoji inside `.hf-space__emoji`.
+All icons (heart, chip, external-link, clock) are inline SVGs using `fill="currentColor"` (inherits text color), `aria-hidden="true"`, `focusable="false"`, and `width="1em" height="1em"` (scales with font size). No external icon font is required. The Hugging Face brand mark is emitted as the 🤗 emoji inside `.hf-space__brand`, and the Space's own emoji inside `.hf-space__emoji`.
 
 ## Module Structure
 

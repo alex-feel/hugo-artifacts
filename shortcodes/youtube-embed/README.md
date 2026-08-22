@@ -227,7 +227,7 @@ Every element uses BEM naming under the `youtube-embed` block:
 
 ### Icons
 
-The play icon is an inline SVG using `fill="currentColor"` (inherits text color), `aria-hidden="true"`, and `width="1em" height="1em"` (scales with font size). No external icon fonts are required. It is decorative: the accessible name lives on the `<button aria-label="...">`.
+The play icon is an inline SVG using `fill="currentColor"` (inherits text color), `aria-hidden="true"`, `focusable="false"`, and `width="1em" height="1em"` (scales with font size). No external icon fonts are required. It is decorative: the accessible name lives on the `<button aria-label="...">`.
 
 ## Module Structure
 
@@ -251,5 +251,5 @@ shortcodes/youtube-embed/
         poster.html                 # T1-T4 poster resolution -> same-origin <picture> data
         facade.html                 # BEM markup + once-per-page script injection
         watch-url.html              # Canonical watch URL builder (shared by facade + markdown variant)
-        icon.html                   # Inline-SVG play icon (currentColor, 1em, aria-hidden)
+        icon.html                   # Inline-SVG play icon (currentColor, 1em, aria-hidden, focusable="false")
 ```
