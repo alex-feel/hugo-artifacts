@@ -14,8 +14,10 @@
   crosses that boundary untouched, so every byte of both documents is printed by
   the plain-text template that owns the file.
 
-  Hand-written rules come FIRST because both hosts that read this file take the
-  first matching rule, so a site's own decision outranks a generated one.
+  Hand-written rules come FIRST because Netlify and Cloudflare Pages both
+  document that the first matching rule wins, so a site's own decision outranks
+  a generated one. GitLab Pages documents no precedence either way, which is a
+  reason to put them first rather than a reason not to.
 
   Context (dict):
   - .page (Page) The home page rendering the document.

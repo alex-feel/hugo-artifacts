@@ -32,9 +32,14 @@
 
   What it DELIBERATELY leaves out, and also says so in its own header: the
   redirect map this module renders. Hugo publishes it, so a walk of the build
-  tree finds it, but the hosts that read it consume it at deploy time and serve
-  it to nobody -- measured against a live Cloudflare Pages site, where
-  /_redirects answers 404 while /sitemap.xml and /robots.txt answer 200. This
+  tree finds it, but no host serves back the bytes the build wrote. Cloudflare
+  Pages documents that the file "will not itself be served as a static asset",
+  and a live Cloudflare Pages site was measured answering 404 for /_redirects
+  while /sitemap.xml and /robots.txt answered 200. GitLab Pages documents that
+  it "isn't served directly" either, but answers that path with a numbered
+  validity report of the rules -- a 200 carrying none of this document's
+  content, which is worse than the 404 for a check that only looks at the
+  status. Netlify's documentation does not address the question. This
   document exists to be compared against what production serves, so a path
   production never serves is a line that is wrong for the one use the file has,
   and the module is the one party that knows the document is a host control file

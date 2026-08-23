@@ -40,8 +40,8 @@
     the page's own language home; the same enabled-means-bytes reasoning,
     and likewise per-language.
   - skills: ALL FOUR gates of home.agentskills.json, evaluated against the
-    DEFAULT site. The gates live in lib/skills-entries.html, which resolves
-    the default-site config and the skills slice once per build; this file
+    DEFAULT site. The gates live in lib/skills-entries.html, which caches the
+    default-site config and the skills slice per language; this file
     and the llms.txt `## Optional` auto-entry in llms.html both read that
     answer through lib/skills-index-url.html, which adds only the URL, so
     the two callers cannot drift apart and the entry is present only when

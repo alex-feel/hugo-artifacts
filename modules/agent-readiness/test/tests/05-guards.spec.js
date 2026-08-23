@@ -624,9 +624,11 @@ test('an unrecognized on_supporting_files keeps warn, the safer of the two', () 
 
 test('a duplicate skill name is refused, with one warning', () => {
   // The name is the sole published path segment, so two entries wearing it
-  // resolve to ONE published artifact. Hugo's resources.Copy returns whichever
-  // resource reached that target first, so the second entry would advertise
-  // its own description and digest over the FIRST entry's bytes: both entries
+  // resolve to ONE published artifact, and the first copy to reach that path
+  // keeps it: measured on Hugo v0.164.0, resources.Copy called on a target
+  // another call already took returns that first call's resource entirely.
+  // The digest comes from the copy, so the second entry would advertise the
+  // FIRST entry's bytes and digest under its own description: both entries
   // verify, and one of them describes a skill this site never published. The
   // name is also the index key a client caches by and the URL a consumer's
   // readers bookmark.

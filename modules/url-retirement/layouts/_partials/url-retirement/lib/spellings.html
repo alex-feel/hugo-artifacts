@@ -8,9 +8,9 @@
   requested at another: Hugo's .Aliases returns a path with no trailing slash
   while the stub it would have published lands at <alias>/index.html, and a
   pager stub is a directory whose only real spelling carries the slash. Netlify
-  documents that it normalizes the difference when matching; Cloudflare's
-  documentation does not say that it does, so `both` is the default and the
-  narrower modes are for a site that knows its host.
+  documents that it normalizes the difference when matching; neither Cloudflare
+  Pages' nor GitLab Pages' documentation says whether it does, so `both` is the
+  default and the narrower modes are for a site that knows its host.
 
   The site root is the one URL with a single spelling: trimming its slash leaves
   nothing, and "" is not a path any host will match. An alias naming the root

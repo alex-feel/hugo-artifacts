@@ -599,8 +599,8 @@ enableRobotsTXT = true
 
     # A valid, fetchable entry repeating an earlier name. One published path
     # would carry whichever artifact reached it first, and the later entry
-    # would advertise its own description and digest over the earlier one's
-    # bytes.
+    # would advertise that earlier artifact's bytes and digest under its own
+    # description.
     [[params.agent.skills]]
       name = 'fixture-single'
       description = 'A duplicate name, which must be refused so one artifact cannot answer to two entries.'

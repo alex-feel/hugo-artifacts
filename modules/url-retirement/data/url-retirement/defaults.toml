@@ -46,7 +46,11 @@ enable = true
 
   # HTTP status emitted for each generated rule. 301 is a permanent move, which
   # is what an alias states. 308 preserves the request method, 302/303/307 are
-  # temporary; any of the five is accepted.
+  # temporary; any of the five is accepted. Only 301 and 302 are documented by
+  # all three hosts that read this file, though: Netlify's documentation calls
+  # 307 unsupported and mentions neither 303 nor 308, and GitLab Pages
+  # documents none of the three. Cloudflare Pages documents all five, which is
+  # why all five are accepted.
   status = 301
 
   # Which spelling of an alias path to emit: both | bare | slash.
@@ -55,11 +59,13 @@ enable = true
   # stub it would have published lands at <alias>/index.html, so the URL the
   # site actually served -- the one search engines and bookmarks hold -- carries
   # the slash (/old-name/). Netlify documents that it normalizes trailing
-  # slashes when matching, so either spelling would do there; Cloudflare's
-  # documentation does not say that it does. `both` emits two rules per alias so
-  # the redirect is correct wherever the site is hosted. Set `slash` or `bare`
-  # to halve the rule count once you know your host's behavior -- the file is
-  # capped at 2,000 static rules on Cloudflare Pages.
+  # slashes when matching, so either spelling would do there; neither Cloudflare
+  # Pages' nor GitLab Pages' documentation says whether it does. `both` emits
+  # two rules per alias so the redirect is correct wherever the site is hosted.
+  # Set `slash` or `bare` to halve the rule count once you know your host's
+  # behavior -- Cloudflare Pages caps the file at 2,000 static rules, and
+  # GitLab Pages at 1,000 rules and 64 KB by default, processing only the
+  # rules that fit.
   trailing_slash = 'both'
 
   # The URL segment Hugo puts between a list page and a pager number: the

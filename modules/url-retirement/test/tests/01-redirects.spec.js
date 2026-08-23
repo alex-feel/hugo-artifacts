@@ -35,8 +35,9 @@ test('every alias and every first pager becomes a rule, in both spellings by def
 // PAGE.Aliases returns a path without a trailing slash while the stub Hugo
 // would have published lands at <alias>/index.html, so the URL production
 // actually served carries the slash. Netlify documents that it normalizes the
-// difference when matching; Cloudflare's documentation does not say that it
-// does, which is why both spellings ship unless a site says otherwise.
+// difference when matching; neither Cloudflare Pages' nor GitLab Pages'
+// documentation says whether it does, which is why both spellings ship unless
+// a site says otherwise.
 test('the two spellings of one retired URL point at the same page', () => {
   const rules = redirectRules(baselineDir);
   const bare = rules.filter((r) => !r.from.endsWith('/'));

@@ -79,10 +79,14 @@
 
 {{/* Names must be unique because each one is the sole path segment its
      artifact is republished under. Two entries sharing a name resolve to ONE
-     published path: Hugo's resources.Copy returns the resource that reached
-     that target first, so the second entry silently advertises the FIRST
-     entry's bytes under its own description and digest -- both entries verify,
-     and one of them describes a skill the site never published. The name is
+     published path, and the first copy to reach it keeps it: measured on Hugo
+     v0.164.0, resources.Copy called on a target another call already took
+     returns that FIRST call's resource ENTIRELY -- its name and its bytes,
+     not the ones handed in. The digest below is computed from the copy, so
+     the later entry publishes the earlier entry's bytes AND the earlier
+     entry's digest under its own description. That is why both entries
+     verify, and why one of them describes a skill the site never published.
+     Entries are copied in array order here, so the earlier one wins. The name is
      also the index key a client caches by and the URL a consumer's readers
      bookmark, so the duplicate is refused rather than published, and the
      refusal spans both types: `x` as an archive and `x` as a SKILL.md occupy
@@ -115,7 +119,7 @@
         {{- $valid = false -}}
         {{- partial "agent-readiness/lib/warn.html" (dict
             "key" (printf "agent-readiness:warn:skill-duplicate:%s" $name)
-            "message" (printf "[agent-readiness] Skipping a second agent skill named %q: the name is the published path segment and the index key, so the two entries resolve to one published artifact -- Hugo republishes whichever reached that path first, and the later entry would advertise its own description and digest over the earlier entry's bytes. Give each skill a distinct name." $name)) -}}
+            "message" (printf "[agent-readiness] Skipping a second agent skill named %q: the name is the published path segment and the index key, so the two entries resolve to one published artifact -- the first copy to reach that path keeps it, and the later entry would then advertise the earlier entry's bytes under its own description. Give each skill a distinct name." $name)) -}}
       {{- end -}}
     {{- end -}}
 

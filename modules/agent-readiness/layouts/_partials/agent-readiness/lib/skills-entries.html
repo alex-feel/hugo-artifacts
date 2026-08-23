@@ -17,11 +17,21 @@
   the whole build, so a language whose params differ from the default's must
   still answer with what actually publishes.
 
-  Both lookups are partialCached under the SAME constant keys the producer uses,
-  so the whole build resolves the default-site config and the skills slice once
-  however many callers ask. That resolution is not cheap and has not been for
-  some time: it fetches every configured source, parses each SKILL.md's front
-  matter, and probes the origin for the supporting files a body names.
+  Both lookups are partialCached under constant keys declared HERE, and every
+  caller reaches them through a plain `partial` call on this file, so the
+  callers of one language share one resolution instead of repeating it. The
+  cache promises no more than that: Hugo keeps a SEPARATE partialCached cache
+  per language, and its own documentation adds that concurrent calls can
+  execute a cached partial more than once, so a two-language build resolves at
+  least twice and no build is guaranteed to resolve exactly once.
+
+  A repeat costs WORK, and costs traffic only where the first attempt FAILED.
+  The resolution fetches every configured source, parses each SKILL.md's front
+  matter, and probes the origin for the supporting files a body names; Hugo's
+  own getresource cache does not expire by default, so a second resolution
+  reads an answered fetch back from disk rather than asking someone else's
+  origin again. A source that ERRORS is not cached, though, and is re-issued in
+  full -- Hugo's own retries included -- every time the resolution runs.
 
   Expected context: none is read; pass an empty dict.
 
