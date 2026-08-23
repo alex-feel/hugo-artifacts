@@ -157,6 +157,9 @@ const TYPOGRAPHY_KEYS = [
 const IMAGE_SOURCE_KEYS = ['source', 'src', 'key', 'match'];
 const OVERLAY_PLACEMENT_KEYS = ['width', 'opacity', 'anchor', 'x', 'y'];
 const OVERLAY_KEYS = [...IMAGE_SOURCE_KEYS, ...OVERLAY_PLACEMENT_KEYS];
+// The background takes the source vocabulary plus one key of its own: what
+// to compose on when the page carries nothing.
+const BACKGROUND_KEYS = ['fallback'];
 
 const SOURCE_TOKENS = [
   'title',
@@ -240,6 +243,10 @@ test('every option the module reads is read by the template that owns it', () =>
   for (const key of IMAGE_SOURCE_KEYS) {
     assert.ok(new RegExp(`"${key}"`).test(image), `the shared image resolver reads ${key}`);
   }
+  const background = partial('resolve/background.html');
+  for (const key of BACKGROUND_KEYS) {
+    assert.ok(new RegExp(`"${key}"`).test(background), `the background resolver reads ${key}`);
+  }
   // A page bundle is looked into for ONE purpose in this module, so its lookup
   // has one caller. The assets/ lookup has a second legitimate one, because a
   // font is not an image and degrades under its own diagnostics; naming both
@@ -311,7 +318,13 @@ test('the README documents every option a consumer can set', () => {
   );
   const missing = [];
   for (const key of [
-    ...new Set([...MODULE_KEYS, ...SLOT_KEYS, ...TYPOGRAPHY_KEYS, ...OVERLAY_KEYS]),
+    ...new Set([
+      ...MODULE_KEYS,
+      ...SLOT_KEYS,
+      ...TYPOGRAPHY_KEYS,
+      ...OVERLAY_KEYS,
+      ...BACKGROUND_KEYS,
+    ]),
   ]) {
     if (!parameters.includes(`\`${key}\``)) missing.push(key);
   }

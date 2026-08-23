@@ -137,6 +137,11 @@ export const BACKGROUNDS = {
   post: {r: 0x1e, g: 0x0a, b: 0x14},
   german: {r: 0x0a, g: 0x1e, b: 0x14},
   wrongSize: {r: 0x14, g: 0x32, b: 0x0a},
+  // The two carried by pages rather than by assets/, at aspect ratios a card
+  // canvas does not have: 400x40 and 40x400 against 1200x630. Nothing that
+  // preserves a source's aspect can cover the canvas with either of them.
+  pageTile: {r: 0x32, g: 0x0a, b: 0x14},
+  pageCover: {r: 0x0a, g: 0x32, b: 0x14},
 };
 
 export const BADGE = {r: 0xfa, g: 0x00, b: 0x00};

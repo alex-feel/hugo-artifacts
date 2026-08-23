@@ -38,6 +38,8 @@
     overlays = 'overlaid'
     fitting = 'fitting'
     unstyled = 'unstyled'
+    bgsource = 'bgresource'
+    bgparam = 'bgparam'
 
   [ogcard.kinds]
     home = 'home'
@@ -548,3 +550,52 @@
       y = 420
       width = 240
       max_lines = 0
+
+  # ---- bgresource / bgparam: a card composed ON the page's own artwork.
+  #      Both tiles are deliberately at aspect ratios nothing could reach by
+  #      being composited as a full-bleed overlay -- 400x40 and 40x400 against
+  #      a 1200x630 canvas -- so a card whose FOUR CORNERS carry the tile's
+  #      color can only have been normalized with .Fill. Each tile carries its
+  #      own flat color, and each fallback a different one again, so a corner
+  #      pixel names which of the three answered rather than merely that
+  #      something did.
+  #
+  #      Three pages share bgresource: the leaf bundle carrying tile.png, the
+  #      plain page carrying nothing (its card is the fallback), and the
+  #      section page, which carries nothing either. bgparam has a section of
+  #      its own rather than being reached from front matter, because front
+  #      matter travels with the content into every environment and would card
+  #      that page in builds whose silence is gated.
+  [ogcard.templates.bgresource]
+    background = { source = 'resource', match = 'tile.png', fallback = 'og/post-bg.png' }
+
+    [[ogcard.templates.bgresource.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 2
+
+  # The same key written as a sub-table rather than inline: a site may write
+  # either, and TOML is the only thing that can tell them apart.
+  [ogcard.templates.bgparam]
+
+    [ogcard.templates.bgparam.background]
+      source = 'param'
+      key = 'bgcover'
+      fallback = 'og/home-bg.png'
+
+    [[ogcard.templates.bgparam.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 2

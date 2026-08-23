@@ -36,6 +36,16 @@
     deg-overlay = 'badoverlay'
     deg-badentry = 'badentry'
     deg-badwhole = 'badwhole'
+    # The background source form, one fault per section. Two of them provoke
+    # TWO diagnostics from one page on purpose: the primary source fails and
+    # the fallback that was supposed to rescue it fails too, which is the only
+    # shape that can show the two are reported separately.
+    deg-bgabsent = 'bgabsent'
+    deg-bgbadmatch = 'bgbadmatch'
+    deg-bgnolocator = 'bgnolocator'
+    deg-bgunknownsource = 'bgunknown'
+    deg-bgnofallback = 'bgbadfb'
+    deg-bgfbshape = 'bgfbshape'
     # A name no [templates] table defines. Its warning has to stay separate
     # from the differently misspelled one below, which is what keying by
     # ORIGIN as well as name buys.
@@ -468,6 +478,71 @@
     background = 'og/*.png'
 
     [[ogcard.templates.oddbg.text]]
+      source = 'title'
+      size = 48
+      x = 72
+      y = 120
+
+  # ---- Background SOURCE faults. The path form's faults are above; these are
+  #      the table form's, and each one is a different party's mistake: a
+  #      pattern no page can satisfy and a source token that is not a word the
+  #      module knows are the template's, while a page not carrying the image
+  #      is the page's and speaks only because no fallback was declared.
+  [ogcard.templates.bgabsent]
+    background = { source = 'resource', match = 'nothing-here.png' }
+
+    [[ogcard.templates.bgabsent.text]]
+      source = 'title'
+      size = 48
+      x = 72
+      y = 120
+
+  # The fallback answers here, so this template's page IS carded -- which is
+  # what separates "the template is wrong" from "no card is possible".
+  [ogcard.templates.bgbadmatch]
+    background = { source = 'resource', match = 'cover-[1.png', fallback = 'og/post-bg.png' }
+
+    [[ogcard.templates.bgbadmatch.text]]
+      source = 'title'
+      size = 48
+      x = 72
+      y = 120
+
+  [ogcard.templates.bgnolocator]
+    background = { source = 'resource' }
+
+    [[ogcard.templates.bgnolocator.text]]
+      source = 'title'
+      size = 48
+      x = 72
+      y = 120
+
+  [ogcard.templates.bgunknown]
+    background = { source = 'bundle', src = 'og/post-bg.png' }
+
+    [[ogcard.templates.bgunknown.text]]
+      source = 'title'
+      size = 48
+      x = 72
+      y = 120
+
+  # Two faults, one page: nothing matches AND the declared fallback names
+  # nothing either.
+  [ogcard.templates.bgbadfb]
+    background = { source = 'resource', match = 'nothing-here.png', fallback = 'og/nope-fallback.png' }
+
+    [[ogcard.templates.bgbadfb.text]]
+      source = 'title'
+      size = 48
+      x = 72
+      y = 120
+
+  # Two faults again: the fallback is a list, so it names no path at all, and
+  # the page it was meant to rescue is then uncarded.
+  [ogcard.templates.bgfbshape]
+    background = { source = 'resource', match = 'nothing-here.png', fallback = ['og/post-bg.png'] }
+
+    [[ogcard.templates.bgfbshape.text]]
       source = 'title'
       size = 48
       x = 72
