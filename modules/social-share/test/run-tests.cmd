@@ -1,5 +1,5 @@
 @echo off
-rem Builds the fixture site as two static subpath overlays, then serves it and
+rem Builds the fixture site as three static overlays, then serves it and
 rem runs the Playwright suite against all three trees. Windows mirror of
 rem run-tests.sh: pre-launch process check, deprecation gate on every hugo
 rem log, and forced hugo cleanup afterward.
@@ -12,7 +12,7 @@ if not errorlevel 1 (
   exit /b 1
 )
 
-rem ---- Static overlays: the two subpath deployment shapes ----
+rem ---- Static overlays: the three subpath deployment shapes ----
 rem Built before the server starts, because the served fixture sits at a
 rem domain root and a domain root CANNOT tell a correct URL absolutization
 rem from a broken one: absURL discards the baseURL's path for a value that
@@ -31,6 +31,11 @@ rem hugo-build-NAME.log. See the :build_overlay subroutine at the end.
 call :build_overlay subpath
 if errorlevel 1 exit /b 1
 call :build_overlay schemeless
+if errorlevel 1 exit /b 1
+rem Layered on the subpath overlay rather than restating it: canonifyURLs is
+rem the one setting under which a share target derived through the relURL
+rem family loses the baseURL path, with nothing to repair it.
+call :build_overlay subpath-canonify hugo.toml,subpath.toml,canonify.toml
 if errorlevel 1 exit /b 1
 
 pushd "%~dp0fixture"
@@ -62,6 +67,7 @@ pushd "%~dp0"
 set FIXTURE_URL=http://localhost:%PORT%
 set FIXTURE_PUBLIC_SUBPATH=%~dp0fixture\public\subpath
 set FIXTURE_PUBLIC_SCHEMELESS=%~dp0fixture\public\schemeless
+set FIXTURE_PUBLIC_SUBPATH_CANONIFY=%~dp0fixture\public\subpath-canonify
 rem npm rather than npx: npx resolves the binary through its own global
 rem cache first, and when that cache holds a Playwright of its own the run
 rem loads two copies and dies with "No tests found". npm runs this package's
@@ -79,16 +85,20 @@ rem Reached only via CALL, never fallen into: the run above ends at the
 rem unconditional "exit /b" immediately preceding this line.
 :build_overlay
 set OVERLAY=%~1
+set CHAIN=%~2
+if "%CHAIN%"=="" set CHAIN=hugo.toml,%OVERLAY%.toml
 rem hugo drops a nonexistent entry from a --config list and still exits 0, so
 rem without this a mistyped overlay name would quietly build the domain-root
 rem config and surface as a baffling assertion mismatch instead of a missing
 rem file.
-if not exist "%~dp0fixture\%OVERLAY%.toml" (
-  echo Missing overlay config: %~dp0fixture\%OVERLAY%.toml
-  exit /b 1
+for %%C in ("%CHAIN:,=" "%") do (
+  if not exist "%~dp0fixture\%%~C" (
+    echo Missing overlay config: %~dp0fixture\%%~C
+    exit /b 1
+  )
 )
 pushd "%~dp0fixture"
-hugo --gc --logLevel info --cleanDestinationDir --config hugo.toml,%OVERLAY%.toml --destination public\%OVERLAY% > "%~dp0hugo-build-%OVERLAY%.log" 2>&1
+hugo --gc --logLevel info --cleanDestinationDir --config %CHAIN% --destination public\%OVERLAY% > "%~dp0hugo-build-%OVERLAY%.log" 2>&1
 if errorlevel 1 (
   echo hugo build failed ^(%OVERLAY% overlay^):
   type "%~dp0hugo-build-%OVERLAY%.log"

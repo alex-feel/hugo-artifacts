@@ -1,0 +1,26 @@
+# Overlay config for the static canonifyURLs build. Merged AFTER hugo.toml AND
+# subpath.toml via --config hugo.toml,subpath.toml,canonify.toml, so it
+# inherits the path-carrying baseURL and changes exactly one further thing.
+# Chaining rather than restating that baseURL is deliberate: two copies of one
+# value are free to drift, and the whole point of this build is that it differs
+# from its twin in a single setting.
+#
+# canonifyURLs makes Hugo rewrite root-relative URLs in HTML output into fully
+# absolute ones after the templates have run. To stop that rewrite from
+# doubling the baseURL path, the relURL family stops emitting the path while
+# the setting is on: measured at v0.164.0 under
+# baseURL = "http://localhost:1414/docs/", relURL "img/share.png" returns
+# "/img/share.png" rather than "/docs/img/share.png". absURL and .Permalink
+# are unaffected, and social-share/lib/absolute-url.html is built on absURL.
+#
+# The rewrite reaches attributes ending in href, src, srcset, action and url,
+# and nothing else -- and it only ever rewrites a ROOT-RELATIVE value. Every
+# URL this module composes is already absolute by the time it is emitted, and
+# most of it is emitted INSIDE another absolute URL, as the query parameter a
+# share intent carries. So the post-processor repairs none of it: a share
+# target that lost the baseURL path would be published exactly as the template
+# wrote it and would send every reader who clicked it to a page that does not
+# exist. That is what this build exists to make visible, and no other build
+# here can: with the setting off, a derivation routed through relURL and one
+# routed through absURL emit identical bytes.
+canonifyURLs = true
