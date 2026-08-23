@@ -31,13 +31,17 @@ import {join} from 'node:path';
 
 const subpathDir = process.env.SUBPATH_DIR;
 const canonifyDir = process.env.CANONIFY_DIR;
+const canonifyPageDir = process.env.CANONIFY_PAGE_DIR;
 
-function readCanonify(...rel) {
-  expect(canonifyDir, 'the runner must export CANONIFY_DIR').toBeTruthy();
-  const file = join(canonifyDir, ...rel);
+function readFrom(dir, name, ...rel) {
+  expect(dir, `the runner must export ${name}`).toBeTruthy();
+  const file = join(dir, ...rel);
   expect(existsSync(file), `${rel.join('/')} is published`).toBe(true);
   return readFileSync(file, 'utf8');
 }
+
+const readCanonify = (...rel) => readFrom(canonifyDir, 'CANONIFY_DIR', ...rel);
+const readCanonifyPage = (...rel) => readFrom(canonifyPageDir, 'CANONIFY_PAGE_DIR', ...rel);
 
 test('the fallback search-page URL keeps the baseURL path', async () => {
   expect(subpathDir, 'the runner must export SUBPATH_DIR').toBeTruthy();
@@ -156,9 +160,30 @@ test('the opensearch query contract survives canonifyURLs unchanged', async () =
   // The advertised template is what a client stores and reuses; a stripped
   // path sends every future query to a host root that does not serve this
   // site. Exact equality against the same value the subpath build emits.
+  //
+  // This build reaches the COMPOSED arm of the search-page resolution, the
+  // one that runs when no page exists yet and builds the URL from the home
+  // page's own permalink.
   const xml = readCanonify('opensearch.xml');
   const template = /<Url type="text\/html"[^>]*template="([^"]+)"/.exec(xml)?.[1];
   expect(template).toBe('https://example.org/docs/no-such-search-page?q={searchTerms}');
   const self = /rel="self" template="([^"]+)"/.exec(xml)?.[1];
   expect(self).toBe('https://example.org/docs/opensearch.xml');
+});
+
+test('a resolved search page keeps its path in the opensearch contract too', async () => {
+  // The RESOLVED arm, reached only by the build that restores page_path.
+  // Both arms feed the same advertised template, and each is invisible in
+  // the other's build: with the page present the composed arm never runs,
+  // and every other consumer of this value is an HTML attribute Hugo repairs
+  // under canonifyURLs whatever the template produced. Without this build a
+  // revert of that arm to .RelPermalink would change no byte anywhere here.
+  const xml = readCanonifyPage('opensearch.xml');
+  const template = /<Url type="text\/html"[^>]*template="([^"]+)"/.exec(xml)?.[1];
+  expect(template).toBe('https://example.org/docs/search/?q={searchTerms}');
+
+  // A control on the build itself: the search page must really exist here,
+  // or the assertion above would be describing the composed arm again.
+  const page = readCanonifyPage('search', 'index.html');
+  expect(page).toContain('data-search-page-url="https://example.org/docs/search/"');
 });

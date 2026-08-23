@@ -306,10 +306,14 @@
 
   {{/* The index output format is resolved through the home page's output
        formats -- the path is never hardcoded (subpath baseURLs, language
-       prefixes, multihost all change it). Rooting the format's .Permalink
-       rather than reading its .RelPermalink keeps the baseURL path under
-       canonifyURLs, which strips it from the whole Page family; see
-       search/lib/rooted-url.html. */}}
+       prefixes, multihost all change it). Rooted from the format's own
+       .Permalink so that every URL this resolver hands out is derived the
+       same way; see search/lib/rooted-url.html. Unlike page_url below, this
+       value currently reaches HTML only -- the noscript pointer and the
+       data-search-index-url attributes -- where Hugo's post-processor would
+       repair a canonifyURLs-stripped .RelPermalink anyway, so no build can
+       tell the two spellings apart here. It becomes load-bearing the moment
+       any non-HTML template emits it, and this module owns two. */}}
   {{- with site.Home -}}
     {{- with .OutputFormats.Get "searchindex" -}}
       {{- $indexURL = partial "search/lib/rooted-url.html" .Permalink -}}
