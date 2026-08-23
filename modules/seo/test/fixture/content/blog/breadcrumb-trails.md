@@ -1,6 +1,7 @@
 ---
 title: 'Breadcrumb Trails'
 description: 'A page declaring extra breadcrumb trails, one of which is too short to qualify.'
+fixture_id_probe: true
 seo:
   breadcrumb_trails:
     - - name: 'Guides'

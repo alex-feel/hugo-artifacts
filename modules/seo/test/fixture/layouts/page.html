@@ -1,4 +1,10 @@
 {{ define "main" }}
   <h1>{{ .Title }}</h1>
   {{ .Content }}
+  {{/* One page asks for this, through its own front matter. A probe rendered
+       on every page would move every build in the suite, and the contract it
+       checks belongs to the partial rather than to any particular page. */}}
+  {{ if .Params.fixture_id_probe }}
+    {{ partial "fixture/id-probe.html" . }}
+  {{ end }}
 {{ end }}
