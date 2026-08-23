@@ -99,7 +99,7 @@ The sibling modules in this repository already answer for the formats they own, 
 
 ### Move `static/_redirects` into `assets/`
 
-If your site already keeps a hand-written `_redirects` file in `static/`, move it under `assets/` and point `redirects.rules` at it. This is not a matter of taste. Hugo copies `static/` into the publish directory and renders this module's document to the same path; the rendered file wins, and it wins with no warning at any log level, not even under `--printPathWarnings`. A site that keeps both loses every hand-written rule silently. Handing the rules to the module removes the collision instead of betting on which producer wins it, and the module copies them through verbatim, ahead of every generated rule, so they keep their precedence -- both hosts take the first matching rule.
+If your site already keeps a hand-written `_redirects` file in `static/`, move it under `assets/` and point `redirects.rules` at it. This is not a matter of taste. Hugo copies `static/` into the publish directory and renders this module's document to the same path; the rendered file wins, and it wins with no warning at any log level, not even under `--printPathWarnings`. A site that keeps both loses every hand-written rule silently. Handing the rules to the module removes the collision instead of betting on which producer wins it, and the module copies them through verbatim, ahead of every generated rule, so they keep their precedence on the hosts that document one.
 
 ```text
 static/_redirects  ->  assets/url-retirement/_redirects
@@ -234,15 +234,36 @@ Your hand-written rules first, exactly as you wrote them, then the generated one
 /legacy/first-post/ /posts/post-1/ 301
 ```
 
-The three producers share one sorted set so that two rules claiming the same retired URL are reported rather than silent -- both hosts take the first match, so the loser never receives its traffic.
+The three producers share one sorted set so that two rules claiming the same retired URL are reported rather than silent -- Netlify and Cloudflare Pages both document that the first matching rule wins, so the loser never receives its traffic.
 
 A pager rule is emitted for every paginator your templates register, whatever `[pagination] disableAliases` says, because no template can read that setting. Leave it at Hugo's default and the stub stays published and keeps winning, which makes the rule inert rather than wrong; the installation instructions above turn it off precisely so the rule is what answers.
 
-Every retired URL appears in two spellings by default. Hugo's `.Aliases` returns a path without a trailing slash, while the stub it would have published lands at `<alias>/index.html`, so the URL your visitors and Google actually hold carries the slash. Netlify documents that it normalizes the difference when matching; Cloudflare's documentation does not say that it does. Set `trailing_slash` to `slash` or `bare` once you know your host's behavior -- Cloudflare Pages caps the file at 2,000 static rules.
+Every retired URL appears in two spellings by default. Hugo's `.Aliases` returns a path without a trailing slash, while the stub it would have published lands at `<alias>/index.html`, so the URL your visitors and Google actually hold carries the slash. Netlify documents that it normalizes the difference when matching; neither Cloudflare Pages' nor GitLab Pages' documentation says whether it does. Set `trailing_slash` to `slash` or `bare` once you know your host's behavior -- it halves the rule count, and both of those hosts cap the file.
 
 On a multilingual site the file is published once at the site root and contains every language's aliases, each pointing at its own translation, plus the one rule for the default site's redirect.
 
 On a **multihost** site there is no shared root to publish it to. Hugo gives every language its own publish root, so this file is written once per HOST, and each copy describes that host alone: its own pages' aliases, its own registered pagers, and its own `redirects` settings, which may legitimately differ from another language's. Retired URLs there are host-relative, because that is what the host serves -- an alias Hugo reports as `/de/alter-pfad` is served at `/alter-pfad` on the German host, and the rule says so. Nothing needs configuring for this; the module reads the shape off `hugo.IsMultihost`.
+
+### What each host documents about `_redirects`
+
+One format, three readers, and they do not document the same feature set. Below is what each host's own redirect documentation states, read on 2026-08-24. A host may well do more than it has written down; the module assumes only this.
+
+| What the documentation states | Netlify | Cloudflare Pages | GitLab Pages |
+| --- | --- | --- | --- |
+| Where the file goes | the publish directory | the build output directory | `public/` |
+| Status codes documented | `301`, `302`, `404`, `200` | `301`, `302`, `303`, `307`, `308`, and `200` for proxying | `301`, `302`, `200` |
+| Status when the rule omits one | `301` | `302` | `301` |
+| Rule cap | no figure stated, though a deploy can fail if the serialized rule set is too large | 2,000 static plus 100 dynamic, and 1,000 characters per rule | 64 KB and 1,000 rules by default, configured per instance |
+| Trailing slash normalized before matching | documented | not addressed | not addressed |
+| First matching rule wins | documented | documented | not addressed |
+
+Three consequences follow for a site using this module.
+
+**`redirects.status` is portable at `301` and `302`, and nowhere else.** Of the five values that key accepts, those two are the only ones all three hosts document. Netlify's documentation says of `302` that it is to be used "instead of `307`, which is currently unsupported", and mentions neither `303` nor `308`; GitLab Pages documents none of the three. The module accepts all five because Cloudflare Pages documents all five, but a site on either of the other two hosts that sets `303`, `307` or `308` is relying on behavior its host has not committed to.
+
+**A generated rule always carries its status, so the differing defaults never decide anything** -- the module writes the code on every line it produces. Hand-written rules copied through `redirects.rules` are yours, though, and a line you wrote without a code takes the host's default, which is `302` on Cloudflare Pages where the other two give `301`.
+
+**The rule caps are what `trailing_slash` is for.** `both`, the default, emits two rules per retired URL, so a site retiring 600 URLs writes 1,200 rules and has already passed GitLab Pages' default cap -- the tightest of the three, and the one that silently processes only the first rules within it. Setting `slash` or `bare` halves the count once you know which spelling your host serves.
 
 ### `/url-manifest.txt`
 
@@ -318,7 +339,7 @@ Every key lives under `[params.url_retirement]` and is overridable there; the sh
 | `enable` | `true` | Master switch. When off, neither document is published: Hugo writes no file for a template that produces no output. |
 | `redirects.enable` | `true` | The redirect map alone. |
 | `redirects.rules` | `''` | Path below `assets/` of the hand-written rules copied verbatim ahead of the generated ones. Empty means the site has none. |
-| `redirects.status` | `301` | Status emitted on generated rules. One of `301`, `302`, `303`, `307`, `308`. |
+| `redirects.status` | `301` | Status emitted on generated rules. One of `301`, `302`, `303`, `307`, `308` -- of which only `301` and `302` are documented by all three hosts, so see [What each host documents](#what-each-host-documents-about-_redirects) before choosing another. |
 | `redirects.trailing_slash` | `'both'` | Which spelling of a retired URL to emit: `both`, `slash` or `bare`. |
 | `redirects.pagination_path` | `'page'` | Your `[pagination] path`, for building the first-pager rule. Consulted only where the segment cannot be read off a pager URL: a language whose every registered list fits on one pager. |
 | `manifest.enable` | `true` | The manifest alone. |

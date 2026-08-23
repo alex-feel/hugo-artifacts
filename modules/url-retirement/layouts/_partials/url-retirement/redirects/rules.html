@@ -8,9 +8,10 @@
   The three producers are separate because their evidence is: an alias is
   content a page carries, a pager is a URL the site registered while rendering,
   and the root redirect is the shape the language configuration puts the site
-  in. Their OUTPUT is not separate, because both hosts that read this file take
-  the first matching rule, so two rules claiming one retired URL mean one of
-  them silently never receives its traffic. A conflict walk inside any one
+  in. Their OUTPUT is not separate, because a host reading this file resolves
+  one retired URL to one rule, so two rules claiming one URL mean the other
+  silently never receives its traffic -- and on the two hosts documenting a
+  precedence, Netlify and Cloudflare Pages, the loser is the later line. A conflict walk inside any one
   producer would see part of the file and miss exactly the cases worth catching:
   a page aliased to a URL that is also some list's first pager, or to the site
   root a default-language subdirectory retires.
@@ -58,8 +59,8 @@
 {{- end -}}
 
 {{/* Two pages claiming the same retired URL is a content mistake this file
-     cannot resolve: both hosts take the first matching rule, so every page but
-     one silently never receives its traffic. Sorted order puts the claimants
+     cannot resolve: one URL resolves to one rule, so every page but one
+     silently never receives its traffic. Sorted order puts the claimants
      adjacent, so one walk finds them all.
 
      The diagnostic names EVERY claimant in one message rather than one pair per
@@ -83,7 +84,7 @@
   {{- end -}}
   {{- partial "url-retirement/lib/warn.html" (dict
       "key" (printf "url-retirement:warn:conflicting-url:%s" $from)
-      "message" (printf "[url-retirement] The retired URL %q is claimed by more than one page (%s). The host takes the first matching rule, so only one of them will ever receive that traffic." $from (delimit (sort (uniq $targets)) ", "))) -}}
+      "message" (printf "[url-retirement] The retired URL %q is claimed by more than one page (%s). A host resolves that URL to one rule, so only one of them will ever receive that traffic." $from (delimit (sort (uniq $targets)) ", "))) -}}
 {{- end -}}
 
 {{- return $sorted -}}

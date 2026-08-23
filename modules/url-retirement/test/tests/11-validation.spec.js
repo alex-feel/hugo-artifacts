@@ -191,8 +191,8 @@ test('one document can be switched off while the other keeps publishing', () => 
   assert.ok(manifest(partialDir).urls.length > 0);
 });
 
-// Both hosts take the first matching rule, so every page but one silently never
-// receives its traffic. Three claimants rather than two on purpose: with a
+// A host resolves one retired URL to one rule, so every page but one silently
+// never receives its traffic. Three claimants rather than two on purpose: with a
 // per-alias deduplication key, a second pair would be suppressed as a duplicate
 // of the first and one page would never be named at all.
 test('three pages claiming one alias produce one diagnostic naming all three', () => {
