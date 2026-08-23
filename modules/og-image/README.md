@@ -150,9 +150,12 @@ Every key is OPTIONAL, and a site that configures nothing composes nothing: the 
 
   # --- Card templates: one background, N text slots, N overlays. The module ships NONE.
   [params.ogcard.templates.post]
-    background = 'og/post-bg.png'   # REQUIRED, a path under assets/. Normalized to width x height
-                                    # with .Fill plus `anchor`, so a raster of any size drops in and
-                                    # every coordinate below stays valid. An SVG is rejected.
+    background = 'og/post-bg.png'   # REQUIRED. Normalized to width x height with .Fill plus `anchor`,
+                                    # so a raster of any size or aspect ratio drops in and every
+                                    # coordinate below stays valid. An SVG is rejected. Write it as a
+                                    # table to compose on the page's own artwork instead --
+                                    # { source = 'resource', match = 'tile.png', fallback = 'og/post-bg.png' }
+                                    # -- see "Background sources" below.
 
     # Any of the nine typography keys, written here to override the module level for every slot
     # of THIS card template. All nine are optional; a card template that names none draws in the
@@ -244,7 +247,8 @@ Card template keys (`[params.ogcard.templates.<name>]`):
 
 | Key | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `background` | string | yes | A path under `assets/`. Everything else is composed onto it |
+| `background` | string or table | yes | Where the base raster comes from. Everything else is composed onto it, and it is normalized to the canvas with `.Fill` plus `anchor` whatever its size or aspect ratio. A string is a path under `assets/`; a table names its image the same three ways an overlay entry does -- `source` (`asset`, `param` or `resource`) with `src`, `key` or `match` -- so a card can be composed on the page's own artwork. See [Background sources](#background-sources) |
+| `fallback` (inside the `background` table) | string | no | A path under `assets/` composed instead when the table form resolves to nothing on a given page -- most often a routed page carrying no artwork of its own. Without one, such a page is declined |
 | `text` | array of tables | no | Text slots, drawn in declaration order, above the overlays |
 | `overlay` | array of tables | no | Overlays, composited in declaration order, below the text |
 | the nine typography keys | -- | no | This card's type, overriding the module level for every slot it owns; see [Typography](#typography) |
@@ -341,6 +345,31 @@ A page is routed to a card template by name, and the candidates are walked most 
 4. `default_template`.
 
 Whether a page with no card is a silent decline or a reported mistake is decided by PROVENANCE, not by emptiness. A page that NO candidate named is a page this generator simply has no template for: it declines silently, and the caller falls through to whatever it uses otherwise. A name that a route, front matter or `default_template` ACTUALLY SUPPLIED but `[templates]` does not define is a typo whose only other symptom would be the site's default banner turning up where a card was expected: it warns once, keyed by origin AND name, so two sections pointing at two differently misspelled templates both report. That key covers every page the misspelled name routes, so the page the message names is one EXAMPLE of them rather than the only page left without a card.
+
+## Background sources
+
+A card is composed ON a raster, and `background` says where that raster comes from. The string form names a path under `assets/` -- the shared backdrop every card of that template carries. The table form names the image the same three ways an overlay entry does, which is what lets a card be composed on artwork the PAGE carries:
+
+| `source` | Names its image with | Resolves to |
+| --- | --- | --- |
+| `asset` (default) | `src` | A path under `assets/`, identical to the string form |
+| `param` | `key` | The path held by that front-matter key, looked up in the page's own bundle first and `assets/` second |
+| `resource` | `match` | The first resource of the page's own bundle matching that glob |
+
+```toml
+[params.ogcard.templates.post]
+  background = { source = 'resource', match = 'tile.png', fallback = 'og/post-bg.png' }
+
+# The same key as a sub-table, which TOML treats identically:
+[params.ogcard.templates.post.background]
+  source   = 'param'
+  key      = 'cover'
+  fallback = 'og/post-bg.png'
+```
+
+Whatever it resolves to is normalized with `.Fill` plus `anchor`, so a source of ANY size or aspect ratio covers the canvas exactly. Passing that artwork as a full-bleed overlay instead is not equivalent and fails silently: an overlay is resized to a `width` with its aspect preserved and then composited, so a source wider than the canvas ratio leaves the backdrop showing above and below it while the build exits 0.
+
+`fallback` is what a routed page composes on when it carries no artwork of its own. It is a path under `assets/` rather than another table, because it is the last resort and must not depend on the page. A page that resolves to nothing with no fallback declared is declined, and the template says so once.
 
 ## Text sources
 
@@ -452,10 +481,17 @@ The module NEVER breaks a build over an image. `errorf` is reserved for the sing
 | `template` or `default_template` holds a table, list or boolean at some tier | Warn + that tier's value dropped, so a lower tier's value stands and the router still tries the remaining candidates | key + value |
 | `template`, `default_template` or a route entry written with no value at all | Silently ignored, so the tier or candidate below it stands -- unlike an explicit `''`, which is a value and does override the tier below | -- |
 | Card template defines no `background` | Warn + decline (a card is composed ON a raster) | template name |
-| `background` names nothing under `assets/`, including a path the operating system refuses to look up at all (a glob, a pasted URL) | Warn + decline | path |
-| `background` is an SVG, an unsupported format, or a file whose bytes are not the image its extension claims | Warn + decline | path |
+| `background` names nothing under `assets/`, including a path the operating system refuses to look up at all (a glob, a pasted URL) | Warn + decline, or compose on `fallback` when one is declared | path |
+| `background` is an SVG, an unsupported format, or a file whose bytes are not the image its extension claims | Warn + decline, or compose on `fallback` | path |
 | `background` cannot be normalized to the canvas | Warn + decline | path |
 | `background` raster is not exactly the canvas size | Silently normalized with `.Fill` plus `anchor` | -- |
+| `background` table names a `source` outside `asset`, `param`, `resource` | Warn + decline, or compose on `fallback` | source token |
+| `background` table names a `source` but no `src`, `key` or `match` | Warn + decline, or compose on `fallback` | template name |
+| `background` `match` is not a pattern Hugo can match against a page's resources (an unclosed `[`) | Warn + decline, or compose on `fallback` | template + pattern |
+| The page carries no image the `param` or `resource` source resolves to, and a `fallback` is declared | Silently composed on the fallback -- the case it exists for | -- |
+| The page carries no such image and NO `fallback` is declared | Warn once per template + decline; the page named is one EXAMPLE of those it covers | template name |
+| `background.fallback` names nothing under `assets/`, or carries no image Hugo can process | Warn + decline; reported separately from the primary source's own diagnostic | path |
+| `background.fallback` is a table, list or boolean | Warn + treated as undeclared | template name |
 | Slot names a font `[fonts]` does not register | Warn + that slot draws in Go Regular; **card still produced** | font name |
 | Registered font path names nothing under `assets/`, including one the operating system refuses to look up | Warn + Go Regular | path |
 | Registered font is not `.ttf` or `.otf` | Warn + Go Regular | path |
@@ -540,7 +576,8 @@ modules/og-image/
 │               ├── warn.html               Single deduplicated-warning helper
 │               ├── warn-emit.html          The emitting body warn.html wraps in partialCached
 │               ├── int.html                Guarded decimal-integer parser (never octal, never overflow)
-│               └── as-map-list.html        Reads an array-of-tables key as something safe to range over
+│               ├── as-map-list.html        Reads an array-of-tables key as something safe to range over
+│               └── resolve-image.html      Owns the asset/param/resource vocabulary a background and an overlay share
 └── test/                                   Fixture site + build-output assertion suite
 ```
 

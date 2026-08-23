@@ -4,20 +4,42 @@
   Purpose: turns a card template's `background` key into the base raster every
   other filter draws onto, normalized to exactly the configured canvas size.
   Because the raster is normalized with .Fill plus the configured anchor, a
-  site can drop in a backdrop of any size and every coordinate in the template
-  stays valid.
+  site can drop in a backdrop of ANY size or aspect ratio and every coordinate
+  in the template stays valid -- the canvas is always covered.
 
-  A card is composed ON a raster, so every failure here declines the whole
-  card rather than publishing a half-made one: a template with no background,
-  a path that names nothing (including one the operating system refuses to
-  look up at all), an SVG (Hugo cannot raster-process one), and a file that
-  carries no decodable image all warn once and return not-ok. The decode probe
-  matters because a media type is inferred from the extension: a text file
-  named .png reads as an image resource and would otherwise take the build
-  down at the first pixel operation.
+  The key takes two shapes. A string is a path under assets/, the shared
+  backdrop every card of that template carries. A table names its image the
+  same three ways an overlay entry does, because og-image/lib/resolve-image.html
+  owns that vocabulary for the module:
+
+    background = 'og/post-bg.png'
+    background = { source = 'asset',    src   = 'og/post-bg.png' }
+    background = { source = 'param',    key   = 'cover' }
+    background = { source = 'resource', match = 'tile.png', fallback = 'og/post-bg.png' }
+
+  The table form is what lets a card be composed ON the page's own artwork and
+  still get the .Fill treatment. Passing that artwork as a full-bleed overlay
+  instead is not the same thing and fails silently: an overlay is resized to a
+  `width` with its aspect preserved and then composited, so a source wider than
+  the canvas ratio leaves the base raster showing above and below it while the
+  build exits 0.
+
+  `fallback` is a path under assets/ used whenever the primary source yields no
+  usable image -- most often a page in a routed section that carries no
+  artwork of its own. It is a plain path rather than another table, because it
+  is the last resort and so must not depend on the page.
+
+  A card is composed ON a raster, so a failure with no fallback declines the
+  whole card rather than publishing a half-made one, and every failure speaks
+  once: a template with no background at all, a path that names nothing
+  (including one the operating system refuses to look up), a glob no page can
+  satisfy, a routed page carrying no matching resource, an SVG, and a file that
+  carries no decodable image. Only one case is silent -- a page that does not
+  carry the image while the template declares a fallback -- because that is the
+  shape the fallback exists for.
 
   Context (dict):
-  - .page (Page)     The current page (for diagnostics).
+  - .page (Page)     The current page.
   - .opts (dict)     The resolved options from og-image/config.html.
   - .name (string)   The card template's name.
   - .template (map)  The card template's table.
@@ -25,57 +47,125 @@
   Return value: dict{ok (bool), resource}. One terminal return.
 */}}
 
+{{- $page := .page -}}
 {{- $opts := .opts -}}
 {{- $name := .name -}}
 {{- $tpl := .template -}}
 {{- $result := dict "ok" false "resource" "" -}}
 
-{{- $path := "" -}}
+{{/* A scalar is the path form; a table is the source form. A list or a boolean
+     names no image either way and takes the same branch as an absent key. */}}
 {{- $raw := index $tpl "background" -}}
-{{- if and (ne $raw nil) (not (reflect.IsMap $raw)) (not (reflect.IsSlice $raw)) (ne (printf "%T" $raw) "bool") -}}
-  {{- $path = trim (printf "%v" $raw) " \t\n\r" -}}
+{{- $spec := "" -}}
+{{- if reflect.IsMap $raw -}}
+  {{- $spec = $raw -}}
+{{- else if and (ne $raw nil) (not (reflect.IsSlice $raw)) (ne (printf "%T" $raw) "bool") -}}
+  {{- with trim (printf "%v" $raw) " \t\n\r" -}}
+    {{- $spec = dict "source" "asset" "src" . -}}
+  {{- end -}}
 {{- end -}}
 
-{{- if not $path -}}
+{{- if not $spec -}}
   {{- partial "og-image/lib/warn.html" (dict
       "key" (printf "og-image:warn:no-background:%s" $name)
       "message" (printf "[og-image] Card template %q defines no background, so no card is composed for the pages it covers. Set [params.ogcard.templates.%s] background to an image under assets/." $name $name)) -}}
 {{- else -}}
-  {{/* resources.Get returns nil for a path that names no file, but RAISES
-       when the operating system rejects the path itself -- one carrying `*`,
-       `?`, or the `:` of a pasted URL is such a path on Windows. Both mean
-       the same thing to the site that wrote it, so the caught error and the
-       plain nil take the one warn-and-decline branch below. */}}
-  {{- $got := try (resources.Get $path) -}}
-  {{- $res := $got.Value -}}
-  {{- if not $res -}}
+  {{- $found := partial "og-image/lib/resolve-image.html" (dict
+      "page" $page "spec" $spec "default" "asset") -}}
+  {{- $res := $found.resource -}}
+  {{- $label := $found.label -}}
+  {{- $fillLabel := $label -}}
+
+  {{/* A fallback of any other shape names no path, so it is treated as
+       undeclared and reported under its own sentinel rather than reaching the
+       asset lookup as a Go debug string. */}}
+  {{- $fbRaw := index $spec "fallback" -}}
+  {{- $fallback := "" -}}
+  {{- if and (ne $fbRaw nil) (not (reflect.IsMap $fbRaw)) (not (reflect.IsSlice $fbRaw)) (ne (printf "%T" $fbRaw) "bool") -}}
+    {{- $fallback = trim (printf "%v" $fbRaw) " \t\n\r" -}}
+  {{- else if ne $fbRaw nil -}}
     {{- partial "og-image/lib/warn.html" (dict
-        "key" (printf "og-image:warn:missing-background:%s" $path)
-        "message" (printf "[og-image] The card background %q was not found under assets/, so the pages using card template %q get no card." $path $name)) -}}
-  {{- else -}}
-    {{- $usable := eq $res.ResourceType "image" -}}
-    {{- if and $usable (eq $res.MediaType.SubType "svg") -}}
-      {{- $usable = false -}}
-    {{- end -}}
-    {{- if $usable -}}
-      {{/* .Width decodes: a width of zero, or an error, means the bytes are
-           not the image the extension claims. */}}
-      {{- $probe := try $res.Width -}}
-      {{- $usable = and (not $probe.Err) (gt (int ($probe.Value | default 0)) 0) -}}
-    {{- end -}}
-    {{- if not $usable -}}
-      {{- partial "og-image/lib/warn.html" (dict
-          "key" (printf "og-image:warn:unusable-background:%s" $path)
-          "message" (printf "[og-image] The card background %q carries no image Hugo can process (an SVG, an unsupported format, or a file whose bytes are not the image its extension claims), so the pages using card template %q get no card." $path $name)) -}}
+        "key" (printf "og-image:warn:bad-background-fallback:%s" $name)
+        "message" (printf "[og-image] The background fallback of card template %q is a table, a list or a boolean rather than a path under assets/, so it is ignored and a page whose own background does not resolve gets no card." $name)) -}}
+  {{- end -}}
+
+  {{- $usedFallback := false -}}
+  {{- $fallbackFailed := false -}}
+  {{- if and (not $res) $fallback -}}
+    {{- $fb := partial "og-image/lib/resolve-image.html" (dict
+        "page" $page "spec" (dict "source" "asset" "src" $fallback) "default" "asset") -}}
+    {{- with $fb.resource -}}
+      {{- $res = . -}}
+      {{- $usedFallback = true -}}
+      {{/* The Fill diagnostic names the file it could not normalize, which
+           from here on is the fallback; the diagnostics ABOVE it still name
+           what the template asked for first, so the two labels are separate. */}}
+      {{- $fillLabel = $fallback -}}
     {{- else -}}
-      {{- $fill := try ($res.Fill (printf "%dx%d %s" $opts.width $opts.height $opts.anchor)) -}}
-      {{- with $fill.Err -}}
-        {{- partial "og-image/lib/warn.html" (dict
-            "key" (printf "og-image:warn:unfillable-background:%s" $path)
-            "message" (printf "[og-image] Could not normalize the card background %q to %dx%d: %s. The pages using card template %q get no card." $path $opts.width $opts.height . $name)) -}}
-      {{- else -}}
-        {{- $result = dict "ok" true "resource" $fill.Value -}}
-      {{- end -}}
+      {{- $fallbackFailed = true -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{/* Every diagnostic below ends the same two ways, and which one is true is
+       known only after the fallback has been tried. */}}
+  {{- $tail := printf "the pages using card template %q get no card" $name -}}
+  {{- if $usedFallback -}}
+    {{- $tail = printf "the pages using card template %q are carded on its fallback %q instead" $name $fallback -}}
+  {{- end -}}
+
+  {{- if eq $found.reason "unknown-source" -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:unknown-enum:background-source:%s" $found.source)
+        "message" (printf "[og-image] Unknown card background source %q in card template %q (allowed: %s), so %s." $found.source $name (delimit $found.known ", ") $tail)) -}}
+  {{- else if eq $found.reason "no-locator" -}}
+    {{- $needs := "a src path" -}}
+    {{- if eq $found.source "param" -}}
+      {{- $needs = "a key naming that parameter" -}}
+    {{- else if eq $found.source "resource" -}}
+      {{- $needs = "a match pattern" -}}
+    {{- end -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:background-no-locator:%s" $name)
+        "message" (printf "[og-image] The background of card template %q reads from %s and needs %s, which it does not name, so %s." $name $found.source $needs $tail)) -}}
+  {{- else if eq $found.reason "not-found" -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:missing-background:%s" $label)
+        "message" (printf "[og-image] The card background %q was not found under assets/, so %s." $label $tail)) -}}
+  {{- else if eq $found.reason "bad-match" -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:background-bad-match:%s:%s" $name $label)
+        "message" (printf "[og-image] The background pattern %q in card template %q is not a pattern Hugo can match against a page's resources, so it names no image on any page and %s. An unclosed [ is the usual cause." $label $name $tail)) -}}
+  {{- else if eq $found.reason "unusable" -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:unusable-background:%s" $label)
+        "message" (printf "[og-image] The card background %q carries no image Hugo can process (an SVG, an unsupported format, or a file whose bytes are not the image its extension claims), so %s." $label $tail)) -}}
+  {{- else if eq $found.reason "absent" -}}
+    {{/* The page simply does not carry the image. With a fallback that is the
+         ordinary case and says nothing; without one it is a routed page that
+         cannot be carded, and the sentinel covers every such page under this
+         template, so the page below is named as an EXAMPLE rather than as the
+         only one. */}}
+    {{- if not $usedFallback -}}
+      {{- partial "og-image/lib/warn.html" (dict
+          "key" (printf "og-image:warn:absent-background:%s" $name)
+          "message" (printf "[og-image] Card template %q reads its background from the page itself, and pages it covers do not carry one (%s among them), so they get no card. Add fallback = \"a path under assets/\" to that template to card them anyway." $name $opts.where)) -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- if $fallbackFailed -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:missing-background-fallback:%s" $fallback)
+        "message" (printf "[og-image] The background fallback %q of card template %q was not found under assets/ or carries no image Hugo can process, so a page whose own background does not resolve gets no card." $fallback $name)) -}}
+  {{- end -}}
+
+  {{- with $res -}}
+    {{- $fill := try (.Fill (printf "%dx%d %s" $opts.width $opts.height $opts.anchor)) -}}
+    {{- with $fill.Err -}}
+      {{- partial "og-image/lib/warn.html" (dict
+          "key" (printf "og-image:warn:unfillable-background:%s" $fillLabel)
+          "message" (printf "[og-image] Could not normalize the card background %q to %dx%d: %s. The pages using card template %q get no card." $fillLabel $opts.width $opts.height . $name)) -}}
+    {{- else -}}
+      {{- $result = dict "ok" true "resource" $fill.Value -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}

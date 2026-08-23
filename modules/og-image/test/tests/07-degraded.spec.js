@@ -147,6 +147,42 @@ const FAULTS = [
     /^Ignoring entry 0 of the text of card template "badentry"/,
   ],
   ['text array: written as a bare scalar', /^Ignoring the text of card template "badwhole"/],
+
+  // The background SOURCE form. Its faults divide the same way the overlay's
+  // do -- by who made the mistake -- with one class the overlay does not have:
+  // a page that carries no image is silent for an overlay and, for the raster
+  // the whole card stands on, either takes a fallback or is worth saying.
+  [
+    'background source: nothing on the page matches, and no fallback',
+    /^Card template "bgabsent" reads its background from the page itself.* so they get no card/,
+  ],
+  [
+    'background source: a pattern Hugo cannot match with, rescued by the fallback',
+    /^The background pattern "cover-\[1\.png" in card template "bgbadmatch" .* are carded on its fallback "og\/post-bg\.png" instead/,
+  ],
+  [
+    'background source: a source naming no locator',
+    /^The background of card template "bgnolocator" reads from resource and needs a match pattern/,
+  ],
+  ['background source: unknown token', /^Unknown card background source "bundle"/],
+  // Two faults from one template, which is the only shape that shows the
+  // primary's diagnostic and the fallback's are separate sentinels.
+  [
+    'background source: the declared fallback names nothing',
+    /^The background fallback "og\/nope-fallback\.png" of card template "bgbadfb" was not found/,
+  ],
+  [
+    'background source: and the page it was to rescue says so too',
+    /^Card template "bgbadfb" reads its background from the page itself/,
+  ],
+  [
+    'background source: a fallback that is a list rather than a path',
+    /^The background fallback of card template "bgfbshape" is a table, a list or a boolean/,
+  ],
+  [
+    'background source: and that page is uncarded in consequence',
+    /^Card template "bgfbshape" reads its background from the page itself/,
+  ],
 ];
 
 const strip = (line) => line.replace(/^\[og-image\] /, '');

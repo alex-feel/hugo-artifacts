@@ -14,7 +14,7 @@
 // the README, so the documentation cannot.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync, readdirSync} from 'node:fs';
 import {resolve, join} from 'node:path';
 
 const moduleRoot = resolve(process.env.MODULE_ROOT ?? '..');
@@ -24,6 +24,22 @@ const readme = read('README.md');
 const defaults = read('data/og-image/defaults.toml');
 const metrics = read('data/og-image/metrics.toml');
 const partial = (rel) => read(join('layouts/_partials/og-image', rel));
+
+// Every template the module ships, walked rather than listed: a hand-written
+// list would go stale exactly when it matters, on the day somebody adds the
+// template that duplicates something meant to have one owner.
+function templatesUnder(rel) {
+  const found = [];
+  for (const entry of readdirSync(join(moduleRoot, 'layouts/_partials/og-image', rel), {
+    withFileTypes: true,
+  })) {
+    const child = rel ? `${rel}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) found.push(...templatesUnder(child));
+    else if (entry.name.endsWith('.html')) found.push(child);
+  }
+  return found;
+}
+const TEMPLATES = templatesUnder('');
 
 // The shipped mechanical defaults: the key, the value data/og-image/defaults.toml
 // states, and the way the README's parameter table has to state the same value
@@ -135,7 +151,15 @@ const TYPOGRAPHY_KEYS = [
   'ellipsis',
 ];
 
-const OVERLAY_KEYS = ['source', 'src', 'key', 'match', 'width', 'opacity', 'anchor', 'x', 'y'];
+// Where an image comes from is one vocabulary for the whole module, so a
+// background and an overlay cannot drift apart on what they accept. Placement
+// is the overlay's own business and stays with the overlay resolver.
+const IMAGE_SOURCE_KEYS = ['source', 'src', 'key', 'match'];
+const OVERLAY_PLACEMENT_KEYS = ['width', 'opacity', 'anchor', 'x', 'y'];
+const OVERLAY_KEYS = [...IMAGE_SOURCE_KEYS, ...OVERLAY_PLACEMENT_KEYS];
+// The background takes the source vocabulary plus one key of its own: what
+// to compose on when the page carries nothing.
+const BACKGROUND_KEYS = ['fallback'];
 
 const SOURCE_TOKENS = [
   'title',
@@ -207,8 +231,35 @@ test('every option the module reads is read by the template that owns it', () =>
     assert.ok(new RegExp(`"${key}"`).test(typography), `the typography resolver reads ${key}`);
   }
   const overlays = partial('resolve/overlays.html');
-  for (const key of OVERLAY_KEYS) {
+  for (const key of OVERLAY_PLACEMENT_KEYS) {
     assert.ok(new RegExp(`"${key}"`).test(overlays), `the overlay resolver reads ${key}`);
+  }
+  // The source keys belong to ONE resolver, which is what keeps `background`
+  // and an overlay entry accepting the same words. Asserting the reads is only
+  // half of that: a second copy of the lookups would satisfy it and drift
+  // anyway, so the module's two entry points into Hugo's resource lookup are
+  // pinned to that file as well.
+  const image = partial('lib/resolve-image.html');
+  for (const key of IMAGE_SOURCE_KEYS) {
+    assert.ok(new RegExp(`"${key}"`).test(image), `the shared image resolver reads ${key}`);
+  }
+  const background = partial('resolve/background.html');
+  for (const key of BACKGROUND_KEYS) {
+    assert.ok(new RegExp(`"${key}"`).test(background), `the background resolver reads ${key}`);
+  }
+  // A page bundle is looked into for ONE purpose in this module, so its lookup
+  // has one caller. The assets/ lookup has a second legitimate one, because a
+  // font is not an image and degrades under its own diagnostics; naming both
+  // is what keeps a THIRD caller from appearing unremarked.
+  for (const [call, owners] of [
+    ['Resources.GetMatch', ['lib/resolve-image.html']],
+    ['resources.Get', ['lib/resolve-image.html', 'resolve/font.html']],
+  ]) {
+    assert.deepEqual(
+      TEMPLATES.filter((t) => partial(t).includes(call)),
+      owners,
+      `${call} is called from ${owners.join(' and ')} and nowhere else`,
+    );
   }
   const source = partial('resolve/source.html');
   for (const token of SOURCE_TOKENS) {
@@ -267,7 +318,13 @@ test('the README documents every option a consumer can set', () => {
   );
   const missing = [];
   for (const key of [
-    ...new Set([...MODULE_KEYS, ...SLOT_KEYS, ...TYPOGRAPHY_KEYS, ...OVERLAY_KEYS]),
+    ...new Set([
+      ...MODULE_KEYS,
+      ...SLOT_KEYS,
+      ...TYPOGRAPHY_KEYS,
+      ...OVERLAY_KEYS,
+      ...BACKGROUND_KEYS,
+    ]),
   ]) {
     if (!parameters.includes(`\`${key}\``)) missing.push(key);
   }
