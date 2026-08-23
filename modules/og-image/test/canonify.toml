@@ -1,0 +1,26 @@
+# Merged ON TOP of the `subpath` environment (hugo -e subpath --config
+# ../canonify.toml, run from within fixture/), which keeps that environment's
+# path-carrying baseURL and its whole card configuration and changes exactly
+# one further thing. A config/canonify/ directory would restate every one of
+# those keys for the sake of one line, and the copy would be free to drift.
+#
+# canonifyURLs makes Hugo rewrite root-relative URLs in HTML output into fully
+# absolute ones after the templates have run. To stop that rewrite from
+# doubling the baseURL path, the whole Page family stops emitting the path
+# while the setting is on: measured at v0.164.0 under
+# baseURL = 'https://og-fixture.example/docs/', a page's .RelPermalink comes
+# back as "/blog/short/" rather than "/docs/blog/short/". A RESOURCE's does
+# not -- it keeps the path -- and .Permalink is untouched entirely.
+#
+# This module publishes card URLs off the processed image RESOURCE and states
+# them absolutely with .Permalink, so its output is identical either way. That
+# is the property this build locks. What it would catch is a derivation routed
+# through the relURL family before absolutizing: correct at every other
+# baseURL and with the setting off, and wrong here, in the one place that
+# matters -- og:image and twitter:image are meta CONTENT attributes, which the
+# post-processor does not touch, so a lost path there is permanent and silent.
+#
+# The fixture's own payload sidecar carries the subject that makes the build
+# assertable: its `url` field is the PAGE's .RelPermalink, so it moves under
+# this setting while every module-derived URL beside it must not.
+canonifyURLs = true
