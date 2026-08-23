@@ -16,6 +16,15 @@ export const configuredDir = resolve(
 // domain root a correct URL absolutization and a broken one emit identical
 // bytes, so this tree is the only place the difference is visible.
 export const subpathDir = resolve(process.env.FIXTURE_PUBLIC_SUBPATH ?? 'fixture/public/subpath');
+// The same environment with canonifyURLs on, the setting that makes the whole
+// relURL family stop emitting the baseURL path while Hugo repairs that
+// afterwards in HTML attributes only. The module derives every URL from absURL
+// or .Permalink, so this tree must match the one above byte for byte; a
+// derivation that started routing through relURL would break the tags the
+// post-processor never reaches, and nothing else in this suite would say so.
+export const subpathCanonifyDir = resolve(
+  process.env.FIXTURE_PUBLIC_SUBPATH_CANONIFY ?? 'fixture/public/subpath-canonify',
+);
 // The config shapes that used to stop the build or silently disable a surface.
 export const badtypesDir = resolve(
   process.env.FIXTURE_PUBLIC_BADTYPES ?? 'fixture/public/badtypes',
@@ -122,6 +131,7 @@ export function buildLog(which = 'baseline') {
     baseline: 'HUGO_BUILD_LOG',
     configured: 'HUGO_BUILD_LOG_CONFIGURED',
     subpath: 'HUGO_BUILD_LOG_SUBPATH',
+    'subpath-canonify': 'HUGO_BUILD_LOG_SUBPATH_CANONIFY',
     badtypes: 'HUGO_BUILD_LOG_BADTYPES',
     offswitch: 'HUGO_BUILD_LOG_OFFSWITCH',
     multilingual: 'HUGO_BUILD_LOG_MULTILINGUAL',

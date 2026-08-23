@@ -1,7 +1,7 @@
 @echo off
-rem Builds the fixture site TWELVE TIMES with hugo (a BUILD, not a server: no port
+rem Builds the fixture site THIRTEEN TIMES with hugo (a BUILD, not a server: no port
 rem binding, and a finite build exits by itself) and runs the Node
-rem build-output assertion suite against all twelve trees. Windows mirror of
+rem build-output assertion suite against all thirteen trees. Windows mirror of
 rem run-tests.sh: pre-launch process check, then a hard fail on any
 rem deprecation or error output in any build log.
 rem
@@ -42,6 +42,7 @@ if not errorlevel 1 (
 set LOG_FILE=%~dp0hugo-build.log
 set LOG_FILE_CONFIGURED=%~dp0hugo-build-configured.log
 set LOG_FILE_SUBPATH=%~dp0hugo-build-subpath.log
+set LOG_FILE_SUBPATH_CANONIFY=%~dp0hugo-build-subpath-canonify.log
 set LOG_FILE_BADTYPES=%~dp0hugo-build-badtypes.log
 set LOG_FILE_OFFSWITCH=%~dp0hugo-build-offswitch.log
 set LOG_FILE_MULTILINGUAL=%~dp0hugo-build-multilingual.log
@@ -71,6 +72,15 @@ hugo -e subpath --logLevel info --cleanDestinationDir --destination public\subpa
 if errorlevel 1 (
   echo hugo build failed ^(subpath^):
   type "%LOG_FILE_SUBPATH%"
+  popd
+  exit /b 1
+)
+rem The same environment with canonifyURLs on, merged as an extra config file
+rem rather than restated as a config directory of its own.
+hugo -e subpath --config ../canonify.toml --logLevel info --cleanDestinationDir --destination public\subpath-canonify > "%LOG_FILE_SUBPATH_CANONIFY%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(subpath-canonify^):
+  type "%LOG_FILE_SUBPATH_CANONIFY%"
   popd
   exit /b 1
 )
@@ -139,7 +149,7 @@ if errorlevel 1 (
 )
 popd
 
-for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_SUBPATH%" "%LOG_FILE_BADTYPES%" "%LOG_FILE_OFFSWITCH%" "%LOG_FILE_MULTILINGUAL%" "%LOG_FILE_PAGINATION%" "%LOG_FILE_PAGINATION_SUBPATH%" "%LOG_FILE_GRAPH%" "%LOG_FILE_SITENAME%" "%LOG_FILE_GENERATED%" "%LOG_FILE_HOMETITLE%") do (
+for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_SUBPATH%" "%LOG_FILE_SUBPATH_CANONIFY%" "%LOG_FILE_BADTYPES%" "%LOG_FILE_OFFSWITCH%" "%LOG_FILE_MULTILINGUAL%" "%LOG_FILE_PAGINATION%" "%LOG_FILE_PAGINATION_SUBPATH%" "%LOG_FILE_GRAPH%" "%LOG_FILE_SITENAME%" "%LOG_FILE_GENERATED%" "%LOG_FILE_HOMETITLE%") do (
   findstr /I "deprecat" %%L >nul 2>&1
   if not errorlevel 1 (
     echo Hugo reported deprecations in %%L:
@@ -157,6 +167,7 @@ for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_SUBPATH%" "%LOG_FILE
 set FIXTURE_PUBLIC=%~dp0fixture\public\baseline
 set FIXTURE_PUBLIC_CONFIGURED=%~dp0fixture\public\configured
 set FIXTURE_PUBLIC_SUBPATH=%~dp0fixture\public\subpath
+set FIXTURE_PUBLIC_SUBPATH_CANONIFY=%~dp0fixture\public\subpath-canonify
 set FIXTURE_PUBLIC_BADTYPES=%~dp0fixture\public\badtypes
 set FIXTURE_PUBLIC_OFFSWITCH=%~dp0fixture\public\offswitch
 set FIXTURE_PUBLIC_MULTILINGUAL=%~dp0fixture\public\multilingual
@@ -169,6 +180,7 @@ set FIXTURE_PUBLIC_HOMETITLE=%~dp0fixture\public\hometitle
 set HUGO_BUILD_LOG=%LOG_FILE%
 set HUGO_BUILD_LOG_CONFIGURED=%LOG_FILE_CONFIGURED%
 set HUGO_BUILD_LOG_SUBPATH=%LOG_FILE_SUBPATH%
+set HUGO_BUILD_LOG_SUBPATH_CANONIFY=%LOG_FILE_SUBPATH_CANONIFY%
 set HUGO_BUILD_LOG_BADTYPES=%LOG_FILE_BADTYPES%
 set HUGO_BUILD_LOG_OFFSWITCH=%LOG_FILE_OFFSWITCH%
 set HUGO_BUILD_LOG_MULTILINGUAL=%LOG_FILE_MULTILINGUAL%

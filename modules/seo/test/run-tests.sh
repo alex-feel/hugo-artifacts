@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Builds the fixture site TWELVE TIMES with hugo (a BUILD, not a server: no port
+# Builds the fixture site THIRTEEN TIMES with hugo (a BUILD, not a server: no port
 # binding, and a finite build exits by itself) and runs the Node
-# build-output assertion suite against all twelve trees.
+# build-output assertion suite against all thirteen trees.
 #
 # The environments are the point of this suite. The default environment omits
 # [seo.alternates], [seo.links] and [seo] content_license entirely, so it
@@ -11,7 +11,13 @@
 # builds could not tell "works" from "always on". The `subpath` environment
 # repeats the configured surfaces under a baseURL that carries a PATH, which
 # is the only shape that can tell a correct URL absolutization from a broken
-# one -- at a domain root the two emit identical bytes. The `badtypes` and
+# one -- at a domain root the two emit identical bytes. It is built a SECOND
+# time with canonifyURLs on, the setting that makes the whole relURL family
+# stop emitting the baseURL path while Hugo repairs that afterwards in HTML
+# attributes only: this module publishes identical bytes either way, and this
+# build is what keeps that true, because a derivation that started routing
+# through relURL would break og:url, og:image and the JSON-LD nodes, which
+# the post-processor never reaches. The `badtypes` and
 # `offswitch` environments hold the config shapes that used to stop the build
 # or silently disable the module. The `multilingual` environment adds a second
 # language whose params set a noindex robots baseline, the only shape that can
@@ -51,6 +57,7 @@ FIXTURE_DIR="$HERE/fixture"
 LOG_FILE="$HERE/hugo-build.log"
 LOG_FILE_CONFIGURED="$HERE/hugo-build-configured.log"
 LOG_FILE_SUBPATH="$HERE/hugo-build-subpath.log"
+LOG_FILE_SUBPATH_CANONIFY="$HERE/hugo-build-subpath-canonify.log"
 LOG_FILE_BADTYPES="$HERE/hugo-build-badtypes.log"
 LOG_FILE_OFFSWITCH="$HERE/hugo-build-offswitch.log"
 LOG_FILE_MULTILINGUAL="$HERE/hugo-build-multilingual.log"
@@ -64,7 +71,7 @@ LOG_FILE_HOMETITLE="$HERE/hugo-build-hometitle.log"
 # The logs are retained after a successful run so the documented re-run recipe
 # can read them; they are gitignored at the repo root. Only an interrupt
 # discards them mid-run.
-trap 'rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_SUBPATH" "$LOG_FILE_BADTYPES" "$LOG_FILE_OFFSWITCH" "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_PAGINATION" "$LOG_FILE_PAGINATION_SUBPATH" "$LOG_FILE_GRAPH" "$LOG_FILE_SITENAME" "$LOG_FILE_GENERATED" "$LOG_FILE_HOMETITLE"' INT TERM
+trap 'rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_SUBPATH" "$LOG_FILE_SUBPATH_CANONIFY" "$LOG_FILE_BADTYPES" "$LOG_FILE_OFFSWITCH" "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_PAGINATION" "$LOG_FILE_PAGINATION_SUBPATH" "$LOG_FILE_GRAPH" "$LOG_FILE_SITENAME" "$LOG_FILE_GENERATED" "$LOG_FILE_HOMETITLE"' INT TERM
 
 # `pgrep -x` matches the process NAME, the semantic twin of the tasklist
 # IMAGENAME filter below. `-f` would match the whole command line, and this
@@ -114,6 +121,18 @@ build() {
 build "" public/baseline "$LOG_FILE"
 build configured public/configured "$LOG_FILE_CONFIGURED"
 build subpath public/subpath "$LOG_FILE_SUBPATH"
+# The same environment with canonifyURLs on. An extra config file merged over
+# the environment rather than a config/canonify/ directory, because the
+# directory would restate seventy lines whose only job is to stay identical to
+# the ones above. Under this setting the whole relURL family stops emitting
+# the baseURL path, and Hugo repairs that afterwards in HTML attributes only.
+# This module derives every URL from absURL or .Permalink, neither of which
+# the setting touches, so the two builds publish identical bytes -- and this
+# is the only build where a derivation that started routing through relURL
+# would say so, in og:url, og:image and the JSON-LD nodes, none of which the
+# post-processor reaches.
+build subpath public/subpath-canonify "$LOG_FILE_SUBPATH_CANONIFY" \
+  --config ../canonify.toml
 build badtypes public/badtypes "$LOG_FILE_BADTYPES"
 build offswitch public/offswitch "$LOG_FILE_OFFSWITCH"
 build multilingual public/multilingual "$LOG_FILE_MULTILINGUAL"
@@ -135,6 +154,7 @@ build hometitle public/hometitle "$LOG_FILE_HOMETITLE"
 export FIXTURE_PUBLIC="$FIXTURE_DIR/public/baseline"
 export FIXTURE_PUBLIC_CONFIGURED="$FIXTURE_DIR/public/configured"
 export FIXTURE_PUBLIC_SUBPATH="$FIXTURE_DIR/public/subpath"
+export FIXTURE_PUBLIC_SUBPATH_CANONIFY="$FIXTURE_DIR/public/subpath-canonify"
 export FIXTURE_PUBLIC_BADTYPES="$FIXTURE_DIR/public/badtypes"
 export FIXTURE_PUBLIC_OFFSWITCH="$FIXTURE_DIR/public/offswitch"
 export FIXTURE_PUBLIC_MULTILINGUAL="$FIXTURE_DIR/public/multilingual"
@@ -147,6 +167,7 @@ export FIXTURE_PUBLIC_HOMETITLE="$FIXTURE_DIR/public/hometitle"
 export HUGO_BUILD_LOG="$LOG_FILE"
 export HUGO_BUILD_LOG_CONFIGURED="$LOG_FILE_CONFIGURED"
 export HUGO_BUILD_LOG_SUBPATH="$LOG_FILE_SUBPATH"
+export HUGO_BUILD_LOG_SUBPATH_CANONIFY="$LOG_FILE_SUBPATH_CANONIFY"
 export HUGO_BUILD_LOG_BADTYPES="$LOG_FILE_BADTYPES"
 export HUGO_BUILD_LOG_OFFSWITCH="$LOG_FILE_OFFSWITCH"
 export HUGO_BUILD_LOG_MULTILINGUAL="$LOG_FILE_MULTILINGUAL"

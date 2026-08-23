@@ -3,6 +3,15 @@
 # value below is authored in the SITE-RELATIVE, leading-slash form the module
 # documents, which is precisely the form Hugo's absURL resolves against the
 # protocol and host alone.
+# Renders the canonifyURLs probe on the home page. This environment backs two
+# builds -- itself and the canonifyURLs one layered on top of it -- and the
+# module emits only absolute URLs, so nothing it publishes differs between
+# them. The probe is what gives the second build something to observe: it
+# carries one relURL-derived value in an attribute Hugo's post-processor
+# rewrites and the same value in one it leaves alone. At a domain root both
+# spellings collapse, which is why no other environment sets this.
+fixture_canonify_probe = true
+
 [seo]
   content_license = 'https://creativecommons.org/licenses/by/4.0/'
 

@@ -35,6 +35,7 @@ import {
   paginationSubpathDir,
   publicDir,
   sitenameDir,
+  subpathCanonifyDir,
   subpathDir,
 } from './helpers.js';
 
@@ -42,6 +43,7 @@ const TREES = [
   ['baseline', publicDir],
   ['configured', configuredDir],
   ['subpath', subpathDir],
+  ['subpath-canonify', subpathCanonifyDir],
   ['badtypes', badtypesDir],
   ['offswitch', offswitchDir],
   ['multilingual', multilingualDir],

@@ -1,0 +1,24 @@
+# Merged ON TOP of the `subpath` environment (hugo -e subpath --config
+# ../canonify.toml, run from within fixture/), which keeps that environment's
+# path-carrying baseURL and its whole params tree and changes exactly one
+# further thing. Restating the environment in a config/canonify/ directory
+# would duplicate seventy lines whose only job is to stay identical.
+#
+# canonifyURLs makes Hugo rewrite root-relative URLs in HTML output into fully
+# absolute ones after the templates have run. To stop that rewrite from
+# doubling the baseURL path, the whole Page family stops emitting the path
+# while the setting is on: measured at v0.164.0, relURL "sentinel/" returns
+# "/sentinel/" rather than "/docs/sentinel/", and a page's .RelPermalink
+# returns "/" rather than "/docs/". absURL is unaffected, and so is .Permalink.
+#
+# This module is built entirely on the unaffected two, so its output is
+# byte-identical with the setting on and off -- which is the property this
+# build exists to LOCK rather than to discover. What it would catch is a
+# derivation that routes a value through the relURL family before absolutizing
+# it: correct at every other baseURL and with the setting off, wrong here. The
+# damage would be invisible in the tags that carry an href, because the
+# post-processor repairs those, and permanent in the ones that do not --
+# og:url, og:image and twitter:image are meta content attributes, and the
+# JSON-LD nodes sit in a script body. Measured at v0.164.0, the post-processor
+# touches neither.
+canonifyURLs = true
