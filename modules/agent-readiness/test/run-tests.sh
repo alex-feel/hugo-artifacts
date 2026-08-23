@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Validates the shipped data files, starts the fixture ORIGIN, then builds
-# TWENTY-THREE fixture sites with hugo (builds, not servers: no port binding,
+# TWENTY-FOUR fixture sites with hugo (builds, not servers: no port binding,
 # and a finite build exits by itself) and runs the Node build-output assertion
-# suite against all twenty-three.
+# suite against all twenty-four.
 #
 # The data-file check runs FIRST, before any build. That ordering is the
 # point: a malformed registry otherwise surfaces as an opaque Hugo failure at
 # some unrelated template, and the reader has to work backwards to it.
 #
-# The twenty-three builds:
+# The twenty-four builds:
 #   baseline   -- every content-license key unset, proving the license
 #                 surfaces are inert until a consumer opts in;
 #   configured -- the license table filled and both switches on, plus
@@ -131,6 +131,7 @@ LOG_FILE_MULTILINGUAL="$HERE/hugo-build-multilingual.log"
 LOG_FILE_MULTIHOST="$HERE/hugo-build-multihost.log"
 LOG_FILE_LLMSOFF="$HERE/hugo-build-llmsoff.log"
 LOG_FILE_EDGE="$HERE/hugo-build-edge.log"
+LOG_FILE_EDGE_CANONIFY="$HERE/hugo-build-edge-canonify.log"
 LOG_FILE_OFF="$HERE/hugo-build-off.log"
 LOG_FILE_BADTABLES="$HERE/hugo-build-badtables.log"
 LOG_FILE_NSOFF="$HERE/hugo-build-nsoff.log"
@@ -179,7 +180,7 @@ stop_origin() {
 cleanup_interrupted() {
   kill_stray_hugo
   stop_origin
-  rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_NOTWINS"     "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_LLMSOFF" "$LOG_FILE_EDGE" "$LOG_FILE_OFF"     "$LOG_FILE_BADTABLES" "$LOG_FILE_NSOFF" "$LOG_FILE_NOSECTIONPAGES" "$LOG_FILE_NOLINKMD"     "$LOG_FILE_NOBUILDTIME" "$LOG_FILE_LLMSINDEXOFF" "$LOG_FILE_UNWIRED" "$LOG_FILE_NOLINKINDEXES" "$LOG_FILE_NOCOMPACT" "$LOG_FILE_STRICTSKILLS" "$LOG_FILE_SHADOW" "$LOG_FILE_PAGINATED" "$LOG_FILE_WIDGETS" "$LOG_FILE_EXTRA" "$ORIGIN_LOG" "$ORIGIN_REQUEST_LOG"
+  rm -f "$LOG_FILE" "$LOG_FILE_CONFIGURED" "$LOG_FILE_MINIMAL" "$LOG_FILE_NOTWINS"     "$LOG_FILE_MULTILINGUAL" "$LOG_FILE_LLMSOFF" "$LOG_FILE_EDGE" "$LOG_FILE_EDGE_CANONIFY" "$LOG_FILE_OFF"     "$LOG_FILE_BADTABLES" "$LOG_FILE_NSOFF" "$LOG_FILE_NOSECTIONPAGES" "$LOG_FILE_NOLINKMD"     "$LOG_FILE_NOBUILDTIME" "$LOG_FILE_LLMSINDEXOFF" "$LOG_FILE_UNWIRED" "$LOG_FILE_NOLINKINDEXES" "$LOG_FILE_NOCOMPACT" "$LOG_FILE_STRICTSKILLS" "$LOG_FILE_SHADOW" "$LOG_FILE_PAGINATED" "$LOG_FILE_WIDGETS" "$LOG_FILE_EXTRA" "$ORIGIN_LOG" "$ORIGIN_REQUEST_LOG"
 }
 cleanup_exit() {
   kill_stray_hugo
@@ -226,10 +227,15 @@ fi
 
 build() {
   local dir="$1" env_name="$2" dest="$3" log="$4"
+  shift 4
   local args=(--gc --logLevel info --cleanDestinationDir --destination "$dest")
   if [ -n "$env_name" ]; then
     args+=(-e "$env_name")
   fi
+  # Anything left is passed to hugo verbatim, which is how one environment
+  # can be built twice under different deployment settings without a second
+  # config directory restating the first one key for key.
+  args+=("$@")
   (cd "$dir" && hugo "${args[@]}") > "$log" 2>&1 || {
     echo "hugo build failed (${env_name:-default} in ${dir}):" >&2
     cat "$log" >&2
@@ -268,6 +274,13 @@ build "$FIXTURE_DIR" multilingual public/multilingual "$LOG_FILE_MULTILINGUAL"
 build "$FIXTURE_DIR" multihost public/multihost "$LOG_FILE_MULTIHOST"
 build "$FIXTURE_DIR" llmsoff public/llmsoff "$LOG_FILE_LLMSOFF"
 build "$FIXTURE_DIR" edge public/edge "$LOG_FILE_EDGE"
+# The same environment with canonifyURLs on. Under that setting the whole
+# Page family stops emitting the baseURL path, and Hugo repairs the loss in
+# HTML attributes only -- never in llms.txt, a Markdown twin, the facts
+# document or the skills index, which is everything this module publishes.
+# An extra config file rather than a config directory of its own: the edge
+# environment is two hundred lines and a copy would be free to drift.
+build "$FIXTURE_DIR" edge public/edge-canonify "$LOG_FILE_EDGE_CANONIFY" --config ../canonify.toml
 build "$FIXTURE_DIR" off public/off "$LOG_FILE_OFF"
 build "$FIXTURE_DIR" badtables public/badtables "$LOG_FILE_BADTABLES"
 build "$FIXTURE_DIR" nsoff public/nsoff "$LOG_FILE_NSOFF"
@@ -292,6 +305,7 @@ export FIXTURE_PUBLIC_MULTILINGUAL="$FIXTURE_DIR/public/multilingual"
 export FIXTURE_PUBLIC_MULTIHOST="$FIXTURE_DIR/public/multihost"
 export FIXTURE_PUBLIC_LLMSOFF="$FIXTURE_DIR/public/llmsoff"
 export FIXTURE_PUBLIC_EDGE="$FIXTURE_DIR/public/edge"
+export FIXTURE_PUBLIC_EDGE_CANONIFY="$FIXTURE_DIR/public/edge-canonify"
 export FIXTURE_PUBLIC_OFF="$FIXTURE_DIR/public/off"
 export FIXTURE_PUBLIC_BADTABLES="$FIXTURE_DIR/public/badtables"
 export FIXTURE_PUBLIC_NSOFF="$FIXTURE_DIR/public/nsoff"
@@ -315,6 +329,7 @@ export HUGO_BUILD_LOG_MULTILINGUAL="$LOG_FILE_MULTILINGUAL"
 export HUGO_BUILD_LOG_MULTIHOST="$LOG_FILE_MULTIHOST"
 export HUGO_BUILD_LOG_LLMSOFF="$LOG_FILE_LLMSOFF"
 export HUGO_BUILD_LOG_EDGE="$LOG_FILE_EDGE"
+export HUGO_BUILD_LOG_EDGE_CANONIFY="$LOG_FILE_EDGE_CANONIFY"
 export HUGO_BUILD_LOG_OFF="$LOG_FILE_OFF"
 export HUGO_BUILD_LOG_BADTABLES="$LOG_FILE_BADTABLES"
 export HUGO_BUILD_LOG_NSOFF="$LOG_FILE_NSOFF"

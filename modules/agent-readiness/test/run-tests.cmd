@@ -1,8 +1,8 @@
 @echo off
 rem Validates the shipped data files, starts the fixture ORIGIN, then builds
-rem TWENTY-THREE fixture sites with hugo (builds, not servers: no port binding,
+rem TWENTY-FOUR fixture sites with hugo (builds, not servers: no port binding,
 rem and a finite build exits by itself) and runs the Node build-output
-rem assertion suite against all twenty-three.
+rem assertion suite against all twenty-four.
 rem Windows mirror of run-tests.sh: data check first, pre-launch process
 rem check, then a hard fail on any deprecation, error, or missing-layout line
 rem in any build log.
@@ -45,6 +45,7 @@ set LOG_FILE_MULTILINGUAL=%~dp0hugo-build-multilingual.log
 set LOG_FILE_MULTIHOST=%~dp0hugo-build-multihost.log
 set LOG_FILE_LLMSOFF=%~dp0hugo-build-llmsoff.log
 set LOG_FILE_EDGE=%~dp0hugo-build-edge.log
+set LOG_FILE_EDGE_CANONIFY=%~dp0hugo-build-edge-canonify.log
 set LOG_FILE_OFF=%~dp0hugo-build-off.log
 set LOG_FILE_BADTABLES=%~dp0hugo-build-badtables.log
 set LOG_FILE_NSOFF=%~dp0hugo-build-nsoff.log
@@ -138,6 +139,15 @@ hugo -e edge --gc --logLevel info --cleanDestinationDir --destination public\edg
 if errorlevel 1 (
   echo hugo build failed ^(edge^):
   type "%LOG_FILE_EDGE%"
+  popd
+  exit /b 1
+)
+rem The same environment with canonifyURLs on, merged as an extra config
+rem file rather than restated as a config directory of its own.
+hugo -e edge --config ../canonify.toml --gc --logLevel info --cleanDestinationDir --destination public\edge-canonify > "%LOG_FILE_EDGE_CANONIFY%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(edge-canonify^):
+  type "%LOG_FILE_EDGE_CANONIFY%"
   popd
   exit /b 1
 )
@@ -276,7 +286,7 @@ if errorlevel 1 (
 )
 popd
 
-for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_MINIMAL%" "%LOG_FILE_NOTWINS%" "%LOG_FILE_MULTILINGUAL%" "%LOG_FILE_MULTIHOST%" "%LOG_FILE_LLMSOFF%" "%LOG_FILE_EDGE%" "%LOG_FILE_OFF%" "%LOG_FILE_BADTABLES%" "%LOG_FILE_NSOFF%" "%LOG_FILE_NOSECTIONPAGES%" "%LOG_FILE_NOLINKMD%" "%LOG_FILE_NOBUILDTIME%" "%LOG_FILE_LLMSINDEXOFF%" "%LOG_FILE_UNWIRED%" "%LOG_FILE_NOLINKINDEXES%" "%LOG_FILE_NOCOMPACT%" "%LOG_FILE_STRICTSKILLS%" "%LOG_FILE_SHADOW%" "%LOG_FILE_PAGINATED%" "%LOG_FILE_WIDGETS%" "%LOG_FILE_EXTRA%") do (
+for %%L in ("%LOG_FILE%" "%LOG_FILE_CONFIGURED%" "%LOG_FILE_MINIMAL%" "%LOG_FILE_NOTWINS%" "%LOG_FILE_MULTILINGUAL%" "%LOG_FILE_MULTIHOST%" "%LOG_FILE_LLMSOFF%" "%LOG_FILE_EDGE%" "%LOG_FILE_EDGE_CANONIFY%" "%LOG_FILE_OFF%" "%LOG_FILE_BADTABLES%" "%LOG_FILE_NSOFF%" "%LOG_FILE_NOSECTIONPAGES%" "%LOG_FILE_NOLINKMD%" "%LOG_FILE_NOBUILDTIME%" "%LOG_FILE_LLMSINDEXOFF%" "%LOG_FILE_UNWIRED%" "%LOG_FILE_NOLINKINDEXES%" "%LOG_FILE_NOCOMPACT%" "%LOG_FILE_STRICTSKILLS%" "%LOG_FILE_SHADOW%" "%LOG_FILE_PAGINATED%" "%LOG_FILE_WIDGETS%" "%LOG_FILE_EXTRA%") do (
   findstr /I "deprecat" %%L >nul 2>&1
   if not errorlevel 1 (
     echo Hugo reported deprecations in %%L:
@@ -305,6 +315,7 @@ set FIXTURE_PUBLIC_MULTILINGUAL=%~dp0fixture\public\multilingual
 set FIXTURE_PUBLIC_MULTIHOST=%~dp0fixture\public\multihost
 set FIXTURE_PUBLIC_LLMSOFF=%~dp0fixture\public\llmsoff
 set FIXTURE_PUBLIC_EDGE=%~dp0fixture\public\edge
+set FIXTURE_PUBLIC_EDGE_CANONIFY=%~dp0fixture\public\edge-canonify
 set FIXTURE_PUBLIC_OFF=%~dp0fixture\public\off
 set FIXTURE_PUBLIC_BADTABLES=%~dp0fixture\public\badtables
 set FIXTURE_PUBLIC_NSOFF=%~dp0fixture\public\nsoff
@@ -328,6 +339,7 @@ set HUGO_BUILD_LOG_MULTILINGUAL=%LOG_FILE_MULTILINGUAL%
 set HUGO_BUILD_LOG_MULTIHOST=%LOG_FILE_MULTIHOST%
 set HUGO_BUILD_LOG_LLMSOFF=%LOG_FILE_LLMSOFF%
 set HUGO_BUILD_LOG_EDGE=%LOG_FILE_EDGE%
+set HUGO_BUILD_LOG_EDGE_CANONIFY=%LOG_FILE_EDGE_CANONIFY%
 set HUGO_BUILD_LOG_OFF=%LOG_FILE_OFF%
 set HUGO_BUILD_LOG_BADTABLES=%LOG_FILE_BADTABLES%
 set HUGO_BUILD_LOG_NSOFF=%LOG_FILE_NSOFF%

@@ -1,0 +1,30 @@
+# Merged ON TOP of the `edge` environment (hugo -e edge --config
+# ../canonify.toml, run from within fixture/), which keeps that environment's
+# path-carrying baseURL and its two hundred lines of configuration and changes
+# exactly one further thing. A config/canonify/ directory would restate all of
+# it for the sake of one line, and the copy would be free to drift.
+#
+# canonifyURLs makes Hugo rewrite root-relative URLs in HTML output into fully
+# absolute ones after the templates have run. To stop that rewrite from
+# doubling the baseURL path, the whole Page family stops emitting the path
+# while the setting is on: measured at v0.164.0 under
+# baseURL = 'https://example.org/docs/', a page's .RelPermalink comes back as
+# "/" rather than "/docs/", and an output format's as "/llms.txt" rather than
+# "/docs/llms.txt". A RESOURCE's does not -- it keeps the path -- and
+# .Permalink is untouched entirely.
+#
+# The rewrite runs on HTML output formats ONLY, and this module publishes
+# almost nothing else: llms.txt, llms-index.txt, the Markdown twin of every
+# page, the agent facts document, the Agent Skills index and robots.txt are
+# all plain text or JSON, so whatever the template wrote is what ships. Every
+# URL in them is derived from .Permalink, from an output format's .Permalink
+# or from absURL, none of which the setting moves, so this build must publish
+# the same bytes as its twin -- the property it exists to LOCK rather than a
+# defect it hunts.
+#
+# The subject that keeps that comparison from being vacuous is the FIXTURE's
+# own section listing: its links are authored root-relative, so the setting
+# rewrites them and its absence leaves them alone. Without a value that moves,
+# "the two builds agree" would pass just as well against two builds where the
+# setting had never been applied at all.
+canonifyURLs = true
