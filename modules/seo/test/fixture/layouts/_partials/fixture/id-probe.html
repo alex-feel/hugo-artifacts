@@ -1,0 +1,22 @@
+{{/*
+  fixture/id-probe.html -- publishes what seo/resolve/id.html returns for a
+  page-scoped kind when the caller OMITS .base.
+
+  That partial documents .base as optional and states that an omitted value
+  means .Permalink, but every in-module caller of a kind that READS .base
+  supplies one, and supplies a value seo/context.html has already run through
+  the identical default. The documented arm therefore reaches no published
+  byte through any module template, and a consumer calling the partial
+  directly from its own override is the only thing that exercises it.
+  Publishing both spellings here holds the documented contract to its word and
+  keeps the supplied arm as the control that proves the parameter still does
+  something.
+
+  Context: the Page.
+*/}}
+<p
+  class="id-probe"
+  data-id-nobase="{{ partial "seo/resolve/id.html" (dict "page" . "kind" "webpage") }}"
+  data-id-withbase="{{ partial "seo/resolve/id.html" (dict "page" . "base" "https://served.example/elsewhere/" "kind" "webpage") }}"
+  data-page-permalink="{{ .Permalink }}"
+></p>

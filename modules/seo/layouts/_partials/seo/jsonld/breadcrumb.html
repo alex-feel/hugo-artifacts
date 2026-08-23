@@ -70,7 +70,11 @@
 
   {{/* Additional explicit trails from seo.breadcrumb_trails[]. Each trail is
        a list of {name, url} entries; @id suffix is #breadcrumb-N where N is
-       the gapless 2-based index (trail 1 is the derived trail above). */}}
+       the gapless 2-based index (trail 1 is the derived trail above). N counts
+       the trails actually EMITTED, so a suppressed trail consumes no number:
+       incrementing before the length gate published #breadcrumb-2 beside
+       #breadcrumb-4 whenever a middle trail was too short to qualify, which
+       is the one shape that contradicts the gapless contract. */}}
   {{- with partial "seo/lib/as-list.html" ($page.Param "seo.breadcrumb_trails") -}}
     {{- $n := 1 -}}
     {{- range . -}}
@@ -81,8 +85,8 @@
            trail is a list of {name, url} tables, so map-filtering closes both
            levels and also absorbs a single table written directly. */}}
       {{- $trail := partial "seo/lib/as-map-list.html" . -}}
-      {{- $n = add $n 1 -}}
       {{- if ge (len $trail) 2 -}}
+        {{- $n = add $n 1 -}}
         {{- $elements := slice -}}
         {{- $pos := 0 -}}
         {{- $count := len $trail -}}
@@ -107,9 +111,16 @@
         {{- with (index $trail (sub $count 1)).name -}}
           {{- $trailName = . -}}
         {{- end -}}
+        {{/* The @id comes from the partial that OWNS the scheme, the same way
+             the derived trail above takes it from $seo.ids.breadcrumb. A
+             second copy of the format string here is free to drift from the
+             one every other node is built with. */}}
+        {{- $trailId := partial "seo/resolve/id.html" (dict
+          "page" $page "base" $seo.pageUrl "kind" "breadcrumb" "n" $n
+        ) -}}
         {{- $result = $result | append (dict
           "@type" "BreadcrumbList"
-          "@id" (printf "%s#breadcrumb-%d" $seo.pageUrl $n)
+          "@id" $trailId
           "name" $trailName
           "itemListElement" $elements
         ) -}}
