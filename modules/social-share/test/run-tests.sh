@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the fixture site once as a STATIC subpath overlay, then serves it and
+# Builds the fixture site as three STATIC overlays, then serves it and
 # runs the Playwright suite against both. Follows the repository's hugo process
 # lifecycle rule: pre-launch process check, a deprecation gate on every hugo
 # log, and belt-and-suspenders cleanup (the trap kills the tracked pid AND
@@ -62,19 +62,28 @@ fi
 # Each build is finite and binds no port. The logs are retained and gitignored
 # (hugo-build*.log). Convention: overlay NAME reads fixture/NAME.toml, writes
 # fixture/public/NAME, and logs to hugo-build-NAME.log.
-build_overlay() {
+# A second argument overrides the config chain, which is how a build layers on
+# top of another overlay instead of restating it -- the canonify build differs
+# from the subpath one by a single setting, and a second copy of the baseURL
+# would be free to drift away from the first.
+build_overlay() { # build_overlay <name> [config chain]
   local name="$1"
-  local config="$FIXTURE_DIR/$name.toml"
+  local chain="${2:-hugo.toml,$name.toml}"
   local log="$HERE/hugo-build-$name.log"
   # hugo drops a nonexistent entry from a --config list and still exits 0, so
   # without this a mistyped overlay name would quietly build the domain-root
   # config and surface as a baffling assertion mismatch instead of a missing
   # file.
-  if [[ ! -f "$config" ]]; then
-    echo "Missing overlay config: $config" >&2
-    exit 1
-  fi
-  (cd "$FIXTURE_DIR" && hugo --gc --logLevel info --cleanDestinationDir --config "hugo.toml,$name.toml" --destination "public/$name") >"$log" 2>&1 || {
+  local part
+  local IFS=,
+  for part in $chain; do
+    if [[ ! -f "$FIXTURE_DIR/$part" ]]; then
+      echo "Missing overlay config: $FIXTURE_DIR/$part" >&2
+      exit 1
+    fi
+  done
+  unset IFS
+  (cd "$FIXTURE_DIR" && hugo --gc --logLevel info --cleanDestinationDir --config "$chain" --destination "public/$name") >"$log" 2>&1 || {
     echo "hugo build failed ($name overlay):" >&2
     cat "$log" >&2
     exit 1
@@ -93,8 +102,15 @@ build_overlay() {
 
 SUBPATH_DIR="$FIXTURE_DIR/public/subpath"
 SCHEMELESS_DIR="$FIXTURE_DIR/public/schemeless"
+SUBPATH_CANONIFY_DIR="$FIXTURE_DIR/public/subpath-canonify"
 build_overlay subpath
 build_overlay schemeless
+# Layered on the subpath overlay rather than restating it. canonifyURLs is the
+# one setting under which a share target derived through the relURL family
+# loses the baseURL path, and nothing repairs the loss: this module composes
+# absolute URLs and hands most of them to ANOTHER absolute URL as a query
+# parameter, which Hugo's post-processor never touches.
+build_overlay subpath-canonify hugo.toml,subpath.toml,canonify.toml
 
 (cd "$FIXTURE_DIR" && hugo server --port "$PORT" --bind 127.0.0.1 --logLevel info >"$LOG_FILE" 2>&1) &
 HUGO_PID=$!
@@ -129,4 +145,5 @@ cd "$HERE"
 FIXTURE_URL="http://localhost:$PORT" \
   FIXTURE_PUBLIC_SUBPATH="$SUBPATH_DIR" \
   FIXTURE_PUBLIC_SCHEMELESS="$SCHEMELESS_DIR" \
+  FIXTURE_PUBLIC_SUBPATH_CANONIFY="$SUBPATH_CANONIFY_DIR" \
   npm test "$@"

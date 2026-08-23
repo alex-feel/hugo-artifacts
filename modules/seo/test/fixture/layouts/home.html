@@ -1,6 +1,12 @@
 {{ define "main" }}
   <h1>{{ .Title }}</h1>
   {{ .Content }}
+  {{/* Only the two builds that carry a path in the baseURL ask for this; at
+       a domain root the probe's two spellings are identical and it would say
+       nothing. */}}
+  {{ if site.Params.fixture_canonify_probe }}
+    {{ partial "fixture/canonify-probe.html" . }}
+  {{ end }}
   {{/* The home page paginates only where the fixture asks for it. A home
        paginated everywhere would move every one of the other builds, and only
        the pagination environment asserts on pagers.

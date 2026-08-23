@@ -1,0 +1,22 @@
+# Overlay for a STATIC build, merged LAST onto the canonifyURLs chain (hugo
+# --config hugo.toml,config-subpath.toml,config-canonify.toml,config-realpage.toml).
+# It undoes exactly one thing config-subpath.toml sets: the page_path pointing
+# at a page that does not exist.
+#
+# search/config.html resolves the search-page URL down two arms -- one that
+# finds the page and reads its permalink, one that composes the URL from the
+# home page's when there is no page yet -- and only the DEFAULT language's
+# value ever reaches an artifact where a lost baseURL path is visible, because
+# /opensearch.xml is emitted once, from the default language. Every other
+# consumer of that value is an HTML attribute, and Hugo repairs those under
+# canonifyURLs whatever the template produced.
+#
+# So each arm needs its own build to be observable at all: the chain without
+# this overlay exercises the composed arm, and this one exercises the resolved
+# arm. Without it a change reverting the resolved arm to .RelPermalink would
+# alter no byte in any build here, while breaking the advertised query
+# contract of every consumer that has a search page, a subpath baseURL and
+# canonifyURLs at once.
+[params]
+  [params.search]
+    page_path = '/search'

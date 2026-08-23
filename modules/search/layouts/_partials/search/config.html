@@ -306,10 +306,17 @@
 
   {{/* The index output format is resolved through the home page's output
        formats -- the path is never hardcoded (subpath baseURLs, language
-       prefixes, multihost all change it). */}}
+       prefixes, multihost all change it). Rooted from the format's own
+       .Permalink so that every URL this resolver hands out is derived the
+       same way; see search/lib/rooted-url.html. Unlike page_url below, this
+       value currently reaches HTML only -- the noscript pointer and the
+       data-search-index-url attributes -- where Hugo's post-processor would
+       repair a canonifyURLs-stripped .RelPermalink anyway, so no build can
+       tell the two spellings apart here. It becomes load-bearing the moment
+       any non-HTML template emits it, and this module owns two. */}}
   {{- with site.Home -}}
     {{- with .OutputFormats.Get "searchindex" -}}
-      {{- $indexURL = .RelPermalink -}}
+      {{- $indexURL = partial "search/lib/rooted-url.html" .Permalink -}}
     {{- end -}}
   {{- end -}}
   {{- if not $indexURL -}}
@@ -322,17 +329,20 @@
        yet, every URL that targets it falls back to page_path | relLangURL,
        so a later-created page starts working with no template change. */}}
   {{- with site.GetPage $pagePath -}}
-    {{- $pageURL = .RelPermalink -}}
+    {{- $pageURL = partial "search/lib/rooted-url.html" .Permalink -}}
     {{- $pageFound = true -}}
   {{- else -}}
-    {{/* The leading slash is stripped before relLangURL. Hugo resolves a
-         leading-slash input against the host root, DISCARDING the baseURL's
-         path -- `relLangURL "/search/"` under baseURL https://example.org/docs/
-         yields "/search/", not "/docs/search/" -- so on a subpath deployment
-         every fallback link, and the OpenSearch template built from this
-         value, would point outside the site. The no-leading-slash form keeps
-         the path. `.RelPermalink` above already carries it. */}}
-    {{- $pageURL = strings.TrimPrefix "/" $pagePath | relLangURL -}}
+    {{/* With no page to ask, the URL is composed from the home page's own
+         rooted permalink, which supplies the baseURL path AND the language
+         prefix for whichever language is rendering. No URL function can
+         stand in for it: relLangURL and absURL both discard the baseURL path
+         for a leading-slash input, and the no-leading-slash form keeps it
+         only while canonifyURLs is off -- with that setting on, relLangURL
+         drops the path deliberately and nothing repairs it in the OpenSearch
+         document, which is not HTML. See search/lib/rooted-url.html. */}}
+    {{- $pageURL = printf "%s%s"
+        (partial "search/lib/rooted-url.html" site.Home.Permalink)
+        (strings.TrimPrefix "/" $pagePath) -}}
     {{- partial "search/lib/warn.html" (dict
         "key" (printf "search:warn:missing-page:%s" site.Language.Name)
         "message" (printf "[search] No page exists at %q for language %q, so search-page links can land on a 404. Create content%s.md (or that language's equivalent) and place the search shortcode on it, or point params.search.page_path at your search page." $pagePath site.Language.Name $pagePath)) -}}

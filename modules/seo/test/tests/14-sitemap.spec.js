@@ -27,6 +27,7 @@ import {XMLValidator, XMLParser} from 'fast-xml-parser';
 import {
   publicDir,
   configuredDir,
+  subpathCanonifyDir,
   subpathDir,
   badtypesDir,
   offswitchDir,
@@ -56,6 +57,12 @@ const TREES = [
   {name: 'baseline', dir: publicDir, base: ROOT_BASE},
   {name: 'configured', dir: configuredDir, base: ROOT_BASE},
   {name: 'subpath', dir: subpathDir, base: SUBPATH_BASE, authoredCanonical: true},
+  {
+    name: 'subpath-canonify',
+    dir: subpathCanonifyDir,
+    base: SUBPATH_BASE,
+    authoredCanonical: true,
+  },
   {name: 'badtypes', dir: badtypesDir, base: ROOT_BASE},
   {name: 'offswitch', dir: offswitchDir, base: ROOT_BASE},
   {name: 'multilingual', dir: multilingualDir, base: ROOT_BASE},
@@ -144,10 +151,10 @@ test('every sitemap document every build publishes is well-formed XML in the sit
   }
   // A count, so a future change that stops publishing a sitemap somewhere is a
   // failure here rather than a loop that quietly runs fewer times.
-  // Eight single-language trees publish one urlset each; the three
+  // Nine single-language trees publish one urlset each; the three
   // two-language trees and the three-language hometitle tree each publish an
   // index plus one urlset per language.
-  assert.equal(documents, 21, 'twelve trees publish twenty-one sitemap documents between them');
+  assert.equal(documents, 22, 'thirteen trees publish twenty-two sitemap documents between them');
 });
 
 test('every sitemap lists at least one URL, which is what makes the absence checks mean anything', () => {

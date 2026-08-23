@@ -1,7 +1,7 @@
 /* global process */
 // Shared helpers for the build-output assertion specs.
 //
-// The runner exports TWENTY-TWO published trees, and every one of them is
+// The runner exports TWENTY-FOUR published trees, and every one of them is
 // load-bearing:
 // FIXTURE_PUBLIC (every content-license key unset), FIXTURE_PUBLIC_CONFIGURED
 // (the license table filled and both switches on, plus the bots_allow with
@@ -86,6 +86,14 @@ export const multihostDir = resolve(
 );
 export const llmsoffDir = resolve(process.env.FIXTURE_PUBLIC_LLMSOFF ?? 'fixture/public/llmsoff');
 export const edgeDir = resolve(process.env.FIXTURE_PUBLIC_EDGE ?? 'fixture/public/edge');
+// The same environment with canonifyURLs on. That setting makes the whole
+// Page family stop emitting the baseURL path, and Hugo repairs the loss in
+// HTML output only -- never in llms.txt, a Markdown twin, the facts document
+// or the skills index, which is everything this module publishes. Every URL
+// in them rides .Permalink or absURL, so this tree must match the one above.
+export const edgeCanonifyDir = resolve(
+  process.env.FIXTURE_PUBLIC_EDGE_CANONIFY ?? 'fixture/public/edge-canonify',
+);
 export const offDir = resolve(process.env.FIXTURE_PUBLIC_OFF ?? 'fixture/public/off');
 export const nsoffDir = resolve(process.env.FIXTURE_PUBLIC_NSOFF ?? 'fixture/public/nsoff');
 export const badtablesDir = resolve(
@@ -342,6 +350,7 @@ export function buildLog(which = 'baseline') {
     multilingual: 'HUGO_BUILD_LOG_MULTILINGUAL',
     llmsoff: 'HUGO_BUILD_LOG_LLMSOFF',
     edge: 'HUGO_BUILD_LOG_EDGE',
+    'edge-canonify': 'HUGO_BUILD_LOG_EDGE_CANONIFY',
     off: 'HUGO_BUILD_LOG_OFF',
     badtables: 'HUGO_BUILD_LOG_BADTABLES',
     nsoff: 'HUGO_BUILD_LOG_NSOFF',

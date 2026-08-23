@@ -1,0 +1,25 @@
+{{/* Publishes the OPERANDS of the canonifyURLs mechanism, so the build that
+     turns the setting on can prove it took effect and a future Hugo change
+     to the mechanism names itself instead of quietly making that build's
+     assertions vacuous. The module itself emits only absolute URLs, so
+     nothing it publishes changes between the two builds -- which is the
+     result being asserted, and exactly why the assertion needs a subject of
+     its own.
+
+     Two spellings of one value, chosen for how Hugo's post-processor treats
+     the attribute NAME (measured at v0.164.0): it rewrites root-relative
+     URLs in attributes ending in href, src, srcset, action and url, and
+     leaves every other attribute alone.
+
+     - data-canonify-raw  shows what the template produced. With the setting
+       off it carries the baseURL path; with it on, relURL drops the path.
+     - data-canonify-href shows what a reader receives. With the setting on
+       the post-processor absolutizes it back onto the full baseURL, which is
+       why a relURL-derived URL is safe in HTML and unsafe everywhere else.
+*/}}
+<span
+  class="canonify-probe"
+  data-canonify-raw="{{ relURL "sentinel/" }}"
+  data-canonify-href="{{ relURL "sentinel/" }}"
+  data-canonify-abs="{{ absURL "sentinel/" }}"
+></span>

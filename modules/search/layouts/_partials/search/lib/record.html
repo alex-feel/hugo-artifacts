@@ -21,9 +21,15 @@
   that does not exist. jsonify serializes angle brackets, ampersands, quotes
   and newlines correctly on its own, so no field needs pre-escaping here.
   All fields are DATA ONLY -- no pre-rendered HTML ever enters the index.
-  href is sourced EXCLUSIVELY from .RelPermalink; the client-side renderer
-  trusts it as safe-by-construction, so any change that sources href from
-  anywhere else must revisit that trust boundary.
+  href is sourced EXCLUSIVELY from the page's own .Permalink, rooted back to
+  a server-relative URL by search/lib/rooted-url.html; the client-side
+  renderer trusts it as safe-by-construction, and both halves of that
+  derivation are Hugo's own output, so the trust boundary is the same one
+  .RelPermalink carried. Any change that sources href from anywhere else --
+  front matter, a configured string, anything a consumer authors -- must
+  revisit it. .RelPermalink itself is NOT interchangeable here: it drops the
+  baseURL path under canonifyURLs, and this document is not HTML, so nothing
+  puts the path back.
 
   Expected context (dict):
   - .page (Page) - The page to serialize.
@@ -38,7 +44,7 @@
 {{- $cfg := .cfg -}}
 
 {{- $record := dict
-  "href" $page.RelPermalink
+  "href" (partial "search/lib/rooted-url.html" $page.Permalink)
   "title" ($page.Title | htmlUnescape)
   "section" $page.Section
 -}}
@@ -203,6 +209,9 @@
     {{- end -}}
   {{- end -}}
   {{- if not $image -}}
+    {{/* A RESOURCE's .RelPermalink keeps the baseURL path under canonifyURLs
+         where a page's does not, so this one needs no rooting; the href
+         above does. See search/lib/rooted-url.html. */}}
     {{- with ($page.Resources.ByType "image").GetMatch "{*feature*,*cover*,*thumbnail*}" -}}
       {{- $image = .RelPermalink -}}
     {{- end -}}

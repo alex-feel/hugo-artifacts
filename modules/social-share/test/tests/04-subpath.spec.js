@@ -42,6 +42,10 @@ const SCHEMELESS_DIR =
   process.env.FIXTURE_PUBLIC_SCHEMELESS ??
   fileURLToPath(new URL('../fixture/public/schemeless', import.meta.url));
 
+const SUBPATH_CANONIFY_DIR =
+  process.env.FIXTURE_PUBLIC_SUBPATH_CANONIFY ??
+  fileURLToPath(new URL('../fixture/public/subpath-canonify', import.meta.url));
+
 // Must stay in sync with fixture/subpath.toml.
 const BASE = 'http://localhost:1414/docs/';
 const ORIGIN = 'http://localhost:1414/';
@@ -214,5 +218,78 @@ test.describe('static schemeless-baseURL build', () => {
     }
     expect(scanned, 'the sweep must have inspected share URLs').toBeGreaterThan(0);
     expect(doubled, 'share URLs that repeated the baseURL path').toEqual([]);
+  });
+});
+// The subpath build again, with canonifyURLs on.
+//
+// Hugo then rewrites root-relative URLs in HTML output into absolute ones
+// after the templates have run, and to stop the rewrite from doubling the
+// baseURL path it makes the relURL family stop emitting that path: measured
+// at v0.164.0 under this baseURL, `relURL "img/share.png"` returns
+// "/img/share.png" rather than "/docs/img/share.png". absURL is untouched,
+// and social-share/lib/absolute-url.html is built on absURL.
+//
+// So the module's output must not move at all -- and nothing would repair it
+// if it did. The rewrite only ever touches a ROOT-RELATIVE value in an
+// attribute ending in href, src, srcset, action or url, while every URL this
+// module composes is already absolute and most of it is carried INSIDE
+// another absolute URL, as the query parameter of a share intent. A share
+// target that lost the baseURL path would be published exactly as written and
+// would send every reader who clicked it to a page that does not exist.
+test.describe('static subpath build with canonifyURLs', () => {
+  test('canonifyURLs is really on here, and off in the twin build', () => {
+    // The control, taken from the FIXTURE's own navigation rather than from
+    // the module: those links are authored root-relative, so the setting
+    // rewrites them and its absence leaves them alone. Without this, every
+    // assertion below would pass just as well against two identical builds.
+    // The section listing, because a post page's own share hrefs also mention
+    // the slug and would match first; the listing links to its members and
+    // nothing else does.
+    const rel = 'blog/index.html';
+    const link = /href="([^"]*blog\/post-plain\/)"/;
+    const off = link.exec(read(SUBPATH_DIR, rel))?.[1];
+    const on = link.exec(read(SUBPATH_CANONIFY_DIR, rel))?.[1];
+    expect(off, 'the fixture links to its own pages').toBe('/docs/blog/post-plain/');
+    expect(on, 'and canonifyURLs absolutizes that link').toBe(`${ORIGIN}docs/blog/post-plain/`);
+  });
+
+  test('every share URL a page emits is identical with the setting on and off', () => {
+    // Equality rather than a shape check: a shape check cannot tell a URL that
+    // kept the baseURL path from one that had it prepended to a value already
+    // carrying it, and both mistakes are silent here.
+    let scanned = 0;
+    for (const rel of pages(SUBPATH_DIR)) {
+      const off = shareUrlsIn(read(SUBPATH_DIR, rel));
+      const on = shareUrlsIn(read(SUBPATH_CANONIFY_DIR, rel));
+      expect(on, `${rel}: the share URLs must not depend on canonifyURLs`).toEqual(off);
+      scanned += off.length;
+    }
+    expect(scanned, 'the sweep must have inspected share URLs').toBeGreaterThan(0);
+  });
+
+  test('and every one of them still carries the baseURL path exactly once', () => {
+    // Equality with the other build would also hold if BOTH lost the path, so
+    // the canonify build is checked against the baseURL on its own terms.
+    const bad = [];
+    let scanned = 0;
+    for (const rel of pages(SUBPATH_CANONIFY_DIR)) {
+      for (const value of shareUrlsIn(read(SUBPATH_CANONIFY_DIR, rel))) {
+        scanned += 1;
+        if (!value.includes(BASE) && value.startsWith(ORIGIN)) bad.push(`${rel}: ${value}`);
+        if (value.includes(`${BASE}docs/`)) bad.push(`${rel}: doubled -- ${value}`);
+      }
+    }
+    expect(scanned, 'the sweep must have inspected share URLs').toBeGreaterThan(0);
+    expect(bad, 'share URLs that lost or repeated the baseURL path').toEqual([]);
+  });
+
+  test('a consumer-authored site-root-relative image keeps the baseURL path', () => {
+    // The image rides a query parameter of an already-absolute intent href,
+    // which is the surface Hugo never rewrites, so it is the value with the
+    // most to lose and the least chance of being repaired.
+    const html = read(SUBPATH_CANONIFY_DIR, 'blog/post-subpath/index.html');
+    const image = param(hrefFor(html, 'pinterest'), 'media');
+    expect(image.startsWith(BASE), `the share image kept the baseURL path: ${image}`).toBe(true);
+    expect(image.includes(`${BASE}docs/`), `and did not repeat it: ${image}`).toBe(false);
   });
 });

@@ -984,7 +984,7 @@ modules/agent-readiness/
 │               ├── skills-index-url.html
 │               ├── surface-published.html
 │               └── warn.html
-├── test/                       # Validation suite: twenty-three Hugo fixture builds plus Node build-output assertions. See test/README.md.
+├── test/                       # Validation suite: twenty-four Hugo fixture builds plus Node build-output assertions. See test/README.md.
 ├── go.mod
 ├── hugo.toml
 └── README.md

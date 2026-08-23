@@ -31,6 +31,16 @@ export const multilingualDir = dir('FIXTURE_PUBLIC_MULTILINGUAL', 'fixture/publi
 // A baseURL carrying a path, which is the only shape in which a card URL that
 // keeps the base path and one that drops it are different bytes.
 export const subpathDir = dir('FIXTURE_PUBLIC_SUBPATH', 'fixture/public/subpath');
+// The same environment with canonifyURLs on. That setting makes the whole
+// Page family stop emitting the baseURL path, and Hugo repairs the loss in
+// HTML attributes only -- never in a meta content attribute, which is where
+// this module's card URL lands. The module states that URL off the image
+// resource and absolutely, so this tree must match the one above; the
+// fixture payload's own `url` field is the page URL that DOES move.
+export const subpathCanonifyDir = dir(
+  'FIXTURE_PUBLIC_SUBPATH_CANONIFY',
+  'fixture/public/subpath-canonify',
+);
 // The only build that sets default_template, the tier `configured` proves the
 // opposite statement about.
 export const routingDir = dir('FIXTURE_PUBLIC_ROUTING', 'fixture/public/routing');
@@ -46,6 +56,7 @@ const LOG_KEYS = {
   degraded: 'HUGO_BUILD_LOG_DEGRADED',
   multilingual: 'HUGO_BUILD_LOG_MULTILINGUAL',
   subpath: 'HUGO_BUILD_LOG_SUBPATH',
+  'subpath-canonify': 'HUGO_BUILD_LOG_SUBPATH_CANONIFY',
   routing: 'HUGO_BUILD_LOG_ROUTING',
   typography: 'HUGO_BUILD_LOG_TYPOGRAPHY',
 };

@@ -1,7 +1,7 @@
 @echo off
-rem Builds the fixture site SEVEN TIMES with hugo (a BUILD, not a server: no
+rem Builds the fixture site EIGHT TIMES with hugo (a BUILD, not a server: no
 rem port binding, and a finite build exits by itself) and runs the Node
-rem build-output assertion suite against all seven trees. Windows mirror of
+rem build-output assertion suite against all eight trees. Windows mirror of
 rem run-tests.sh: pre-launch process check, then a hard fail on any
 rem deprecation or error output in any build log.
 rem
@@ -36,6 +36,7 @@ set LOG_CONFIGURED=%~dp0hugo-build-configured.log
 set LOG_DEGRADED=%~dp0hugo-build-degraded.log
 set LOG_MULTILINGUAL=%~dp0hugo-build-multilingual.log
 set LOG_SUBPATH=%~dp0hugo-build-subpath.log
+set LOG_SUBPATH_CANONIFY=%~dp0hugo-build-subpath-canonify.log
 set LOG_ROUTING=%~dp0hugo-build-routing.log
 set LOG_TYPOGRAPHY=%~dp0hugo-build-typography.log
 
@@ -82,6 +83,15 @@ if errorlevel 1 (
   popd
   exit /b 1
 )
+rem The same environment with canonifyURLs on, merged as an extra config
+rem file rather than restated as a config directory of its own.
+hugo -e subpath --config ../canonify.toml --logLevel info --cleanDestinationDir --destination public\subpath-canonify > "%LOG_SUBPATH_CANONIFY%" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(subpath-canonify^):
+  type "%LOG_SUBPATH_CANONIFY%"
+  popd
+  exit /b 1
+)
 hugo -e routing --logLevel info --cleanDestinationDir --destination public\routing > "%LOG_ROUTING%" 2>&1
 if errorlevel 1 (
   echo hugo build failed ^(routing^):
@@ -98,7 +108,7 @@ if errorlevel 1 (
 )
 popd
 
-for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_DEGRADED%" "%LOG_MULTILINGUAL%" "%LOG_SUBPATH%" "%LOG_ROUTING%" "%LOG_TYPOGRAPHY%") do (
+for %%L in ("%LOG_BASELINE%" "%LOG_CONFIGURED%" "%LOG_DEGRADED%" "%LOG_MULTILINGUAL%" "%LOG_SUBPATH%" "%LOG_SUBPATH_CANONIFY%" "%LOG_ROUTING%" "%LOG_TYPOGRAPHY%") do (
   findstr /I "deprecat" %%L >nul 2>&1
   if not errorlevel 1 (
     echo Hugo reported deprecations in %%L:
@@ -132,6 +142,7 @@ set FIXTURE_PUBLIC_CONFIGURED=%~dp0fixture\public\configured
 set FIXTURE_PUBLIC_DEGRADED=%~dp0fixture\public\degraded
 set FIXTURE_PUBLIC_MULTILINGUAL=%~dp0fixture\public\multilingual
 set FIXTURE_PUBLIC_SUBPATH=%~dp0fixture\public\subpath
+set FIXTURE_PUBLIC_SUBPATH_CANONIFY=%~dp0fixture\public\subpath-canonify
 set FIXTURE_PUBLIC_ROUTING=%~dp0fixture\public\routing
 set FIXTURE_PUBLIC_TYPOGRAPHY=%~dp0fixture\public\typography
 set HUGO_BUILD_LOG_BASELINE=%LOG_BASELINE%
@@ -139,6 +150,7 @@ set HUGO_BUILD_LOG_CONFIGURED=%LOG_CONFIGURED%
 set HUGO_BUILD_LOG_DEGRADED=%LOG_DEGRADED%
 set HUGO_BUILD_LOG_MULTILINGUAL=%LOG_MULTILINGUAL%
 set HUGO_BUILD_LOG_SUBPATH=%LOG_SUBPATH%
+set HUGO_BUILD_LOG_SUBPATH_CANONIFY=%LOG_SUBPATH_CANONIFY%
 set HUGO_BUILD_LOG_ROUTING=%LOG_ROUTING%
 set HUGO_BUILD_LOG_TYPOGRAPHY=%LOG_TYPOGRAPHY%
 for /f "tokens=2 delims=v " %%v in ('hugo version') do (

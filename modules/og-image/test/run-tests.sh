@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Builds the fixture site SEVEN TIMES with hugo (a BUILD, not a server: no
+# Builds the fixture site EIGHT TIMES with hugo (a BUILD, not a server: no
 # port binding, and a finite build exits by itself) and runs the Node
-# build-output assertion suite against all seven trees.
+# build-output assertion suite against all eight trees.
 #
 # Each environment earns its place by a distinction no other one can make. The
 # default environment omits [params.ogcard] entirely, so it is the only build
@@ -20,7 +20,12 @@
 # through the rendering language give different answers. The `subpath`
 # environment repeats the card set under a baseURL carrying a PATH, which is
 # the only shape in which a published card URL that keeps the base path and
-# one that drops it are different bytes. The `routing` environment is the only
+# one that drops it are different bytes; it is built a SECOND time with
+# canonifyURLs on, the setting that makes the whole Page family stop emitting
+# that path while Hugo repairs the loss in HTML attributes only -- so a card
+# URL routed through it would still read correctly everywhere except og:image
+# and twitter:image, which are meta content attributes no post-processor
+# reaches. The `routing` environment is the only
 # one that sets `default_template`, the card template for a page no route
 # names: `configured` proves the contradictory statement that such a page gets
 # nothing at all, and its decline set is that proof, so the two cannot share a
@@ -44,13 +49,14 @@ LOG_CONFIGURED="$HERE/hugo-build-configured.log"
 LOG_DEGRADED="$HERE/hugo-build-degraded.log"
 LOG_MULTILINGUAL="$HERE/hugo-build-multilingual.log"
 LOG_SUBPATH="$HERE/hugo-build-subpath.log"
+LOG_SUBPATH_CANONIFY="$HERE/hugo-build-subpath-canonify.log"
 LOG_ROUTING="$HERE/hugo-build-routing.log"
 LOG_TYPOGRAPHY="$HERE/hugo-build-typography.log"
 
 # The logs are retained after a successful run so the documented re-run recipe
 # can read them; they are gitignored at the repo root. Only an interrupt
 # discards them mid-run.
-trap 'rm -f "$LOG_BASELINE" "$LOG_CONFIGURED" "$LOG_DEGRADED" "$LOG_MULTILINGUAL" "$LOG_SUBPATH" "$LOG_ROUTING" "$LOG_TYPOGRAPHY"' INT TERM
+trap 'rm -f "$LOG_BASELINE" "$LOG_CONFIGURED" "$LOG_DEGRADED" "$LOG_MULTILINGUAL" "$LOG_SUBPATH" "$LOG_SUBPATH_CANONIFY" "$LOG_ROUTING" "$LOG_TYPOGRAPHY"' INT TERM
 
 # `pgrep -x` matches the process NAME, the semantic twin of the tasklist
 # IMAGENAME filter below. `-f` would match the whole command line, and this
@@ -76,12 +82,22 @@ fi
 # card", which stale bytes satisfy silently.
 rm -rf "$FIXTURE_DIR/public"
 
-build() { # build <environment> <destination> <log> [strict]
-  local env_name="$1" dest="$2" log="$3" strict="${4:-}"
+build() { # build <environment> <destination> <log> [strict] [extra hugo args...]
+  local env_name="$1" dest="$2" log="$3"
+  shift 3
+  local strict=""
+  if [ "${1:-}" = "strict" ]; then
+    strict="strict"
+    shift
+  fi
   local args=(--logLevel info --cleanDestinationDir --destination "$dest")
   if [ -n "$env_name" ]; then
     args+=(-e "$env_name")
   fi
+  # Anything left is passed to hugo verbatim, which is how one environment can
+  # be built twice under different deployment settings without a second config
+  # directory restating the first one key for key.
+  args+=("$@")
   (cd "$FIXTURE_DIR" && hugo "${args[@]}") > "$log" 2>&1 || {
     echo "hugo build failed (${env_name:-default}):" >&2
     cat "$log" >&2
@@ -113,6 +129,15 @@ build configured public/configured "$LOG_CONFIGURED" strict
 build degraded public/degraded "$LOG_DEGRADED"
 build multilingual public/multilingual "$LOG_MULTILINGUAL"
 build subpath public/subpath "$LOG_SUBPATH"
+# The same environment with canonifyURLs on. Under that setting the whole
+# Page family stops emitting the baseURL path and Hugo repairs the loss in
+# HTML attributes only, so a card URL routed through it would break in
+# og:image and twitter:image -- meta content attributes the post-processor
+# never reaches. This module states card URLs off the image resource and
+# absolutely, so the two builds must agree; the fixture payload sidecar
+# carries the page URL that DOES move, which is what makes the agreement
+# assertable rather than vacuous.
+build subpath public/subpath-canonify "$LOG_SUBPATH_CANONIFY" --config ../canonify.toml
 build routing public/routing "$LOG_ROUTING" strict
 build typography public/typography "$LOG_TYPOGRAPHY"
 
@@ -124,6 +149,7 @@ export FIXTURE_PUBLIC_CONFIGURED="$FIXTURE_DIR/public/configured"
 export FIXTURE_PUBLIC_DEGRADED="$FIXTURE_DIR/public/degraded"
 export FIXTURE_PUBLIC_MULTILINGUAL="$FIXTURE_DIR/public/multilingual"
 export FIXTURE_PUBLIC_SUBPATH="$FIXTURE_DIR/public/subpath"
+export FIXTURE_PUBLIC_SUBPATH_CANONIFY="$FIXTURE_DIR/public/subpath-canonify"
 export FIXTURE_PUBLIC_ROUTING="$FIXTURE_DIR/public/routing"
 export FIXTURE_PUBLIC_TYPOGRAPHY="$FIXTURE_DIR/public/typography"
 export HUGO_BUILD_LOG_BASELINE="$LOG_BASELINE"
@@ -131,6 +157,7 @@ export HUGO_BUILD_LOG_CONFIGURED="$LOG_CONFIGURED"
 export HUGO_BUILD_LOG_DEGRADED="$LOG_DEGRADED"
 export HUGO_BUILD_LOG_MULTILINGUAL="$LOG_MULTILINGUAL"
 export HUGO_BUILD_LOG_SUBPATH="$LOG_SUBPATH"
+export HUGO_BUILD_LOG_SUBPATH_CANONIFY="$LOG_SUBPATH_CANONIFY"
 export HUGO_BUILD_LOG_ROUTING="$LOG_ROUTING"
 export HUGO_BUILD_LOG_TYPOGRAPHY="$LOG_TYPOGRAPHY"
 HUGO_VERSION="$(hugo version | sed -E 's/^hugo v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"

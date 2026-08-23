@@ -1,0 +1,28 @@
+# Overlay for a STATIC build, merged AFTER hugo.toml AND config-subpath.toml
+# (hugo --config hugo.toml,config-subpath.toml,config-canonify.toml), so it
+# inherits the path-carrying baseURL and the missing-page page_path and
+# changes exactly one further thing.
+#
+# canonifyURLs makes Hugo rewrite every root-relative URL in HTML output into
+# a fully absolute one after the templates have run. To keep that rewrite from
+# doubling the baseURL path, the whole Page family stops emitting the path
+# while the setting is on: measured at v0.164.0 under
+# baseURL = 'https://example.org/docs/', a page's .RelPermalink comes back as
+# "/" and an output format's as "/searchindex.json". A RESOURCE's does not --
+# it keeps the path -- which is why the two URL families in this module's
+# index behave differently and why only one of them needed rooting.
+#
+# The rewrite runs on HTML output formats ONLY, so anything the module writes
+# elsewhere keeps whatever the template produced. This module owns two such
+# artifacts, and both carry URLs: /searchindex.json, whose every record href
+# is a search result the reader clicks, and /opensearch.xml, whose Url
+# template is the query contract this site advertises to clients. A stripped
+# path sends both OUTSIDE the site on a subpath deployment, with nothing
+# failing anywhere -- the HTML surfaces stay correct, because the
+# post-processor repairs them.
+#
+# This is therefore the only build that can tell a rooted derivation from a
+# .RelPermalink one. The subpath build alone cannot: with canonifyURLs off,
+# .RelPermalink already carries the path, so both spellings emit identical
+# bytes there.
+canonifyURLs = true
