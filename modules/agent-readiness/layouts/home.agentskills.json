@@ -82,13 +82,15 @@
 {{- $cfg := partial "agent-readiness/config.html" (dict "page" . "site_only" true) -}}
 {{- if and $cfg.enable $cfg.skills_index.enable (or hugo.IsMultihost site.Language.IsDefault) -}}
   {{/* Through lib/skills-entries.html, which resolves the slice against the
-       DEFAULT site under the shared cache key, so the validation, the fetches,
-       the front-matter parse, the sibling probes and the hashing all happen
-       ONCE for the build however many callers ask -- and so this template, the
-       surface enumeration and the url-retirement writes hook are three
-       projections of one resolution rather than three resolutions that could
-       disagree. The gates above stay this site's own, because a host that
-       switches the index off must not publish one. */}}
+       DEFAULT site: this template, the surface enumeration and the
+       url-retirement writes hook are therefore three projections of one
+       answer rather than three answers that could disagree, whichever
+       language is rendering. That partial's shared cache key is what keeps
+       the validation, the fetches, the front-matter parse, the sibling probes
+       and the hashing from being repeated per caller -- within one language,
+       which is as far as a partialCached cache reaches. The gates above stay
+       this site's own, because a host that switches the index off must not
+       publish one. */}}
   {{- $skills := partial "agent-readiness/lib/skills-entries.html" dict -}}
   {{- with $skills -}}
     {{/* `with` has rebound the dot to the skill slice, so the page the
