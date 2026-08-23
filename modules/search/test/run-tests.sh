@@ -4,19 +4,22 @@
 # check, a deprecation gate on the server log, and belt-and-suspenders
 # cleanup (the trap kills the tracked pid AND pkills stray hugo children).
 #
-# Nine STATIC builds run first, before the server starts. They exist because
+# Ten STATIC builds run first, before the server starts. They exist because
 # the module has states the single served fixture cannot be in at once -- a
 # hostile site title, which proves the OpenSearch document escapes what it
 # interpolates; the default-off gate, which is what every consumer gets until
 # they opt in; a subpath baseURL, the only place a discarded baseURL path is
-# visible; scalar values written for the table-valued config keys, whose
-# warnings the suite counts from the captured build log; a single-page corpus
-# of edge-case front matter, which proves the index round-trips the authored
-# characters; the three list-valued keys written as tables, as booleans and
-# as lists, which is the shape matrix the resolver degrades over; and a
-# per-language override of two site-scoped keys. All are plain builds, so
-# they cost a few seconds and bind no port; each one's output is captured
-# next to its destination directory as <dir>.log.
+# visible; that same subpath baseURL plus canonifyURLs, the only place a
+# .RelPermalink-derived URL is distinguishable from a rooted one in the two
+# artifacts Hugo's HTML post-processor never repairs; scalar values written
+# for the table-valued config keys, whose warnings the suite counts from the
+# captured build log; a single-page corpus of edge-case front matter, which
+# proves the index round-trips the authored characters; the three list-valued
+# keys written as tables, as booleans and as lists, which is the shape matrix
+# the resolver degrades over; and a per-language override of two site-scoped
+# keys. All are plain builds, so they cost a few seconds and bind no port;
+# each one's output is captured next to its destination directory as
+# <dir>.log.
 set -euo pipefail
 
 PORT="${PORT:-1515}"
@@ -26,6 +29,7 @@ LOG_FILE="$HERE/.hugo-server.log"
 OPENSEARCH_HOSTILE_DIR="$HERE/.opensearch-hostile"
 OPENSEARCH_OFF_DIR="$HERE/.opensearch-off"
 SUBPATH_DIR="$HERE/.subpath"
+CANONIFY_DIR="$HERE/.canonify"
 SCALAR_TABLES_DIR="$HERE/.scalar-tables"
 SERIALIZATION_DIR="$HERE/.serialization"
 SHAPE_TABLES_DIR="$HERE/.shape-tables"
@@ -62,8 +66,9 @@ cleanup() {
   fi
   kill_stray_hugo
   rm -f "$LOG_FILE"
-  for dir in "$OPENSEARCH_HOSTILE_DIR" "$OPENSEARCH_OFF_DIR" "$SUBPATH_DIR" "$SCALAR_TABLES_DIR" \
-    "$SERIALIZATION_DIR" "$SHAPE_TABLES_DIR" "$SHAPE_BOOLS_DIR" "$SHAPE_LISTS_DIR" "$MULTILINGUAL_DIR"; do
+  for dir in "$OPENSEARCH_HOSTILE_DIR" "$OPENSEARCH_OFF_DIR" "$SUBPATH_DIR" "$CANONIFY_DIR" \
+    "$SCALAR_TABLES_DIR" "$SERIALIZATION_DIR" "$SHAPE_TABLES_DIR" "$SHAPE_BOOLS_DIR" \
+    "$SHAPE_LISTS_DIR" "$MULTILINGUAL_DIR"; do
     rm -rf "$dir"
     rm -f "$dir.log"
   done
@@ -96,13 +101,16 @@ static_build() {
 static_build config-opensearch-hostile.toml "$OPENSEARCH_HOSTILE_DIR"
 static_build config-opensearch-off.toml "$OPENSEARCH_OFF_DIR"
 static_build config-subpath.toml "$SUBPATH_DIR"
+# Chained onto the subpath overlay rather than restating its baseURL, so the
+# two builds can never drift apart on the one setting that separates them.
+static_build config-subpath.toml,config-canonify.toml "$CANONIFY_DIR"
 static_build config-scalar-tables.toml "$SCALAR_TABLES_DIR"
 static_build config-serialization.toml "$SERIALIZATION_DIR"
 static_build config-shape-tables.toml "$SHAPE_TABLES_DIR"
 static_build config-shape-bools.toml "$SHAPE_BOOLS_DIR"
 static_build config-shape-lists.toml "$SHAPE_LISTS_DIR"
 static_build config-multilingual.toml "$MULTILINGUAL_DIR"
-export OPENSEARCH_HOSTILE_DIR OPENSEARCH_OFF_DIR SUBPATH_DIR SCALAR_TABLES_DIR
+export OPENSEARCH_HOSTILE_DIR OPENSEARCH_OFF_DIR SUBPATH_DIR CANONIFY_DIR SCALAR_TABLES_DIR
 export SERIALIZATION_DIR SHAPE_TABLES_DIR SHAPE_BOOLS_DIR SHAPE_LISTS_DIR MULTILINGUAL_DIR
 
 (cd "$FIXTURE_DIR" && hugo server --port "$PORT" --bind 127.0.0.1 --logLevel info >"$LOG_FILE" 2>&1) &

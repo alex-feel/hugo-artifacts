@@ -294,7 +294,7 @@ Shipped glyphs: `search` and `close` -- inline SVGs using `stroke="currentColor"
 
 ## Validation
 
-The Playwright suite under [`test/`](test/) validates the module against the multilingual fixture site in `test/fixture` (index shape and filters, index serialization of the authored front matter characters, the configuration-shape matrix, pagination, per-language configuration, the no-JavaScript baseline, enhancement and lazy loading, English and Russian recall, the modal and inline keyboard models, live regions, robustness against hostile payloads, caching, and the event contract); see [`test/README.md`](test/README.md) for how to run it. Repository CI verifies `go.mod` parsing, the standalone `hugo mod graph`, and the lint suite; the Playwright suite runs locally.
+The Playwright suite under [`test/`](test/) validates the module against the multilingual fixture site in `test/fixture` (index shape and filters, index serialization of the authored front matter characters, the configuration-shape matrix, pagination, per-language configuration, the no-JavaScript baseline, enhancement and lazy loading, English and Russian recall, the modal and inline keyboard models, live regions, robustness against hostile payloads, caching, the event contract, and URL derivation under a subpath baseURL both with and without `canonifyURLs`); see [`test/README.md`](test/README.md) for how to run it. Repository CI verifies `go.mod` parsing, the standalone `hugo mod graph`, and the lint suite, and runs this suite in full.
 
 ## Publication answers
 
@@ -360,6 +360,7 @@ modules/search/
 │               ├── listparam.html      # list-valued config key normalizer
 │               ├── record.html         # per-page index record builder
 │               ├── record-json.html    # serializes one record, identity first, body last
+│               ├── rooted-url.html     # permalink -> server-relative URL that keeps the baseURL path
 │               ├── headings.html       # heading-tree walker
 │               ├── build-time.html     # the index `generated` stamp: sibling module first
 │               └── build-time-value.html # its fallback, for a search-only site

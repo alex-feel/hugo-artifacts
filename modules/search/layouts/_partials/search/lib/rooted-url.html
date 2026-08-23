@@ -1,0 +1,51 @@
+{{/*
+  search/lib/rooted-url.html -- INTERNAL (lib tier). PURE.
+
+  Turns an ABSOLUTE Hugo permalink into the server-relative URL for the same
+  resource, keeping the baseURL's own path. Under
+  baseURL = "https://example.org/docs/", "https://example.org/docs/search/"
+  becomes "/docs/search/"; at a domain root it comes back as "/search/".
+
+  WHY NOT .RelPermalink, WHICH RETURNS EXACTLY THAT ALREADY: because it stops
+  doing so under canonifyURLs. With that setting on, Hugo rewrites every
+  root-relative URL in HTML output into a fully absolute one after the
+  templates have run, and to keep the rewrite from DOUBLING the baseURL path
+  it makes .RelPermalink omit the path in the first place. Measured at
+  v0.164.0 under baseURL = "https://example.org/docs/": a Page's
+  .RelPermalink is "/" rather than "/docs/", and an output format's is
+  "/probe.txt" rather than "/docs/probe.txt". relURL and relLangURL lose the
+  path the same way, and a leading-slash argument discards it under every
+  setting.
+
+  That post-processor runs on HTML output formats ONLY, so the stripped value
+  is repaired in HTML and published as-is everywhere else -- in this module's
+  /searchindex.json and /opensearch.xml, where every href and the advertised
+  query template would silently point outside the site on a subpath
+  deployment. .Permalink is what stays put: measured identical with the
+  setting on and off, for pages, output formats and resources alike. Parsing
+  the path back out of it is therefore the derivation that holds in every
+  output format.
+
+  A RESOURCE's .RelPermalink does keep the path under canonifyURLs (measured
+  at v0.164.0, for plain, copied and fingerprinted resources), which is why
+  the thumbnail URL in search/lib/record.html needs no conversion. Only the
+  Page and output-format families lose it.
+
+  In HTML the converted value costs nothing: the post-processor CONSUMES a
+  leading baseURL path rather than doubling it, so "/docs/search/" and
+  "/search/" both arrive as "https://example.org/docs/search/".
+
+  Context (string): an absolute URL -- any .Permalink. An empty string
+  returns empty, so a caller that could not resolve one passes it through
+  unchanged.
+
+  Return value: string -- the server-relative URL, baseURL path included.
+
+  One terminal return.
+*/}}
+
+{{- $rooted := "" -}}
+{{- with . -}}
+  {{- $rooted = (urls.Parse .).Path -}}
+{{- end -}}
+{{- return $rooted -}}
