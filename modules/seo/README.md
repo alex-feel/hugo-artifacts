@@ -520,7 +520,7 @@ All `@id`s are absolute URLs with a stable URL-fragment discriminator -- globall
 | WebSite | `{site.Home.Permalink}#website` |
 | Organization (or Person publisher) | `{site.Home.Permalink}#organization` (kept as `#organization` even when `type = "Person"`) |
 | WebPage / CollectionPage | `{.Permalink}#webpage` |
-| BreadcrumbList | `{.Permalink}#breadcrumb`; extra trails `#breadcrumb-2`, `#breadcrumb-3`, ... (gapless; the derived trail is trail 1) |
+| BreadcrumbList | `{.Permalink}#breadcrumb`; extra trails `#breadcrumb-2`, `#breadcrumb-3`, ... (gapless; the derived trail is trail 1, and a trail suppressed for holding fewer than two items takes no number) |
 | Content node | `{.Permalink}#article` (all Article subtypes), `#product`, `#profilepage`, `#softwareapplication`, `#videoobject` |
 | Person (author) | `{author-page.Permalink}#person` when an author page resolves; else no `@id` (inline anonymous Person) |
 | Offer / AggregateRating / Review / ImageObject | no top-level `@id` (nested inline) |

@@ -150,7 +150,7 @@ test('every card in the tree was composed from the exact strings its page publis
       `${file}: description handed to the hook`,
     );
   }
-  assert.equal(cards.length, 14, `card-bearing pages changed: ${cards.sort().join(', ')}`);
+  assert.equal(cards.length, 15, `card-bearing pages changed: ${cards.sort().join(', ')}`);
 });
 
 test('the hook serves list and home pages, not only regular ones', () => {

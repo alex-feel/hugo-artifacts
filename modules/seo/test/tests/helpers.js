@@ -179,4 +179,5 @@ export const PAGES = {
   mapImages: 'map-images/index.html',
   mapTaxonomies: 'blog/map-taxonomies/index.html',
   tableCanonical: 'blog/table-canonical/index.html',
+  breadcrumbTrails: 'blog/breadcrumb-trails/index.html',
 };
