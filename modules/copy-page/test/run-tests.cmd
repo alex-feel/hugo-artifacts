@@ -32,6 +32,16 @@ if not errorlevel 1 (
   exit /b 1
 )
 
+rem ---- Static overlays: a subpath deployment, and the same one canonified ----
+rem The served fixture sits at a domain root, where a URL that keeps the
+rem baseURL path and one that drops it are byte-identical. The second build
+rem adds canonifyURLs, whose repair reaches HTML attributes only and never the
+rem Markdown twins this fixture publishes.
+call :overlay_build subpath hugo.toml,subpath.toml
+if errorlevel 1 exit /b 1
+call :overlay_build subpath-canonify hugo.toml,subpath.toml,canonify.toml
+if errorlevel 1 exit /b 1
+
 pushd "%~dp0fixture"
 start "copy-page-fixture" /b hugo server --port %PORT% --bind 127.0.0.1 --logLevel info > "%~dp0.hugo-server.log" 2>&1
 popd
@@ -70,3 +80,32 @@ popd
 taskkill /F /IM hugo.exe >nul 2>&1
 del "%~dp0.hugo-server.log" >nul 2>&1
 exit /b %EXITCODE%
+
+rem ---- Subroutine: build one static overlay and gate its log ----
+rem Reached only via CALL, never fallen into: the run above ends at the
+rem unconditional "exit /b" immediately preceding this line.
+:overlay_build
+set OVERLAY=%~1
+set CHAIN=%~2
+pushd "%~dp0fixture"
+hugo --gc --logLevel info --cleanDestinationDir --config %CHAIN% --destination public\%OVERLAY% > "%~dp0hugo-build-%OVERLAY%.log" 2>&1
+if errorlevel 1 (
+  echo hugo build failed ^(%OVERLAY% overlay^):
+  type "%~dp0hugo-build-%OVERLAY%.log"
+  popd
+  exit /b 1
+)
+popd
+findstr /I "deprecat" "%~dp0hugo-build-%OVERLAY%.log" >nul 2>&1
+if not errorlevel 1 (
+  echo Hugo reported deprecations ^(%OVERLAY% overlay^):
+  findstr /I "deprecat" "%~dp0hugo-build-%OVERLAY%.log"
+  exit /b 1
+)
+findstr /C:"ERROR" "%~dp0hugo-build-%OVERLAY%.log" >nul 2>&1
+if not errorlevel 1 (
+  echo Hugo reported errors ^(%OVERLAY% overlay^):
+  findstr /C:"ERROR" "%~dp0hugo-build-%OVERLAY%.log"
+  exit /b 1
+)
+exit /b 0

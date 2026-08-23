@@ -1,0 +1,28 @@
+# Overlay config for the static canonifyURLs build. Merged AFTER hugo.toml AND
+# subpath.toml via --config hugo.toml,subpath.toml,canonify.toml, so it
+# inherits the path-carrying baseURL and changes exactly one further thing.
+# Chained rather than restating that baseURL: two copies of one value are free
+# to drift, and the point of this build is that it differs from its twin in a
+# single setting.
+#
+# canonifyURLs makes Hugo rewrite root-relative URLs in HTML output into fully
+# absolute ones after the templates have run. To stop that rewrite from
+# doubling the baseURL path, the whole Page family stops emitting the path
+# while the setting is on: measured at v0.164.0 under
+# baseURL = "http://localhost:1616/docs/", a page's .RelPermalink comes back
+# without the /docs segment. A RESOURCE's does not, and .Permalink is
+# untouched entirely.
+#
+# This module owns no output format. Every URL it derives is a .Permalink --
+# the page's own, its Markdown twin's, the home page's llms.txt -- and its one
+# .RelPermalink is the fingerprinted script resource, which rides a `src`
+# attribute the rewrite repairs anyway. So its output must not move at all.
+#
+# The reason a build is needed to say so is the fixture's Markdown twins. The
+# widget renders into them as well as into HTML, and NOTHING post-processes a
+# twin: a URL that lost the baseURL path in HTML would be repaired and the
+# same loss in the twin would ship. A consumer-authored value passed through
+# verbatim shows both halves of that at once -- rewritten in the HTML, left
+# alone in the twin -- which is the module's documented pass-through contract
+# seen from the one angle that can distinguish the two surfaces.
+canonifyURLs = true

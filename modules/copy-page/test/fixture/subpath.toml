@@ -1,0 +1,17 @@
+# Overlay config for the static subpath build. Merged AFTER hugo.toml via
+# --config hugo.toml,subpath.toml, so exactly one thing differs from the
+# served fixture: the baseURL carries a PATH. The host and port deliberately
+# match hugo.toml so the path segment is the only variable; nothing is ever
+# served from this build, which is written to fixture/public/subpath and read
+# off disk.
+#
+# Hugo resolves a value that already starts with "/" against the protocol and
+# host ONLY, discarding the baseURL's path -- for relURL and relLangURL
+# exactly as for absURL. At a domain root, which is what the served fixture
+# uses, a URL that keeps the base path and one that drops it are therefore
+# byte-identical, and this is the only build where the difference exists.
+#
+# It also exists because the canonifyURLs build layered on top of it needs a
+# path to lose: at a domain root that setting changes nothing observable, so a
+# canonify build without this one would assert against two identical trees.
+baseURL = "http://localhost:1616/docs/"

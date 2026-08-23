@@ -60,6 +60,38 @@ if grep -qi "deprecat" "$KILLED_LOG"; then
   exit 1
 fi
 
+# ---- Static overlays: a subpath deployment, and the same one canonified ----
+# The served fixture sits at a domain root, where a URL that keeps the
+# baseURL path and one that drops it are byte-identical, so neither mistake
+# is visible there. The second build adds canonifyURLs, under which the whole
+# Page family stops emitting that path and Hugo repairs the loss in HTML
+# attributes only -- never in the Markdown twins this fixture publishes, which
+# the widget renders into as well. The two are chained rather than restated so
+# they differ in exactly one setting.
+overlay_build() { # overlay_build <name> <config chain>
+  local name="$1"
+  local chain="$2"
+  local log="$HERE/hugo-build-$name.log"
+  (cd "$FIXTURE_DIR" && hugo --gc --logLevel info --cleanDestinationDir \
+    --config "$chain" --destination "public/$name") >"$log" 2>&1 || {
+    echo "hugo build failed ($name overlay):" >&2
+    cat "$log" >&2
+    exit 1
+  }
+  if grep -qi "deprecat" "$log"; then
+    echo "Hugo reported deprecations ($name overlay):" >&2
+    grep -i "deprecat" "$log" >&2
+    exit 1
+  fi
+  if grep -q "ERROR" "$log"; then
+    echo "Hugo reported errors ($name overlay):" >&2
+    grep "ERROR" "$log" >&2
+    exit 1
+  fi
+}
+overlay_build subpath hugo.toml,subpath.toml
+overlay_build subpath-canonify hugo.toml,subpath.toml,canonify.toml
+
 (cd "$FIXTURE_DIR" && hugo server --port "$PORT" --bind 127.0.0.1 --logLevel info >"$LOG_FILE" 2>&1) &
 HUGO_PID=$!
 

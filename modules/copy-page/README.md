@@ -315,7 +315,7 @@ Every icon is an inline SVG with `width="1em" height="1em"`, `fill`/`stroke="cur
 
 ## Validation
 
-The module cannot build standalone; [`test/`](test/) contains a minimal consuming fixture site plus a Playwright suite that asserts exact row hrefs (including a hostile-character encoding matrix), URL derivation and the render-nothing self-gate, kill switches, `rows_extra` handling with the `https` allowlist, the progressive-enhancement reveal, the clipboard flow (success, and the no-write guarantee on a 404 twin), menu behavior, per-placement script emission on a paginated output, and the CustomEvent surface. Run it with Node.js 22+ from `test/`:
+The module cannot build standalone; [`test/`](test/) contains a minimal consuming fixture site plus a Playwright suite that asserts exact row hrefs (including a hostile-character encoding matrix), URL derivation and the render-nothing self-gate, kill switches, `rows_extra` handling with the `https` allowlist, the progressive-enhancement reveal, the clipboard flow (success, and the no-write guarantee on a 404 twin), menu behavior, per-placement script emission on a paginated output, the CustomEvent surface, and URL derivation under a `baseURL` that carries a path -- both plain and with `canonifyURLs`, the setting under which Hugo repairs a stripped root-relative URL in HTML attributes and leaves the same loss standing in the Markdown twins this widget also renders into. Run it with Node.js 22+ from `test/`:
 
 ```bash
 cd modules/copy-page/test
