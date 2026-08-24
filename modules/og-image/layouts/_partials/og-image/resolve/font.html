@@ -4,9 +4,13 @@
   Purpose: turns ONE registered font PATH into a font resource that
   images.Text can use, or into nothing at all.
 
-  It is called through partialCached keyed on the path, so a font is fetched
-  and guarded once per build however many slots, pages and output formats
-  reference it. The path is the memo key rather than the registry name,
+  It is called through partialCached keyed on the path, so the slots, pages
+  and output formats of one language share one resolution. Not one per
+  build: Hugo keeps a separate partialCached cache per language, and its own
+  documentation adds that concurrent calls can execute a cached partial more
+  than once. A repeat re-reads assets/ and nothing else observes it -- the
+  warning stays single because lib/warn.html's sentinel is build-global.
+  The path is the memo key rather than the registry name,
   because a name means whatever the tier that defined it says it means: two
   pages can carry different registries under the same name, and keying on the
   name would silently hand the second page the first page's face.

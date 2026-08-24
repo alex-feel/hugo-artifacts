@@ -2,8 +2,12 @@
   og-image/text/metrics.html -- INTERNAL (text tier).
 
   Purpose: resolves ONE named width table into a flat per-glyph lookup. Call
-  through partialCached keyed on the name: the result is a pure function of
-  the data files, so one build computes it once.
+  through partialCached keyed on the name, so the callers of one language
+  share one computation. Not one per build: Hugo keeps a separate
+  partialCached cache per language, and its own documentation adds that
+  concurrent calls can execute a cached partial more than once. The result
+  is a pure function of the data files, so a repeat is idempotent, and its
+  warnings stay single because lib/warn.html's sentinel is build-global.
 
   Tables come from data/og-image/metrics.toml and, where a site supplies one,
   data/og-image/metrics-local.toml, which wins per NAME. Classes are expanded
