@@ -151,10 +151,13 @@
       x = 72
       y = 400
 
-    # A page parameter holding a list names no single string.
+    # A page parameter holding a table names no drawable string. A flat LIST
+    # is not a fault -- it draws one item per line, which the configured
+    # environment's datafacts template proves -- so the shape that warns here
+    # has to be a map.
     [[ogcard.templates.badslots.text]]
       source = 'param'
-      key = 'tags'
+      key = 'contact'
       font = 'mono'
       size = 24
       x = 72
@@ -263,6 +266,24 @@
       x = 600
       y = 440
       width = 500
+
+    # A data key naming a whole table names no drawable string either.
+    [[ogcard.templates.badslots.text]]
+      source = 'data'
+      key = 'facts.values.identity'
+      font = 'mono'
+      size = 24
+      x = 600
+      y = 500
+
+    # And a list with a table inside it is not the flat list that draws.
+    [[ogcard.templates.badslots.text]]
+      source = 'data'
+      key = 'facts.values.identity.links'
+      font = 'mono'
+      size = 24
+      x = 600
+      y = 560
 
   # ---- A font that passes the extension guard and carries no font inside.
   #      The whole filter chain fails, the try net catches it, and the card is

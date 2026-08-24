@@ -15,14 +15,22 @@
     date          the page date, formatted with `key` as the layout
                   (default ":date_long")
     param         the page parameter named by `key`, dotted paths included
+    data          the value in data/ named by `key`, a dotted path resolved
+                  against hugo.Data -- build-global, so every language draws
+                  the same value
     literal       the slot's own `value`
 
   A source that resolves to nothing is a SILENT skip together with its prefix
   and suffix, because an optional per-page field only some pages carry is
   exactly what a slot is for: no section on the home page, no date on an
-  undated page, no subtitle on most posts. Only a mistake speaks: an unknown
-  source token, or a `param` that resolves to a table or list, warns once and
-  drops that one slot while the rest of the card renders.
+  undated page, no subtitle on most posts. A `param` or `data` value that is
+  a flat list draws one item per line -- the joined value carries newlines,
+  which draw as hard breaks in a wrapping and a non-wrapping slot alike -- so
+  a slot naming a list of roles needs no pre-joining. Only a mistake speaks:
+  an unknown source token,
+  or a `param` or `data` key that resolves to a table or to a list with a
+  table or a list inside it, warns once and drops that one slot while the
+  rest of the card renders.
 
   Everything reads through $page.Site, never the global `site`, so a card
   composed for a translation carries that translation's site title and host.
@@ -40,10 +48,12 @@
 {{- $page := .page -}}
 {{- $slot := .slot -}}
 {{- $name := .name -}}
-{{- $known := slice "title" "description" "section" "section_title" "kind" "site_title" "domain" "date" "param" "literal" -}}
+{{- $known := slice "title" "description" "section" "section_title" "kind" "site_title" "domain" "date" "param" "data" "literal" -}}
 {{- $source := lower (trim (printf "%v" (index $slot "source" | default "title")) " \t\n\r") -}}
 {{- $key := trim (printf "%v" (index $slot "key" | default "")) " \t\n\r" -}}
 {{- $text := "" -}}
+{{- $v := "" -}}
+{{- $looked := false -}}
 
 {{- if not (in $known $source) -}}
   {{- partial "og-image/lib/warn.html" (dict
@@ -90,17 +100,61 @@
 {{- else if eq $source "param" -}}
   {{/* .Param returns nil through a scalar segment, so a dotted path into a
        non-table is absent rather than an error. An absent key is the ordinary
-       case and stays silent; a table or list names no single string, which is
-       a configuration mistake worth one warning. */}}
+       case and stays silent. */}}
   {{- if $key -}}
-    {{- $v := $page.Param $key -}}
-    {{- if or (reflect.IsMap $v) (reflect.IsSlice $v) -}}
-      {{- partial "og-image/lib/warn.html" (dict
-          "key" (printf "og-image:warn:param-shape:%s" $key)
-          "message" (printf "[og-image] The card text slot in template %q reads the page parameter %q, which holds a table or a list rather than a single value, so the slot is left blank." $name $key)) -}}
-    {{- else if ne $v nil -}}
-      {{- $text = printf "%v" $v -}}
+    {{- $v = $page.Param $key -}}
+    {{- $looked = true -}}
+  {{- end -}}
+{{- else if eq $source "data" -}}
+  {{/* hugo.Data is walked map by map, so a dotted path that runs through a
+       scalar -- or names a key no data file carries -- is absent rather than
+       an error, exactly as .Param reports the same shapes. The guard is also
+       what keeps `index` off a non-map, which would raise and stop the
+       build. */}}
+  {{- if $key -}}
+    {{- $cur := hugo.Data -}}
+    {{- $live := true -}}
+    {{- range $seg := split $key "." -}}
+      {{- if and $live (reflect.IsMap $cur) -}}
+        {{- $cur = index $cur $seg -}}
+      {{- else -}}
+        {{- $live = false -}}
+      {{- end -}}
     {{- end -}}
+    {{- if $live -}}
+      {{- $v = $cur -}}
+      {{- $looked = true -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* param and data answer in Hugo values rather than strings, and one shape
+     rule covers both: a scalar draws, a flat list draws one item per line --
+     the joining newlines draw as hard breaks in every slot -- and a table,
+     or a list hiding a table or a list, names no drawable string, which is a
+     configuration mistake worth one warning. */}}
+{{- if $looked -}}
+  {{- $what := cond (eq $source "data") "the data key" "the page parameter" -}}
+  {{- if reflect.IsMap $v -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:source-shape:%s:%s" $source $key)
+        "message" (printf "[og-image] The card text slot in template %q reads %s %q, which holds a table rather than a value a slot can draw, so the slot is left blank." $name $what $key)) -}}
+  {{- else if reflect.IsSlice $v -}}
+    {{- $flat := true -}}
+    {{- range $item := $v -}}
+      {{- if or (reflect.IsMap $item) (reflect.IsSlice $item) -}}
+        {{- $flat = false -}}
+      {{- end -}}
+    {{- end -}}
+    {{- if $flat -}}
+      {{- $text = printf "%v" (delimit $v "\n") -}}
+    {{- else -}}
+      {{- partial "og-image/lib/warn.html" (dict
+          "key" (printf "og-image:warn:source-shape:%s:%s" $source $key)
+          "message" (printf "[og-image] The card text slot in template %q reads %s %q, which holds a list with a table or a list inside it, so the slot is left blank. A list draws one item per line only when every item is a single value." $name $what $key)) -}}
+    {{- end -}}
+  {{- else if ne $v nil -}}
+    {{- $text = printf "%v" $v -}}
   {{- end -}}
 {{- end -}}
 

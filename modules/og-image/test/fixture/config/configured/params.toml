@@ -34,6 +34,7 @@
     twins = 'plain'
     oversize = 'oversize'
     sources = 'sources'
+    facts = 'datafacts'
     aligned = 'aligned'
     overlays = 'overlaid'
     fitting = 'fitting'
@@ -339,6 +340,83 @@
       color = '#ffd400'
       x = 72
       y = 544
+
+  # ---- datafacts: the rows source='data' can resolve, on the sources
+  #      template's monospace terms: the row count says which lookups drew
+  #      and the glyph count of each row says what. The two list rows draw
+  #      TWO lines each at the shipped pitch of round(28 * 1.4) = 39, so the
+  #      row after each of them starts 88 pixels down rather than 44. The two
+  #      absent rows -- a key data/ does not carry, and a dotted path that
+  #      runs through a scalar -- carry a prefix and a suffix, so their
+  #      drawing nothing is also the statement that the glue dropped with the
+  #      value. tests/14-sources.spec.js reads every row.
+  [ogcard.templates.datafacts]
+    background = 'og/post-bg.png'
+
+    # A string out of data/facts/values.toml, three segments deep.
+    [[ogcard.templates.datafacts.text]]
+      source = 'data'
+      key = 'facts.values.identity.name'
+      font = 'mono'
+      size = 28
+      color = '#ffd400'
+      x = 72
+      y = 16
+
+    # A number out of the same table, drawn as its digits.
+    [[ogcard.templates.datafacts.text]]
+      source = 'data'
+      key = 'facts.values.identity.since'
+      font = 'mono'
+      size = 28
+      color = '#ffd400'
+      x = 72
+      y = 60
+
+    # A flat list: two items, two lines, no pre-joining in the data file.
+    [[ogcard.templates.datafacts.text]]
+      source = 'data'
+      key = 'facts.values.identity.roles'
+      font = 'mono'
+      size = 28
+      color = '#ffd400'
+      x = 72
+      y = 104
+
+    # A flat list out of the page's own front matter: the same one-item-per-
+    # line rule through source='param'.
+    [[ogcard.templates.datafacts.text]]
+      source = 'param'
+      key = 'highlights'
+      font = 'mono'
+      size = 28
+      color = '#ffd400'
+      x = 72
+      y = 192
+
+    # A key no data file carries: nothing draws, the glue included.
+    [[ogcard.templates.datafacts.text]]
+      source = 'data'
+      key = 'facts.values.identity.nickname'
+      prefix = '['
+      suffix = ']'
+      font = 'mono'
+      size = 28
+      color = '#ffd400'
+      x = 72
+      y = 280
+
+    # A dotted path that runs THROUGH a scalar: absent, not an error.
+    [[ogcard.templates.datafacts.text]]
+      source = 'data'
+      key = 'facts.values.identity.name.deeper'
+      prefix = '['
+      suffix = ']'
+      font = 'mono'
+      size = 28
+      color = '#ffd400'
+      x = 72
+      y = 324
 
   # ---- aligned: the same ten glyphs in the same 1000-pixel box, drawn once
   #      per alignment. A wrapped slot draws one filter per line and computes

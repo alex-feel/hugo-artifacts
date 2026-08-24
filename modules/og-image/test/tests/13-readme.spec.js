@@ -171,6 +171,7 @@ const SOURCE_TOKENS = [
   'domain',
   'date',
   'param',
+  'data',
   'literal',
 ];
 
