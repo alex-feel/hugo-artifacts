@@ -1,0 +1,14 @@
+# The canonical-facts file the datafacts template reads through source =
+# 'data'. One nested table so a dotted path has depth to walk, one number so
+# a non-string scalar is drawn, one flat list so two items become two lines,
+# and one list of tables so the degraded environment has a list no slot can
+# draw. Only the degraded build points a slot at the last two shapes; this
+# file itself is inert in every environment, because data is warned about on
+# USE, never on load.
+[identity]
+name = 'anon crux'
+since = 2019
+roles = ['first role', 'second line']
+
+[[identity.links]]
+label = 'site'

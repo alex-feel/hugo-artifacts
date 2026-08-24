@@ -166,9 +166,10 @@ Every key is OPTIONAL, and a site that configures nothing composes nothing: the 
     # Text slots, drawn in declaration order, ON TOP of the overlays.
     [[params.ogcard.templates.post.text]]
       source      = 'title'     # title | description | section | section_title | kind | site_title
-                                # | domain | date | param | literal
-      key         = ''          # a .Param path for source='param' (dotted paths work); a Hugo time
-                                # layout for source='date' (default ':date_long').
+                                # | domain | date | param | data | literal
+      key         = ''          # a .Param path for source='param' or a hugo.Data path for
+                                # source='data' (dotted paths work in both); a Hugo time layout for
+                                # source='date' (default ':date_long').
       value       = ''          # the string drawn for source='literal'.
       prefix      = ''          # glued in front of a resolved value, and dropped with it when the
       suffix      = ''          # value resolves empty, so a lone separator never draws.
@@ -184,10 +185,12 @@ Every key is OPTIONAL, and a site that configures nothing composes nothing: the 
       color       = '#ffffff'   # '#rgb' or '#rrggbb' ONLY. Unset leaves Hugo's own #ffffff.
       x           = 72          # With `width` set: the wrap box's LEFT edge (0 when unset). Without
                                 # `width`: the absolute anchor coordinate itself, per `align`.
-      y           = 320         # Top of the first line (0 when unset in a wrapping slot).
+      y           = 320         # Top of the first line (0 when unset in a wrapping or multi-line
+                                # slot).
       align       = 'left'      # left | center | right, applied per line.
       width       = 1040        # Wrap-box width in px. Its PRESENCE turns on the wrap engine;
-                                # without it the slot draws on one line.
+                                # without it the slot never wraps and draws its value's own lines,
+                                # one per newline in it.
       max_lines   = 3           # Hard bound on drawn lines. 0 or unset means unlimited -- and an
                                 # unlimited slot never shrinks and never truncates.
       ellipsis    = '…'         # Appended to a truncated last line. Set it to '' for none.
@@ -258,13 +261,13 @@ Text slot keys (`[[params.ogcard.templates.<name>.text]]`) -- everything that de
 | Key | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `source` | string | `title` | See [Text sources](#text-sources) |
-| `key` | string | -- | `.Param` path for `source='param'`; time layout for `source='date'` (`:date_long`) |
+| `key` | string | -- | `.Param` path for `source='param'`; `hugo.Data` path for `source='data'`; time layout for `source='date'` (`:date_long`) |
 | `value` | string | -- | The string drawn for `source='literal'` |
-| `prefix`, `suffix` | string | -- | Glued around a non-empty value only |
+| `prefix`, `suffix` | string | -- | Glued around a non-empty value only; on a multi-line value, in front of the first line and after the last |
 | `case` | string | `none` | `none`, `upper`, `lower`, `title` |
 | `size` | int | `20` | 1-100000. Omitted from the drawing call when unset on a single-line slot |
 | `color` | string | -- | `#rgb` or `#rrggbb`; unset leaves Hugo's `#ffffff` |
-| `x`, `y` | int | `0` in a wrapping slot | -100000 to 100000. Omitted when unset on a single-line slot, where Hugo's own `10` applies |
+| `x`, `y` | int | `0` in a wrapping or multi-line slot | -100000 to 100000. Omitted when unset on a single-line slot, where Hugo's own `10` applies |
 | `align` | string | `left` | `left`, `center`, `right`. Omitted when unset on a single-line slot |
 | `width` | int | -- | 1-100000. PRESENCE turns on wrapping |
 | `max_lines` | int | `0` | 0-100000. 0 means unlimited; nothing shrinks or truncates without it |
@@ -386,15 +389,16 @@ Each text slot resolves its `source` to one string, then applies `case`, `prefix
 | `domain` | The host of the site's base URL |
 | `date` | The page date formatted with `key` as the layout (`:date_long` by default) |
 | `param` | The page parameter named by `key`, dotted paths included |
+| `data` | The value in `data/` named by `key` -- a dotted path resolved against `hugo.Data`, so `key = 'facts.values.name'` reads the `name` key of `data/facts/values.toml`. Build-global: every language draws the same value |
 | `literal` | The slot's own `value` |
 
-A source that resolves to nothing is a SILENT skip, together with its `prefix` and `suffix` -- an optional per-page field that only some pages carry is exactly what a slot is for: no section on the home page, no date on an undated page, no subtitle on most posts. Only mistakes speak: an unknown source token, a `param` that holds a table or a list, and a `date` layout Hugo cannot read each warn once and drop that one slot while the rest of the card renders.
+A source that resolves to nothing is a SILENT skip, together with its `prefix` and `suffix` -- an optional per-page field that only some pages carry is exactly what a slot is for: no section on the home page, no date on an undated page, no subtitle on most posts. A `param` or `data` value that is a flat list draws one item per line, with `prefix` glued in front of the first line and `suffix` after the last, so a slot naming a list of roles needs no pre-joining; a `data` path that runs through a non-table, like a `param` path through one, is simply absent. Only mistakes speak: an unknown source token, a `param` or `data` key that holds a table (or a list with a table or a list inside it), and a `date` layout Hugo cannot read each warn once and drop that one slot while the rest of the card renders.
 
 ## Text layout
 
 ### Wrapping and fitting
 
-A slot with `width` set runs through the fit engine; a slot without it draws on one line, and Hugo's own canvas-edge word wrap is the silent backstop if that line does not fit. The engine measures the text once, then walks a bounded ladder of sizes from `size` down to `ceil(size * min_scale)` in `shrink_step` steps, wrapping greedily at each rung against the budget
+A slot with `width` set runs through the fit engine; a slot without it never wraps -- it draws its value's own lines, one per newline already in it, at the pitch `round(size * line_height)`, defaulting like a wrapping slot when it draws more than one -- and Hugo's own canvas-edge word wrap is the silent backstop if a line does not fit. The engine measures the text once, then walks a bounded ladder of sizes from `size` down to `ceil(size * min_scale)` in `shrink_step` steps, wrapping greedily at each rung against the budget
 
 ```text
 budget = floor(width * em * safety * width_factor / size)
@@ -505,7 +509,9 @@ The module NEVER breaks a build over an image. `errorf` is reserved for the sing
 | Unknown enum (`format`, `anchor`, slot `align`, `case`, overlay `anchor`, overlay `source`) | Warn + the documented fallback (`png`, `Center`, `left`, text as written, `topleft`; an unknown overlay `source` drops that overlay) | key + value, plus the tier for `format` and `anchor` |
 | Unknown slot `source` token | Warn naming the whole vocabulary + that slot dropped; the rest of the card draws | token |
 | `source='param'` naming a key the page does not carry | Silent skip -- optional per-page fields are a design, not a mistake | -- |
-| `source='param'` resolving to a table or a list | Warn + that slot skipped | key |
+| `source='data'` naming a key no data file carries, or a dotted path that runs through a non-table | Silent skip -- the same design | -- |
+| `source='param'` or `'data'` resolving to a table | Warn + that slot skipped | key |
+| `source='param'` or `'data'` resolving to a list with a table or a list inside it | Warn + that slot skipped -- a FLAT list is not a fault and draws one item per line | key |
 | `source='date'` on a page with no date | Silent skip | -- |
 | `source='date'` whose `key` is not a layout Hugo understands | Warn + that slot skipped | layout |
 | `source='section'` or `'section_title'` on the home page | Silent skip | -- |

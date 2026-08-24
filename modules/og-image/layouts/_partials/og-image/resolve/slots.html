@@ -17,8 +17,14 @@
   A slot with `width` set runs through the fit engine: the text is measured
   once in per-mille em and wrapped against the box, shrinking down a bounded
   size ladder until it fits or reaching the ladder's floor and truncating with
-  an ellipsis. A slot WITHOUT `width` draws on one line, and the width
-  estimate never enters positioning -- it decides line breaks only.
+  an ellipsis. A slot WITHOUT `width` never wraps, but it still draws one
+  filter per newline already in its value -- a multi-line literal, or a flat
+  list joined one item per line -- at the same resolved line pitch, because
+  handing images.Text the newlines instead is exactly the coupling this
+  per-line scheme exists to avoid. A multi-line slot therefore defaults like
+  a wrapping one -- size taken as 20, `x` and `y` as 0, align as left -- with
+  `y` the top of the first line. The width estimate never enters positioning
+  -- it decides line breaks only.
 
   Every key of the option dict is written out by name, because images.Text
   silently ignores an option key it does not know: a typo would be invisible
@@ -235,16 +241,42 @@
               "aligny" "top")) -}}
       {{- end -}}
     {{- else -}}
-      {{/* Unwrapped slot: one line, and only the keys the site actually set.
-           Hugo word-wraps at the canvas edge on its own when a line does not
-           fit, which is a silent backstop, not a placement this module chose:
-           set `width` to lay the text out here instead. */}}
-      {{- $o := dict "aligny" "top" -}}
-      {{- if $has.size -}}{{- $o = merge $o (dict "size" $ints.size) -}}{{- end -}}
-      {{- if $has.x -}}{{- $o = merge $o (dict "x" $ints.x) -}}{{- end -}}
-      {{- if $has.y -}}{{- $o = merge $o (dict "y" $ints.y) -}}{{- end -}}
-      {{- if $hasAlign -}}{{- $o = merge $o (dict "alignx" $align) -}}{{- end -}}
-      {{- $emit = $emit | append (dict "text" $src.text "opts" $o) -}}
+      {{/* Unwrapped slot: no fit engine, and only the keys the site actually
+           set. Hugo word-wraps at the canvas edge on its own when a line does
+           not fit, which is a silent backstop, not a placement this module
+           chose: set `width` to lay the text out here instead. A value that
+           already carries newlines is still drawn one filter per line at the
+           resolved pitch -- handed to images.Text whole, its lines merge at
+           card sizes under Hugo's own spacing. */}}
+      {{- $lines := split (replaceRE `\r\n?` "\n" $src.text) "\n" -}}
+      {{- if le (len $lines) 1 -}}
+        {{- $o := dict "aligny" "top" -}}
+        {{- if $has.size -}}{{- $o = merge $o (dict "size" $ints.size) -}}{{- end -}}
+        {{- if $has.x -}}{{- $o = merge $o (dict "x" $ints.x) -}}{{- end -}}
+        {{- if $has.y -}}{{- $o = merge $o (dict "y" $ints.y) -}}{{- end -}}
+        {{- if $hasAlign -}}{{- $o = merge $o (dict "alignx" $align) -}}{{- end -}}
+        {{- $emit = $emit | append (dict "text" $src.text "opts" $o) -}}
+      {{- else -}}
+        {{/* A multi-line slot defaults exactly like a wrapping one -- size
+             taken as 20, x and y as 0, align as left -- so drawing more than
+             one line is ONE contract wherever the lines came from. An
+             all-whitespace line emits no filter and still advances the
+             count, so a deliberate blank line stays a visible gap. */}}
+        {{- $pitch := int (math.Round (mul (float $ints.size) (float $type.line_height))) -}}
+        {{- if lt $pitch 1 -}}{{- $pitch = 1 -}}{{- end -}}
+        {{- range $li, $line := $lines -}}
+          {{- if ne (trim $line " \t") "" -}}
+            {{- $emit = $emit | append (dict
+                "text" $line
+                "opts" (dict
+                  "size" $ints.size
+                  "x" $ints.x
+                  "y" (add $ints.y (mul $li $pitch))
+                  "alignx" $align
+                  "aligny" "top")) -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
     {{- end -}}
 
     {{- range $e := $emit -}}

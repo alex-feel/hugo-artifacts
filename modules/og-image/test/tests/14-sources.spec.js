@@ -1,10 +1,11 @@
 // WHERE a slot's text comes from, and what happens to it on the way.
 //
-// Ten source tokens, four case transforms and a prefix/suffix pair are the
+// Eleven source tokens, four case transforms and a prefix/suffix pair are the
 // whole of a slot's vocabulary, and every one of them resolves to a string a
 // card draws. Two of them -- title and description -- are what the caller
-// handed in and are read in tests/03-text.spec.js; the other eight are read
-// out of the page, the site and the clock, and this is where they are drawn.
+// handed in and are read in tests/03-text.spec.js; the other nine are read
+// out of the page, the site, the clock and the data directory, and this is
+// where they are drawn.
 //
 // The card is one row per source in a monospace face at a constant advance, so
 // a row's ink extent divided by that advance is a character count and the
@@ -19,7 +20,7 @@
 // two was drawn, and the amount of ink separates 'Anon Crux' from both.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {configuredDir, records, cardImage, MONO_EM_RATIO} from './helpers.js';
+import {configuredDir, records, cardImage, MONO_EM_RATIO, SHIPPED_LINE_HEIGHT} from './helpers.js';
 import {inkBands, charsOn} from './lib/raster.js';
 
 // The sources template: every row at x = 72, size 28, the first at y = 16 and
@@ -101,6 +102,52 @@ test('a case transform is visible in the ink, not only in the width', () => {
     plain.pixels < titled.pixels && titled.pixels < upper.pixels,
     `two capitals ink more than none and less than nine: ${plain.pixels}, ${titled.pixels}, ${upper.pixels}`,
   );
+});
+
+// The datafacts template on /facts/a: the `data` rows on the same monospace
+// terms, plus the one `param` row that proves a flat front-matter list draws
+// by the same rule. The two list rows draw TWO lines each at the shipped
+// pitch of round(28 * 1.4) = 39, which is why the template hands each of them
+// an 88-pixel window where a scalar row gets 44. The two rows that resolve to
+// nothing carry a prefix and a suffix, so the band count doubling as the row
+// count is also the statement that the glue dropped with the value.
+const FACTS_PITCH = Math.round(ROW.size * SHIPPED_LINE_HEIGHT);
+const FACTS = [
+  {y: 16, lines: ['anon crux'], why: 'a string three segments into data/'},
+  {y: 60, lines: ['2019'], why: 'a number drawn as its digits'},
+  {y: 104, lines: ['first role', 'second line'], why: 'a flat data list, one item per line'},
+  {y: 192, lines: ['alpha row', 'beta'], why: 'a flat front-matter list through param'},
+  {y: 280, lines: [], why: 'a key no data file carries'},
+  {y: 324, lines: [], why: 'a dotted path that runs through a scalar'},
+];
+
+test('a data slot draws what its key names, a flat list one item per line, an absent path nothing', () => {
+  const bands = bandsOf(records(configuredDir), '/facts/a');
+  const expected = FACTS.flatMap(({y, lines, why}) =>
+    lines.map((text, line) => ({top: y + line * FACTS_PITCH, text, why})),
+  );
+  assert.equal(bands.length, expected.length, 'one band per line that resolved to something');
+  expected.forEach(({top, text, why}, position) => {
+    const band = bands[position];
+    assert.ok(
+      band.top >= top && band.top < top + FACTS_PITCH,
+      `${why}: ink top ${band.top} against line top ${top}`,
+    );
+    assert.equal(glyphs(band), text.length, `${why}: drew ${JSON.stringify(text)}`);
+    assert.ok(band.left >= ROW.x, `${why}: starts at the left edge of the slot`);
+  });
+});
+
+test('a list in an unwrapped slot draws at the resolved line pitch, not at images.Text spacing', () => {
+  // Both lines of each list start with an ascender-height glyph, so the two
+  // ink tops sit at the same offset inside their lines and their distance IS
+  // the pitch the module drew at. Handing the joined string to images.Text
+  // instead would space the lines by its own default, which at this size is a
+  // different number -- that regression moves the second band out of this
+  // assertion before it moves anything else.
+  const bands = bandsOf(records(configuredDir), '/facts/a');
+  assert.equal(bands[3].top - bands[2].top, FACTS_PITCH, 'the data list');
+  assert.equal(bands[5].top - bands[4].top, FACTS_PITCH, 'the param list');
 });
 
 test('the section sources are empty on the home page and drawn everywhere else', () => {

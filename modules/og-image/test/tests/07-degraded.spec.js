@@ -90,8 +90,16 @@ const FAULTS = [
   ],
   ['slot: unknown source token', /^Unknown card text source "autor"/],
   [
-    'slot: parameter holding a list',
-    /^The card text slot in template "badslots" reads the page parameter "tags"/,
+    'slot: parameter holding a table',
+    /^The card text slot in template "badslots" reads the page parameter "contact", which holds a table rather than a value a slot can draw/,
+  ],
+  [
+    'slot: data key holding a table',
+    /^The card text slot in template "badslots" reads the data key "facts\.values\.identity", which holds a table rather than a value a slot can draw/,
+  ],
+  [
+    'slot: data list with a table inside',
+    /^The card text slot in template "badslots" reads the data key "facts\.values\.identity\.links", which holds a list with a table or a list inside it/,
   ],
   ['slot: unknown metrics table', /^No metrics table named "nosuch"/],
   [
