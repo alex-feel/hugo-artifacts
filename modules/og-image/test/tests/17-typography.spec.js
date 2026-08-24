@@ -242,8 +242,13 @@ test('the typography build says exactly the two things it was built to say', () 
   // runner does not gate on silence -- and it is also the "warns ONCE" half of
   // the two assertions above, which a per-page or per-slot repetition would
   // fail here rather than nowhere.
+  // Sorted before comparing: the two faults live in different sections, whose
+  // pages render concurrently, so which line prints first is a race the
+  // module does not promise -- observed both ways across otherwise identical
+  // builds. Sorting keeps the count and the exact text assertable while
+  // dropping only the inter-page order.
   const lines = moduleWarnings('typography').map((line) => line.replace(/^\[og-image\] /, ''));
-  assert.deepEqual(lines, [
+  assert.deepEqual([...lines].sort(), [
     'Ignoring the line_height value "nope" set in text slot 0 of card template "tbadslot" (expected a number written as a plain decimal). That level\'s value is dropped, so the level below it applies.',
     'Ignoring the line_height value "wobbly" set in card template "tbadtpl" (expected a number written as a plain decimal). That level\'s value is dropped, so the level below it applies.',
   ]);
