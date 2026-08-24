@@ -5,17 +5,20 @@
   filters. Overlays are composited in declaration order and UNDER the text, so
   a logo can never hide the words the card exists to show.
 
-  Each entry names its image one of three ways -- an `asset` path, a `param`
-  naming a front-matter key that holds a path, or a `resource` glob matched
-  against the page's own bundle -- and og-image/lib/resolve-image.html owns
-  that vocabulary for the module, so an overlay and a background name their
-  artwork identically. What is decided HERE is what each outcome MEANS to an
-  overlay: the split between a warning and silence follows WHO made the
-  mistake, not which source it happened under. An entry whose own `src`, `key`
-  or `match` is missing, or whose `match` is not a pattern that can be matched
-  at all, is a card-template mistake no page can satisfy and warns once; a
-  param or bundle resource the page simply does not have is the ordinary case
-  and stays silent. Either way the rest of the card still renders.
+  Each entry names its image one of four ways -- an `asset` path, a `param`
+  naming a front-matter key that holds a path, a `resource` glob matched
+  against the page's own bundle, or a `data` key naming a path in a data
+  file -- and og-image/lib/resolve-image.html owns that vocabulary for the
+  module, so an overlay and a background name their artwork identically. What
+  is decided HERE is what each outcome MEANS to an overlay: the split between
+  a warning and silence follows WHO made the mistake, not which source it
+  happened under. An entry whose own `src`, `key` or `match` is missing, or
+  whose `match` is not a pattern that can be matched at all, is a
+  card-template mistake no page can satisfy and warns once; a param or bundle
+  resource the page simply does not have is the ordinary case and stays
+  silent. `data` has no page in it -- the key and the value are both the
+  site's own -- so every data fault is a mistake and warns once. Either way
+  the rest of the card still renders.
 
   Placement: images.Overlay takes absolute pixel coordinates from the top-left
   corner, so the configured `anchor` plus the overlay's own size decide the
@@ -67,15 +70,37 @@
       {{- partial "og-image/lib/warn.html" (dict
           "key" (printf "og-image:warn:overlay-no-key:%s:%d" $name $i)
           "message" (printf "[og-image] Overlay %d of card template %q names no image: an overlay reading from a page parameter needs a key naming that parameter. That overlay is dropped." $i $name)) -}}
+    {{- else if eq $found.source "data" -}}
+      {{- partial "og-image/lib/warn.html" (dict
+          "key" (printf "og-image:warn:overlay-data-no-key:%s:%d" $name $i)
+          "message" (printf "[og-image] Overlay %d of card template %q names no image: an overlay reading from a data file needs a key naming the value that holds its path. That overlay is dropped." $i $name)) -}}
     {{- else -}}
       {{- partial "og-image/lib/warn.html" (dict
           "key" (printf "og-image:warn:overlay-no-match:%s:%d" $name $i)
           "message" (printf "[og-image] Overlay %d of card template %q names no image: an overlay reading from the page's own resources needs a match pattern. That overlay is dropped." $i $name)) -}}
     {{- end -}}
   {{- else if eq $found.reason "not-found" -}}
+    {{/* The key carries the source as well as the path, because the wording
+         differs by source and the first message stored under a key wins: one
+         path named by both an asset src and a data value must not have one
+         spelling suppress the other's provenance. */}}
+    {{- if eq $found.source "data" -}}
+      {{- partial "og-image/lib/warn.html" (dict
+          "key" (printf "og-image:warn:missing-overlay:%s:%s" $found.source $label)
+          "message" (printf "[og-image] The overlay %q named in data/ by card template %q was not found in the page's resources or under assets/; that overlay is dropped and the card is composed without it." $label $name)) -}}
+    {{- else -}}
+      {{- partial "og-image/lib/warn.html" (dict
+          "key" (printf "og-image:warn:missing-overlay:%s:%s" $found.source $label)
+          "message" (printf "[og-image] The overlay %q used by card template %q was not found under assets/; that overlay is dropped and the card is composed without it." $label $name)) -}}
+    {{- end -}}
+  {{- else if eq $found.reason "no-value" -}}
     {{- partial "og-image/lib/warn.html" (dict
-        "key" (printf "og-image:warn:missing-overlay:%s" $label)
-        "message" (printf "[og-image] The overlay %q used by card template %q was not found under assets/; that overlay is dropped and the card is composed without it." $label $name)) -}}
+        "key" (printf "og-image:warn:overlay-data-no-value:%s:%d" $name $i)
+        "message" (printf "[og-image] Overlay %d of card template %q reads the data key %q, which names no value in data/; that overlay is dropped." $i $name $label)) -}}
+  {{- else if eq $found.reason "bad-value" -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:overlay-data-bad-value:%s:%d" $name $i)
+        "message" (printf "[og-image] Overlay %d of card template %q reads the data key %q, which holds a table or a list rather than a path; that overlay is dropped." $i $name $label)) -}}
   {{- else if eq $found.reason "bad-match" -}}
     {{- partial "og-image/lib/warn.html" (dict
         "key" (printf "og-image:warn:overlay-bad-match:%s:%s" $name $label)

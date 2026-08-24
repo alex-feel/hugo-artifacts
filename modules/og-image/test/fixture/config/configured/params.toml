@@ -41,6 +41,7 @@
     unstyled = 'unstyled'
     bgsource = 'bgresource'
     bgparam = 'bgparam'
+    bgdata = 'bgdata'
 
   [ogcard.kinds]
     home = 'home'
@@ -467,22 +468,25 @@
       max_lines = 1
       align = 'right'
 
-  # ---- overlaid: the two overlay sources the badge cannot reach. param takes
-  #      a path from the page's own front matter and resolves it against the
-  #      page's bundle first and assets/ second; resource matches a glob
-  #      against the page's bundle. Each lands in its own 80-pixel square, and
-  #      the three squares carry three different flat colors, so which source
-  #      resolved is a bounding box rather than a guess. The third square is
-  #      the badge at half opacity: a blend of two known colors is neither of
-  #      them, which is what tells a faded overlay from an opaque one.
+  # ---- overlaid: the three overlay sources the badge cannot reach. param
+  #      takes a path from the page's own front matter and resolves it against
+  #      the page's bundle first and assets/ second; resource matches a glob
+  #      against the page's bundle; data takes a path from a data file, so it
+  #      does not depend on the page at all. Each lands in its own 80-pixel
+  #      square, and the four squares carry four different flat colors, so
+  #      which source resolved is a bounding box rather than a guess. The
+  #      third square is the badge at half opacity: a blend of two known
+  #      colors is neither of them, which is what tells a faded overlay from
+  #      an opaque one.
   #
-  #      Five pages share this template: one carrying an assets/ path in the
-  #      parameter, one leaf bundle whose parameter and glob both name its own
-  #      image, two whose parameter holds a path no lookup can resolve (one
-  #      the operating system refuses and one that is not a matchable
-  #      pattern), and the section page, which carries neither. All of those
-  #      are the page's value rather than the template's, so all of them are
-  #      silent, and this build's silence is gated.
+  #      Six pages share this template: two carrying an assets/ path in the
+  #      parameter (one spelled site-absolutely, which the module trims), one
+  #      leaf bundle whose parameter and glob both name its own image, two
+  #      whose parameter holds a path no lookup can resolve (one the
+  #      operating system refuses and one that is not a matchable pattern),
+  #      and the section page, which carries neither. All of those are the
+  #      page's value rather than the template's, so all of them are silent,
+  #      and this build's silence is gated.
   [ogcard.templates.overlaid]
     background = 'og/post-bg.png'
 
@@ -520,6 +524,18 @@
       width = 80
       anchor = 'topleft'
       x = 600
+      y = 440
+
+    # The fourth square reads its path out of data/. The key is the
+    # template's and the value is the data file's, so unlike the param and
+    # resource squares this one appears on EVERY page of the template, the
+    # section page included -- data has no page in it.
+    [[ogcard.templates.overlaid.overlay]]
+      source = 'data'
+      key = 'facts.values.identity.badge'
+      width = 80
+      anchor = 'topleft'
+      x = 800
       y = 440
 
   # ---- fitting: overflow = 'truncate', which skips the shrink ladder
@@ -668,6 +684,26 @@
       fallback = 'og/home-bg.png'
 
     [[ogcard.templates.bgparam.text]]
+      source = 'title'
+      font = 'mono'
+      metrics = 'mono'
+      size = 64
+      color = '#ffd400'
+      x = 72
+      y = 120
+      width = 1040
+      max_lines = 2
+
+  # ---- bgdata: the backdrop's path read out of data/. The value is stored
+  #      site-absolutely ('/og/home-bg.png') on purpose: the module trims one
+  #      leading slash before the lookups, so the spelling a data file tends
+  #      to carry still resolves. No fallback is declared, so a card filled
+  #      with the home color is the proof the primary source answered --
+  #      declining is what failure looks like here.
+  [ogcard.templates.bgdata]
+    background = { source = 'data', key = 'facts.values.identity.backdrop' }
+
+    [[ogcard.templates.bgdata.text]]
       source = 'title'
       font = 'mono'
       metrics = 'mono'

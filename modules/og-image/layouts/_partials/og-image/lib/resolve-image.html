@@ -10,11 +10,26 @@
     param     `key`   a front-matter key holding a path, resolved against the
                       page's own bundle first and assets/ second
     resource  `match` a glob matched against the page's own bundle
+    data      `key`   a dotted path into hugo.Data holding a path, resolved
+                      against the page's own bundle first and assets/ second
+
+  A `param` or `data` value may spell an assets path site-absolutely: one
+  leading "/" is trimmed before the lookups, because both values tend to live
+  beside published URLs in front matter and data files. Hugo's own lookup
+  currently normalizes a leading slash away too (measured at v0.164.0: a
+  build with this trim removed resolves the same paths), so the trim exists
+  to make the documented contract the module's own rather than a dependence
+  on that normalization. The `asset` and `resource` locators are the
+  template's own literals and are taken as written.
 
   It reports WHAT happened and never warns itself, because the same outcome
   means different things to different callers: a page not carrying the image
   is an ordinary skip for an overlay and a decline (or a fallback) for a
-  background. The caller owns that judgment and the wording that goes with it.
+  background. `data` is the one source with no page in it -- the key is the
+  card template's and the value is a data file's, both the site's own and
+  build-global -- so every data outcome short of an image is somebody's
+  mistake for the caller to warn about. The caller owns that judgment and
+  the wording that goes with it.
 
   The usability probe runs here too. A resource can be media-typed as an image
   and still carry nothing Hugo can decode -- a media type is inferred from the
@@ -33,8 +48,10 @@
     unknown-source  the source token is not in the vocabulary
     no-locator      the source is known but its own src/key/match is missing
     bad-match       the glob cannot be matched against any page's resources
-    not-found       an assets/ path that names no file (a template mistake)
+    not-found       a path that names no file (a template or data mistake)
     absent          this page simply does not carry the image
+    no-value        a data key that names no value in data/
+    bad-value       a data key holding a table or a list rather than a path
     unusable        something was found that Hugo cannot process as an image
 
   ONE terminal return.
@@ -42,7 +59,7 @@
 
 {{- $page := .page -}}
 {{- $spec := .spec -}}
-{{- $known := slice "asset" "param" "resource" -}}
+{{- $known := slice "asset" "param" "resource" "data" -}}
 {{- $source := lower (trim (printf "%v" (index $spec "source" | default .default)) " \t\n\r") -}}
 {{- $res := "" -}}
 {{- $label := "" -}}
@@ -82,7 +99,7 @@
     {{- $reason = "absent" -}}
     {{- $v := $page.Param $key -}}
     {{- if and (ne $v nil) (not (reflect.IsMap $v)) (not (reflect.IsSlice $v)) -}}
-      {{- $p := trim (printf "%v" $v) " \t\n\r" -}}
+      {{- $p := strings.TrimPrefix "/" (trim (printf "%v" $v) " \t\n\r") -}}
       {{- $label = $p -}}
       {{- if $p -}}
         {{- $bundled := try ($page.Resources.GetMatch $p) -}}
@@ -95,6 +112,46 @@
             {{- $res = . -}}
             {{- $reason = "" -}}
           {{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- else if eq $source "data" -}}
+  {{/* Both halves of this source are the site's own: the key is the card
+       template's and the value lives in a data file, so unlike `param` there
+       is no page whose ordinary business a failure could be. The walk is the
+       same one the text slots use (og-image/lib/data-value.html), and the
+       value is then looked up exactly as a param value is -- the page's own
+       bundle first, assets/ second, both wrapped for the raise a glob or a
+       pasted URL causes. */}}
+  {{- $key := trim (printf "%v" (index $spec "key" | default "")) " \t\n\r" -}}
+  {{- if not $key -}}
+    {{- $reason = "no-locator" -}}
+  {{- else -}}
+    {{- $label = $key -}}
+    {{- $walk := partial "og-image/lib/data-value.html" (dict "key" $key) -}}
+    {{- $v := $walk.value -}}
+    {{- if or (not $walk.live) (eq $v nil) -}}
+      {{- $reason = "no-value" -}}
+    {{- else if or (reflect.IsMap $v) (reflect.IsSlice $v) -}}
+      {{- $reason = "bad-value" -}}
+    {{- else -}}
+      {{- $p := strings.TrimPrefix "/" (trim (printf "%v" $v) " \t\n\r") -}}
+      {{- if not $p -}}
+        {{- $reason = "no-value" -}}
+      {{- else -}}
+        {{- $label = $p -}}
+        {{- $bundled := try ($page.Resources.GetMatch $p) -}}
+        {{- with $bundled.Value -}}
+          {{- $res = . -}}
+        {{- else -}}
+          {{- $got := try (resources.Get $p) -}}
+          {{- with $got.Value -}}
+            {{- $res = . -}}
+          {{- end -}}
+        {{- end -}}
+        {{- if not $res -}}
+          {{- $reason = "not-found" -}}
         {{- end -}}
       {{- end -}}
     {{- end -}}

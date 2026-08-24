@@ -155,6 +155,8 @@ Every key is OPTIONAL, and a site that configures nothing composes nothing: the 
                                     # coordinate below stays valid. An SVG is rejected. Write it as a
                                     # table to compose on the page's own artwork instead --
                                     # { source = 'resource', match = 'tile.png', fallback = 'og/post-bg.png' }
+                                    # -- or on artwork a data file names --
+                                    # { source = 'data', key = 'identity.portrait' }
                                     # -- see "Background sources" below.
 
     # Any of the nine typography keys, written here to override the module level for every slot
@@ -206,9 +208,10 @@ Every key is OPTIONAL, and a site that configures nothing composes nothing: the 
 
     # Overlays, composited in declaration order, UNDER the text.
     [[params.ogcard.templates.post.overlay]]
-      source  = 'asset'          # asset | param | resource
+      source  = 'asset'          # asset | param | resource | data
       src     = 'og/logo.png'    # a path under assets/, for source='asset'
-      key     = ''               # a front-matter param holding a path, for source='param'
+      key     = ''               # a front-matter param holding a path, for source='param', or a
+                                 # hugo.Data path holding one, for source='data'
       match   = ''               # a page-bundle resource glob, for source='resource' (e.g. '*avatar*')
       width   = 96               # resized to this width before compositing; unset draws native size.
       opacity = 1.0              # 0.0 - 1.0
@@ -250,7 +253,7 @@ Card template keys (`[params.ogcard.templates.<name>]`):
 
 | Key | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `background` | string or table | yes | Where the base raster comes from. Everything else is composed onto it, and it is normalized to the canvas with `.Fill` plus `anchor` whatever its size or aspect ratio. A string is a path under `assets/`; a table names its image the same three ways an overlay entry does -- `source` (`asset`, `param` or `resource`) with `src`, `key` or `match` -- so a card can be composed on the page's own artwork. See [Background sources](#background-sources) |
+| `background` | string or table | yes | Where the base raster comes from. Everything else is composed onto it, and it is normalized to the canvas with `.Fill` plus `anchor` whatever its size or aspect ratio. A string is a path under `assets/`; a table names its image the same four ways an overlay entry does -- `source` (`asset`, `param`, `resource` or `data`) with `src`, `key` or `match` -- so a card can be composed on the page's own artwork, or on artwork a data file names. See [Background sources](#background-sources) |
 | `fallback` (inside the `background` table) | string | no | A path under `assets/` composed instead when the table form resolves to nothing on a given page -- most often a routed page carrying no artwork of its own. Without one, such a page is declined |
 | `text` | array of tables | no | Text slots, drawn in declaration order, above the overlays |
 | `overlay` | array of tables | no | Overlays, composited in declaration order, below the text |
@@ -276,9 +279,9 @@ Overlay keys (`[[params.ogcard.templates.<name>.overlay]]`):
 
 | Key | Type | Default | Notes |
 | --- | --- | --- | --- |
-| `source` | string | `asset` | `asset` (a path under `assets/`), `param` (a front-matter key holding a path), `resource` (a page-bundle glob) |
+| `source` | string | `asset` | `asset` (a path under `assets/`), `param` (a front-matter key holding a path), `resource` (a page-bundle glob), `data` (a `hugo.Data` key holding a path) |
 | `src` | string | -- | The `assets/` path, for `source='asset'` |
-| `key` | string | -- | The front-matter key, for `source='param'` |
+| `key` | string | -- | The front-matter key, for `source='param'`; the dotted `hugo.Data` path, for `source='data'` |
 | `match` | string | -- | The bundle glob, for `source='resource'` |
 | `width` | int | -- | 1-100000; resized before compositing, unset draws the native size |
 | `opacity` | float | `1.0` | 0 <= v <= 1 |
@@ -351,13 +354,14 @@ Whether a page with no card is a silent decline or a reported mistake is decided
 
 ## Background sources
 
-A card is composed ON a raster, and `background` says where that raster comes from. The string form names a path under `assets/` -- the shared backdrop every card of that template carries. The table form names the image the same three ways an overlay entry does, which is what lets a card be composed on artwork the PAGE carries:
+A card is composed ON a raster, and `background` says where that raster comes from. The string form names a path under `assets/` -- the shared backdrop every card of that template carries. The table form names the image the same four ways an overlay entry does, which is what lets a card be composed on artwork the PAGE carries, or on artwork whose path lives in a data file beside the site's other canonical facts:
 
 | `source` | Names its image with | Resolves to |
 | --- | --- | --- |
 | `asset` (default) | `src` | A path under `assets/`, identical to the string form |
 | `param` | `key` | The path held by that front-matter key, looked up in the page's own bundle first and `assets/` second |
 | `resource` | `match` | The first resource of the page's own bundle matching that glob |
+| `data` | `key` | The path held by that value in `data/` -- a dotted path resolved against `hugo.Data`, exactly as a text slot's `data` source reads it -- looked up in the page's own bundle first and `assets/` second |
 
 ```toml
 [params.ogcard.templates.post]
@@ -368,9 +372,18 @@ A card is composed ON a raster, and `background` says where that raster comes fr
   source   = 'param'
   key      = 'cover'
   fallback = 'og/post-bg.png'
+
+# A backdrop whose path is a canonical fact of the site, kept in data/:
+[params.ogcard.templates.author.background]
+  source = 'data'
+  key    = 'identity.values.portrait'
 ```
 
+A `param` or `data` value may spell an assets path site-absolutely: one leading `/` is trimmed before the lookups, so a value like `/og/portrait.png` resolves to `assets/og/portrait.png`. The `asset` form's `src` and the `resource` form's `match` are the template's own literals and are taken as written.
+
 Whatever it resolves to is normalized with `.Fill` plus `anchor`, so a source of ANY size or aspect ratio covers the canvas exactly. Passing that artwork as a full-bleed overlay instead is not equivalent and fails silently: an overlay is resized to a `width` with its aspect preserved and then composited, so a source wider than the canvas ratio leaves the backdrop showing above and below it while the build exits 0.
+
+`data` is the one source with no page in it: the key is the card template's and the value is a data file's, both the site's own, and `hugo.Data` is build-global. So where a `param` or `resource` the page does not carry is a silent design, every `data` outcome short of an image is a mistake and warns once -- a missing `key`, a key naming no value, a value that is a table or a list, and a path naming no file each get their own diagnostic, and a background falls to its `fallback` where one is declared.
 
 `fallback` is what a routed page composes on when it carries no artwork of its own. It is a path under `assets/` rather than another table, because it is the last resort and must not depend on the page. A page that resolves to nothing with no fallback declared is declined, and the template says so once.
 
@@ -485,13 +498,15 @@ The module NEVER breaks a build over an image. `errorf` is reserved for the sing
 | `template` or `default_template` holds a table, list or boolean at some tier | Warn + that tier's value dropped, so a lower tier's value stands and the router still tries the remaining candidates | key + value |
 | `template`, `default_template` or a route entry written with no value at all | Silently ignored, so the tier or candidate below it stands -- unlike an explicit `''`, which is a value and does override the tier below | -- |
 | Card template defines no `background` | Warn + decline (a card is composed ON a raster) | template name |
-| `background` names nothing under `assets/`, including a path the operating system refuses to look up at all (a glob, a pasted URL) | Warn + decline, or compose on `fallback` when one is declared | path |
+| `background` names nothing under `assets/`, including a path the operating system refuses to look up at all (a glob, a pasted URL) | Warn + decline, or compose on `fallback` when one is declared | source + path |
 | `background` is an SVG, an unsupported format, or a file whose bytes are not the image its extension claims | Warn + decline, or compose on `fallback` | path |
 | `background` cannot be normalized to the canvas | Warn + decline | path |
 | `background` raster is not exactly the canvas size | Silently normalized with `.Fill` plus `anchor` | -- |
-| `background` table names a `source` outside `asset`, `param`, `resource` | Warn + decline, or compose on `fallback` | source token |
+| `background` table names a `source` outside `asset`, `param`, `resource`, `data` | Warn + decline, or compose on `fallback` | source token |
 | `background` table names a `source` but no `src`, `key` or `match` | Warn + decline, or compose on `fallback` | template name |
 | `background` `match` is not a pattern Hugo can match against a page's resources (an unclosed `[`) | Warn + decline, or compose on `fallback` | template + pattern |
+| `background` `data` key names no value in `data/`, or holds a table or a list rather than a path | Warn + decline, or compose on `fallback` -- data is the site's own, so unlike `param` there is no silent absence | template + key |
+| `background` `data` value is a path found neither in the page's bundle nor under `assets/` | Warn + decline, or compose on `fallback` | source + path |
 | The page carries no image the `param` or `resource` source resolves to, and a `fallback` is declared | Silently composed on the fallback -- the case it exists for | -- |
 | The page carries no such image and NO `fallback` is declared | Warn once per template + decline; the page named is one EXAMPLE of those it covers | template name |
 | `background.fallback` names nothing under `assets/`, or carries no image Hugo can process | Warn + decline; reported separately from the primary source's own diagnostic | path |
@@ -516,8 +531,10 @@ The module NEVER breaks a build over an image. `errorf` is reserved for the sing
 | `source='date'` whose `key` is not a layout Hugo understands | Warn + that slot skipped | layout |
 | `source='section'` or `'section_title'` on the home page | Silent skip | -- |
 | Any source resolving to empty or whitespace | Silent skip, together with its `prefix` and `suffix` | -- |
-| Overlay entry naming no image at all: no `src` under `source='asset'`, no `key` under `'param'`, no `match` under `'resource'` | Warn + that overlay dropped; **card still produced** | template + index |
-| Overlay `src` naming nothing under `assets/`, including a path the operating system refuses to look up | Warn + that overlay dropped; **card still produced** | path |
+| Overlay entry naming no image at all: no `src` under `source='asset'`, no `key` under `'param'` or `'data'`, no `match` under `'resource'` | Warn + that overlay dropped; **card still produced** | template + index |
+| Overlay `data` key names no value in `data/`, or holds a table or a list rather than a path | Warn + that overlay dropped -- data is the site's own, so unlike `param` there is no silent absence | template + index + key |
+| Overlay `data` value is a path found neither in the page's bundle nor under `assets/` | Warn + that overlay dropped; **card still produced** | source + path |
+| Overlay `src` naming nothing under `assets/`, including a path the operating system refuses to look up | Warn + that overlay dropped; **card still produced** | source + path |
 | Overlay `match` that is not a pattern Hugo can match against a page's resources (an unclosed `[`) | Warn + that overlay dropped -- a card-template pattern no page could satisfy | template + pattern |
 | Overlay naming an unusable image (SVG, unsupported format, bytes that are not the image the extension claims) | Warn + that overlay dropped; **card still produced** | path or pattern |
 | Overlay that cannot be resized or faded | Warn + that overlay dropped | path or pattern |
@@ -583,7 +600,8 @@ modules/og-image/
 │               ├── warn-emit.html          The emitting body warn.html wraps in partialCached
 │               ├── int.html                Guarded decimal-integer parser (never octal, never overflow)
 │               ├── as-map-list.html        Reads an array-of-tables key as something safe to range over
-│               └── resolve-image.html      Owns the asset/param/resource vocabulary a background and an overlay share
+│               ├── data-value.html         Walks one dotted key against hugo.Data for text slots and image sources alike
+│               └── resolve-image.html      Owns the asset/param/resource/data vocabulary a background and an overlay share
 └── test/                                   Fixture site + build-output assertion suite
 ```
 

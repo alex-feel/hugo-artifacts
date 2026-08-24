@@ -106,23 +106,15 @@
     {{- $looked = true -}}
   {{- end -}}
 {{- else if eq $source "data" -}}
-  {{/* hugo.Data is walked map by map, so a dotted path that runs through a
-       scalar -- or names a key no data file carries -- is absent rather than
-       an error, exactly as .Param reports the same shapes. The guard is also
-       what keeps `index` off a non-map, which would raise and stop the
-       build. */}}
+  {{/* The walk lives in og-image/lib/data-value.html, shared with the image
+       sources' own `data`, so the two vocabularies cannot drift on what a
+       dotted path means. A path that dies -- it runs through a scalar, or
+       names a key no data file carries -- is absent rather than an error,
+       exactly as .Param reports the same shapes. */}}
   {{- if $key -}}
-    {{- $cur := hugo.Data -}}
-    {{- $live := true -}}
-    {{- range $seg := split $key "." -}}
-      {{- if and $live (reflect.IsMap $cur) -}}
-        {{- $cur = index $cur $seg -}}
-      {{- else -}}
-        {{- $live = false -}}
-      {{- end -}}
-    {{- end -}}
-    {{- if $live -}}
-      {{- $v = $cur -}}
+    {{- $walk := partial "og-image/lib/data-value.html" (dict "key" $key) -}}
+    {{- if $walk.live -}}
+      {{- $v = $walk.value -}}
       {{- $looked = true -}}
     {{- end -}}
   {{- end -}}

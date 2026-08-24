@@ -79,6 +79,22 @@ test('and so does one named through a front-matter key', () => {
   );
 });
 
+test('a background whose path lives in data/ resolves and fills, leading slash and all', () => {
+  // The value is stored as '/og/home-bg.png' on purpose: the module trims one
+  // leading slash from a param or data value before the assets/ lookup, so
+  // the site-absolute spelling a data file tends to carry still resolves.
+  // The template declares no fallback, so a card filled with the home color
+  // is the primary source answering -- and the value is the site's rather
+  // than the page's, so the section page and the leaf both get one.
+  for (const path of ['/bgdata', '/bgdata/a']) {
+    assertFilledWith(
+      cardOf(configuredDir, path),
+      BACKGROUNDS.home,
+      `${path} composed on the data-named backdrop`,
+    );
+  }
+});
+
 test('a routed page carrying no artwork is carded on the declared fallback', () => {
   // The case the fallback exists for, and the one that used to force a
   // placeholder background whose only job was to be covered up.
@@ -110,6 +126,23 @@ test('without a fallback the same page is declined rather than half-composed', (
   // that cannot be resolved declines the card instead of publishing one drawn
   // on nothing.
   for (const path of ['/deg-bgabsent/a', '/deg-bgnolocator/a', '/deg-bgunknownsource/a']) {
+    const rec = records(degradedDir).get(path);
+    assert.ok(rec, `${path} was built`);
+    assert.deepEqual(rec.cards, [], `${path} publishes no card`);
+  }
+});
+
+test('every data-source background fault declines its page the same way', () => {
+  // The pixel side of the four data diagnostics 07-degraded.spec.js asserts:
+  // a missing key, a key naming no value, a table where a path should be, and
+  // a fine path naming a file that exists nowhere. None declares a fallback,
+  // so each page is declined rather than half-composed.
+  for (const path of [
+    '/deg-bgdatanokey/a',
+    '/deg-bgdatanovalue/a',
+    '/deg-bgdatabadvalue/a',
+    '/deg-bgdatamissing/a',
+  ]) {
     const rec = records(degradedDir).get(path);
     assert.ok(rec, `${path} was built`);
     assert.deepEqual(rec.cards, [], `${path} publishes no card`);

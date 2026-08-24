@@ -14,12 +14,13 @@ import {colorBounds, countColor, pixel, hex} from './lib/raster.js';
 
 const BOX = {left: 1072, right: 1151, top: 502, bottom: 581};
 
-// The overlaid template. Three squares of 80 pixels, one per source, each a
+// The overlaid template. Four squares of 80 pixels, one per source, each a
 // flat color that appears nowhere else on the card: the parameter's image is
-// blue, the page's own bundled image is green, and the badge at half opacity
-// is neither red nor the backdrop.
+// blue, the page's own bundled image is green, the data-named image is
+// magenta, and the badge at half opacity is neither red nor the backdrop.
 const PARAM_IMAGE = {r: 0x00, g: 0x00, b: 0xfa};
 const BUNDLED_IMAGE = {r: 0x00, g: 0xfa, b: 0x00};
+const DATA_IMAGE = {r: 0xfa, g: 0x00, b: 0xfa};
 const SQUARE = (x) => ({left: x, right: x + 79, top: 440, bottom: 519, pixels: 80 * 80});
 const FADED = {x: 600, y: 440};
 
@@ -103,6 +104,38 @@ test("an overlay reading a page parameter resolves that page's own value", () =>
     80 * 80,
     "the page's own bundled image resolved instead",
   );
+});
+
+test('a param value with a leading slash still resolves against assets/', () => {
+  // The parameter spells the same assets/ path site-absolutely, and the
+  // module documents that one leading slash is trimmed before the lookups,
+  // so the square is the same blue the relative spelling draws. What this
+  // locks is the CONTRACT: the module trims the slash itself, so the promise
+  // holds whether or not Hugo's own lookup keeps normalizing a leading slash
+  // away, which it measurably does at v0.164.0.
+  const fromSlash = overlaid(records(configuredDir), '/overlays/slash-param');
+  assert.deepEqual(colorBounds(fromSlash, PARAM_IMAGE), SQUARE(200), 'the trimmed path resolved');
+});
+
+test('an overlay whose path lives in data/ draws on every page of the template', () => {
+  // The key is the template's and the value is a data file's, so unlike the
+  // param and resource squares this one does not depend on the page: the
+  // section page and every leaf draw it, in the same square.
+  const all = records(configuredDir);
+  for (const path of [
+    '/overlays',
+    '/overlays/asset-param',
+    '/overlays/bundled',
+    '/overlays/odd-param',
+    '/overlays/odd-glob',
+    '/overlays/slash-param',
+  ]) {
+    assert.deepEqual(
+      colorBounds(overlaid(all, path), DATA_IMAGE),
+      SQUARE(800),
+      `${path}: the data-named square`,
+    );
+  }
 });
 
 test("an overlay matching the page's own resources draws the image it matched", () => {
