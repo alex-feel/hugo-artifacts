@@ -2,7 +2,7 @@
 #
 # default_template is the card template for a page NO route names. The
 # configured environment proves the opposite statement -- that a page no route
-# names gets nothing at all, which is what its twenty-five-entry decline set
+# names gets nothing at all, which is what its documented decline set
 # measures -- so setting default_template there would delete the proof rather
 # than add one. The two claims are contradictory by construction, and this is
 # the build that carries the second of them.
