@@ -46,6 +46,14 @@
     deg-bgunknownsource = 'bgunknown'
     deg-bgnofallback = 'bgbadfb'
     deg-bgfbshape = 'bgfbshape'
+    # The data source's own fault classes. Everything about source = 'data'
+    # is the site's -- the key is the template's and the value is a data
+    # file's -- so unlike param there is no silent page-absence case: each of
+    # these warns, and with no fallback declared each declines its pages.
+    deg-bgdatanokey = 'bgdatanokey'
+    deg-bgdatanovalue = 'bgdatanovalue'
+    deg-bgdatabadvalue = 'bgdatabadvalue'
+    deg-bgdatamissing = 'bgdatamissing'
     # A name no [templates] table defines. Its warning has to stay separate
     # from the differently misspelled one below, which is what keying by
     # ORIGIN as well as name buys.
@@ -431,6 +439,27 @@
       x = 20
       y = 20
 
+    # The data source's fault classes on the overlay side, appended AFTER the
+    # existing entries so the indices their warnings carry stay stable. An
+    # entry that reads from data/ and names no key.
+    [[ogcard.templates.badoverlay.overlay]]
+      source = 'data'
+
+    # A data key that names no value: the dotted path runs through a scalar.
+    [[ogcard.templates.badoverlay.overlay]]
+      source = 'data'
+      key = 'facts.values.identity.name.deeper'
+
+    # A data key that holds a list of tables rather than a path.
+    [[ogcard.templates.badoverlay.overlay]]
+      source = 'data'
+      key = 'facts.values.identity.links'
+
+    # A data value that is a fine string naming a file that exists nowhere.
+    [[ogcard.templates.badoverlay.overlay]]
+      source = 'data'
+      key = 'facts.values.identity.ghostpath'
+
   # ---- Templates the SHARED content set names from front matter and from the
   #      call site. They are defined here so that the only front-matter-origin
   #      routing fault in this build is the deliberate one: blog/otf.md names
@@ -564,6 +593,49 @@
     background = { source = 'resource', match = 'nothing-here.png', fallback = ['og/post-bg.png'] }
 
     [[ogcard.templates.bgfbshape.text]]
+      source = 'title'
+      size = 48
+      x = 72
+      y = 120
+
+  # ---- The data source's background faults, one template each. No fallback
+  #      anywhere here, so each one declines its pages -- the rescued shape is
+  #      already proven by bgbadmatch above, and rescuing these would hide the
+  #      decline half of the contract.
+  [ogcard.templates.bgdatanokey]
+    background = { source = 'data' }
+
+    [[ogcard.templates.bgdatanokey.text]]
+      source = 'title'
+      size = 48
+      x = 72
+      y = 120
+
+  # The dotted path is fine and the final map simply does not carry the key.
+  [ogcard.templates.bgdatanovalue]
+    background = { source = 'data', key = 'facts.values.identity.nickname' }
+
+    [[ogcard.templates.bgdatanovalue.text]]
+      source = 'title'
+      size = 48
+      x = 72
+      y = 120
+
+  # The key resolves, to a table no path can be read from.
+  [ogcard.templates.bgdatabadvalue]
+    background = { source = 'data', key = 'facts.values.identity' }
+
+    [[ogcard.templates.bgdatabadvalue.text]]
+      source = 'title'
+      size = 48
+      x = 72
+      y = 120
+
+  # The key resolves to a fine string naming a file that exists nowhere.
+  [ogcard.templates.bgdatamissing]
+    background = { source = 'data', key = 'facts.values.identity.ghostpath' }
+
+    [[ogcard.templates.bgdatamissing.text]]
       source = 'title'
       size = 48
       x = 72

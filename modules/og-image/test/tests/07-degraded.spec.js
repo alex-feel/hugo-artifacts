@@ -150,6 +150,26 @@ const FAULTS = [
     /^Ignoring the opacity value "9{300,}" on overlay 11/,
   ],
 
+  // The data source on the overlay side. The key and the value are both the
+  // site's own, so unlike param there is no silent page-absence class: every
+  // fault warns, and each drops only its own overlay.
+  [
+    'overlay data: entry names no key',
+    /^Overlay 12 of card template "badoverlay" names no image: an overlay reading from a data file/,
+  ],
+  [
+    'overlay data: key names no value',
+    /^Overlay 13 of card template "badoverlay" reads the data key "facts\.values\.identity\.name\.deeper", which names no value in data\//,
+  ],
+  [
+    'overlay data: value is a list of tables',
+    /^Overlay 14 of card template "badoverlay" reads the data key "facts\.values\.identity\.links", which holds a table or a list rather than a path/,
+  ],
+  [
+    'overlay data: path names nothing',
+    /^The overlay "og\/data-nowhere\.png" named in data\/ by card template "badoverlay" was not found in the page's resources or under assets\//,
+  ],
+
   [
     'text array: an entry that is not a table',
     /^Ignoring entry 0 of the text of card template "badentry"/,
@@ -190,6 +210,26 @@ const FAULTS = [
   [
     'background source: and that page is uncarded in consequence',
     /^Card template "bgfbshape" reads its background from the page itself/,
+  ],
+
+  // The data source's background faults. None declares a fallback, so each
+  // warns AND declines its pages, which 19-background-source.spec.js reads on
+  // the pixel side.
+  [
+    'background data: entry names no key',
+    /^The background of card template "bgdatanokey" reads from data and needs a key naming the value that holds its path/,
+  ],
+  [
+    'background data: key names no value',
+    /^The background of card template "bgdatanovalue" reads the data key "facts\.values\.identity\.nickname", which names no value in data\//,
+  ],
+  [
+    'background data: value is a table',
+    /^The background of card template "bgdatabadvalue" reads the data key "facts\.values\.identity", which holds a table or a list rather than a path/,
+  ],
+  [
+    'background data: path names nothing',
+    /^The card background "og\/data-nowhere\.png" named in data\/ was not found in the page's resources or under assets\//,
   ],
 ];
 
@@ -305,14 +345,14 @@ test('a background fault declines the whole card; an overlay fault drops one ove
 });
 
 test('the overlays that survived are exactly the four that named a usable image', () => {
-  // Eight of the twelve overlays are dropped, each for its own reason. The
+  // Twelve of the sixteen overlays are dropped, each for its own reason. The
   // four that remain are placed by the anchors they name -- one at the top
   // left corner from the rejected anchor's fallback, one at the bottom left,
   // one at the top right, one at the bottom right -- so the count and the
-  // bounding box together say that the right eight were dropped rather than
-  // merely that eight were. Two of the four carry a value the module rejected
-  // (a width and an opacity) and are drawn at their own size, fully opaque,
-  // which is what those two fallbacks promise.
+  // bounding box together say that the right twelve were dropped rather than
+  // merely that twelve were. Two of the four carry a value the module
+  // rejected (a width and an opacity) and are drawn at their own size, fully
+  // opaque, which is what those two fallbacks promise.
   const rec = records(degradedDir).get('/deg-overlay/a');
   const img = cardImage(degradedDir, rec.cards[0].url);
   assert.equal(countColor(img, BADGE), 4 * 80 * 80, 'four badges, none of them resized or faded');

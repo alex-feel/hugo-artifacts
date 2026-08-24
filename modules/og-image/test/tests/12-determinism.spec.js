@@ -53,6 +53,10 @@ const SHARED = [
   ['/aligned', '/aligned/a'],
   // The same words at the same quality, with the format spelled two ways.
   ['/jpeg-low/sample', '/jpeg-upper/sample'],
+  // The same words, and the same badge named relative on one page and
+  // site-absolutely on the other: the leading-slash trim resolves both
+  // spellings to the SAME resource, and the identical bytes are the proof.
+  ['/overlays/asset-param', '/overlays/slash-param'],
   // The same words, and neither page's overlay parameter resolves to anything.
   ['/overlays/odd-glob', '/overlays/odd-param'],
   // The pair the fixture exists to state.

@@ -155,6 +155,7 @@ const TYPOGRAPHY_KEYS = [
 // background and an overlay cannot drift apart on what they accept. Placement
 // is the overlay's own business and stays with the overlay resolver.
 const IMAGE_SOURCE_KEYS = ['source', 'src', 'key', 'match'];
+const IMAGE_SOURCE_TOKENS = ['asset', 'param', 'resource', 'data'];
 const OVERLAY_PLACEMENT_KEYS = ['width', 'opacity', 'anchor', 'x', 'y'];
 const OVERLAY_KEYS = [...IMAGE_SOURCE_KEYS, ...OVERLAY_PLACEMENT_KEYS];
 // The background takes the source vocabulary plus one key of its own: what
@@ -243,6 +244,12 @@ test('every option the module reads is read by the template that owns it', () =>
   const image = partial('lib/resolve-image.html');
   for (const key of IMAGE_SOURCE_KEYS) {
     assert.ok(new RegExp(`"${key}"`).test(image), `the shared image resolver reads ${key}`);
+  }
+  for (const token of IMAGE_SOURCE_TOKENS) {
+    assert.ok(
+      new RegExp(`"${token}"`).test(image),
+      `the image source vocabulary includes ${token}`,
+    );
   }
   const background = partial('resolve/background.html');
   for (const key of BACKGROUND_KEYS) {
@@ -364,4 +371,13 @@ test('the README documents the whole text source vocabulary', () => {
   );
   const missing = SOURCE_TOKENS.filter((token) => !sources.includes(`\`${token}\``));
   assert.deepEqual(missing, [], 'source tokens the Text sources section does not name');
+});
+
+test('and the whole image source vocabulary, in the section that documents it', () => {
+  // The same claim for the vocabulary a background and an overlay share. The
+  // module warns and drops -- or declines -- for anything outside the list,
+  // so an undocumented token is a feature nobody can reach.
+  const sources = section('Background sources');
+  const missing = IMAGE_SOURCE_TOKENS.filter((token) => !sources.includes(`\`${token}\``));
+  assert.deepEqual(missing, [], 'source tokens the Background sources section does not name');
 });

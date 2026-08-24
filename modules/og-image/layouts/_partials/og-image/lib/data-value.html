@@ -1,0 +1,36 @@
+{{/*
+  og-image/lib/data-value.html -- INTERNAL (library tier).
+
+  Purpose: walks ONE dotted key against hugo.Data and reports what it found.
+  It is the module's single owner of that walk: the text slots' `data` source
+  and the image sources' `data` source both resolve their keys here, so the
+  two vocabularies cannot drift on what a dotted path means.
+
+  hugo.Data is walked map by map, so a dotted path that runs through a
+  scalar -- or names a key no data file carries -- is reported as not live
+  rather than an error, exactly as .Param reports the same shapes. The guard
+  is also what keeps `index` off a non-map, which would raise and stop the
+  build. hugo.Data is build-global, so every language and every page reads
+  the same value.
+
+  Context (dict):
+  - .key (string) The dotted path, e.g. "identity.values.fact.portrait".
+
+  Return value: dict{live (bool), value}. `live` is true when every step of
+  the walk found a map to step into; `value` is whatever the final segment
+  named there, which can still be nil when the last map does not carry it.
+  The value is meaningful only when `live` is true. One terminal return.
+*/}}
+
+{{- $key := printf "%v" (.key | default "") -}}
+{{- $cur := hugo.Data -}}
+{{- $live := true -}}
+{{- range $seg := split $key "." -}}
+  {{- if and $live (reflect.IsMap $cur) -}}
+    {{- $cur = index $cur $seg -}}
+  {{- else -}}
+    {{- $live = false -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return (dict "live" $live "value" $cur) -}}

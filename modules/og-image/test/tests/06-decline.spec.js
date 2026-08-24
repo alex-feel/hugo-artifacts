@@ -35,6 +35,10 @@ const DECLINED = new Map([
     'deg-badwhole',
     'deg-bgabsent',
     'deg-bgbadmatch',
+    'deg-bgdatabadvalue',
+    'deg-bgdatamissing',
+    'deg-bgdatanokey',
+    'deg-bgdatanovalue',
     'deg-bgfbshape',
     'deg-bgnofallback',
     'deg-bgnolocator',
@@ -65,7 +69,7 @@ test('every page Hugo built is either carded or documented as declining', () => 
     if (!DECLINED.has(path)) unexplained.push(path);
   }
   assert.deepEqual(unexplained, [], 'pages that stopped getting a card');
-  assert.equal(DECLINED.size, 37, 'the documented decline set changed size');
+  assert.equal(DECLINED.size, 45, 'the documented decline set changed size');
   for (const path of DECLINED.keys()) {
     assert.ok(all.has(path), `${path} is listed as declining but Hugo no longer builds it`);
   }

@@ -9,13 +9,14 @@
 
   The key takes two shapes. A string is a path under assets/, the shared
   backdrop every card of that template carries. A table names its image the
-  same three ways an overlay entry does, because og-image/lib/resolve-image.html
+  same four ways an overlay entry does, because og-image/lib/resolve-image.html
   owns that vocabulary for the module:
 
     background = 'og/post-bg.png'
     background = { source = 'asset',    src   = 'og/post-bg.png' }
     background = { source = 'param',    key   = 'cover' }
     background = { source = 'resource', match = 'tile.png', fallback = 'og/post-bg.png' }
+    background = { source = 'data',     key   = 'identity.portrait' }
 
   The table form is what lets a card be composed ON the page's own artwork and
   still get the .Fill treatment. Passing that artwork as a full-bleed overlay
@@ -33,9 +34,10 @@
   whole card rather than publishing a half-made one, and every failure speaks
   once: a template with no background at all, a path that names nothing
   (including one the operating system refuses to look up), a glob no page can
-  satisfy, a routed page carrying no matching resource, an SVG, and a file that
-  carries no decodable image. Only one case is silent -- a page that does not
-  carry the image while the template declares a fallback -- because that is the
+  satisfy, a routed page carrying no matching resource, a data key naming no
+  value or a value no path can be read from, an SVG, and a file that carries
+  no decodable image. Only one case is silent -- a page that does not carry
+  the image while the template declares a fallback -- because that is the
   shape the fallback exists for.
 
   Context (dict):
@@ -123,14 +125,34 @@
       {{- $needs = "a key naming that parameter" -}}
     {{- else if eq $found.source "resource" -}}
       {{- $needs = "a match pattern" -}}
+    {{- else if eq $found.source "data" -}}
+      {{- $needs = "a key naming the value that holds its path" -}}
     {{- end -}}
     {{- partial "og-image/lib/warn.html" (dict
         "key" (printf "og-image:warn:background-no-locator:%s" $name)
         "message" (printf "[og-image] The background of card template %q reads from %s and needs %s, which it does not name, so %s." $name $found.source $needs $tail)) -}}
   {{- else if eq $found.reason "not-found" -}}
+    {{/* The key carries the source as well as the path, because the wording
+         differs by source and the first message stored under a key wins: one
+         path named by both an asset src and a data value must not have one
+         spelling suppress the other's provenance. */}}
+    {{- if eq $found.source "data" -}}
+      {{- partial "og-image/lib/warn.html" (dict
+          "key" (printf "og-image:warn:missing-background:%s:%s" $found.source $label)
+          "message" (printf "[og-image] The card background %q named in data/ was not found in the page's resources or under assets/, so %s." $label $tail)) -}}
+    {{- else -}}
+      {{- partial "og-image/lib/warn.html" (dict
+          "key" (printf "og-image:warn:missing-background:%s:%s" $found.source $label)
+          "message" (printf "[og-image] The card background %q was not found under assets/, so %s." $label $tail)) -}}
+    {{- end -}}
+  {{- else if eq $found.reason "no-value" -}}
     {{- partial "og-image/lib/warn.html" (dict
-        "key" (printf "og-image:warn:missing-background:%s" $label)
-        "message" (printf "[og-image] The card background %q was not found under assets/, so %s." $label $tail)) -}}
+        "key" (printf "og-image:warn:background-data-no-value:%s" $name)
+        "message" (printf "[og-image] The background of card template %q reads the data key %q, which names no value in data/, so %s." $name $label $tail)) -}}
+  {{- else if eq $found.reason "bad-value" -}}
+    {{- partial "og-image/lib/warn.html" (dict
+        "key" (printf "og-image:warn:background-data-bad-value:%s" $name)
+        "message" (printf "[og-image] The background of card template %q reads the data key %q, which holds a table or a list rather than a path, so %s." $name $label $tail)) -}}
   {{- else if eq $found.reason "bad-match" -}}
     {{- partial "og-image/lib/warn.html" (dict
         "key" (printf "og-image:warn:background-bad-match:%s:%s" $name $label)

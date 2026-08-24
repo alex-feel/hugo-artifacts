@@ -12,8 +12,8 @@ import assert from 'node:assert/strict';
 import {configuredDir, records, cardBytes, cardExists, moduleWarnings} from './helpers.js';
 import {sniff} from './lib/raster.js';
 
-const CARD_BEARING_PAGES = 53;
-const CARDS_PUBLISHED = 54;
+const CARD_BEARING_PAGES = 56;
+const CARDS_PUBLISHED = 57;
 const MEDIA_TYPES = {png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp'};
 
 test('every card the module returned is a real file of the configured size', () => {

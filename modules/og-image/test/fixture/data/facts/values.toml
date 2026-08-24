@@ -1,14 +1,20 @@
 # The canonical-facts file the datafacts template reads through source =
-# 'data'. One nested table so a dotted path has depth to walk, one number so
-# a non-string scalar is drawn, one flat list so two items become two lines,
-# and one list of tables so the degraded environment has a list no slot can
-# draw. Only the degraded build points a slot at the last two shapes; this
-# file itself is inert in every environment, because data is warned about on
-# USE, never on load.
+# 'data', and the image sources read through their own source = 'data'. One
+# nested table so a dotted path has depth to walk, one number so a non-string
+# scalar is drawn, one flat list so two items become two lines, one list of
+# tables so the degraded environment has a shape no slot and no image can
+# use, and three image paths: one spelled relative, one spelled
+# site-absolutely so the leading-slash trim is what resolves it, and one
+# naming a file that exists nowhere so the degraded environment can point an
+# image source at it. This file itself is inert in every environment, because
+# data is warned about on USE, never on load.
 [identity]
 name = 'anon crux'
 since = 2019
 roles = ['first role', 'second line']
+badge = 'og/data-badge.png'
+backdrop = '/og/home-bg.png'
+ghostpath = 'og/data-nowhere.png'
 
 [[identity.links]]
 label = 'site'
