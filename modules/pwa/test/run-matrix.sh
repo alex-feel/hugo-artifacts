@@ -9,9 +9,9 @@
 #   Pass 3 (v1->v2):   row 8 only, with concurrent v1->v2 fixture swap watcher.
 #                      MATRIX_PASS3_PERSISTENT=1, --grep "Row 8:".
 #
-# Hugo Process Lifecycle Management (~/.claude/aegis/rules/hugo-development.md
-# Section 3.1 / 3.2) is enforced: pre-launch process+port check and `pkill hugo`
-# between passes (and inside the Pass 3 watcher when swapping to v2).
+# Follows the repository's hugo process lifecycle discipline: a pre-launch
+# process+port check and `pkill hugo` between passes (and inside the Pass 3
+# watcher when swapping to v2).
 #
 # Aggregate target: 9 PASS / 0 SKIPPED / 0 FAIL.
 #
@@ -103,7 +103,6 @@ cleanup() {
     rm -f "$HUGO_LOG" 2>/dev/null || true
   fi
 }
-trap cleanup EXIT INT TERM
 
 start_hugo() {
   HUGO_LOG="$(mktemp)"
@@ -156,7 +155,7 @@ v1_to_v2_watcher() {
   return 1
 }
 
-# ----- Pre-launch (Hugo Development Rule R3 Section 3.1) -----------------------------
+# ----- Pre-launch process and port check ---------------------------------------------
 
 # `pgrep -x` matches the process NAME, the semantic twin of the tasklist
 # IMAGENAME filter in the fallback branch. `-f` would match the whole command
@@ -186,6 +185,15 @@ if command -v lsof >/dev/null 2>&1; then
     exit 1
   fi
 fi
+
+# The cleanup trap is registered AFTER the pre-launch checks, and the ordering
+# is load-bearing: the checks exist to hand a foreign hugo process, or a bound
+# port, back to the human, and a trap registered above them would fire on that
+# very abort and kill the process the message just said to go and deal with.
+# Registered here, the trap can only ever kill strays of this runner's own
+# servers, because a passed check proves no foreign hugo existed when it
+# armed.
+trap cleanup EXIT INT TERM
 
 remove_sentinels
 

@@ -30,7 +30,6 @@ cleanup() {
   fi
   rm -f "$LOG_FILE"
 }
-trap cleanup EXIT INT TERM
 
 # `pgrep -x` matches the process NAME, the semantic twin of the tasklist
 # IMAGENAME filter below. `-f` would match the whole command line, and this
@@ -48,6 +47,15 @@ elif command -v tasklist >/dev/null 2>&1; then
     exit 1
   fi
 fi
+
+# The cleanup trap is registered AFTER the pre-launch check, and the ordering
+# is load-bearing: the check exists to hand a foreign hugo process -- a dev
+# server serving some other project -- back to the human, and a trap
+# registered above it would fire on this very abort and kill the process the
+# message just said to go and deal with. Registered here, the trap can only
+# ever kill strays of this runner's own builds and server, because a passed
+# check proves no foreign hugo existed when it armed.
+trap cleanup EXIT INT TERM
 
 # ---- Static build 1: the standalone fixture (fixture-bare) ----
 # Built once, statically, before the server starts: proves the module

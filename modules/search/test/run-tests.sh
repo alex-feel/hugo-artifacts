@@ -76,12 +76,20 @@ cleanup() {
     rm -f "$dir.log"
   done
 }
-trap cleanup EXIT INT TERM
 
 if hugo_running; then
   echo "A hugo process is already running; stop it first (pkill hugo, or taskkill /F /IM hugo.exe on Windows)." >&2
   exit 1
 fi
+
+# The cleanup trap is registered AFTER the pre-launch check, and the ordering
+# is load-bearing: the check exists to hand a foreign hugo process -- a dev
+# server serving some other project -- back to the human, and a trap
+# registered above it would fire on this very abort and kill the process the
+# message just said to go and deal with. Registered here, the trap can only
+# ever kill strays of this runner's own builds and server, because a passed
+# check proves no foreign hugo existed when it armed.
+trap cleanup EXIT INT TERM
 
 # ---- Static overlay builds, before the server binds anything ----
 # Each build's output lands in <dest>.log (not --quiet: the scalar-tables

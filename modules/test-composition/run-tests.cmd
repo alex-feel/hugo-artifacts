@@ -42,7 +42,11 @@ rem server gives up on its own after fifteen minutes, and every run stops a
 rem previous one before starting its own.
 setlocal
 
-tasklist /FI "IMAGENAME eq hugo.exe" | find /I "hugo.exe" >nul
+rem findstr, not find: a caller inheriting Git Bash's PATH resolves find to
+rem GNU find (usr\bin precedes System32), which rejects /I and exits 1 -- a
+rem find-based check silently passes over a live hugo, and this run's own
+rem cleanup taskkill would then kill the process the check exists to protect.
+tasklist /FI "IMAGENAME eq hugo.exe" | findstr /I "hugo.exe" >nul
 if not errorlevel 1 (
   echo A hugo process is already running; stop it first: taskkill /F /IM hugo.exe
   exit /b 1

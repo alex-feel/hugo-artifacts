@@ -15,7 +15,11 @@ rem is their documented contract, so failing on WARN would fail this suite on
 rem any runner without network. ERROR and deprecation remain hard failures.
 setlocal
 
-tasklist /FI "IMAGENAME eq hugo.exe" | find /I "hugo.exe" >nul
+rem findstr, not find: a caller inheriting Git Bash's PATH resolves find to
+rem GNU find (usr\bin precedes System32), which rejects /I and exits 1 -- a
+rem find-based check silently passes over a live hugo, and the builds then run
+rem beside the process the check exists to keep them clear of.
+tasklist /FI "IMAGENAME eq hugo.exe" | findstr /I "hugo.exe" >nul
 if not errorlevel 1 (
   echo A hugo process is already running; stop it first: taskkill /F /IM hugo.exe
   exit /b 1
