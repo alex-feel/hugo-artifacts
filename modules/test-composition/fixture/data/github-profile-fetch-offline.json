@@ -1,0 +1,25 @@
+{
+  "user": {
+    "login": "composition-dev",
+    "name": "Composition Dev",
+    "url": "https://github.com/composition-dev",
+    "avatarUrl": "",
+    "organizations": {
+      "totalCount": 2,
+      "nodes": [
+        {
+          "login": "composition-org",
+          "name": "Composition Org",
+          "url": "https://github.com/composition-org",
+          "avatarUrl": ""
+        },
+        {
+          "login": "quiet-org",
+          "name": "Quiet Org",
+          "url": "https://github.com/quiet-org",
+          "avatarUrl": ""
+        }
+      ]
+    }
+  }
+}

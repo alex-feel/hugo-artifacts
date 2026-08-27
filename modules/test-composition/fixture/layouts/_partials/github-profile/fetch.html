@@ -1,0 +1,67 @@
+{{/*
+  FIXTURE SEAM -- shadows github-profile/fetch.html from the imported module.
+
+  Hugo resolves a site's own layouts/ ahead of any module's, so this file wins
+  the lookup for the partial path "github-profile/fetch.html" and the module's
+  GitHub-API-bound original never runs; derive.html, render.html and every
+  section partial come from the module and run for real. The API is the ONLY
+  thing shadowed here: avatar images are fetched by the module's own
+  avatar.html with resources.GetRemote, live, which is the surface this
+  fixture exists to exercise -- the fetch-mode avatar copies and their arrival
+  in /url-manifest.txt.
+
+  The canned snapshot is minimal (identity plus organization memberships,
+  nothing else), because the composition subject is the avatars rather than
+  the widget; the module's own suite proves the full rendering. TWO data
+  files carry it, picked by site.Params.github_profile_fixture_avatars:
+
+  - github-profile-fetch-offline.json (the default): every avatarUrl is
+    empty, so the module fetches nothing, publishes nothing, registers
+    nothing, and warns about nothing -- which keeps the base build offline
+    and its no-WARN log gate meaningful, and is itself the subject of the
+    base-build absence assertions.
+  - github-profile-fetch-origin.json (skills.toml sets the switch): the
+    identity and first-organization avatars name URLs on this suite's own
+    origin, so the fetch-mode copies exist in the builds that may fetch. The
+    second organization stays bare in BOTH files: an entry whose data carries
+    no avatar renders the placeholder while its sibling fetches, silently.
+
+  tests/05-github-profile-avatars.spec.js holds the two files to being
+  identical except for the avatarUrl values, so the pair cannot drift apart.
+
+  Context and return contract: identical to the module partial (see
+  shortcodes/github-profile/layouts/_partials/github-profile/fetch.html). The
+  fields this fixture never exercises are represented by falsy values of the
+  right shape, exactly as the module's own test seam represents its "or nil"
+  fields.
+*/}}
+
+{{- $requestedLogin := .user -}}
+{{- $position := .position -}}
+
+{{- $result := dict
+  "apiOk" false
+  "degradedReason" "not-found"
+  "user" false
+  "yearTotals" (dict)
+  "mergedPrCount" -1
+  "authorshipOk" false
+  "authorship" (dict)
+-}}
+
+{{- $file := printf "github-profile-fetch-%s" (site.Params.github_profile_fixture_avatars | default "offline") -}}
+{{- $fixture := index hugo.Data $file -}}
+{{- if not $fixture -}}
+  {{/* A silently degrading seam would turn every avatar assertion vacuous:
+       the widget would render its degraded identity chip and the absence
+       checks would pass against a build that fetched nothing for the wrong
+       reason. Fail the build loudly instead. */}}
+  {{- errorf "[test-composition] data/%s.json did not load, so the github-profile seam has no canned snapshot to serve. See %s" $file $position -}}
+{{- else -}}
+  {{- $cannedUser := index $fixture "user" -}}
+  {{- if eq $requestedLogin (printf "%v" (index $cannedUser "login")) -}}
+    {{- $result = merge $result (dict "apiOk" true "degradedReason" "" "user" $cannedUser) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $result -}}

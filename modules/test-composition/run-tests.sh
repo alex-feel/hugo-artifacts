@@ -20,10 +20,11 @@
 # disk, at the right size, drawn on this site's own base raster.
 #
 # The URL registry. Four content-side modules publish files belonging to THIS
-# site by reading their URLs, and agent-readiness publishes skill artifacts no
-# walk of the page graph reaches; only a site that also holds url-retirement can
-# show those URLs arriving in /url-manifest.txt with nothing configured for
-# them, and only these builds can show the derivatives beside them staying out.
+# site by reading their URLs, github-profile copies remote avatars at build
+# time, and agent-readiness publishes skill artifacts no walk of the page graph
+# reaches; only a site that also holds url-retirement can show those URLs
+# arriving in /url-manifest.txt with nothing configured for them, and only
+# these builds can show the derivatives beside them staying out.
 #
 # WHY THREE BUILDS.
 #   base            -- no skill configured, which is the ONLY coverage of an
@@ -39,11 +40,12 @@
 #                      artifacts must be listed here too, which is the assertion
 #                      every push design fails and the shipped pull passes.
 #
-# The last two fetch their skill over HTTP from an origin this suite owns,
-# served by serve-origin.mjs out of fixture-origin/. A skill entry names a
-# REMOTE source and has no local form, so there is no offline way to make an
-# artifact exist; serving the bytes ourselves keeps the suite off anybody else's
-# endpoint.
+# The last two fetch their skills AND the github-profile avatars over HTTP from
+# an origin this suite owns, served by serve-origin.mjs out of fixture-origin/.
+# A skill entry names a REMOTE source and has no local form, and a fetch-mode
+# avatar copy is likewise a remote image the module fetches at build time, so
+# there is no offline way to make either artifact exist; serving the bytes
+# ourselves keeps the suite off anybody else's endpoint.
 #
 # Follows the repository's hugo process lifecycle rule with a pre-launch
 # process check, and hard-fails on any deprecation or error output in any build

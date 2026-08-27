@@ -1,31 +1,28 @@
 /* global process, URL, setTimeout, fetch */
-// A static origin over fixture-origin/, started by the runners before the
-// builds that need it and stopped afterwards.
+// A static origin over fixture-origin/, started by the runners around the ONE
+// build that fetches and stopped afterwards.
 //
 //   node serve-origin.mjs serve [port]   listen until stopped
 //   node serve-origin.mjs wait  [port]   block until it answers, or fail
 //   node serve-origin.mjs stop           stop the process named in origin.pid
 //
-// WHY THIS SUITE NEEDS A SERVER AT ALL. The agent-readiness module republishes
-// each configured agent skill as an artifact of its own, and every skill entry
-// names a REMOTE source the module fetches at build time -- there is no local
-// form of that configuration. Those artifacts are the only URLs in this
-// repository that a module answers for through a url-retirement writes hook
-// rather than registering, so a build without them proves the hook file exists
-// and nothing about what it answers. The github-profile shortcode's fetch-mode
-// avatars are the same shape one mechanism over: remote images the module
-// copies at build time and registers, whose arrival in the manifest needs
-// url-retirement beside it -- which that module's own single-module suite can
-// never show. Serving the bytes ourselves keeps the suite off anybody else's
-// origin: the corpus is committed beside this file, no endpoint outside this
-// checkout can turn a pull request red, and the artifact the specs read is one
-// this repository wrote.
+// WHY THIS SUITE NEEDS A SERVER AT ALL. avatar="fetch" copies avatar images at
+// build time with resources.GetRemote, and the fetch success arm is guarded
+// template code of its own -- including the templates.Exists probe for the
+// OPTIONAL url-retirement sibling, whose false arm only a site importing this
+// module ALONE can take. The two offline builds cannot reach that arm at all
+// (nothing fetches), and the cross-module composition suite always imports
+// url-retirement, so the origin-backed build here is the one place a plain
+// single-module consumer's fetch-mode build is rendered. Serving the bytes
+// ourselves keeps the suite off anybody else's endpoint: the corpus is
+// committed beside this file, and no URL outside this checkout can turn a
+// pull request red.
 //
 // The port is fixed because a Hugo configuration file cannot learn one at run
-// time and the fixture's `source` URLs have to name it. It sits BELOW the
-// ephemeral range an operating system draws outbound source ports from
-// (49152-65535 on Windows), beside the ports the sibling suites use: a fixed
-// port inside that range is a suite that fails when an unrelated outbound
+// time and fixture/origin.toml has to name it. It sits BELOW the ephemeral
+// range an operating system draws outbound source ports from (49152-65535 on
+// Windows), beside the ports the sibling suites use (1818, 1919): a fixed port
+// inside that range is a suite that fails when an unrelated outbound
 // connection happens to hold it, and on Windows that failure arrives as EACCES
 // rather than EADDRINUSE, which reads like a permissions problem instead.
 import {createServer} from 'node:http';
@@ -37,7 +34,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(join(here, 'fixture-origin'));
 const PID_FILE = join(here, 'origin.pid');
 
-export const DEFAULT_PORT = 1919;
+export const DEFAULT_PORT = 1717;
 
 // A backstop against a leaked process: even if a runner dies between `serve`
 // and `stop` -- cmd has no trap, so an early exit can do exactly that -- the
@@ -63,15 +60,12 @@ const serve = (port) => {
       response.writeHead(404).end('not found');
       return;
     }
-    // The discovery convention the module implements requires text/markdown for
-    // a SKILL.md, and the module's own security.http.mediaTypes documentation
-    // rests on the server sending it. The avatar corpus is image bytes, and the
-    // extension Hugo publishes a fetched copy under follows the served media
-    // type, so an image answer has to name its own.
+    // The extension Hugo publishes a fetched copy under follows the served
+    // media type, so an image answer has to name its own.
     const types = {'.png': 'image/png'};
     const extension = target.slice(target.lastIndexOf('.'));
     response.writeHead(200, {
-      'Content-Type': types[extension] ?? 'text/markdown; charset=utf-8',
+      'Content-Type': types[extension] ?? 'application/octet-stream',
     });
     response.end(readFileSync(target));
   });

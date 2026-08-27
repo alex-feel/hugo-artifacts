@@ -54,9 +54,18 @@
   reads yearTotals through `with` and reads user only under apiOk, so a false
   and an empty dict behave exactly as the real partial's nils do.
 
-  A shortcode call asking for any login other than the canned one degrades with
-  degradedReason "not-found", which is how a spec exercises the module's
+  A shortcode call asking for any login other than the canned ones degrades
+  with degradedReason "not-found", which is how a spec exercises the module's
   degraded identity chip without a network round trip.
+
+  One more login, "origin-dev", exists for the origin-backed build alone: it
+  answers with a minimal canned identity whose avatarUrl points at the suite's
+  own origin (fixture/origin.toml names it in
+  params.github_profile_fixture_origin), so the avatar-fetch page renders the
+  shared avatar partial's fetch success arm -- resources.GetRemote and all --
+  on a site importing github-profile ALONE. In the two offline builds the
+  param is unset, the arm below falls through, and the page degrades to the
+  identity chip with nothing fetched and nothing logged.
 */}}
 
 {{- $requestedLogin := .user -}}
@@ -94,6 +103,15 @@
     {{- end -}}
     {{- if and (eq $languageScope "worked-in") (not page.Params.github_profile_fixture_authorship_fail) -}}
       {{- $result = merge $result (dict "authorshipOk" true "authorship" (index $fixture "authorship" | default (dict))) -}}
+    {{- end -}}
+  {{- else if eq $requestedLogin "origin-dev" -}}
+    {{- with site.Params.github_profile_fixture_origin -}}
+      {{- $result = merge $result (dict "apiOk" true "degradedReason" "" "user" (dict
+        "login" "origin-dev"
+        "name" "Origin Dev"
+        "url" "https://github.com/origin-dev"
+        "avatarUrl" (printf "%s/avatar.png?s=200&v=4" .)
+      )) -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}

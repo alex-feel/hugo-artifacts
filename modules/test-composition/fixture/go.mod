@@ -15,6 +15,7 @@ require (
 	github.com/alex-feel/hugo-artifacts/modules/url-retirement v0.0.0-00010101000000-000000000000
 	github.com/alex-feel/hugo-artifacts/modules/workbox v0.0.0-20260802210223-6fb48a799944
 	github.com/alex-feel/hugo-artifacts/shortcodes/callout v0.0.0-00010101000000-000000000000
+	github.com/alex-feel/hugo-artifacts/shortcodes/github-profile v0.0.0-00010101000000-000000000000
 )
 
 replace github.com/alex-feel/hugo-artifacts/modules/agent-readiness => ../../agent-readiness
@@ -38,5 +39,7 @@ replace github.com/alex-feel/hugo-artifacts/modules/social-share => ../../social
 replace github.com/alex-feel/hugo-artifacts/modules/url-retirement => ../../url-retirement
 
 replace github.com/alex-feel/hugo-artifacts/shortcodes/callout => ../../../shortcodes/callout
+
+replace github.com/alex-feel/hugo-artifacts/shortcodes/github-profile => ../../../shortcodes/github-profile
 
 replace github.com/alex-feel/hugo-artifacts/modules/workbox => ../../workbox

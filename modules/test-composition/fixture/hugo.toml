@@ -96,6 +96,15 @@ disableAliases = true
   [[module.imports]]
     path = "github.com/alex-feel/hugo-artifacts/shortcodes/callout"
 
+  # And the one module that publishes REMOTE files: under avatar="fetch" the
+  # github-profile shortcode copies avatar images at build time with
+  # resources.GetRemote, at stable URL-derived names no walk of .Site.Pages can
+  # see. Its own suite renders the fetch arm against an origin of its own but
+  # imports no url-retirement, so the copies' arrival in /url-manifest.txt is
+  # observable only here, in the builds that fetch from this suite's origin.
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/shortcodes/github-profile"
+
 [params]
 
   [params.seo]

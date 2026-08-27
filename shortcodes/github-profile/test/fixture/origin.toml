@@ -1,0 +1,33 @@
+# Applied on top of hugo.toml with `hugo --config hugo.toml,origin.toml`, for
+# the ONE build that fetches: the origin-backed build whose avatar-fetch page
+# renders the shared avatar partial's fetch success arm on a site importing
+# github-profile ALONE. That arm carries the templates.Exists probe for the
+# OPTIONAL url-retirement sibling, and only a build without that module can
+# take the probe's false arm -- remove the guard and this build dies on a
+# missing partial while every url-retirement-importing fixture stays green.
+#
+# It is separate rather than merged into the base file because the two offline
+# builds must keep building under Hugo's DEFAULT security posture with nothing
+# fetched: the allow-list below is what makes a loopback fetch possible at all,
+# it is a TEST HARNESS affordance, and a consuming site fetching GitHub's real
+# CDN needs nothing like it.
+[security]
+
+  [security.http]
+    urls = ['^http://127\.0\.0\.1:1717/']
+
+# Hugo caches a fetched remote resource FOREVER by default (maxAge = -1), keyed
+# by URL. This origin's URL never changes, so a cached body would outlive every
+# edit to fixture-origin/ and this build would assert against bytes no longer
+# on disk. The origin is a loopback socket, so re-fetching costs nothing.
+[caches]
+
+  [caches.getresource]
+    maxAge = 0
+
+[params]
+
+  # The fixture seam serves the origin-backed login's canned identity only when
+  # this names the origin, so the avatar-fetch page degrades to the identity
+  # chip -- silently, with nothing fetched -- in the two offline builds.
+  github_profile_fixture_origin = 'http://127.0.0.1:1717'
