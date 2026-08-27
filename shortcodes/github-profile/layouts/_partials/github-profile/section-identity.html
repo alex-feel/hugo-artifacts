@@ -7,7 +7,8 @@
   Avatar handling follows the .avatar option: "fetch" copies the image at
   build time (self-contained output; a failed fetch degrades to the person
   icon placeholder), "hotlink" references GitHub's CDN directly, "none"
-  omits the element.
+  omits the element. The rendering itself lives in the shared
+  github-profile/avatar.html partial, which the organization lists use too.
 
   The non-avatar fields sit inside a github-profile__identity-body wrapper,
   so an avatar-beside-text-column layout is one flex rule away for the
@@ -23,27 +24,17 @@
 {{- $position := .position -}}
 <section class="github-profile__section github-profile__section--identity">
   {{- if and (ne $avatarMode "none") $identity.avatarUrl }}
-  {{- $avatarShown := false }}
-  {{- if eq $avatarMode "fetch" }}
-    {{- with try (resources.GetRemote $identity.avatarUrl (dict "key" (printf "github-profile:%s:avatar" $d.login))) }}
-      {{- with .Err }}
-        {{- warnf "[github-profile] Failed to fetch the avatar of user %q; rendering the placeholder. See %s" $d.login $position }}
-      {{- else with .Value }}
-        <img class="github-profile__avatar" src="{{ .RelPermalink }}" alt="{{ $identity.name }}" width="200" height="200" loading="lazy" decoding="async">
-        {{- $avatarShown = true }}
-      {{- else }}
-        {{- warnf "[github-profile] The avatar of user %q returned HTTP 404; rendering the placeholder. See %s" $d.login $position }}
-      {{- end }}
-    {{- end }}
-  {{- else }}
-    <img class="github-profile__avatar" src="{{ $identity.avatarUrl }}" alt="{{ $identity.name }}" width="200" height="200" loading="lazy" decoding="async">
-    {{- $avatarShown = true }}
-  {{- end }}
-  {{- if not $avatarShown }}
-  <span class="github-profile__avatar github-profile__avatar--placeholder">
-    {{- partial "github-profile/icon.html" (dict "name" "person" "class" "github-profile__icon") -}}
-  </span>
-  {{- end }}
+  {{- partial "github-profile/avatar.html" (dict
+    "url" $identity.avatarUrl
+    "mode" $avatarMode
+    "class" "github-profile__avatar"
+    "alt" $identity.name
+    "size" 200
+    "icon" "person"
+    "cacheKey" (printf "github-profile:%s:avatar" $d.login)
+    "warnSubject" (printf "the avatar of user %q" $d.login)
+    "position" $position
+  ) }}
   {{- end }}
   <div class="github-profile__identity-body">
   <span class="github-profile__name">{{ $identity.name }}</span>

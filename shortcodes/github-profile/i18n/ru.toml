@@ -53,6 +53,12 @@ few = "плюс {{ .formatted }} приватных вклада"
 many = "плюс {{ .formatted }} приватных вкладов"
 other = "плюс {{ .formatted }} приватных вкладов"
 
+[github_profile_more]
+one = "и еще {{ .formatted }}"
+few = "и еще {{ .formatted }}"
+many = "и еще {{ .formatted }}"
+other = "и еще {{ .formatted }}"
+
 [github_profile_streak_days]
 one = "{{ .formatted }} день"
 few = "{{ .formatted }} дня"

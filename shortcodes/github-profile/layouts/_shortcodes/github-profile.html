@@ -29,8 +29,17 @@
     (github-readme-stats formula, documented in the README). Default: false
   - merged-prs (bool, optional): Fetch the lifetime merged-PR count via one
     extra REST Search request. Default: false
-  - avatar (string, optional): Avatar handling in the identity section. One
-    of: fetch (build-time copy with placeholder fallback), hotlink, none.
+  - org-rollup-limit (int, optional): How many rollup rows render, top-N by
+    total. 0 renders every row. A truncated list says so: it carries its
+    pre-cap total in data-total and renders a visible localized remainder
+    note. Default: 10
+  - contributed-limit (int, optional): How many contributed repositories
+    render, top-N by stars. 0 renders every fetched one; the remainder note
+    then reflects only what the API itself withheld past its 100-node
+    ceiling. Default: 12
+  - avatar (string, optional): Avatar handling: the identity avatar and the
+    organization avatars in the rollup and membership lists. One of: fetch
+    (build-time copy with placeholder fallback), hotlink, none.
     Default: "fetch"
   - name (string, optional): Display-name override (also used by the
     degraded identity chip)
@@ -43,6 +52,7 @@
     github-profile user="alex-feel" variant="full" history="all"
     github-profile user="alex-feel" sections="headline,calendar" show-streak="true"
     github-profile user="alex-feel" language-scope="worked-in"
+    github-profile user="alex-feel" org-rollup-limit="0"
 */}}
 
 {{- $user := .Get "user" -}}
@@ -53,6 +63,18 @@
 {{- $showStreak := eq (lower (printf "%v" (.Get "show-streak" | default false))) "true" -}}
 {{- $showRank := eq (lower (printf "%v" (.Get "show-rank" | default false))) "true" -}}
 {{- $mergedPrs := eq (lower (printf "%v" (.Get "merged-prs" | default false))) "true" -}}
+{{/* isset over .Params rather than `| default`, because 0 is a legitimate
+     value meaning "every row" and an UNQUOTED numeric argument arrives as a
+     Go int, whose 0 `default` collapses to the fallback silently (measured
+     at v0.164.0; a quoted "0" arrives as a string and survives). */}}
+{{- $orgRollupLimitRaw := 10 -}}
+{{- if isset .Params "org-rollup-limit" -}}
+  {{- $orgRollupLimitRaw = .Get "org-rollup-limit" -}}
+{{- end -}}
+{{- $contributedLimitRaw := 12 -}}
+{{- if isset .Params "contributed-limit" -}}
+  {{- $contributedLimitRaw = .Get "contributed-limit" -}}
+{{- end -}}
 {{- $avatar := .Get "avatar" | default "fetch" -}}
 {{- $name := .Get "name" | default "" -}}
 {{- $attribution := ne (lower (printf "%v" (.Get "attribution" | default true))) "false" -}}
@@ -87,6 +109,35 @@
 {{- $validLanguageScope := slice "owned" "worked-in" -}}
 {{- if not (in $validLanguageScope $languageScope) -}}
   {{- errorf "The %q shortcode received invalid language-scope %q. Must be one of: owned, worked-in. See %s" .Name $languageScope .Position -}}
+{{- end -}}
+
+{{/* Validate the list limits: non-negative integers, 0 meaning every row.
+     The cast is try-wrapped because the parameter can arrive as markup text
+     and `int` raises on anything that is not a whole number. The raw value
+     in each message goes through %v before %q, because the raw can be a Go
+     int (an unquoted argument) and %q formats an integer as a rune literal
+     rather than a quoted value. */}}
+{{- $orgRollupLimit := 0 -}}
+{{- with try (int $orgRollupLimitRaw) -}}
+  {{- if .Err -}}
+    {{- errorf "The %q shortcode received invalid org-rollup-limit %q. Must be a non-negative integer (0 renders every row). See %s" $.Name (printf "%v" $orgRollupLimitRaw) $.Position -}}
+  {{- else -}}
+    {{- $orgRollupLimit = .Value -}}
+  {{- end -}}
+{{- end -}}
+{{- if lt $orgRollupLimit 0 -}}
+  {{- errorf "The %q shortcode received invalid org-rollup-limit %q. Must be a non-negative integer (0 renders every row). See %s" .Name (printf "%v" $orgRollupLimitRaw) .Position -}}
+{{- end -}}
+{{- $contributedLimit := 0 -}}
+{{- with try (int $contributedLimitRaw) -}}
+  {{- if .Err -}}
+    {{- errorf "The %q shortcode received invalid contributed-limit %q. Must be a non-negative integer (0 renders every fetched repository). See %s" $.Name (printf "%v" $contributedLimitRaw) $.Position -}}
+  {{- else -}}
+    {{- $contributedLimit = .Value -}}
+  {{- end -}}
+{{- end -}}
+{{- if lt $contributedLimit 0 -}}
+  {{- errorf "The %q shortcode received invalid contributed-limit %q. Must be a non-negative integer (0 renders every fetched repository). See %s" .Name (printf "%v" $contributedLimitRaw) .Position -}}
 {{- end -}}
 
 {{/* Resolve the section list: the variant preset, unless a sections CSV
@@ -132,6 +183,8 @@
   "showRank" $showRank
   "nameOverride" $name
   "languageScope" $languageScope
+  "orgRollupLimit" $orgRollupLimit
+  "contributedLimit" $contributedLimit
 ) -}}
 
 {{/* Dispatch to the renderer. */}}

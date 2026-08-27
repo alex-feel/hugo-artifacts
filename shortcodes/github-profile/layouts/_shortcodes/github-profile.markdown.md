@@ -22,10 +22,11 @@
   Parameters: identical to github-profile.html. user, history, merged-prs,
   show-streak, show-rank, and name feed the shared fetch/derive layer so the
   request surface matches the HTML render of the same call; variant,
-  sections, avatar, attribution, class, and language-scope shape only the
-  HTML widget and are accepted here for call-site compatibility and ignored
-  -- language-scope selects which repositories the language ROW measures, and
-  this variant renders no language row. Parameter validation
+  sections, avatar, attribution, class, language-scope, org-rollup-limit,
+  and contributed-limit shape only the HTML widget and are accepted here for
+  call-site compatibility and ignored -- language-scope selects which
+  repositories the language ROW measures, and this variant renders no
+  language row, no rollup, and no contributed list. Parameter validation
   (missing or malformed user, invalid enums) lives in the HTML entry
   template, which renders the same page in the HTML output format and already
   stops the build with errorf; this template does not duplicate those checks

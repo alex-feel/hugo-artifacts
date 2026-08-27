@@ -1,0 +1,21 @@
+{{/*
+  The visible remainder under a truncated list -- the single owner of that
+  contract for every list section, so a reader always learns that rows were
+  cut and how many, instead of a list that simply stops. Renders nothing
+  when nothing was cut.
+
+  The note is real announced text (never aria-hidden): unlike a section
+  title, it ADDS information the adjacent list does not carry, which is the
+  module's rule for what stays announced. The count reaches i18n
+  preformatted, per the module's convention (translation templates have no
+  function map).
+
+  Context expectations:
+  - .token (string)    Section token, exposed as data-section.
+  - .remainder (int)   How many entries the list did not render.
+*/}}
+
+{{- $remainder := .remainder -}}
+{{- if gt $remainder 0 }}
+<p class="github-profile__more" data-section="{{ .token }}" data-raw="{{ $remainder }}">{{ T "github_profile_more" (dict "count" $remainder "formatted" (lang.FormatNumber 0 $remainder)) | default (printf "and %s more" (lang.FormatNumber 0 $remainder)) }}</p>
+{{- end -}}

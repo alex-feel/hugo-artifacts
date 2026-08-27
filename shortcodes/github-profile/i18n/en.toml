@@ -64,6 +64,13 @@ other = "contributions"
 one = "plus 1 private contribution"
 other = "plus {{ .formatted }} private contributions"
 
+# The visible remainder under a truncated list (rollup, memberships,
+# contributed). Deliberately unitless -- the list right above it names the
+# unit -- so one key serves all three lists.
+[github_profile_more]
+one = "and 1 more"
+other = "and {{ .formatted }} more"
+
 [github_profile_streak_days]
 one = "1 day"
 other = "{{ .formatted }} days"

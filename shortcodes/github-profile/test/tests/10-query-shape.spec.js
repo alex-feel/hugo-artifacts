@@ -190,6 +190,49 @@ for (const build of BUILDS) {
       fixture.user.codeContributedTo.nodes.every((n) => n.languages),
       'and every canned code node must carry them, because it does',
     );
+    // The rollup's avatar images ride on the owner blocks: a scalar on an
+    // already-selected node, so the request count and connection set stay
+    // put. The canned owners mirror it with two deliberate deviations, each
+    // the subject of a fallback arm 12-org-avatars.spec.js asserts: the
+    // solo-maintainer owner carries no avatarUrl (the placeholder), and
+    // NEITHER open-fixture owner in the commit list does (the
+    // fill-from-a-later-list guard in derive.html). A real response nulls
+    // whole nodes rather than single scalars, so the deviations are the
+    // fixture's, and this enumeration is what keeps them deliberate.
+    assert.equal(
+      (query.match(/owner \{ login __typename avatarUrl\(size: 64\) \}/g) ?? []).length,
+      4,
+      'every byRepo owner block must request the avatar',
+    );
+    const byRepoLists = [
+      'commitContributionsByRepository',
+      'issueContributionsByRepository',
+      'pullRequestContributionsByRepository',
+      'pullRequestReviewContributionsByRepository',
+    ];
+    const bare = [];
+    for (const list of byRepoLists) {
+      for (const entry of fixture.user.contributionsCollection[list] ?? []) {
+        if (!entry.repository.owner.avatarUrl) {
+          bare.push(`${list}:${entry.repository.owner.login}`);
+        }
+      }
+    }
+    assert.deepEqual(
+      bare.sort(),
+      [
+        'commitContributionsByRepository:open-fixture',
+        'commitContributionsByRepository:open-fixture',
+        'pullRequestContributionsByRepository:solo-maintainer',
+      ],
+      'exactly the documented deviations lack an owner avatar',
+    );
+    const orgNodes = fixture.user.organizations.nodes;
+    assert.deepEqual(
+      orgNodes.filter((n) => !n.avatarUrl).map((n) => n.login),
+      ['quiet-collective'],
+      'exactly one canned membership lacks an avatar: the membership placeholder subject',
+    );
     assert.equal(typeof fixture.user.id, 'string', 'the canned user must carry the node id');
     assert.ok(fixture.user.id.length > 0, 'and it must be non-empty');
     assert.ok(

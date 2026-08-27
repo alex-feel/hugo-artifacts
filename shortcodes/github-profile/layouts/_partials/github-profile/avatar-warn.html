@@ -1,0 +1,27 @@
+{{/*
+  Emits the one warning for a failed avatar fetch. ALWAYS call this through
+  partialCached keyed by the avatar's cache key: partialCached is what
+  actually serializes concurrent emitters -- pages render in parallel, and a
+  bare check-then-set lets several pass the check before any of them writes
+  -- while the store sentinel inside covers partialCached's per-language
+  split, so a multilingual site still warns once per build rather than once
+  per language. The first caller's position wins, the module's first-wins
+  rule for deduplicated diagnostics.
+
+  Context expectations:
+  - .failure (string)  "transport" or "not-found".
+  - .subject (string)  The failing thing, mid-sentence (the caller's
+                       warnSubject).
+  - .position          Shortcode call position.
+  - .key (string)      The avatar's cache key (the dedup axis).
+*/}}
+
+{{- $warnedKey := printf "github-profile:warn:avatar:%s" .key -}}
+{{- if not (hugo.Store.Get $warnedKey) -}}
+  {{- hugo.Store.Set $warnedKey true -}}
+  {{- if eq .failure "not-found" -}}
+    {{- warnf "[github-profile] Got HTTP 404 for %s; rendering the placeholder. See %s" .subject .position -}}
+  {{- else -}}
+    {{- warnf "[github-profile] Failed to fetch %s; rendering the placeholder. See %s" .subject .position -}}
+  {{- end -}}
+{{- end -}}

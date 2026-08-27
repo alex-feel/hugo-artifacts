@@ -80,7 +80,10 @@
   - The four *ContributionsByRepository lists cap at maxRepositories: 100
     (the API's hard ceiling); for extremely prolific accounts the
     per-organization rollup therefore covers the top 100 repositories per
-    contribution type within the window.
+    contribution type within the window. Each list's owner block carries
+    avatarUrl(size: 64) for the rollup's avatar images -- a scalar on the
+    already-selected owner node, so it adds no connection and leaves the
+    API's node-count cost formula unchanged.
   - The all-time totals cannot be part of the snapshot because the year list
     is only known from the snapshot's contributionYears; the "years" kind
     exists for that second, opt-in (history="all") round trip.
@@ -186,19 +189,19 @@
   byRepo: user(login: $login) {
     contributionsCollection {
       commitContributionsByRepository(maxRepositories: 100) {
-        repository { nameWithOwner owner { login __typename } }
+        repository { nameWithOwner owner { login __typename avatarUrl(size: 64) } }
         contributions(first: 1) { totalCount }
       }
       issueContributionsByRepository(maxRepositories: 100) {
-        repository { nameWithOwner owner { login __typename } }
+        repository { nameWithOwner owner { login __typename avatarUrl(size: 64) } }
         contributions(first: 1) { totalCount }
       }
       pullRequestContributionsByRepository(maxRepositories: 100) {
-        repository { nameWithOwner owner { login __typename } }
+        repository { nameWithOwner owner { login __typename avatarUrl(size: 64) } }
         contributions(first: 1) { totalCount }
       }
       pullRequestReviewContributionsByRepository(maxRepositories: 100) {
-        repository { nameWithOwner owner { login __typename } }
+        repository { nameWithOwner owner { login __typename avatarUrl(size: 64) } }
         contributions(first: 1) { totalCount }
       }
     }

@@ -20,6 +20,12 @@
   - .languageScope (string) Which repositories the language row measures:
                          "owned" or "worked-in". Optional; omitting it means
                          "owned", which is what the Markdown variant does.
+  - .orgRollupLimit (int) How many rollup rows survive the cap, top-N by
+                         total; 0 keeps every row. Optional; omitting it
+                         means 10 (the Markdown variant omits it).
+  - .contributedLimit (int) The same cap for the contributed list, top-N by
+                         stars; 0 keeps every fetched repository. Optional;
+                         omitting it means 12.
 
   Returns: the normalized dict documented field-by-field in the README's
   Styling section (every data-* attribute maps to one of these fields).
@@ -57,6 +63,20 @@
 {{- $languageAttribution := "repository" -}}
 {{- if eq $languageScope "worked-in" -}}
   {{- $languageAttribution = "authorship-weighted" -}}
+{{- end -}}
+
+{{/* The list caps, read with isset rather than default: 0 is a legitimate
+     value meaning "keep every row", and `default` would collapse it to the
+     fallback because 0 is the int zero value. The entry template validates
+     the numbers; the Markdown variant omits both keys and gets the shipped
+     caps. */}}
+{{- $orgRollupLimit := 10 -}}
+{{- if isset . "orgRollupLimit" -}}
+  {{- $orgRollupLimit = .orgRollupLimit -}}
+{{- end -}}
+{{- $contributedLimit := 12 -}}
+{{- if isset . "contributedLimit" -}}
+  {{- $contributedLimit = .contributedLimit -}}
 {{- end -}}
 
 {{- $user := $raw.user -}}
@@ -465,9 +485,9 @@
 {{/* ---------- Per-organization rollup ---------- */}}
 {{/* Groups the four *ContributionsByRepository lists by repository owner,
      excluding the person's own account, yielding {commits, issues, prs,
-     reviews} per organization or external user -- the composite GitHub
-     itself never presents. Scoped to the snapshot's rolling-year window and
-     to the API's top-100-repositories-per-type ceiling. */}}
+     reviews, avatarUrl} per organization or external user -- the composite
+     GitHub itself never presents. Scoped to the snapshot's rolling-year
+     window and to the API's top-100-repositories-per-type ceiling. */}}
 {{- $roll := dict -}}
 {{- $rollSources := slice
   (dict "field" "commitContributionsByRepository" "key" "commits")
@@ -479,10 +499,12 @@
   {{- range index $cc $src.field | default (slice) -}}
     {{- $ownerLogin := "" -}}
     {{- $ownerType := "" -}}
+    {{- $ownerAvatar := "" -}}
     {{- with index . "repository" -}}
       {{- with index . "owner" -}}
         {{- $ownerLogin = printf "%v" (or (index . "login") "") -}}
         {{- $ownerType = printf "%v" (or (index . "__typename") "") -}}
+        {{- $ownerAvatar = printf "%v" (or (index . "avatarUrl") "") -}}
       {{- end -}}
     {{- end -}}
     {{- $count := 0 -}}
@@ -490,9 +512,15 @@
       {{- $count = partial "github-profile/to-int.html" (index . "totalCount") -}}
     {{- end -}}
     {{- if and $ownerLogin (ne $ownerLogin $login) (gt $count 0) -}}
-      {{- $entry := dict "login" $ownerLogin "type" $ownerType "commits" 0 "issues" 0 "prs" 0 "reviews" 0 "total" 0 -}}
+      {{- $entry := dict "login" $ownerLogin "type" $ownerType "avatarUrl" "" "commits" 0 "issues" 0 "prs" 0 "reviews" 0 "total" 0 -}}
       {{- with index $roll $ownerLogin -}}
         {{- $entry = . -}}
+      {{- end -}}
+      {{/* The same owner appears in up to four lists carrying one avatarUrl,
+           so the first non-empty occurrence wins; the guard only matters for
+           a node shape where the owner block resolved without the scalar. */}}
+      {{- if and $ownerAvatar (not (index $entry "avatarUrl")) -}}
+        {{- $entry = merge $entry (dict "avatarUrl" $ownerAvatar) -}}
       {{- end -}}
       {{- $entry = merge $entry (dict
         $src.key (add (index $entry $src.key) $count)
@@ -507,8 +535,12 @@
   {{- $orgRollup = $orgRollup | append $entry -}}
 {{- end -}}
 {{- $orgRollup = sort $orgRollup "total" "desc" -}}
-{{- if gt (len $orgRollup) 10 -}}
-  {{- $orgRollup = first 10 $orgRollup -}}
+{{/* The pre-cap owner count leaves this partial beside the capped list, so
+     the renderer can say how many rows the cap cut instead of truncating
+     silently. */}}
+{{- $orgRollupTotal := len $orgRollup -}}
+{{- if and (gt $orgRollupLimit 0) (gt $orgRollupTotal $orgRollupLimit) -}}
+  {{- $orgRollup = first $orgRollupLimit $orgRollup -}}
 {{- end -}}
 
 {{/* ---------- Externally contributed repositories ---------- */}}
@@ -543,8 +575,12 @@
   {{- end -}}
 {{- end -}}
 {{- $contributed = sort $contributed "stars" "desc" -}}
-{{- if gt (len $contributed) 12 -}}
-  {{- $contributed = first 12 $contributed -}}
+{{/* No pre-cap count is kept here: the connection's own totalCount
+     ($externalRepos) is the honest total for this list, and it also covers
+     what the API withheld past its 100-node ceiling, which a length taken
+     after the fetch cannot see. */}}
+{{- if and (gt $contributedLimit 0) (gt (len $contributed) $contributedLimit) -}}
+  {{- $contributed = first $contributedLimit $contributed -}}
 {{- end -}}
 
 {{/* ---------- Public organization memberships ---------- */}}
@@ -670,6 +706,7 @@
   "streakLongest" $streakLongest
   "languages" $languages
   "orgRollup" $orgRollup
+  "orgRollupTotal" $orgRollupTotal
   "contributed" $contributed
   "externalRepos" $externalRepos
   "externalOrgs" $externalOrgs
