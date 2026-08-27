@@ -40,8 +40,6 @@ cleanup_interrupted() {
   kill_stray_hugo
   rm -f "$LOG_FILE" "$LOG_FILE_MINIFIED"
 }
-trap cleanup_interrupted INT TERM
-trap kill_stray_hugo EXIT
 
 cd "$HERE"
 
@@ -51,6 +49,14 @@ cd "$HERE"
 # checkout is named hugo-artifacts, so a runner invoked by absolute path
 # matches ITSELF and aborts -- which is exactly what a CI workspace path
 # such as /home/runner/work/hugo-artifacts/hugo-artifacts produces.
+#
+# The cleanup traps are registered AFTER this check, and the ordering is
+# load-bearing: the check exists to hand a foreign hugo process -- a dev
+# server serving some other project -- back to the human, and a trap
+# registered above it would fire on this very abort and taskkill the process
+# the message just said to go and deal with. Registered here, the traps can
+# only ever kill strays of this runner's own builds, because a passed check
+# proves no foreign hugo existed when they armed.
 if command -v pgrep >/dev/null 2>&1; then
   if pgrep -x hugo >/dev/null 2>&1; then
     echo "A hugo process is already running; stop it first (pkill hugo)." >&2
@@ -62,6 +68,8 @@ elif command -v tasklist >/dev/null 2>&1; then
     exit 1
   fi
 fi
+trap cleanup_interrupted INT TERM
+trap kill_stray_hugo EXIT
 
 if [ ! -d "$HERE/node_modules" ]; then
   npm install
