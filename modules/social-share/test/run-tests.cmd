@@ -6,7 +6,11 @@ rem log, and forced hugo cleanup afterward.
 setlocal enabledelayedexpansion
 if "%PORT%"=="" set PORT=1414
 
-tasklist /FI "IMAGENAME eq hugo.exe" | find /I "hugo.exe" >nul
+rem findstr, not find: a caller inheriting Git Bash's PATH resolves find to
+rem GNU find (usr\bin precedes System32), which rejects /I and exits 1 -- a
+rem find-based check silently passes over a live hugo, and this run's own
+rem cleanup taskkill would then kill the process the check exists to protect.
+tasklist /FI "IMAGENAME eq hugo.exe" | findstr /I "hugo.exe" >nul
 if not errorlevel 1 (
   echo A hugo process is already running; stop it first: taskkill /F /IM hugo.exe
   exit /b 1
@@ -35,18 +39,25 @@ if errorlevel 1 exit /b 1
 rem Layered on the subpath overlay rather than restating it: canonifyURLs is
 rem the one setting under which a share target derived through the relURL
 rem family loses the baseURL path, with nothing to repair it.
-call :build_overlay subpath-canonify hugo.toml,subpath.toml,canonify.toml
+rem The chain is quoted because cmd splits call arguments on commas: unquoted,
+rem %~2 receives only "hugo.toml", the rest of the chain lands in arguments
+rem nothing reads, and the overlay silently builds the base config alone.
+call :build_overlay subpath-canonify "hugo.toml,subpath.toml,canonify.toml"
 if errorlevel 1 exit /b 1
 
 pushd "%~dp0fixture"
 start "social-share-fixture" /b hugo server --port %PORT% --bind 127.0.0.1 --logLevel info > "%~dp0.hugo-server.log" 2>&1
 popd
 
+rem ping, not timeout: under that same inherited PATH, timeout resolves to
+rem GNU timeout, which rejects /t and exits at once, collapsing this wait
+rem into a fast-failing burst that aborts before hugo can bind; only
+rem System32 ships a ping, and -n 2 against the loopback sleeps one second.
 set READY=0
 for /l %%i in (1,1,60) do (
   curl -fsS "http://localhost:%PORT%/" >nul 2>&1 && set READY=1
   if "!READY!"=="1" goto ready
-  timeout /t 1 /nobreak >nul
+  ping -n 2 127.0.0.1 >nul
 )
 :ready
 if "%READY%"=="0" (

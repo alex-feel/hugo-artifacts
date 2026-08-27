@@ -9,8 +9,9 @@ rem                      LEGACY_FIXTURE=1, --grep "Row 4:".
 rem   Pass 3 (v1->v2):   row 8 only, with concurrent v1->v2 fixture swap watcher.
 rem                      MATRIX_PASS3_PERSISTENT=1, --grep "Row 8:".
 rem
-rem Hugo Process Lifecycle Management uses tasklist + taskkill per
-rem ~/.claude/aegis/rules/hugo-development.md Section 3.1 / 3.2.
+rem Follows the repository's hugo process lifecycle discipline with the
+rem Windows-native tasklist + taskkill equivalents: a pre-launch process+port
+rem check and a forced hugo cleanup between passes.
 rem
 rem Aggregate target: 9 PASS / 0 SKIPPED / 0 FAIL.
 rem
@@ -48,9 +49,13 @@ set "PASS2_EXIT=-1"
 set "PASS3_EXIT=-1"
 set "HUGO_LOG="
 
-rem ----- Pre-launch (Hugo Development Rule R3 Section 3.1) -------------------------
+rem ----- Pre-launch process and port check -----------------------------------------
 
-tasklist /FI "IMAGENAME eq hugo.exe" 2>nul | find /I "hugo.exe" >nul
+rem findstr, not find: a caller inheriting Git Bash's PATH resolves find to
+rem GNU find (usr\bin precedes System32), which rejects /I and exits 1 -- a
+rem find-based check silently passes over a live hugo, and this run's own
+rem cleanup taskkill would then kill the process the check exists to protect.
+tasklist /FI "IMAGENAME eq hugo.exe" 2>nul | findstr /I "hugo.exe" >nul
 if %errorlevel% equ 0 (
   echo ERROR: a hugo.exe process is already running. Terminate it before re-running the matrix.
   echo        taskkill /F /IM hugo.exe

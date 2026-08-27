@@ -186,8 +186,6 @@ cleanup_exit() {
   kill_stray_hugo
   stop_origin
 }
-trap cleanup_interrupted INT TERM
-trap cleanup_exit EXIT
 
 cd "$HERE"
 
@@ -211,6 +209,16 @@ elif command -v tasklist >/dev/null 2>&1; then
     exit 1
   fi
 fi
+
+# The cleanup traps are registered AFTER the pre-launch check, and the
+# ordering is load-bearing: the check exists to hand a foreign hugo process
+# -- a dev server serving some other project -- back to the human, and a trap
+# registered above it would fire on this very abort and kill the process the
+# message just said to go and deal with. Registered here, the traps can only
+# ever kill strays of this runner's own builds, because a passed check proves
+# no foreign hugo existed when they armed.
+trap cleanup_interrupted INT TERM
+trap cleanup_exit EXIT
 
 # ---- The fixture origin ----
 # Started before any build, stopped by the EXIT trap. The stop first clears an
