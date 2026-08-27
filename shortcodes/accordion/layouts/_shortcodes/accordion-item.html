@@ -1,0 +1,157 @@
+{{/*
+  Renders one accordion item as a native <details>/<summary> disclosure,
+  either nested inside an accordion container or standalone:
+
+    {{< accordion-item "Shipping" >}}
+    Ships in 2-3 days. **Markdown**, nested shortcodes, and render hooks
+    all work here.
+    {{< /accordion-item >}}
+
+    {{< accordion-item title="Returns" open="true" id="returns" >}}
+    Thirty days, no questions.
+    {{< /accordion-item >}}
+
+  Nested inside {{< accordion >}}, the item inherits that container's
+  group, heading level, and icon setting, re-derived from the container's
+  own arguments through .Parent (see accordion/lib/sc-config.html).
+  Called on its OWN, it renders a complete single-item accordion --
+  container div plus item -- so a page needing one collapsible region does
+  not have to wrap it, and the BEM block stays intact (no orphan
+  accordion__item element outside an accordion block). A standalone item
+  is never part of an exclusive group: exclusivity is a container-level
+  decision, and a lone item has nothing to be exclusive with.
+
+  Parameters:
+  - title (positional 0, or title=) REQUIRED. The summary text, rendered
+    as INLINE markdown (emphasis, code, links work; block constructs do
+    not, because a summary is a phrasing-content context). A missing or
+    blank title is a build failure: a disclosure control with no
+    accessible name leaves the browser to substitute its own
+    non-localizable "Details" label, which tells a screen-reader user
+    nothing about what the item contains.
+  - open (bool)    Start expanded (emits the native open attribute).
+    Default false. Inside an exclusive group, browsers keep only the
+    FIRST open item and silently close the rest, so a second one warns.
+  - id (string)    Deep-link id, placed on the item's body element. When
+    omitted, an id is minted from the title with anchorize plus -1/-2
+    collision suffixes, matching Hugo's own heading-anchor behavior, so
+    every item is linkable and the platform's fragment-reveal behavior
+    can open a closed item. id="" opts out of the attribute entirely.
+  - class (string) Extra class(es) appended to the <details> element.
+
+  Inner content is rendered as BLOCK-level markdown through
+  .Page.RenderString, so the full content pipeline runs: nested
+  shortcodes, render hooks, and markdown all work, and the body is never
+  collapsed into a bare <p>. .InnerDeindent (not .Inner) is the source, so
+  an item authored inside an indented Markdown structure -- a list item,
+  a blockquote -- is not read as a code block by CommonMark's four-space
+  rule. An empty body is allowed and yields an empty body element. Use
+  the {{< >}} notation only; the {{% %}} form renders the body through
+  Goldmark before RenderString sees it, which double-renders it.
+
+  Everything except the missing title degrades: a bad bool token falls
+  back to its default with a one-shot warning, and an unknown named
+  parameter (a typo) warns once and is ignored.
+*/}}
+
+{{/* The diagnostics position, resolved through accordion/lib/position.html
+     because a NESTED shortcode's own .Position collapses to "<file>:1:1" at
+     Hugo v0.164.0; the partial substitutes the outermost ancestor's accurate
+     position, which points at the container the item was authored in. */}}
+{{- $where := partial "accordion/lib/position.html" . -}}
+
+{{- $vocab := slice "title" "open" "id" "class" -}}
+{{- if .IsNamedParams -}}
+  {{- range $k, $_ := .Params -}}
+    {{- if not (in $vocab $k) -}}
+      {{- partial "accordion/lib/warn.html" (dict
+          "key" (printf "accordion:warn:unknown-param:accordion-item:%s:%s" $k $where)
+          "message" (printf "[accordion] Ignoring the unknown accordion-item shortcode parameter %q (see the README Parameters table for the accepted names). See %s" $k $where)) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Title presence is detected with the dedicated argument API rather than
+     `.Get | default`: a missing NAMED argument does not reliably come back
+     as nil from .Get when other named arguments are present, and an author
+     who wrote title="" deserves the same build failure as one who wrote
+     nothing -- both leave the disclosure control unnamed. */}}
+{{- $rawTitle := "" -}}
+{{- if .IsNamedParams -}}
+  {{- if isset .Params "title" -}}{{- $rawTitle = printf "%v" (.Get "title") -}}{{- end -}}
+{{- else -}}
+  {{/* .Params is nil (not an empty slice) for a call with no arguments at
+       all, and `len` raises on a nil pointer, so presence is tested with
+       `with` before any positional argument is read. */}}
+  {{- with .Params -}}
+    {{- $rawTitle = printf "%v" ($.Get 0) -}}
+  {{- end -}}
+{{- end -}}
+{{- $rawTitle = trim $rawTitle " \t\n\r" -}}
+{{- if eq $rawTitle "" -}}
+  {{- errorf "The %q shortcode requires a title (the summary text): {{< accordion-item \"Shipping\" >}} or title=\"Shipping\". A disclosure control with no accessible name is unusable with a screen reader. See %s" .Name $where -}}
+{{- else -}}
+
+{{- $open := false -}}
+{{- if and .IsNamedParams (isset .Params "open") -}}
+  {{- $open = partial "accordion/lib/bool.html" (dict "value" (.Get "open") "name" "open" "default" false "where" $where) -}}
+{{- end -}}
+
+{{/* Container-inherited settings, re-derived from the CONTAINER's own
+     arguments through .Parent. That indirection is not a style choice:
+     measured at Hugo v0.164.0, a nested shortcode executes BEFORE its
+     parent's template body, so a value the container writes to its own
+     .Store -- or even to the shared .Page.Store -- above its .Inner line
+     is not there yet when this template runs. Arguments are the one
+     channel that carries, which is what Hugo's own .Parent documentation
+     demonstrates. .Parent is nil when the item is not nested, so the
+     standalone path keeps the documented defaults. */}}
+{{- $group := "" -}}
+{{- $heading := 0 -}}
+{{- $icon := true -}}
+{{- $standalone := true -}}
+{{- with .Parent -}}
+  {{- $standalone = false -}}
+  {{- $cfg := partial "accordion/lib/sc-config.html" (dict "sc" . "where" $where) -}}
+  {{- $group = $cfg.group -}}
+  {{- $heading = $cfg.heading -}}
+  {{- $icon = $cfg.icon -}}
+{{- end -}}
+
+{{- $identity := printf "shortcode:%s" (partial "accordion/lib/identity.html" .) -}}
+{{- $id := partial "accordion/lib/id.html" (dict
+    "page" .Page
+    "raw" $rawTitle
+    "idSet" (and .IsNamedParams (isset .Params "id"))
+    "idParam" (.Get "id")
+    "identity" $identity) -}}
+
+{{- $titleHTML := .Page.RenderString (dict "display" "inline") $rawTitle -}}
+{{- $bodyHTML := "" -}}
+{{- with .InnerDeindent | strings.TrimSpace -}}
+  {{- $bodyHTML = $.Page.RenderString (dict "display" "block") . -}}
+{{- end -}}
+
+{{- $ctx := dict
+  "page" .Page
+  "where" $where
+  "identity" $identity
+  "titleHTML" $titleHTML
+  "bodyHTML" $bodyHTML
+  "group" $group
+  "heading" $heading
+  "icon" $icon
+  "open" $open
+  "id" $id
+  "class" (.Get "class" | default "")
+-}}
+
+{{- if $standalone -}}
+<div class="accordion">
+{{ partial "accordion/item.html" $ctx }}
+</div>
+{{- else -}}
+{{- partial "accordion/item.html" $ctx -}}
+{{- end -}}
+
+{{- end -}}

@@ -1,0 +1,13 @@
+# Overlay configuration for the suite's SECOND build, chained onto hugo.toml.
+#
+# It turns on Goldmark's raw-HTML passthrough, which is the documented remedy
+# for the module's one real limitation: an accordion-item body is rendered
+# with .Page.RenderString, and at Hugo's default unsafe = false Goldmark
+# replaces any raw HTML in it with an omission comment -- so an accordion
+# nested inside another accordion's item, or any other HTML-emitting
+# shortcode there, silently disappears. The default build proves the
+# limitation; this one proves the remedy.
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true

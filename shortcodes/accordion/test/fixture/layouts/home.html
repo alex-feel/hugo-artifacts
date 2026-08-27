@@ -1,0 +1,11 @@
+{{/*
+  Home template for the fixture site.
+
+  The wrapper carries a stable id so a spec can locate the rendered content
+  without depending on the surrounding chrome.
+*/}}
+{{ define "main" }}
+  <div id="fixture-content" data-fixture-page="{{ .Kind }}">
+    {{ .Content }}
+  </div>
+{{ end }}

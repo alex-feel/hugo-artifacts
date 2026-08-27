@@ -82,6 +82,7 @@ jobs:
             shortcodes/github-repo
             shortcodes/github-profile
             shortcodes/hf-space
+            shortcodes/accordion
             shortcodes/callout
             shortcodes/youtube-embed
             shortcodes/arxiv-paper
@@ -101,6 +102,7 @@ jobs:
             modules/copy-page/test/fixture
             modules/og-image/test/fixture
             modules/url-retirement/test/fixture
+            shortcodes/accordion/test/fixture
             shortcodes/github-profile/test/fixture
             shortcodes/test-smoke/fixture
             modules/test-composition/fixture
@@ -142,7 +144,7 @@ jobs:
           # fetch over the module proxy as +incompatible versions. This step is
           # what proves a consumer can import any one of these modules alone,
           # so keep the list in sync with the leaf module set.
-          for m in modules/pwa modules/workbox modules/idb modules/seo modules/social-share modules/search modules/images modules/carousel modules/agent-readiness modules/copy-page modules/og-image modules/url-retirement shortcodes/github-repo shortcodes/github-profile shortcodes/hf-space shortcodes/callout shortcodes/youtube-embed shortcodes/arxiv-paper; do
+          for m in modules/pwa modules/workbox modules/idb modules/seo modules/social-share modules/search modules/images modules/carousel modules/agent-readiness modules/copy-page modules/og-image modules/url-retirement shortcodes/github-repo shortcodes/github-profile shortcodes/hf-space shortcodes/accordion shortcodes/callout shortcodes/youtube-embed shortcodes/arxiv-paper; do
             echo "::group::hugo mod graph -- ${m}"
             ( cd "${m}" && hugo mod graph )
             echo "::endgroup::"
@@ -281,6 +283,9 @@ jobs:
             run: bash run-tests.sh
             deps: true
             browser: true
+          - name: accordion
+            dir: shortcodes/accordion/test
+            run: bash run-tests.sh
           - name: github-profile
             dir: shortcodes/github-profile/test
             run: bash run-tests.sh

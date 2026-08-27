@@ -291,8 +291,14 @@
      markup string LAST; display=block keeps full paragraph structure (so the
      body is never collapsed into a bare inline <p>). The full content pipeline
      runs, so nested shortcodes, render hooks, and markdown all work. An empty
-     body is allowed and simply yields an empty body element. */}}
-{{- $inner := .Inner | strings.TrimSpace -}}
+     body is allowed and simply yields an empty body element.
+
+     The source is .InnerDeindent, not .Inner: a callout authored inside an
+     indented Markdown structure -- a list item, a blockquote -- carries that
+     indentation into its body, and CommonMark reads four spaces as a code
+     block. Measured, the same body renders as prose here and as
+     <pre><code> under .Inner. */}}
+{{- $inner := .InnerDeindent | strings.TrimSpace -}}
 {{- $bodyHTML := "" -}}
 {{- with $inner -}}
   {{- $bodyHTML = $.Page.RenderString (dict "display" "block") . -}}

@@ -1,0 +1,95 @@
+{{/*
+  Renders ONE accordion item as a native <details>/<summary> pair. This is
+  the single item-rendering surface shared by the accordion-item shortcode
+  (nested and standalone) and the accordion/list.html partial, so every
+  path produces IDENTICAL markup.
+
+  Emitted shape (single-line elements; see "Whitespace discipline" below):
+
+    <details class="accordion__item [EXTRA]" [name="GROUP"] [open]>
+      <summary class="accordion__summary">[<hN class="accordion__heading">]<span class="accordion__title">TITLE</span>[</hN>][ICON]</summary>
+      <div class="accordion__body" [id="ID"]>BODY</div>
+    </details>
+
+  Deliberate contract points:
+  - Zero ARIA. <details>/<summary> carries the expand/collapse state
+    natively (WAI-ARIA 1.2 section 1.1's first rule of ARIA: use the host
+    language feature); adding aria-expanded, aria-controls, or
+    role="button" to a summary is redundant at best and measurably harmful
+    at worst (it can suppress state announcements and hide a nested
+    heading from VoiceOver). The README carries the full account.
+  - The open attribute is emitted BARE, never open="true": every value,
+    including "false", enables the boolean attribute in HTML.
+  - The id lives on the accordion__body div, NOT on <details>: the HTML
+    fragment-navigation reveal (the ancestor details revealing algorithm)
+    opens only details elements that are ANCESTORS of the target through
+    the content slot, so a deep link to the details element itself -- or to
+    the summary, which sits in the summary slot -- scrolls without opening
+    (whatwg/html#8509 tracks that gap). Anchoring the body is what makes a
+    deep link to a closed item actually reveal it where the platform
+    supports the algorithm.
+  - The heading, when requested, wraps ONLY the title span; the icon stays
+    outside it so heading navigation announces the title text alone. The
+    dynamic <h{{ .heading }}> tag is the same construct Hugo's own
+    embedded heading render hook uses.
+  - A second open item inside one exclusive (named) group warns once per
+    group: the native rule keeps only the FIRST open member of a named
+    group and silently closes the rest (MDN-documented), so the silent
+    surprise becomes a visible build-time diagnostic. The counter is a
+    .Page.Store scalar keyed by group name, incremented once per distinct
+    item identity rather than once per execution; the store is per page and
+    group names are page-scoped, so counts never bleed across pages.
+
+  Context expectations (assembled by the caller; all values pre-resolved):
+  - .page      (Page)          The current page.
+  - .where     (string)        Diagnostics origin.
+  - .identity  (string)        The item's stable, per-page-unique identity,
+                               used to count an open item once however many
+                               times Hugo re-executes the page's shortcodes.
+  - .titleHTML (template.HTML) Inline-rendered title.
+  - .bodyHTML  (template.HTML) Block-rendered body ("" allowed).
+  - .group     (string)        Exclusive group name; "" emits no name
+                               attribute.
+  - .heading   (int)           0 for none, or 2..6.
+  - .icon      (bool)          Whether to render the chevron glyph.
+  - .open      (bool)          Whether the item starts expanded.
+  - .id        (string)        Body id; "" emits no id attribute.
+  - .class     (string)        Extra class(es) on the details element.
+
+  Whitespace discipline: every logic-only action tag uses {{- -}} trim
+  markers and each emitted element sits on its own tightly controlled
+  line, so consumers styling with :first-child / adjacent-sibling
+  selectors see exact element adjacency, and no emitted line ever starts
+  with a bare ">" that Goldmark could misparse as a blockquote when the
+  markup lands inside another block construct.
+
+  Return value: none. This partial renders.
+*/}}
+
+{{- $itemClass := "accordion__item" -}}
+{{- with .class -}}{{- $itemClass = printf "%s %s" $itemClass . -}}{{- end -}}
+
+{{- if and .open (ne .group "") -}}
+  {{- $countKey := printf "accordion:open-count:%s" .group -}}
+  {{/* Counted once per distinct ITEM, not once per execution. Hugo
+       re-executes a page's shortcodes for every HTML-family output format it
+       renders, so a bare counter would reach two on the second render of a
+       group holding a single open item and warn about a defect that is not
+       there. Keying the increment on the item's own identity makes the count
+       idempotent, exactly as the id registry is. */}}
+  {{- $seenKey := printf "accordion:open-seen:%s:%s" .group .identity -}}
+  {{- if not (.page.Store.Get $seenKey) -}}
+    {{- .page.Store.Set $seenKey true -}}
+    {{- .page.Store.Add $countKey 1 -}}
+  {{- end -}}
+  {{- if ge (.page.Store.Get $countKey) 2 -}}
+    {{- partial "accordion/lib/warn.html" (dict
+        "key" (printf "accordion:warn:multi-open:%s" .group)
+        "message" (printf "[accordion] More than one item in the exclusive group %q carries open; browsers keep only the FIRST open member of a named group and silently close the rest. See %s" .group .where)) -}}
+  {{- end -}}
+{{- end -}}
+
+<details class="{{ $itemClass }}"{{ with .group }} name="{{ . }}"{{ end }}{{ if .open }} open{{ end }}>
+  <summary class="accordion__summary">{{ if .heading }}<h{{ .heading }} class="accordion__heading">{{ end }}<span class="accordion__title">{{ .titleHTML }}</span>{{ if .heading }}</h{{ .heading }}>{{ end }}{{ if .icon }}{{ partial "accordion/icon.html" (dict "class" "accordion__icon") }}{{ end }}</summary>
+  <div class="accordion__body"{{ with .id }} id="{{ . }}"{{ end }}>{{ .bodyHTML }}</div>
+</details>

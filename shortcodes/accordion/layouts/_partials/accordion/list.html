@@ -1,0 +1,167 @@
+{{/*
+  accordion/list.html -- PUBLIC ENTRY (renderer tier).
+
+  Renders a whole accordion from a DATA slice, for callers that are
+  templates rather than Markdown -- a layout, a partial, a page template:
+
+      {{ partial "accordion/list.html" (dict
+        "page" .
+        "position" "layouts/skills/list.html"
+        "items" (slice
+          (dict "title" "Frontend" "content" "Everything that runs in a browser.")
+          (dict "title" "Backend"  "content" $renderedHTML "open" true))
+      ) }}
+
+  The emitted markup is IDENTICAL to what the accordion / accordion-item
+  shortcodes produce (both dispatch to accordion/item.html), so a site can
+  move a widget between Markdown and a layout without any styling
+  changing. See the accordion shortcode's docstring for the platform
+  contract -- native <details>, zero JS, zero CSS, zero ARIA.
+
+  Expected context (dict):
+  - .page      (Page) REQUIRED. The current page: the id registry, the
+    exclusive-group counter, and Markdown rendering all hang off it.
+  - .items     (slice of dicts) REQUIRED. One dict per item, in render
+    order. An empty or absent slice warns once and renders nothing.
+  - .position  (string, optional) Diagnostics origin, since a partial has
+    no .Position of its own. Falls back to the page path. It also
+    distinguishes two accordions rendered by ONE layout in the id
+    registry, so pass distinct values when a layout renders several.
+  - .exclusive (bool)   As on the shortcode: single-open behavior through
+    a freshly minted native group name. Default false.
+  - .group     (string) Explicit group name, implies exclusive.
+  - .heading   (int)    2..6, wraps each title in <hN>. Default none.
+  - .icon      (bool)   Render the chevron glyph. Default true.
+  - .id        (string) id attribute on the container div.
+  - .class     (string) Extra class(es) on the container div.
+
+  Per-item dict keys:
+  - .title   (string) REQUIRED. Rendered as INLINE markdown. A missing or
+    blank title build-fails, exactly as it does in the shortcode: a
+    disclosure control with no accessible name is unusable with a screen
+    reader.
+  - .content (string OR template.HTML) The body. THE TYPE DECIDES THE
+    TREATMENT, and this is the one trap of the partial surface: a plain
+    string is treated as Markdown and rendered through
+    .Page.RenderString, which under Goldmark's default unsafe = false
+    silently STRIPS any raw HTML in it; a template.HTML value (what a
+    layout gets from `partial`, `.Content`, `safeHTML`, or another
+    render) passes through untouched. So hand over HTML as HTML and
+    Markdown as a string, and neither gets mangled. Absent or empty
+    yields an empty body element.
+  - .open    (bool)   Start expanded. Default false.
+  - .id      (string) Deep-link id on the item body; omitted means minted
+    from the title, "" opts out. Same rules as the shortcode.
+  - .class   (string) Extra class(es) on the item's <details>.
+
+  Validation: a non-Page .page or a non-slice .items errorfs (the caller
+  is a template author who can fix it immediately, and there is no
+  sensible degradation for either); an item that is not a map, or whose
+  title is blank, likewise errorfs naming the item's index. Everything
+  else degrades with a one-shot warning, matching the shortcode surface.
+
+  Return value: none. This partial renders.
+*/}}
+
+{{- $args := . -}}
+{{- $page := "" -}}
+{{- if reflect.IsMap $args -}}
+  {{- $page = $args.page -}}
+{{- end -}}
+
+{{- if not (reflect.IsPage $page) -}}
+  {{- errorf "[accordion] accordion/list.html must be called with an options dict carrying at least the current Page and an items slice: {{ partial \"accordion/list.html\" (dict \"page\" . \"items\" $items) }}." -}}
+{{- else -}}
+
+{{- $where := "" -}}
+{{- with $args.position -}}{{- $where = printf "%s" . -}}{{- end -}}
+{{- if not $where -}}{{- $where = printf "%v" $page.Path -}}{{- end -}}
+
+{{- $items := $args.items -}}
+{{- if and (isset $args "items") (not (reflect.IsSlice $items)) -}}
+  {{- errorf "[accordion] accordion/list.html requires \"items\" to be a slice of dicts, one per accordion item. See %s" $where -}}
+{{- else if not $items -}}
+  {{- partial "accordion/lib/warn.html" (dict
+      "key" (printf "accordion:warn:empty-items:%s" $where)
+      "message" (printf "[accordion] accordion/list.html received no items; rendering nothing. See %s" $where)) -}}
+{{- else -}}
+
+{{- $exclusive := false -}}
+{{- if isset $args "exclusive" -}}
+  {{- $exclusive = partial "accordion/lib/bool.html" (dict "value" $args.exclusive "name" "exclusive" "default" false "where" $where) -}}
+{{- end -}}
+{{- $group := trim (printf "%v" ($args.group | default "")) " \t\n\r" -}}
+{{- if and (eq $group "") $exclusive -}}
+  {{/* The seed is the caller's own position, which is what distinguishes two
+       accordions rendered by one layout -- the same value the id registry
+       distinguishes them by, and the reason this partial's docstring asks a
+       layout with several accordions to pass distinct "position" strings. */}}
+  {{- $group = partial "accordion/lib/group-name.html" (dict "seed" $where) -}}
+{{- end -}}
+
+{{- $heading := 0 -}}
+{{- if isset $args "heading" -}}
+  {{- $heading = partial "accordion/lib/heading.html" (dict "value" $args.heading "where" $where) -}}
+{{- end -}}
+
+{{- $icon := true -}}
+{{- if isset $args "icon" -}}
+  {{- $icon = partial "accordion/lib/bool.html" (dict "value" $args.icon "name" "icon" "default" true "where" $where) -}}
+{{- end -}}
+
+{{- $rootClass := "accordion" -}}
+{{- if ne $group "" -}}{{- $rootClass = printf "%s accordion--exclusive" $rootClass -}}{{- end -}}
+{{- with $args.class -}}{{- $rootClass = printf "%s %s" $rootClass . -}}{{- end -}}
+
+<div class="{{ $rootClass }}"{{ with $args.id }} id="{{ . }}"{{ end }}>
+{{- range $i, $item := $items -}}
+  {{- if not (reflect.IsMap $item) -}}
+    {{- errorf "[accordion] accordion/list.html item %d is not a dict; every items entry is a dict with at least a \"title\". See %s" $i $where -}}
+  {{- else -}}
+    {{- $rawTitle := trim (printf "%v" ($item.title | default "")) " \t\n\r" -}}
+    {{- if eq $rawTitle "" -}}
+      {{- errorf "[accordion] accordion/list.html item %d has no title. A disclosure control with no accessible name is unusable with a screen reader. See %s" $i $where -}}
+    {{- else -}}
+      {{- $itemOpen := false -}}
+      {{- if isset $item "open" -}}
+        {{- $itemOpen = partial "accordion/lib/bool.html" (dict "value" $item.open "name" "open" "default" false "where" $where) -}}
+      {{- end -}}
+      {{- $identity := printf "list:%s:%d" $where $i -}}
+      {{- $itemId := partial "accordion/lib/id.html" (dict
+          "page" $page
+          "raw" $rawTitle
+          "idSet" (isset $item "id")
+          "idParam" ($item.id | default "")
+          "identity" $identity) -}}
+      {{/* The body's TYPE decides its treatment: template.HTML is already
+           rendered markup and passes through, while a plain string is
+           author Markdown and goes through the same block-level
+           RenderString the shortcode body uses. */}}
+      {{- $bodyHTML := "" -}}
+      {{- with $item.content -}}
+        {{- if eq (printf "%T" .) "template.HTML" -}}
+          {{- $bodyHTML = . -}}
+        {{- else -}}
+          {{- with trim (printf "%v" .) " \t\n\r" -}}
+            {{- $bodyHTML = $page.RenderString (dict "display" "block") . -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+      {{- partial "accordion/item.html" (dict
+          "page" $page
+          "where" $where
+          "identity" $identity
+          "titleHTML" ($page.RenderString (dict "display" "inline") $rawTitle)
+          "bodyHTML" $bodyHTML
+          "group" $group
+          "heading" $heading
+          "icon" $icon
+          "open" $itemOpen
+          "id" $itemId
+          "class" ($item.class | default "")) -}}
+  {{- end -}}
+  {{- end -}}
+{{- end -}}
+</div>
+{{- end -}}
+{{- end -}}

@@ -1,0 +1,9 @@
+{{/*
+  Single-page template for the fixture site, mirroring home.html so a spec
+  reads every content page through the same wrapper.
+*/}}
+{{ define "main" }}
+  <div id="fixture-content" data-fixture-page="{{ .Kind }}">
+    {{ .Content }}
+  </div>
+{{ end }}

@@ -20,12 +20,18 @@
 //     these legitimately but the test fixture documentation MUST NOT be
 //     restyled to preserve the regression-free Phase 7 status.
 //   - modules/images/test/fixture/content/,
-//     modules/agent-readiness/test/fixture-widgets/content/ and
-//     shortcodes/test-smoke/fixture/content/ are Markdown test DATA rather
-//     than Markdown documents (paralleling the .prettierignore
+//     modules/agent-readiness/test/fixture-widgets/content/,
+//     shortcodes/test-smoke/fixture/content/ and
+//     shortcodes/accordion/test/fixture/content/ are Markdown test DATA
+//     rather than Markdown documents (paralleling the .prettierignore
 //     exclusions): bare URLs inside shortcode arguments, javascript:
-//     destinations, bracketed-title probes, and attribute blocks whose line
-//     structure is semantically load-bearing.
+//     destinations, bracketed-title probes, attribute blocks, and a
+//     shortcode authored at four spaces inside a list item -- all line
+//     structure that is semantically load-bearing. The accordion case is
+//     measured rather than assumed: rendering that item's body with .Inner
+//     instead of .InnerDeindent turns its nested list into a code block, so
+//     normalizing the indentation to the two spaces MD007 wants would delete
+//     the test.
 //   - modules/agent-readiness/test/fixture-origin/ is the Agent Skills
 //     fixture ORIGIN corpus: Markdown test DATA served over HTTP to the
 //     module's own fetcher (paralleling the .prettierignore exclusion).
@@ -66,6 +72,7 @@
     "modules/agent-readiness/test/fixture-widgets/content/**",
     "modules/agent-readiness/test/fixture-origin/**",
     "shortcodes/test-smoke/fixture/content/**",
+    "shortcodes/accordion/test/fixture/content/**",
     "**/layouts/**/*.md",
     "**/test-results/**",
     "**/playwright-report/**",

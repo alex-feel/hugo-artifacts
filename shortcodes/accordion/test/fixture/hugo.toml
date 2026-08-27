@@ -1,0 +1,32 @@
+# Fixture site for the accordion shortcode module.
+#
+# The module fetches nothing, ships no JavaScript, and needs no credentials,
+# so this site is fully offline and fully deterministic: every byte the
+# suite asserts is produced by the module's own templates from the fixture's
+# own content.
+#
+# The home page renders in BOTH the html and markdown output formats, which
+# is what selects the module's <name>.markdown.md template variants for the
+# same content calls, so one build proves both surfaces.
+baseURL = 'https://fixture.example/'
+title = 'Accordion Fixture'
+defaultContentLanguage = 'en'
+
+# The site has no taxonomies. Left enabled, Hugo would still build the
+# default tags and categories list pages, and each would log a "found no
+# layout file" warning that the suite's clean-build gate would have to
+# either whitelist or be blinded by.
+disableKinds = ['taxonomy', 'term']
+
+# An [outputs] list REPLACES the default for its page kind, so 'html' is
+# restated here alongside the markdown twin.
+[outputs]
+  home = ['html', 'markdown']
+
+[module]
+
+  [module.hugoVersion]
+    min = "0.160.0"
+
+  [[module.imports]]
+    path = "github.com/alex-feel/hugo-artifacts/shortcodes/accordion"

@@ -23,6 +23,7 @@ body:
         - [shortcodes/github-repo README](https://github.com/alex-feel/hugo-artifacts/blob/main/shortcodes/github-repo/README.md) -- GitHub-repo shortcode reference
         - [shortcodes/github-profile README](https://github.com/alex-feel/hugo-artifacts/blob/main/shortcodes/github-profile/README.md) -- GitHub-profile shortcode reference
         - [shortcodes/hf-space README](https://github.com/alex-feel/hugo-artifacts/blob/main/shortcodes/hf-space/README.md) -- Hugging Face Space shortcode reference
+        - [shortcodes/accordion README](https://github.com/alex-feel/hugo-artifacts/blob/main/shortcodes/accordion/README.md) -- Accordion shortcodes and list partial reference
         - [shortcodes/callout README](https://github.com/alex-feel/hugo-artifacts/blob/main/shortcodes/callout/README.md) -- Callout shortcode and blockquote render hook reference
         - [shortcodes/youtube-embed README](https://github.com/alex-feel/hugo-artifacts/blob/main/shortcodes/youtube-embed/README.md) -- YouTube-embed shortcode reference
         - [shortcodes/arxiv-paper README](https://github.com/alex-feel/hugo-artifacts/blob/main/shortcodes/arxiv-paper/README.md) -- arXiv-paper shortcode reference

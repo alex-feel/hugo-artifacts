@@ -1,0 +1,79 @@
+{{/*
+  Resolves one item's deep-link id and RETURNS it as a string ("" = emit
+  no id attribute).
+
+  An author-supplied id wins verbatim: it is the author's own namespace,
+  so it is neither sanitized nor deduplicated, and the explicit empty
+  string id="" is the documented opt-out that suppresses the attribute
+  entirely. When no id was supplied, the id is minted from the item's raw
+  title through anchorize -- the same sanitizer Hugo's auto heading ids
+  use, driven by the same markup.goldmark.parser.autoHeadingIDType
+  setting, so author expectations transfer -- with -1/-2 collision
+  suffixes matching Hugo's documented heading-collision convention. A
+  title that anchorizes to nothing (pure punctuation) falls back to the
+  base "accordion-item" and dedups from there.
+
+  The collision registry is a set of .Page.Store scalar sentinels, one per
+  claimed id, whose VALUE is the claiming item's identity (the shortcode
+  call's .Position, or the partial caller's position plus item index).
+  Storing the identity rather than a bare flag makes minting IDEMPOTENT:
+  Hugo re-executes shortcodes for every output format that selects an HTML
+  template variant, and on a re-render the same item finds its own
+  identity under the candidate key and reuses the same id instead of
+  drifting to the next suffix. The registry can only dedup against the
+  module's OWN page-scoped claims -- a page heading whose auto id matches a
+  minted id produces a duplicate id this partial cannot see (Hugo's
+  .Fragments tracks Markdown heading ids only, per-render); the README
+  documents that caveat with id= as the fix. Two same-titled items whose
+  identities also collide (two position-less list.html calls in one layout
+  with identical indexes) would share an id; layout callers with several
+  accordions on one page pass distinct "position" strings or explicit ids.
+
+  Within one page render, items execute sequentially, so the check-then-set
+  below does not race itself; across output formats the stored identity
+  makes a lost update harmless, because both writers store the same value
+  for the same item.
+
+  Context (dict):
+  - .page     (Page)   The current page (registry home).
+  - .raw      (string) The item's raw title (pre-render markup, matching
+                       what an author would anchorize by eye).
+  - .idSet    (bool)   Whether the author supplied id= at all.
+  - .idParam  (any)    The supplied id value (meaningful when idSet).
+  - .identity (string) Stable per-item identity across renders.
+
+  Return value: string. Exactly one terminal return.
+*/}}
+
+{{- $result := "" -}}
+{{- if .idSet -}}
+  {{- $result = trim (printf "%v" .idParam) " \t\n\r" -}}
+{{- else -}}
+  {{- $page := .page -}}
+  {{- $identity := .identity -}}
+  {{- $base := anchorize (trim (printf "%v" .raw) " \t\n\r") -}}
+  {{- if eq $base "" -}}{{- $base = "accordion-item" -}}{{- end -}}
+  {{- range $i := seq 0 99 -}}
+    {{- $candidate := $base -}}
+    {{- if gt $i 0 -}}{{- $candidate = printf "%s-%d" $base $i -}}{{- end -}}
+    {{- $key := printf "accordion:id:%s" $candidate -}}
+    {{- $owner := $page.Store.Get $key -}}
+    {{- if not $owner -}}
+      {{- $page.Store.Set $key $identity -}}
+      {{- $result = $candidate -}}
+      {{- break -}}
+    {{- else if eq (printf "%v" $owner) $identity -}}
+      {{- $result = $candidate -}}
+      {{- break -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if eq $result "" -}}
+    {{/* Ninety-nine same-base collisions exhausted the bounded loop; an
+         identity-hash suffix stays deterministic across re-renders and is
+         claimed without dedup (a collision would need two distinct items
+         with equal identities, which the identity contract already
+         excludes). */}}
+    {{- $result = printf "%s-x%s" $base (substr (md5 $identity) 0 8) -}}
+  {{- end -}}
+{{- end -}}
+{{- return $result -}}
