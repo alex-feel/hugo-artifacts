@@ -53,6 +53,13 @@ modules/agent-readiness/test/fixture-widgets/content/
 # would delete the test by making it pass for the wrong reason.
 shortcodes/accordion/test/fixture/content/
 
+# Shortcode-smoke fixture content: the same trap shape. Its indented-callout
+# case authors a shortcode inside a list item at FOUR spaces, the CommonMark
+# code-block threshold that callout's .InnerDeindent handling exists to
+# survive; normalizing the indentation would make that assertion pass for the
+# wrong reason. (Already excluded from markdownlint for the same content.)
+shortcodes/test-smoke/fixture/content/
+
 # Phase 7 locked Playwright test artifacts. Per master plan, these files
 # achieved 9 PASS / 0 SKIPPED / 0 FAIL and MUST NOT be modified to preserve
 # regression-free status. They use indent / quoting styles that differ from

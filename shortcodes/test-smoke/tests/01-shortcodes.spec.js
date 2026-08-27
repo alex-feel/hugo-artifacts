@@ -169,6 +169,41 @@ test('an unreachable icon degrades the callout instead of failing the build', ()
   assert.ok(tip[0].includes('data-callout-type="tip"'));
 });
 
+test('an indented callout body is Markdown, not a code block', () => {
+  // A shortcode authored inside a Markdown list item carries the list's
+  // indentation into its inner content, and CommonMark reads four leading
+  // spaces as a code block. Taking the body from .InnerDeindent is what
+  // survives that; taking it from .Inner publishes the list below as
+  // <pre><code>, which is what this asserts against.
+  const page = html();
+  const marker = 'A paragraph inside an indented callout.';
+  const at = page.indexOf(marker);
+  assert.notEqual(at, -1, 'the indented callout must render its body');
+  const body = page.slice(at, at + 600);
+  assert.ok(!body.includes('<pre'), 'the indented callout body rendered as a code block');
+  assert.ok(
+    /<li>a list item that must not become code<\/li>/.test(body),
+    'the indented callout body lost its list',
+  );
+});
+
+test('an indented callout body is deindented in the Markdown twin too', () => {
+  // The twin emits the body's RAW Markdown inside a blockquote, so the same
+  // four spaces survive there as leading indentation and its reader parses
+  // them as a code block. The HTML assertion above cannot see that: the two
+  // surfaces take the body through different code paths, and a regression in
+  // either one would leave the other green.
+  const md = markdown();
+  const marker = 'A paragraph inside an indented callout.';
+  const at = md.indexOf(marker);
+  assert.notEqual(at, -1, 'the indented callout must reach the Markdown twin');
+  const block = md.slice(at, at + 300);
+  assert.ok(
+    /^> - a list item that must not become code$/m.test(block),
+    'the twin kept the list indented, so its reader sees a code block',
+  );
+});
+
 test('every module is actually invoked, so this suite cannot pass vacuously', () => {
   // The failure mode this guards is silent: a fixture that stopped invoking a
   // module would make every assertion above trivially true for it, because

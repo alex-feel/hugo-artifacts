@@ -151,14 +151,18 @@
   {{- $alertLine = printf "%s %s" $alertLine $mdTitle -}}
 {{- end -}}
 
-{{/* Body: the RAW inner Markdown, trimmed, line endings normalized to LF,
+{{/* Body: the RAW inner Markdown, taken from .InnerDeindent for the same
+     reason the HTML variant takes it -- a callout authored inside an indented
+     Markdown structure would otherwise carry four spaces of indentation into
+     the emitted blockquote, where the twin's reader parses it as a code
+     block -- trimmed, line endings normalized to LF,
      every line prefixed with "> " (a bare ">" for empty lines) so the whole
      construct is one blockquote. The lone ">" after the designator keeps the
      designator its own paragraph. An empty body emits the designator line
      alone -- a valid alert, mirroring the HTML variant's empty-body
      tolerance. */}}
 {{- $lines := slice $alertLine -}}
-{{- $inner := .Inner | strings.TrimSpace -}}
+{{- $inner := .InnerDeindent | strings.TrimSpace -}}
 {{- with $inner -}}
   {{- $lines = $lines | append ">" -}}
   {{- range split (replaceRE `\r\n?` "\n" .) "\n" -}}
