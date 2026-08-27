@@ -79,7 +79,7 @@
       ]
     },
     "organizations": {
-      "totalCount": 3,
+      "totalCount": 6,
       "nodes": [
         {
           "login": "fixture-labs",
@@ -98,6 +98,11 @@
           "name": "",
           "url": "https://github.com/another-org",
           "avatarUrl": "https://avatars.fixture.example/o/13?s=64"
+        },
+        {
+          "login": "quiet-collective",
+          "name": "Quiet Collective",
+          "url": "https://github.com/quiet-collective"
         }
       ]
     },
@@ -906,7 +911,8 @@
             "nameWithOwner": "fixture-labs/toolkit",
             "owner": {
               "login": "fixture-labs",
-              "__typename": "Organization"
+              "__typename": "Organization",
+              "avatarUrl": "https://avatars.fixture.example/o/11?s=64"
             }
           },
           "contributions": {
@@ -918,7 +924,8 @@
             "nameWithOwner": "fixture-labs/docs-site",
             "owner": {
               "login": "fixture-labs",
-              "__typename": "Organization"
+              "__typename": "Organization",
+              "avatarUrl": "https://avatars.fixture.example/o/11?s=64"
             }
           },
           "contributions": {
@@ -930,7 +937,8 @@
             "nameWithOwner": "another-org/pipeline",
             "owner": {
               "login": "another-org",
-              "__typename": "Organization"
+              "__typename": "Organization",
+              "avatarUrl": "https://avatars.fixture.example/o/13?s=64"
             }
           },
           "contributions": {
@@ -954,7 +962,8 @@
             "nameWithOwner": "fixture-dev/toolbelt",
             "owner": {
               "login": "fixture-dev",
-              "__typename": "User"
+              "__typename": "User",
+              "avatarUrl": "https://avatars.fixture.example/u/4242?s=64"
             }
           },
           "contributions": {
@@ -980,7 +989,8 @@
             "nameWithOwner": "fixture-labs/toolkit",
             "owner": {
               "login": "fixture-labs",
-              "__typename": "Organization"
+              "__typename": "Organization",
+              "avatarUrl": "https://avatars.fixture.example/o/11?s=64"
             }
           },
           "contributions": {
@@ -992,7 +1002,8 @@
             "nameWithOwner": "open-fixture/parser",
             "owner": {
               "login": "open-fixture",
-              "__typename": "Organization"
+              "__typename": "Organization",
+              "avatarUrl": "https://avatars.fixture.example/o/12?s=64"
             }
           },
           "contributions": {
@@ -1006,7 +1017,8 @@
             "nameWithOwner": "fixture-labs/toolkit",
             "owner": {
               "login": "fixture-labs",
-              "__typename": "Organization"
+              "__typename": "Organization",
+              "avatarUrl": "https://avatars.fixture.example/o/11?s=64"
             }
           },
           "contributions": {
@@ -1018,7 +1030,8 @@
             "nameWithOwner": "open-fixture/parser",
             "owner": {
               "login": "open-fixture",
-              "__typename": "Organization"
+              "__typename": "Organization",
+              "avatarUrl": "https://avatars.fixture.example/o/12?s=64"
             }
           },
           "contributions": {
@@ -1044,7 +1057,8 @@
             "nameWithOwner": "fixture-labs/toolkit",
             "owner": {
               "login": "fixture-labs",
-              "__typename": "Organization"
+              "__typename": "Organization",
+              "avatarUrl": "https://avatars.fixture.example/o/11?s=64"
             }
           },
           "contributions": {
@@ -1056,7 +1070,8 @@
             "nameWithOwner": "open-fixture/parser",
             "owner": {
               "login": "open-fixture",
-              "__typename": "Organization"
+              "__typename": "Organization",
+              "avatarUrl": "https://avatars.fixture.example/o/12?s=64"
             }
           },
           "contributions": {

@@ -1,13 +1,22 @@
 {{/*
   Public organization memberships. Only memberships the person set to public
-  are visible to any token, so this list is a floor. Org avatars are exposed
-  as data-avatar URLs rather than rendered images, keeping the markup
-  style-agnostic and the build free of extra image fetches.
+  are visible to any token, so this list is a floor. Each entry leads with
+  the organization's avatar image -- an avatar identifies an organization
+  faster than its name does, and GitHub serves one for effectively every
+  account -- governed by the same .avatar option as the identity strip:
+  under "none" the entry keeps the generic organization glyph, and an entry
+  whose data carries no avatar URL gets the glyph in a placeholder element.
+  The original CDN URL stays exposed as data-avatar for machine consumers,
+  which under avatar="fetch" is not redundant with the img src (the src
+  names the build-time copy).
 
-  Context: the render.html context dict (.d carries the normalized data).
+  Context: the render.html context dict (.d carries the normalized data;
+  .avatar and .position come from the shortcode call).
 */}}
 
 {{- $d := .d -}}
+{{- $avatarMode := .avatar -}}
+{{- $position := .position -}}
 {{- if gt (len $d.orgs) 0 -}}
 <section class="github-profile__section github-profile__section--orgs">
   {{- partial "github-profile/section-title.html" (dict "token" "orgs" "key" "github_profile_orgs_label" "fallback" "Organizations") }}
@@ -19,10 +28,25 @@
         data-avatar="{{ . }}"
         {{- end }}>
       <a class="github-profile__org-name" href="{{ or .url (printf "https://github.com/%s" .login) }}" target="_blank" rel="noopener noreferrer">
-        {{- partial "github-profile/icon.html" (dict "name" "org" "class" "github-profile__icon") }} {{ or .name .login -}}
+        {{- if eq $avatarMode "none" -}}
+        {{- partial "github-profile/icon.html" (dict "name" "org" "class" "github-profile__icon") }} {{ or .name .login }}
+        {{- else -}}
+        {{- partial "github-profile/avatar.html" (dict
+          "url" .avatarUrl
+          "mode" $avatarMode
+          "class" "github-profile__org-avatar"
+          "alt" ""
+          "size" 64
+          "icon" "org"
+          "cacheKey" (printf "github-profile:org-avatar:%s" .login)
+          "warnSubject" (printf "the avatar of organization %q" .login)
+          "position" $position
+        ) }} {{ or .name .login }}
+        {{- end -}}
       </a>
     </li>
     {{- end }}
   </ul>
+  {{- partial "github-profile/more-note.html" (dict "token" "orgs" "remainder" (sub $d.orgsTotal (len $d.orgs))) }}
 </section>
 {{- end }}

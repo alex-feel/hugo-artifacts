@@ -1,0 +1,90 @@
+{{/*
+  Renders one avatar image with its placeholder fallback -- the single owner
+  of the avatar contract for every call site (the identity strip and both
+  organization lists), so all of them render and degrade the same way.
+
+  Modes (the shortcode's avatar parameter; the CALLER handles "none" itself,
+  because what "no avatar" renders is each caller's own baseline):
+  - "fetch": copy the image at build time with resources.GetRemote, so the
+    published output is self-contained. The fetch is a single try-wrapped
+    attempt rather than a run through fetch.html's retry loop -- an avatar is
+    a CDN object, not an API endpoint, and the loop's classification,
+    budgets and circuit breaker guard the API. Any failure (transport error,
+    or an HTTP error page arriving as a nil resource) degrades to the
+    placeholder with ONE warning per cache key: the same image can be
+    rendered from several sections and several profiles in one build, and
+    the build should name each problem once. Reading .RelPermalink is what
+    publishes the copy.
+  - "hotlink": reference the URL directly.
+
+  An empty .url renders the placeholder WITHOUT a warning: the API answered
+  and simply carried no avatar, which is the caller's data to explain, not a
+  fetch failure.
+
+  Context expectations:
+  - .url (string)         Avatar URL; may be empty.
+  - .mode (string)        "fetch" or "hotlink" (the caller filters out "none").
+  - .class (string)       BEM class; the placeholder appends a "--placeholder"
+                          modifier of the same base.
+  - .alt (string)         Alternative text; "" when the adjacent text already
+                          carries the name, so the image stays decorative.
+  - .size (int)           Intrinsic width and height attributes.
+  - .icon (string)        github-profile/icon.html name for the placeholder.
+  - .cacheKey (string)    resources.GetRemote key, and the axis the warning
+                          deduplicates on (1:1 with .warnSubject, so one key
+                          never serves two wordings).
+  - .warnSubject (string) The failing thing, as it should read mid-sentence
+                          in the warning (for example: the avatar of user
+                          "octocat").
+  - .position             Shortcode call position, named in the warning.
+*/}}
+
+{{- $url := .url -}}
+{{- $mode := .mode -}}
+{{- $class := .class -}}
+{{- $alt := .alt -}}
+{{- $size := .size -}}
+{{- $icon := .icon -}}
+{{- $cacheKey := .cacheKey -}}
+{{- $warnSubject := .warnSubject -}}
+{{- $position := .position -}}
+
+{{- $shown := false -}}
+{{- $failure := "" -}}
+{{- if $url -}}
+  {{- if eq $mode "fetch" -}}
+    {{- with try (resources.GetRemote $url (dict "key" $cacheKey)) -}}
+      {{- with .Err -}}
+        {{- $failure = "transport" -}}
+      {{- else with .Value -}}
+        <img class="{{ $class }}" src="{{ .RelPermalink }}" alt="{{ $alt }}" width="{{ $size }}" height="{{ $size }}" loading="lazy" decoding="async">
+        {{- $shown = true -}}
+      {{- else -}}
+        {{- $failure = "not-found" -}}
+      {{- end -}}
+    {{- end -}}
+  {{- else -}}
+    <img class="{{ $class }}" src="{{ $url }}" alt="{{ $alt }}" width="{{ $size }}" height="{{ $size }}" loading="lazy" decoding="async">
+    {{- $shown = true -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if $failure -}}
+  {{/* One warning per cache key, serialized through partialCached: pages
+       render concurrently, and a bare check-then-set lets several of them
+       pass the check before any writes. The failure class cannot vary
+       within a build -- GetRemote memoizes the result under the key -- so
+       one key serves one wording. */}}
+  {{- partialCached "github-profile/avatar-warn.html" (dict
+    "failure" $failure
+    "subject" $warnSubject
+    "position" $position
+    "key" $cacheKey
+  ) $cacheKey -}}
+{{- end -}}
+
+{{- if not $shown -}}
+<span class="{{ $class }} {{ $class }}--placeholder">
+  {{- partial "github-profile/icon.html" (dict "name" $icon "class" "github-profile__icon") -}}
+</span>
+{{- end -}}

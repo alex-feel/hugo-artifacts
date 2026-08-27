@@ -25,20 +25,44 @@
 */}}
 
 {{- $d := .d -}}
+{{- $avatarMode := .avatar -}}
+{{- $position := .position -}}
 {{- if gt (len $d.orgRollup) 0 -}}
 <section class="github-profile__section github-profile__section--org-rollup">
   {{- partial "github-profile/section-title.html" (dict "token" "org-rollup" "key" "github_profile_org_rollup_label" "fallback" "Contributions by organization") }}
-  <ul class="github-profile__org-rollup" aria-label="{{ T "github_profile_org_rollup_label" | default "Contributions by organization" }}">
+  <ul class="github-profile__org-rollup" aria-label="{{ T "github_profile_org_rollup_label" | default "Contributions by organization" }}" data-total="{{ $d.orgRollupTotal }}">
     {{- range $d.orgRollup }}
     <li class="github-profile__org-roll"
         data-org="{{ .login }}"
         data-owner-type="{{ .type }}"
+        {{- with .avatarUrl }}
+        data-avatar="{{ . }}"
+        {{- end }}
         data-commits="{{ .commits }}"
         data-issues="{{ .issues }}"
         data-prs="{{ .prs }}"
         data-reviews="{{ .reviews }}"
         data-total="{{ .total }}">
-      <a class="github-profile__org-roll-name" href="https://github.com/{{ .login }}" target="_blank" rel="noopener noreferrer">{{ .login }}</a>
+      {{- /* The owner's avatar leads the row under the same .avatar option
+           the other avatar surfaces follow; "none" keeps the bare name,
+           which is this row's baseline. */}}
+      <a class="github-profile__org-roll-name" href="https://github.com/{{ .login }}" target="_blank" rel="noopener noreferrer">
+        {{- if eq $avatarMode "none" -}}
+        {{- .login -}}
+        {{- else -}}
+        {{- partial "github-profile/avatar.html" (dict
+          "url" .avatarUrl
+          "mode" $avatarMode
+          "class" "github-profile__org-roll-avatar"
+          "alt" ""
+          "size" 64
+          "icon" "org"
+          "cacheKey" (printf "github-profile:org-avatar:%s" .login)
+          "warnSubject" (printf "the avatar of organization %q" .login)
+          "position" $position
+        ) }} {{ .login }}
+        {{- end -}}
+      </a>
       {{- $statFirst := true }}
       {{- if gt .commits 0 }}
       {{- if not $statFirst }}<span class="github-profile__sep">{{ T "github_profile_sep" | default ", " }}</span>{{ end }}
@@ -67,5 +91,6 @@
     </li>
     {{- end }}
   </ul>
+  {{- partial "github-profile/more-note.html" (dict "token" "org-rollup" "remainder" (sub $d.orgRollupTotal (len $d.orgRollup))) }}
 </section>
 {{- end }}

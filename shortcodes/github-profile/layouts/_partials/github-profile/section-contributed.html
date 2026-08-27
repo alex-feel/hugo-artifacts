@@ -1,7 +1,9 @@
 {{/*
   Externally contributed repositories: repositories the person does NOT own,
   ordered by stars -- the hardest-to-game collaboration evidence. Capped at
-  the twelve most starred.
+  the most starred N (the contributed-limit parameter, 12 by default), with
+  the connection's own total in data-total and a visible remainder note when
+  the list renders fewer than that total names.
 
   Context: the render.html context dict (.d carries the normalized data).
 */}}
@@ -10,7 +12,7 @@
 {{- if gt (len $d.contributed) 0 -}}
 <section class="github-profile__section github-profile__section--contributed">
   {{- partial "github-profile/section-title.html" (dict "token" "contributed" "key" "github_profile_contributed_label" "fallback" "Contributes to") }}
-  <ul class="github-profile__contributed" aria-label="{{ T "github_profile_contributed_label" | default "Contributes to" }}">
+  <ul class="github-profile__contributed" aria-label="{{ T "github_profile_contributed_label" | default "Contributes to" }}" data-total="{{ $d.externalRepos }}">
     {{- range $d.contributed }}
     <li class="github-profile__repo"
         data-repo="{{ .nameWithOwner }}"
@@ -34,5 +36,6 @@
     </li>
     {{- end }}
   </ul>
+  {{- partial "github-profile/more-note.html" (dict "token" "contributed" "remainder" (sub $d.externalRepos (len $d.contributed))) }}
 </section>
 {{- end }}
