@@ -39,6 +39,22 @@
         )
       ) }}
     </section>
+    <section id="exclusive-second">
+      {{/* A SECOND exclusive call. Without it the group-name minting on this
+           path is unfalsifiable: one call cannot show whether the name is
+           derived per container or is a constant, and a constant silently
+           joins every exclusive accordion a site renders here into one
+           native group. */}}
+      {{ partial "accordion/list.html" (dict
+        "page" .
+        "position" "layouts/layout-path.html:exclusive-second"
+        "exclusive" true
+        "items" (slice
+          (dict "title" "Second one" "content" "Body.")
+          (dict "title" "Second two" "content" "Body.")
+        )
+      ) }}
+    </section>
     <section id="empty">
       {{ partial "accordion/list.html" (dict
         "page" .

@@ -199,6 +199,23 @@ for (const build of BUILDS) {
     assert.equal(item.body.inner, '', 'the empty body is not empty');
   });
 
+  test(`[${build.name}] id and class reach the markup from the shortcode surface too`, () => {
+    // The partial path asserts these separately. Without this, a break in the
+    // container's or the item's own argument wiring would ship green, because
+    // nothing else on the Markdown surface passes either one.
+    const html = read(PAGES.home, build.dir);
+    const container = containers(html).find((c) => attr(c.openTag, 'id') === 'authored-container');
+    assert.ok(container, 'the container shortcode did not emit the requested id');
+    assert.ok(
+      container.classes.includes('site-accordion'),
+      'the container shortcode dropped the extra class',
+    );
+    const item = items(container.inner).find((i) => i.titleText === 'Item with a class');
+    assert.ok(item, 'the class-carrying item is missing');
+    assert.ok(item.classes.includes('site-item'), 'the item shortcode dropped the extra class');
+    assert.ok(item.classes.includes('accordion__item'), 'the extra class replaced the block class');
+  });
+
   test(`[${build.name}] the module ships no CSS and no script`, () => {
     for (const [name, rel] of HTML_PAGES) {
       const html = read(rel, build.dir);

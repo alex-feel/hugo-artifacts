@@ -118,12 +118,13 @@
   {{- $icon = $cfg.icon -}}
 {{- end -}}
 
+{{- $identity := printf "shortcode:%s" (partial "accordion/lib/identity.html" .) -}}
 {{- $id := partial "accordion/lib/id.html" (dict
     "page" .Page
     "raw" $rawTitle
     "idSet" (and .IsNamedParams (isset .Params "id"))
     "idParam" (.Get "id")
-    "identity" (printf "shortcode:%s" (partial "accordion/lib/identity.html" .))) -}}
+    "identity" $identity) -}}
 
 {{- $titleHTML := .Page.RenderString (dict "display" "inline") $rawTitle -}}
 {{- $bodyHTML := "" -}}
@@ -134,6 +135,7 @@
 {{- $ctx := dict
   "page" .Page
   "where" $where
+  "identity" $identity
   "titleHTML" $titleHTML
   "bodyHTML" $bodyHTML
   "group" $group

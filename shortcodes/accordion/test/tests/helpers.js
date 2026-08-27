@@ -34,8 +34,14 @@ export const PAGES = {
   degrade: 'degrade/index.html',
   idCollision: 'id-collision/index.html',
   layout: 'layout-path/index.html',
+  rerender: 'rerender/index.html',
   markdownTwin: 'index.md',
 };
+
+// The second HTML-family rendering of PAGES.rerender. It is kept out of PAGES
+// because the specs that sweep every HTML page would then read the same page
+// twice; 08-rerender.spec.js reads it deliberately, as the pair.
+export const AMP_RERENDER = 'amp/rerender/index.html';
 
 export function read(rel, dir = defaultDir) {
   return readFileSync(join(dir, rel), 'utf8');

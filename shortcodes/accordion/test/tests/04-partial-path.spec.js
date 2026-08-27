@@ -97,6 +97,40 @@ for (const build of BUILDS) {
     }
   });
 
+  test(`[${build.name}] two exclusive calls on one page mint different group names`, () => {
+    // The failure this catches is silent and total: a minter that ignored its
+    // seed would hand every exclusive accordion on the partial path one
+    // constant name, joining unrelated widgets into a single native group so
+    // that opening an item in one closes an item in the other. One call
+    // cannot see it -- the name is truthy and consistent either way -- so the
+    // fixture renders two.
+    const html = read(PAGES.layout, build.dir);
+    const first = items(/<section id="exclusive">([\s\S]*?)<\/section>/.exec(html)?.[1] ?? '');
+    const second = items(
+      /<section id="exclusive-second">([\s\S]*?)<\/section>/.exec(html)?.[1] ?? '',
+    );
+    assert.equal(first.length, 2, 'the first exclusive partial call is missing');
+    assert.equal(second.length, 2, 'the second exclusive partial call is missing');
+    assert.ok(first[0].group && second[0].group, 'an exclusive partial call minted no group name');
+    assert.notEqual(
+      first[0].group,
+      second[0].group,
+      'two exclusive accordions rendered by one layout share a group name, so they close each other',
+    );
+    // And the name is derived from the caller's position rather than being any
+    // constant: a name that ignored its input would still differ from nothing.
+    assert.match(
+      first[0].group,
+      /exclusive/,
+      'the minted group name does not derive from the caller position it was seeded with',
+    );
+    assert.match(
+      second[0].group,
+      /exclusive-second/,
+      'the minted group name does not derive from the caller position it was seeded with',
+    );
+  });
+
   test(`[${build.name}] the partial's group name does not collide with the shortcode path's`, () => {
     // Both paths mint from a seed, and the seeds come from different worlds
     // (an ordinal path versus a caller-supplied position). A collision would

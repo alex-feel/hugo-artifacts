@@ -92,7 +92,11 @@
 {{- end -}}
 {{- $group := trim (printf "%v" ($args.group | default "")) " \t\n\r" -}}
 {{- if and (eq $group "") $exclusive -}}
-  {{- $group = partial "accordion/lib/group-name.html" (dict "page" $page) -}}
+  {{/* The seed is the caller's own position, which is what distinguishes two
+       accordions rendered by one layout -- the same value the id registry
+       distinguishes them by, and the reason this partial's docstring asks a
+       layout with several accordions to pass distinct "position" strings. */}}
+  {{- $group = partial "accordion/lib/group-name.html" (dict "seed" $where) -}}
 {{- end -}}
 
 {{- $heading := 0 -}}
@@ -122,12 +126,13 @@
       {{- if isset $item "open" -}}
         {{- $itemOpen = partial "accordion/lib/bool.html" (dict "value" $item.open "name" "open" "default" false "where" $where) -}}
       {{- end -}}
+      {{- $identity := printf "list:%s:%d" $where $i -}}
       {{- $itemId := partial "accordion/lib/id.html" (dict
           "page" $page
           "raw" $rawTitle
           "idSet" (isset $item "id")
           "idParam" ($item.id | default "")
-          "identity" (printf "list:%s:%d" $where $i)) -}}
+          "identity" $identity) -}}
       {{/* The body's TYPE decides its treatment: template.HTML is already
            rendered markup and passes through, while a plain string is
            author Markdown and goes through the same block-level
@@ -145,6 +150,7 @@
       {{- partial "accordion/item.html" (dict
           "page" $page
           "where" $where
+          "identity" $identity
           "titleHTML" ($page.RenderString (dict "display" "inline") $rawTitle)
           "bodyHTML" $bodyHTML
           "group" $group

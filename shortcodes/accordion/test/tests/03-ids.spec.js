@@ -44,6 +44,7 @@ for (const build of BUILDS) {
       ['Warranty', 'warranty'],
       ['Heading item', 'heading-item'],
       ['Standalone', 'standalone'],
+      ['Item with a class', 'item-with-a-class'],
     ]);
   });
 

@@ -11,8 +11,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {PAGES, read, items, defaultDir, unsafeDir, elements} from './helpers.js';
 
-const BODY_HTML_PAGES = [PAGES.nesting, PAGES.layout];
-const NO_BODY_HTML_PAGES = [PAGES.home, PAGES.groups, PAGES.ids, PAGES.degrade];
+// Pages whose item bodies carry raw HTML, so the site's markup setting decides
+// what they publish. groups.md is here for its nested exclusive container --
+// an accordion inside an accordion item is raw HTML in a body like any other.
+const BODY_HTML_PAGES = [PAGES.nesting, PAGES.layout, PAGES.groups];
+const NO_BODY_HTML_PAGES = [PAGES.home, PAGES.ids, PAGES.degrade, PAGES.rerender];
 
 test('an indented body is Markdown, not a code block', () => {
   // .InnerDeindent, not .Inner: CommonMark reads four spaces of leading

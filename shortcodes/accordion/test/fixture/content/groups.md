@@ -86,3 +86,31 @@ Body.
 
 {{< /accordion >}}
 
+
+## Nested exclusive container
+
+The inner container's identity is an ordinal PATH, so its seed carries a dot. The sanitization has to keep that distinct from a bare-integer identity rather than folding both onto the same token.
+
+{{< accordion >}}
+
+{{< accordion-item "Holds a nested exclusive accordion" >}}
+
+{{< accordion exclusive="true" >}}
+
+{{< accordion-item "Nested alpha" >}}
+
+Body.
+
+{{< /accordion-item >}}
+
+{{< accordion-item "Nested beta" >}}
+
+Body.
+
+{{< /accordion-item >}}
+
+{{< /accordion >}}
+
+{{< /accordion-item >}}
+
+{{< /accordion >}}

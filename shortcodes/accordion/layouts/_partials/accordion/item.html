@@ -36,12 +36,16 @@
     group: the native rule keeps only the FIRST open member of a named
     group and silently closes the rest (MDN-documented), so the silent
     surprise becomes a visible build-time diagnostic. The counter is a
-    .Page.Store scalar keyed by group name; the store is per page, and
+    .Page.Store scalar keyed by group name, incremented once per distinct
+    item identity rather than once per execution; the store is per page and
     group names are page-scoped, so counts never bleed across pages.
 
   Context expectations (assembled by the caller; all values pre-resolved):
   - .page      (Page)          The current page.
   - .where     (string)        Diagnostics origin.
+  - .identity  (string)        The item's stable, per-page-unique identity,
+                               used to count an open item once however many
+                               times Hugo re-executes the page's shortcodes.
   - .titleHTML (template.HTML) Inline-rendered title.
   - .bodyHTML  (template.HTML) Block-rendered body ("" allowed).
   - .group     (string)        Exclusive group name; "" emits no name
@@ -67,7 +71,17 @@
 
 {{- if and .open (ne .group "") -}}
   {{- $countKey := printf "accordion:open-count:%s" .group -}}
-  {{- .page.Store.Add $countKey 1 -}}
+  {{/* Counted once per distinct ITEM, not once per execution. Hugo
+       re-executes a page's shortcodes for every HTML-family output format it
+       renders, so a bare counter would reach two on the second render of a
+       group holding a single open item and warn about a defect that is not
+       there. Keying the increment on the item's own identity makes the count
+       idempotent, exactly as the id registry is. */}}
+  {{- $seenKey := printf "accordion:open-seen:%s:%s" .group .identity -}}
+  {{- if not (.page.Store.Get $seenKey) -}}
+    {{- .page.Store.Set $seenKey true -}}
+    {{- .page.Store.Add $countKey 1 -}}
+  {{- end -}}
   {{- if ge (.page.Store.Get $countKey) 2 -}}
     {{- partial "accordion/lib/warn.html" (dict
         "key" (printf "accordion:warn:multi-open:%s" .group)

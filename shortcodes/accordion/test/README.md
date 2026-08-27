@@ -23,6 +23,7 @@ Both runners check for an already-running hugo process first and refuse to start
 | `05-warnings.spec.js` | The degradation contract as an EXACT warning set -- every documented degradation warns exactly once, nothing else warns, and every warning names a position an author can act on. |
 | `06-markdown-twin.spec.js` | The `markdown` output format: no HTML leaks, every title and body survives, and the label form (bold line versus ATX heading) mirrors the HTML structure decision. |
 | `07-nesting.spec.js` | Indented bodies (`.InnerDeindent`), and the raw-HTML limitation with its documented remedy -- proven in both directions across the two builds. |
+| `08-rerender.spec.js` | What survives Hugo executing one page's shortcodes twice: a minted id must resolve the same in both documents, and an open item must be counted once rather than once per render. |
 
 ## Why two builds
 
@@ -54,6 +55,7 @@ test/
       nesting.md               # An item inside a Markdown list, and an accordion inside an item
       degrade.md               # Every tolerated input problem
       layout-path.md           # A page whose layout calls the public partial
+      rerender.md              # A page in two HTML-family output formats, so its shortcodes run twice
     layouts/
       baseof.html, home.html, page.html
       home.markdown.md         # The Markdown twin, which selects the module's .markdown.md variants

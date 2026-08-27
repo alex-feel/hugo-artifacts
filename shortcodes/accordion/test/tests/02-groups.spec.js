@@ -53,9 +53,12 @@ for (const build of BUILDS) {
     const exclusiveContainers = containers(html).filter((c) =>
       c.classes.includes('accordion--exclusive'),
     );
+    // Five top-level grouped containers, plus the nested one -- which only
+    // survives to the output where raw HTML passes through the Markdown
+    // renderer, so the count differs by build.
     assert.equal(
       exclusiveContainers.length,
-      5,
+      build.name === 'unsafe' ? 6 : 5,
       'the modifier class does not mark every grouped container on the groups page',
     );
     for (const c of exclusiveContainers) {
@@ -74,6 +77,34 @@ for (const build of BUILDS) {
     for (const item of items(plain)) {
       assert.equal(item.group, null, 'an ungrouped item carries a name attribute');
     }
+  });
+
+  test(`[${build.name}] a nested exclusive container gets its own name, distinct from every sibling`, () => {
+    // A nested container's identity is an ordinal PATH, so its seed carries a
+    // dot, and the sanitization has to keep "1.0" distinct from "10" rather
+    // than folding both onto one token. The nested accordion only survives to
+    // the output where raw HTML is allowed through the Markdown renderer, so
+    // the default build has nothing to read here.
+    if (build.name !== 'unsafe') return;
+    const all = items(read(PAGES.groups, build.dir));
+    const nested = all.filter((i) => i.titleText?.startsWith('Nested '));
+    assert.equal(nested.length, 2, 'the nested exclusive container did not render its items');
+    assert.ok(nested[0].group, 'the nested exclusive container minted no group name');
+    assert.equal(
+      nested[0].group,
+      nested[1].group,
+      'the nested container gave its items different names',
+    );
+
+    const others = all
+      .filter((i) => !i.titleText?.startsWith('Nested '))
+      .map((i) => i.group)
+      .filter(Boolean);
+    assert.ok(others.length > 0, 'no sibling groups to compare against');
+    assert.ok(
+      !others.includes(nested[0].group),
+      `the nested container's name ${JSON.stringify(nested[0].group)} collides with a sibling's`,
+    );
   });
 
   test(`[${build.name}] a group name is a legal, readable attribute value`, () => {

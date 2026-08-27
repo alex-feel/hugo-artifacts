@@ -50,3 +50,15 @@ An item called on its own renders its own container.
 
 {{< /accordion-item >}}
 
+
+## Container and item passthrough
+
+{{< accordion id="authored-container" class="site-accordion" >}}
+
+{{< accordion-item title="Item with a class" class="site-item" >}}
+
+Body.
+
+{{< /accordion-item >}}
+
+{{< /accordion >}}
