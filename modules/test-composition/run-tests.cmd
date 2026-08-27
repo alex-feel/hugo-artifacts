@@ -20,10 +20,10 @@ rem holding both can show a real card reaching og:image -- with the file it
 rem names on disk, at the right size, drawn on this site's own base raster.
 rem
 rem The URL registry. Four content-side modules publish files belonging to THIS
-rem site by reading their URLs, and agent-readiness publishes skill artifacts no
-rem walk of the page graph reaches; only a site that also holds url-retirement
-rem can show those URLs arriving in /url-manifest.txt with nothing configured
-rem for them.
+rem site by reading their URLs, github-profile copies remote avatars at build
+rem time, and agent-readiness publishes skill artifacts no walk of the page
+rem graph reaches; only a site that also holds url-retirement can show those
+rem URLs arriving in /url-manifest.txt with nothing configured for them.
 rem
 rem WHY THREE BUILDS. `base` configures no skill, which is the only coverage of
 rem an unconfigured skills surface; `skills` configures two, so the artifacts
@@ -33,8 +33,9 @@ rem is the setting that decides whether a registration placed where the
 rem artifacts are copied would have been in time. The artifacts must be listed
 rem there too, which is the assertion every push design fails.
 rem
-rem THE ORIGIN: a skill entry names a REMOTE source and has no local form, so
-rem the last two builds fetch from serve-origin.mjs on 127.0.0.1 rather than
+rem THE ORIGIN: a skill entry names a REMOTE source with no local form, and a
+rem fetch-mode github-profile avatar is likewise a remote image, so the last
+rem two builds fetch both from serve-origin.mjs on 127.0.0.1 rather than
 rem from anybody else's endpoint. cmd has no trap, so an early `exit /b` here
 rem can leave the origin running; that is bounded rather than unhandled -- the
 rem server gives up on its own after fifteen minutes, and every run stops a
@@ -54,7 +55,8 @@ set ORIGIN_LOG=%~dp0fixture-origin.log
 
 rem Fixed, because a Hugo configuration file cannot learn a port at run time and
 rem the fixture's `source` URLs name this one. Kept in step with the value in
-rem serve-origin.mjs, run-tests.sh and fixture\skills.toml.
+rem serve-origin.mjs, run-tests.sh, fixture\skills.toml and
+rem fixture\data\github-profile-fetch-origin.json.
 set ORIGIN_PORT=1919
 
 rem The destination is REMOVED, not merely cleaned: --cleanDestinationDir only

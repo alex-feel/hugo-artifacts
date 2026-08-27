@@ -1,25 +1,35 @@
 #!/usr/bin/env bash
-# Builds the offline github-profile fixture TWICE from the SAME fixture
-# directory -- once as a plain build, once with --minify -- and runs the
-# Node build-output assertion suite against both. The defect this suite
+# Builds the github-profile fixture THREE TIMES from the SAME fixture
+# directory -- plain, with --minify, and origin-backed -- and runs the Node
+# build-output assertion suite against all three. The defect the first pair
 # exists to pin (Hugo's --minify collapsing the note separator's leading
-# space across a tag boundary) is invisible without the minified build,
-# which is why both builds are mandatory and the specs receive both
-# destinations.
+# space across a tag boundary) is invisible without the minified build, which
+# is why both offline builds are mandatory and the specs receive both
+# destinations. The third build layers fixture/origin.toml over the same
+# configuration and is the ONE build that fetches: its avatar-fetch page
+# renders the shared avatar partial's fetch success arm -- including the
+# false arm of the templates.Exists probe for the OPTIONAL url-retirement
+# sibling, which only a site importing github-profile ALONE can take.
 #
 # Follows the repository's hugo process lifecycle rule with a pre-launch
 # process check and belt-and-suspenders cleanup afterward.
 #
-# NETWORK: none. The fixture shadows the module's remote-fetch partial with
-# a canned data file (fixture/layouts/_partials/github-profile/fetch.html
-# reading fixture/data/github-profile-fetch.json), so both builds are fully
-# offline.
+# NETWORK: loopback only. The fixture shadows the module's remote-fetch
+# partial with a canned data file (fixture/layouts/_partials/github-profile/
+# fetch.html reading fixture/data/github-profile-fetch.json), so the first
+# two builds are fully offline; the third fetches one avatar image from
+# serve-origin.mjs, a static origin over the committed fixture-origin/
+# corpus, listening on 127.0.0.1.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FIXTURE_DIR="$HERE/fixture"
 LOG_FILE="$HERE/hugo-build.log"
 LOG_FILE_MINIFIED="$HERE/hugo-build-minified.log"
+LOG_FILE_ORIGIN="$HERE/hugo-build-origin.log"
+ORIGIN_LOG="$HERE/fixture-origin.log"
+ORIGIN_PORT=1717
+ORIGIN_PID=""
 
 # The logs are retained after a successful run so the documented re-run
 # recipe can read them; they are gitignored at the repo root
@@ -36,9 +46,20 @@ kill_stray_hugo() {
     taskkill //F //IM hugo.exe >/dev/null 2>&1 || true
   fi
 }
-cleanup_interrupted() {
+stop_origin() {
+  if [ -n "$ORIGIN_PID" ]; then
+    kill "$ORIGIN_PID" 2>/dev/null || true
+    wait "$ORIGIN_PID" 2>/dev/null || true
+    ORIGIN_PID=""
+  fi
+}
+cleanup_exit() {
+  stop_origin
   kill_stray_hugo
-  rm -f "$LOG_FILE" "$LOG_FILE_MINIFIED"
+}
+cleanup_interrupted() {
+  cleanup_exit
+  rm -f "$LOG_FILE" "$LOG_FILE_MINIFIED" "$LOG_FILE_ORIGIN" "$ORIGIN_LOG"
 }
 
 cd "$HERE"
@@ -69,7 +90,7 @@ elif command -v tasklist >/dev/null 2>&1; then
   fi
 fi
 trap cleanup_interrupted INT TERM
-trap kill_stray_hugo EXIT
+trap cleanup_exit EXIT
 
 if [ ! -d "$HERE/node_modules" ]; then
   npm install
@@ -113,9 +134,28 @@ rm -rf "$FIXTURE_DIR/public"
 build "$FIXTURE_DIR" public/normal "$LOG_FILE" ""
 build "$FIXTURE_DIR" public/minified "$LOG_FILE_MINIFIED" "--minify"
 
+# ---- The origin-backed build ----
+# The origin serves only this build and is stopped right after it, with the
+# EXIT trap as the backstop. The stop first clears an origin left behind by an
+# aborted Windows run, which has no trap; a port held by anything else makes
+# the listen fail, which `wait` reports with the server's own message rather
+# than letting the build fetch from whatever is actually there.
+node "$HERE/serve-origin.mjs" stop >/dev/null 2>&1 || true
+node "$HERE/serve-origin.mjs" serve "$ORIGIN_PORT" > "$ORIGIN_LOG" 2>&1 &
+ORIGIN_PID=$!
+if ! node "$HERE/serve-origin.mjs" wait "$ORIGIN_PORT"; then
+  echo "The fixture origin did not start on 127.0.0.1:${ORIGIN_PORT}:" >&2
+  cat "$ORIGIN_LOG" >&2
+  exit 1
+fi
+build "$FIXTURE_DIR" public/origin "$LOG_FILE_ORIGIN" "--config hugo.toml,origin.toml"
+stop_origin
+
 export FIXTURE_PUBLIC="$FIXTURE_DIR/public/normal"
 export FIXTURE_PUBLIC_MINIFIED="$FIXTURE_DIR/public/minified"
+export FIXTURE_PUBLIC_ORIGIN="$FIXTURE_DIR/public/origin"
 export HUGO_BUILD_LOG="$LOG_FILE"
 export HUGO_BUILD_LOG_MINIFIED="$LOG_FILE_MINIFIED"
+export HUGO_BUILD_LOG_ORIGIN="$LOG_FILE_ORIGIN"
 
 npm test "$@"

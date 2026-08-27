@@ -1,11 +1,15 @@
 # Applied on top of hugo.toml with `hugo --config hugo.toml,skills.toml`, for
-# the builds that need a configured agent skill.
+# the builds that fetch from this suite's own origin: the ones that need a
+# configured agent skill, and the ones whose github-profile avatars exist.
 #
 # It is separate rather than merged into the base file because the base build
 # must keep showing what an UNCONFIGURED skills surface does: the agentskills
 # format stays wired in the merged home list while publishing no document, and
 # the manifest must not list a URL nothing wrote. That build is the only
 # coverage of that direction, and configuring a skill here would delete it.
+# The github-profile switch below is separate for the mirror reason: the base
+# build must keep showing that an avatar the data never named publishes no
+# file and reaches no manifest line.
 #
 # WHAT THESE BUILDS PROVE that no other build in this repository can. The
 # agent-readiness module republishes each configured skill as an artifact at a
@@ -38,6 +42,13 @@
     maxAge = 0
 
 [params]
+
+  # Flat key first: a [table] header above it would swallow it into that table.
+  # The fixture's github-profile fetch seam (layouts/_partials/github-profile/
+  # fetch.html) picks its canned data file by this switch, and only the
+  # `origin` file names avatar URLs -- pointing at this suite's own origin, so
+  # the fetch-mode copies exist in exactly the builds that may fetch.
+  github_profile_fixture_avatars = 'origin'
 
   [params.agent]
 

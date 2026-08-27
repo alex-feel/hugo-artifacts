@@ -407,6 +407,10 @@ test('and those registrations come from the owning modules, not from the fixture
     [join(modulesRoot, 'social-share'), 'layouts/_partials/social-share/lib/register-url.html'],
     [join(modulesRoot, 'carousel'), 'layouts/_partials/carousel/slides.html'],
     [resolve(modulesRoot, '..', 'shortcodes', 'callout'), 'layouts/_shortcodes/callout.html'],
+    [
+      resolve(modulesRoot, '..', 'shortcodes', 'github-profile'),
+      'layouts/_partials/github-profile/avatar.html',
+    ],
   ];
   for (const [root, rel] of owners) {
     const source = readFileSync(join(root, rel), 'utf8');

@@ -192,6 +192,10 @@ When a fetch cannot run or exhausts its retries, the module does not break the b
 - **Organization-restricted token:** when an organization policy withholds the per-repository contribution lists (their aliased query block arrives null), the widget renders every other section and warns once; only the per-organization rollup is omitted.
 - **Partial GraphQL data:** a resolved user block with a non-empty `errors` array renders every section whose data resolved and warns once; a section whose data is missing -- including individual repository, organization, or pinned-item nodes the token cannot see, which the API returns as null entries -- is omitted or skipped, never broken. That rule deliberately covers a list whose EVERY node the token withheld: the whole section is omitted, remainder note included, rather than rendering an empty list under a note about rows that are not there. The remainder note is a statement about a list that renders.
 
+## Published avatar copies and the URL manifest
+
+Under `avatar="fetch"` each distinct avatar is copied at build time and published at the site root under a stable URL-derived name (`<name>_<hash-of-the-URL>.<ext>`; the name does not change when the image bytes do). Reading the copy's URL is what WRITES that file, and it is a Resource rather than a Page, so no walk of `.Site.Pages` reaches it. Where a site also imports [`url-retirement`](../../modules/url-retirement/README.md), this module registers each copy it publishes, and those URLs appear in that module's `/url-manifest.txt` with nothing configured for them -- so a deployment check covers them, and a copy that stops being published (an organization dropping off a list, a changed avatar URL upstream) surfaces as a retired URL instead of a silent 404. `hotlink` and `none` publish nothing and register nothing, and a site that does not import `url-retirement` is unaffected: the call sits behind `templates.Exists` and costs it nothing.
+
 ## Computed Metrics
 
 Everything beyond raw API fields is computed at build time from data already fetched:
@@ -365,7 +369,7 @@ shortcodes/github-profile/
         classify-error.html         # HTTP error -> (errorClass, waitHintSeconds, errorMessage)
         derive.html                 # Computed metrics (rollups, recency, shares, streaks, score)
         render.html                 # Root element + section dispatch + degraded chip
-        avatar.html                 # Shared avatar rendering: img or placeholder, fetch/hotlink
+        avatar.html                 # Shared avatar rendering: img or placeholder, fetch/hotlink; tells url-retirement about a fetched copy
         avatar-warn.html            # One deduplicated warning per failed avatar fetch
         more-note.html              # Visible remainder under a truncated list
         section-title.html          # Visible localized heading for the list sections

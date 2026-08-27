@@ -14,8 +14,11 @@
     placeholder with ONE warning per cache key: the same image can be
     rendered from several sections and several profiles in one build, and
     the build should name each problem once. Reading .RelPermalink is what
-    publishes the copy.
-  - "hotlink": reference the URL directly.
+    publishes the copy, and the copy is registered with the sibling
+    url-retirement module's manifest when a site imports both (see the
+    comment at the call).
+  - "hotlink": reference the URL directly. Nothing is published, so nothing
+    is registered.
 
   An empty .url renders the placeholder WITHOUT a warning: the API answered
   and simply carried no avatar, which is the caller's data to explain, not a
@@ -58,6 +61,24 @@
         {{- $failure = "transport" -}}
       {{- else with .Value -}}
         <img class="{{ $class }}" src="{{ .RelPermalink }}" alt="{{ $alt }}" width="{{ $size }}" height="{{ $size }}" loading="lazy" decoding="async">
+        {{- /* Reading that URL published the copy, and no walk of .Site.Pages
+             can see it, so the sibling url-retirement module is told behind
+             the guard that costs a site without it nothing. The name is
+             stable rather than content-addressed -- measured at v0.164.0, a
+             GetRemote resource is named and published as
+             <urlbase>_<hash-of-the-URL>.<ext>, unchanged when the bytes
+             served at the URL change -- so it survives url-retirement's
+             content-addressed refusal; the resource is handed over rather
+             than its URL because url-retirement owns that distinction. The
+             page is the RENDERING language's home: what a registration
+             picks is which language's manifest the URL belongs to. This
+             runs in the html pass (weight 10), so it is always in time for
+             the manifest's weight-100 pass. The delimiters are trimmed so
+             the branch keeps emitting the img tag with zero trailing
+             bytes. */ -}}
+        {{- if templates.Exists "_partials/url-retirement/register-url.html" -}}
+          {{- partial "url-retirement/register-url.html" (dict "page" site.Home "resource" .) -}}
+        {{- end -}}
         {{- $shown = true -}}
       {{- else -}}
         {{- $failure = "not-found" -}}
