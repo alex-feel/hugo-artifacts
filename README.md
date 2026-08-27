@@ -99,6 +99,10 @@ Renders an [arXiv.org](https://arxiv.org/) paper reference in one of six display
 
 Privacy-first YouTube facade: renders only a same-origin, build-time-fetched poster plus a real play button, and injects the `youtube-nocookie.com` player only on click, so the page makes zero third-party contact before the visitor opts in. Supports `id`/`url` parsing (all common shapes plus `?t=` offsets), playlists, an explicit local poster override, arbitrary player-parameter passthrough, responsive same-origin `<picture>` posters, and a no-JavaScript fallback link. See [`shortcodes/youtube-embed/README.md`](shortcodes/youtube-embed/README.md).
 
+### `shortcodes/accordion`
+
+Universal, unstyled accordion built on the native `<details>` / `<summary>` elements: paired `{{< accordion >}}` / `{{< accordion-item >}}` shortcodes for Markdown plus a public `accordion/list.html` partial for layouts, with optional single-open groups, opt-in heading semantics, and per-item deep-link anchors. Ships zero JavaScript, zero CSS, and zero ARIA -- the browser carries the toggle, the keyboard interaction, and the state semantics. See [`shortcodes/accordion/README.md`](shortcodes/accordion/README.md).
+
 ### `shortcodes/callout`
 
 Universal, unstyled paired admonition shortcode (`{{< callout "type" >}}...{{< /callout >}}`) with fifteen first-class types, true-synonym aliases, arbitrary custom-type passthrough, native `<details>` collapsibility, opt-in ARIA, and overridable icons. Also ships a blockquote render hook so GitHub-style `> [!NOTE]` alerts render as the same markup. See [`shortcodes/callout/README.md`](shortcodes/callout/README.md).

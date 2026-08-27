@@ -1,0 +1,126 @@
+{{/*
+  Renders an accordion container: a group of native <details>/<summary>
+  disclosure items authored as nested accordion-item shortcodes.
+
+    {{< accordion >}}
+    {{< accordion-item "Shipping" >}}Ships in 2-3 days.{{< /accordion-item >}}
+    {{< accordion-item "Returns" open="true" >}}Thirty days, no questions.{{< /accordion-item >}}
+    {{< /accordion >}}
+
+    {{< accordion exclusive="true" heading="3" >}}
+    ...items...
+    {{< /accordion >}}
+
+  This is a UNIVERSAL, UNSTYLED accordion: it emits semantic BEM markup on
+  the native <details>/<summary> platform and ships ZERO CSS, ZERO
+  JavaScript, and ZERO ARIA -- the browser carries the toggle behavior, the
+  keyboard interaction (Enter/Space plus the ordinary Tab sequence, which
+  is exactly the WAI-ARIA APG accordion keyboard contract), and the
+  expand/collapse state semantics natively. The consuming site owns all
+  visual styling through the BEM class hooks; see the README's Styling
+  section for the marker-hiding, icon-rotation, and animation recipes.
+
+  Parameters (all named):
+  - exclusive (bool)  Single-open ("radio") behavior via the native
+    <details> name attribute: opening one item closes its group sibling.
+    A fresh group name is minted per container, so two exclusive
+    accordions on one page never couple. Default false (every item
+    toggles independently -- the native default, and the mode with no
+    older-browser degradation and no known assistive-tech gaps).
+  - group (string)    Explicit group name, implies exclusive. Lets two
+    containers on one page share one exclusivity group (named details
+    need not be siblings). Default none.
+  - heading (int)     2..6: wrap each item's title in an <hN
+    class="accordion__heading"> inside the summary, giving screen-reader
+    users heading navigation between items (the APG accordion's header
+    shape). Off by default because heading-in-summary is the one
+    AT-inconsistent construct on this platform: Chrome exposes the
+    heading only when the site sets summary { display: block }, and JAWS
+    does not expose it at all -- the README carries the recipe and the
+    caveat. An invalid value warns once and degrades to no heading.
+  - icon (bool)       Render the chevron glyph (accordion/icon.html) in
+    each item's summary. Default true. Sites that keep the native
+    disclosure marker instead pass icon=false; sites that keep the icon
+    hide the native marker with one documented CSS line.
+  - id (string)       id attribute on the container div.
+  - class (string)    Extra class(es) appended to the container div.
+
+  The container does NOT hand its resolved settings to its items: measured
+  at Hugo v0.164.0, a nested shortcode executes BEFORE its parent's
+  template body runs at all, so nothing this template writes to any store
+  can reach them. Each item re-derives group, heading, and icon from this
+  container's own arguments through .Parent, which is the only channel
+  that carries. accordion/lib/sc-config.html is the single resolver both
+  sides call, so the two derivations agree by construction.
+
+  The inner stream is emitted trimmed and RAW (safeHTML, no RenderString):
+  it is the children's already-rendered HTML, not author markdown --
+  markdown BODIES are rendered inside accordion-item, which is where
+  content lives. Stray prose between items therefore surfaces visibly as
+  unrendered text instead of disappearing or rendering in an invalid
+  position, and an accordion whose trimmed inner stream is empty warns
+  once and renders nothing at all (an empty container div is a
+  subject-less artifact). Use the {{< >}} notation only; the {{% %}} form
+  would push this raw HTML back through Goldmark.
+
+  Validation and degradation: nothing in this container errorfs -- a bad
+  bool/heading token degrades to its default with a one-shot warning, an
+  unknown named parameter (a typo) warns once and is ignored, and
+  positional arguments (this shortcode defines none) warn once and are
+  ignored. The one build failure in the module is a missing item title,
+  raised by accordion-item itself.
+
+  For layout templates, the accordion/list.html partial renders the same
+  markup from a data slice; see its docstring.
+*/}}
+
+{{/* The diagnostics position, resolved through accordion/lib/position.html
+     because a NESTED shortcode's own .Position collapses to "<file>:1:1" at
+     Hugo v0.164.0; a container nested inside another accordion's item is
+     exactly that case, and the partial substitutes the outermost ancestor's
+     accurate position. */}}
+{{- $where := partial "accordion/lib/position.html" . -}}
+
+{{- $vocab := slice "exclusive" "group" "heading" "icon" "id" "class" -}}
+{{- if .IsNamedParams -}}
+  {{- range $k, $_ := .Params -}}
+    {{- if not (in $vocab $k) -}}
+      {{- partial "accordion/lib/warn.html" (dict
+          "key" (printf "accordion:warn:unknown-param:accordion:%s:%s" $k $where)
+          "message" (printf "[accordion] Ignoring the unknown accordion shortcode parameter %q (see the README Parameters table for the accepted names). See %s" $k $where)) -}}
+    {{- end -}}
+  {{- end -}}
+{{- else -}}
+  {{/* .Params is nil (not an empty slice) for a call with no arguments at
+       all, and `len` raises on a nil pointer, so presence is tested with
+       `with` before any length is taken. */}}
+  {{- with .Params -}}
+    {{- partial "accordion/lib/warn.html" (dict
+        "key" (printf "accordion:warn:positional:accordion:%s" $where)
+        "message" (printf "[accordion] The accordion shortcode takes named parameters only; ignoring the positional arguments. See %s" $where)) -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Only the group is needed here (it decides the exclusive modifier
+     class); heading and icon are resolved identically by each item from
+     this same container object. See accordion/lib/sc-config.html for why
+     the items re-derive rather than being handed the values. */}}
+{{- $cfg := partial "accordion/lib/sc-config.html" (dict "sc" . "where" $where) -}}
+{{- $group := $cfg.group -}}
+
+{{- $id := .Get "id" | default "" -}}
+{{- $class := .Get "class" | default "" -}}
+
+{{- $inner := .Inner | strings.TrimSpace -}}
+{{- if eq $inner "" -}}
+  {{- partial "accordion/lib/warn.html" (dict
+      "key" (printf "accordion:warn:empty:%s" $where)
+      "message" (printf "[accordion] The accordion shortcode has no inner content; rendering nothing. Author accordion-item shortcodes between its opening and closing tags. See %s" $where)) -}}
+{{- else -}}
+{{- $rootClass := "accordion" -}}
+{{- if ne $group "" -}}{{- $rootClass = printf "%s accordion--exclusive" $rootClass -}}{{- end -}}
+{{- with $class -}}{{- $rootClass = printf "%s %s" $rootClass . -}}{{- end -}}
+<div class="{{ $rootClass }}"{{ with $id }} id="{{ . }}"{{ end }}>
+{{ $inner | safeHTML }}
+</div>
+{{- end -}}

@@ -1,0 +1,29 @@
+{{/*
+  Renders the module's single inline SVG glyph: a chevron-down disclosure
+  indicator, emitted inside each item's <summary> unless the container
+  suppresses it with icon=false.
+
+  Contract (identical to the callout / github-repo / carousel sibling
+  modules so the family reads as one): width="1em" height="1em" so the
+  glyph scales with font size, stroke="currentColor" so it inherits the
+  consumer's text color, aria-hidden="true" and focusable="false" because
+  the disclosure state is already conveyed natively by <details>, and a
+  24x24 viewBox. The consuming site rotates it on details[open] through
+  the accordion__icon class hook -- the module ships NO transform, NO
+  transition, and NO color.
+
+  The geometry is original line-art in the Lucide / Tabler visual idiom
+  (24x24 grid, 2px stroke, round caps/joins). No third-party SVG assets
+  are bundled.
+
+  Context (dict):
+  - .class (string, optional) CSS class(es) for the svg element.
+*/}}
+
+{{- $class := .class | default "" -}}
+{{- $stroke := `width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"` -}}
+<svg class="{{ $class }}" {{ $stroke | safeHTMLAttr }}><path d="m6 9 6 6 6-6"/></svg>
+{{- /* The trim markers on this closing comment consume the newline after the
+     svg element and the file's own final newline, so the partial's output ends
+     exactly at the closing svg tag and injects no whitespace into the summary
+     that includes it. */ -}}

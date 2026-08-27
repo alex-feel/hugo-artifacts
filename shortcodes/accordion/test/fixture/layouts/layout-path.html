@@ -1,0 +1,50 @@
+{{/*
+  Exercises the PUBLIC accordion/list.html partial from a layout -- the entry
+  a consuming site's template uses, where no shortcode object exists to
+  supply .Position or .Ordinal.
+
+  Three calls: a plain container covering every per-item key and both content
+  types, an exclusive + heading container proving the partial path mints its
+  own group name and honors heading mode, and an empty items slice proving
+  the warn-and-render-nothing degradation.
+*/}}
+{{ define "main" }}
+  <div id="fixture-content" data-fixture-page="{{ .Kind }}">
+    <section id="plain">
+      {{ partial "accordion/list.html" (dict
+        "page" .
+        "position" "layouts/layout-path.html:plain"
+        "items" (slice
+          (dict "title" "String content" "content" "A **markdown** string, plus a raw <em>inline element</em> Goldmark strips at the default unsafe setting.")
+          (dict "title" "Typed content" "content" ("<p>Pre-rendered <em>inline element</em>, passed through untouched.</p>" | safeHTML))
+          (dict "title" "Open item" "content" "Body." "open" true)
+          (dict "title" "Author id" "content" "Body." "id" "layout-chosen")
+          (dict "title" "Extra class" "content" "Body." "class" "site-item")
+          (dict "title" "No content")
+        )
+      ) }}
+    </section>
+    <section id="exclusive">
+      {{ partial "accordion/list.html" (dict
+        "page" .
+        "position" "layouts/layout-path.html:exclusive"
+        "exclusive" true
+        "heading" 4
+        "icon" false
+        "class" "site-accordion"
+        "id" "layout-exclusive"
+        "items" (slice
+          (dict "title" "Exclusive one" "content" "Body.")
+          (dict "title" "Exclusive two" "content" "Body.")
+        )
+      ) }}
+    </section>
+    <section id="empty">
+      {{ partial "accordion/list.html" (dict
+        "page" .
+        "position" "layouts/layout-path.html:empty"
+        "items" slice
+      ) }}
+    </section>
+  </div>
+{{ end }}

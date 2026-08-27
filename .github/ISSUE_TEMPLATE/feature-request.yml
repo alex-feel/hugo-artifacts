@@ -43,6 +43,7 @@ body:
         - shortcodes/github-repo
         - shortcodes/github-profile
         - shortcodes/hf-space
+        - shortcodes/accordion
         - shortcodes/callout
         - shortcodes/youtube-embed
         - shortcodes/arxiv-paper

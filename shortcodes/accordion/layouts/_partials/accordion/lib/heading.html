@@ -1,0 +1,34 @@
+{{/*
+  Parses the heading parameter and RETURNS the heading level as an int,
+  with 0 meaning "no heading" (the title renders as a plain span).
+
+  Callers invoke this ONLY when the parameter is actually present (isset);
+  an omitted parameter keeps the documented default of no heading. The
+  accepted values are the integers 2 through 6: an accordion item is never
+  the page's h1, and HTML defines nothing past h6. Hugo parses an unquoted
+  numeric argument to an int and a quoted one to a string, so both arrive
+  here through one printf "%v" surface.
+
+  An invalid value (out of range, non-numeric, empty) degrades to no
+  heading with a one-shot deduplicated warning -- an optional structural
+  upgrade must not fail the build.
+
+  Context (dict):
+  - .value (any)    The present parameter value, verbatim.
+  - .where (string) Diagnostics origin (shortcode .Position or the partial
+                    caller's position/page path).
+
+  Return value: int (0, or 2..6). Exactly one terminal return.
+*/}}
+
+{{- $raw := printf "%v" .value -}}
+{{- $tok := trim $raw " \t\n\r" -}}
+{{- $result := 0 -}}
+{{- if findRE `^[2-6]$` $tok 1 -}}
+  {{- $result = int $tok -}}
+{{- else -}}
+  {{- partial "accordion/lib/warn.html" (dict
+      "key" (printf "accordion:warn:heading:%s" $tok)
+      "message" (printf "[accordion] Ignoring invalid heading=%q (use an integer from 2 to 6). The title renders as a plain span. See %s" $raw .where)) -}}
+{{- end -}}
+{{- return $result -}}

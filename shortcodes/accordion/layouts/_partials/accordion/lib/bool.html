@@ -1,0 +1,42 @@
+{{/*
+  Parses one boolean parameter token and RETURNS the resulting bool.
+
+  Callers invoke this ONLY when the parameter is actually present (isset);
+  an omitted parameter keeps its documented default without any parsing or
+  warning. Centralizing the token rules here keeps the accordion shortcode,
+  the accordion-item shortcode, and the accordion/list.html partial
+  byte-identical in what they accept, and keeps the unrecognized-token
+  warning worded once.
+
+  Token rules (callout's exact convention, so the two modules read as a
+  family): truthy tokens are true/1/yes/on in any casing; falsy tokens are
+  false/0/no/off or the empty string; surrounding whitespace is trimmed; a
+  bare bool arrives through printf "%v" and folds into the same string
+  surface. An unrecognized token falls back to the parameter's own
+  documented DEFAULT (not to a hardcoded false, because this module's icon
+  parameter defaults to true) with a one-shot deduplicated warning that
+  echoes the author's original value.
+
+  Context (dict):
+  - .value   (any)    The present parameter value, verbatim.
+  - .name    (string) The parameter name, for the warning text and key.
+  - .default (bool)   The parameter's documented default.
+  - .where   (string) Diagnostics origin (shortcode .Position or the
+                      partial caller's position/page path).
+
+  Return value: bool. Exactly one terminal return.
+*/}}
+
+{{- $raw := printf "%v" .value -}}
+{{- $tok := lower (trim $raw " \t\n\r") -}}
+{{- $result := .default -}}
+{{- if in (slice "true" "1" "yes" "on") $tok -}}
+  {{- $result = true -}}
+{{- else if in (slice "false" "0" "no" "off" "") $tok -}}
+  {{- $result = false -}}
+{{- else -}}
+  {{- partial "accordion/lib/warn.html" (dict
+      "key" (printf "accordion:warn:bool:%s:%s" .name $tok)
+      "message" (printf "[accordion] Ignoring unrecognized %s=%q (use true/1/yes/on or false/0/no/off, any casing). Falling back to the default (%v). See %s" .name $raw .default .where)) -}}
+{{- end -}}
+{{- return $result -}}

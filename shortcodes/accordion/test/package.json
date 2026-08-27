@@ -1,0 +1,9 @@
+{
+  "name": "accordion-module-tests",
+  "private": true,
+  "type": "module",
+  "description": "Build-output assertion suite for the accordion Hugo shortcode module. One offline fixture, built once, covering both authoring surfaces (the paired accordion / accordion-item shortcodes and the public accordion/list.html partial), both output formats (html and the markdown twin), the native <details> markup contract, exclusive-group name minting, deep-link id minting with collision suffixes, and the exact set of warnings the module's degradation contract promises.",
+  "scripts": {
+    "test": "node --test \"tests/*.spec.js\""
+  }
+}

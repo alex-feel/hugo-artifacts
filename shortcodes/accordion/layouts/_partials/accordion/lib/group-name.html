@@ -1,0 +1,38 @@
+{{/*
+  RETURNS the exclusive-group name for a container that asked for
+  exclusive="true" without naming a group explicitly.
+
+  The name is a pure FUNCTION of the container's seed -- its ordinal path
+  through the shortcode tree, or the caller-supplied position on the
+  partial path -- rather than a counter, and that is load-bearing rather
+  than tidy. A counter would have to live in a page-scoped store, and the
+  container is not the only party that needs the answer: a nested item
+  resolves its container's settings independently (nested shortcodes
+  execute BEFORE their parent's template body, measured at Hugo v0.164.0,
+  so nothing the parent writes to any store can reach them). Two
+  independent derivations of one counter cannot agree; two derivations of
+  one function always do. A function also survives a re-render for a
+  second output format unchanged, where a counter would keep climbing.
+
+  Uniqueness comes from the seed: ordinal paths are unique per page by
+  construction, so two containers never collide, and one container always
+  reproduces its own name.
+
+  The seed is sanitized to the characters an attribute value reads
+  cleanly with, and the substitution is one-to-one on the shortcode path
+  form ("1.0" -> "1-0", never colliding with "10"). anchorize is
+  deliberately NOT used: it strips dots outright, which maps "1.0" and
+  "10" onto the same token.
+
+  Context (dict):
+  - .seed (string) The container's identity: its ordinal path (shortcode
+                   path) or the caller's position string (partial path).
+
+  Return value: string. Exactly one terminal return.
+*/}}
+
+{{- $token := replaceRE `[^A-Za-z0-9_-]+` "-" (printf "%v" .seed) -}}
+{{- $token = trim $token "-" -}}
+{{- if eq $token "" -}}{{- $token = "group" -}}{{- end -}}
+{{- $result := printf "accordion-%s" $token -}}
+{{- return $result -}}

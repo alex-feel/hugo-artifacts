@@ -1,0 +1,61 @@
+{{/*
+  Resolves a CONTAINER's settings from its own shortcode arguments and
+  RETURNS them as a dict: group (string, "" when not exclusive), heading
+  (int, 0 for none), icon (bool).
+
+  It is called from two places with the same answer required from both: the
+  accordion container resolving its own settings, and a nested
+  accordion-item resolving its container's -- the item passes `.Parent`,
+  which is the very same shortcode object.
+
+  WHY THE ITEM RE-DERIVES INSTEAD OF BEING TOLD. Measured at Hugo v0.164.0
+  with a probe fixture, a nested shortcode executes BEFORE its parent's
+  template body runs at all: a value the parent writes to its own .Store,
+  or even to the shared .Page.Store, immediately above the line that
+  dereferences .Inner is NOT visible to the child, which has already run.
+  The only channel from a container to its items is therefore the
+  container's ARGUMENTS, read through .Parent.Get and .Parent.Params --
+  which is exactly the inheritance pattern Hugo's own .Parent
+  documentation demonstrates. Everything derived here is consequently a
+  pure function of those arguments plus the container's position in the
+  shortcode tree, so both derivations agree by construction.
+
+  Re-deriving costs nothing in warnings: the bool and heading helpers
+  deduplicate their diagnostics on the offending token, so a container
+  with a bad value warns once per build however many items re-read it.
+
+  Context (dict):
+  - .sc    (Shortcode) The CONTAINER shortcode object (`.` in the
+                       container, `.Parent` in a nested item).
+  - .where (string)    Diagnostics origin.
+
+  Return value: dict with keys group, heading, icon. Exactly one terminal
+  return.
+*/}}
+
+{{- $sc := .sc -}}
+{{- $where := .where -}}
+{{- $named := $sc.IsNamedParams -}}
+
+{{- $exclusive := false -}}
+{{- if and $named (isset $sc.Params "exclusive") -}}
+  {{- $exclusive = partial "accordion/lib/bool.html" (dict "value" ($sc.Get "exclusive") "name" "exclusive" "default" false "where" $where) -}}
+{{- end -}}
+
+{{- $group := trim (printf "%v" ($sc.Get "group" | default "")) " \t\n\r" -}}
+{{- if and (eq $group "") $exclusive -}}
+  {{- $group = partial "accordion/lib/group-name.html" (dict "seed" (partial "accordion/lib/identity.html" $sc)) -}}
+{{- end -}}
+
+{{- $heading := 0 -}}
+{{- if and $named (isset $sc.Params "heading") -}}
+  {{- $heading = partial "accordion/lib/heading.html" (dict "value" ($sc.Get "heading") "where" $where) -}}
+{{- end -}}
+
+{{- $icon := true -}}
+{{- if and $named (isset $sc.Params "icon") -}}
+  {{- $icon = partial "accordion/lib/bool.html" (dict "value" ($sc.Get "icon") "name" "icon" "default" true "where" $where) -}}
+{{- end -}}
+
+{{- $result := dict "group" $group "heading" $heading "icon" $icon -}}
+{{- return $result -}}

@@ -1,0 +1,33 @@
+{{/*
+  RETURNS a stable, per-page-unique identity string for a shortcode call:
+  its ordinal path through the shortcode tree, outermost first
+  ("3", "3.0", "3.0.1.0").
+
+  WHY A PATH, and not the two obvious alternatives. Measured at Hugo
+  v0.164.0: a NESTED shortcode's .Position collapses to "<file>:1:1" -- the
+  real line and column survive only for a top-level call -- so a position
+  cannot tell two nested items apart, and every item inside one page would
+  share an identity. .Ordinal alone is no better: it is page-global for a
+  top-level call but restarts at 0 inside each parent, so the first item of
+  every container carries ordinal 0. Only the PATH is unique, because
+  ordinals are unique among siblings and the walk names each ancestor.
+
+  The identity is also STABLE across renders, which is the other half of
+  what callers need: a page rendered for a second HTML-family output format
+  re-executes its shortcodes, and the id registry keyed on this identity
+  then hands each item back the id it already had instead of drifting onto
+  the next collision suffix.
+
+  The walk is a recursive partial rather than a fixed unroll, so it costs
+  exactly the real nesting depth and cannot silently truncate a deeper one.
+
+  Context: the shortcode object itself (pass `.`).
+
+  Return value: string. Exactly one terminal return.
+*/}}
+
+{{- $result := printf "%d" .Ordinal -}}
+{{- with .Parent -}}
+  {{- $result = printf "%s.%s" (partial "accordion/lib/identity.html" .) $result -}}
+{{- end -}}
+{{- return $result -}}
