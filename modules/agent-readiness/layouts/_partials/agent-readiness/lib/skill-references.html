@@ -7,23 +7,44 @@
   which is why the patterns below are tuned for recall and a false nomination
   costs one HTTP request rather than a wrong verdict.
 
-  WHY THREE CLASSES, MEASURED. The obvious detector -- a Markdown link whose
-  destination is relative -- was run against the seventeen skills published in
-  github.com/anthropics/skills (sixteen of them multi-file, one single-file):
-  it fires on ONE of the sixteen. Real skills name their supporting files in
-  prose. `pdf/SKILL.md` says "see REFERENCE.md" and "read FORMS.md" with no
-  link syntax at all, and the format specification's own File references
-  example is a bare `scripts/extract.py` on its own line. Adding the two prose
-  classes below raises the same measurement to sixteen of sixteen with no
-  false nomination on the single-file skill.
+  WHY FOUR CLASSES, MEASURED. The obvious detector -- a Markdown link whose
+  destination is relative -- was run against the skills published in
+  github.com/anthropics/skills: it fires on a small fraction of the
+  multi-file ones. Real skills name their supporting files in prose.
+  `pdf/SKILL.md` says "see REFERENCE.md" and "read FORMS.md" with no link
+  syntax at all, and the format specification's own File references example
+  is a bare `scripts/extract.py` on its own line. And a real skill in the
+  wild wrote "read recovering-a-failed-run.md in full" -- lowercase, bare,
+  plain prose -- which the first three classes all walk past, so its
+  supporting file went unprobed and a consumer republished a body whose one
+  instruction resolved to nothing, with no warning anywhere. Class D exists
+  because of that measured miss.
 
     A. a Markdown link or image destination that is relative;
     B. a slash-bearing path with a file extension, the shape the spec's own
        example uses;
-    C. an ALL-CAPS file name with a documentary extension. The all-caps rule
-       is load-bearing: a `Word.ext` pattern also matches ordinary prose such
-       as `Claude.ai`, and the measured absence of false nominations depends
-       on requiring capitals.
+    C. an ALL-CAPS file name with a documentary extension;
+    D. a bare file name with a documentary extension, whatever its case.
+       C is a subset of D; it stays as its own class ahead of D so that
+       capitalized names -- the stronger convention for a documentary file --
+       keep their place in the candidate ORDER, which is the order the probe
+       spends its budget in.
+
+  The extension alternation in C and D is closed with a word boundary, so a
+  name whose extension merely BEGINS with a documentary one nominates
+  nothing: without the anchor, `Button.tsx` nominates `Button.ts` and
+  `guide.mdx` nominates `guide.md` -- names the body never wrote, each
+  spending a probe from the budget on a file that cannot be a reference, and
+  capable of a wrong FOUND verdict where the truncated name happens to exist.
+
+  Re-measured against the corpus above at twenty skills (eighteen
+  multi-file, two single-file): both the three-class and the four-class
+  detector reach a probe hit on all eighteen multi-file skills, and class D
+  adds two false nominations on one prose-heavy single-file skill, whose
+  body names example files for the READER to create ("Name it appropriately
+  (e.g., `decision-doc.md`, `technical-spec.md`)"). Both 404 and the verdict
+  stays absent, which is this file's whole contract: nomination is tuned for
+  recall, and the probe buys precision at one request per false name.
 
   WHAT IS STRIPPED, AND WHAT IS NOT. Fenced code blocks are removed for every
   class -- as far as one regular expression reaches, which is not all the way:
@@ -33,17 +54,19 @@
   the cost is a request rather than a wrong verdict. The rest of the rule is
   that a fenced example demonstrating a skill's layout is not that skill's
   own reference. Code SPANS are removed for classes A and C only, because a
-  link inside backticks is an example while class B's natural habitat is
-  exactly a span -- the discovery draft writes its own supporting-file
-  reference as `` `scripts/deploy.sh` ``. Indented code blocks are deliberately
-  NOT stripped: they are indistinguishable from a nested list continuation,
-  and dropping them would cost recall, which the probe cannot recover.
+  link inside backticks is an example while classes B and D live exactly
+  there -- the discovery draft writes its own supporting-file reference as
+  `` `scripts/deploy.sh` ``, and a skill telling its reader to open a
+  reference file writes `` `known-limitations.md` ``. Indented code blocks
+  are deliberately NOT stripped: they are indistinguishable from a nested
+  list continuation, and dropping them would cost recall, which the probe
+  cannot recover.
 
   The front-matter block IS scanned along with the body. That is where a
   bundled license file is usually named -- the format specification defines
   `license` as a "License name or reference to a bundled license file" -- and
-  in the corpus above it is the ONLY signal for fifteen of the sixteen
-  multi-file skills.
+  in the corpus above it is the ONLY signal that reaches a probe hit for
+  seven of the eighteen multi-file skills.
 
   Expected context (dict):
   - .body (string) - The fetched SKILL.md, verbatim.
@@ -70,7 +93,10 @@
 {{- range findRESubmatch `(?:^|[^\w./:-])([a-zA-Z][\w.-]*(?:/[\w.-]+)+\.[A-Za-z0-9]{1,5})` $nofence -1 -}}
   {{- $raw = $raw | append (index . 1) -}}
 {{- end -}}
-{{- range findRESubmatch `(?:^|[^\w./-])([A-Z][A-Z0-9_-]*\.(?:md|txt|json|ya?ml|sh|py|js|ts|csv|toml))` $nocode -1 -}}
+{{- range findRESubmatch `(?:^|[^\w./-])([A-Z][A-Z0-9_-]*\.(?:md|txt|json|ya?ml|sh|py|js|ts|csv|toml))\b` $nocode -1 -}}
+  {{- $raw = $raw | append (index . 1) -}}
+{{- end -}}
+{{- range findRESubmatch `(?:^|[^\w./-])([A-Za-z][\w-]*\.(?:md|txt|json|ya?ml|sh|py|js|ts|csv|toml))\b` $nofence -1 -}}
   {{- $raw = $raw | append (index . 1) -}}
 {{- end -}}
 
@@ -84,11 +110,15 @@
     {{/* A destination carrying a scheme, or a protocol-relative one, names
          somewhere else entirely and can never be a file inside this skill's
          directory. `SKILL.md` names the artifact being published, not a
-         supporting file beside it. */}}
+         supporting file beside it -- compared case-insensitively, because
+         class D nominates any casing and on an origin that resolves paths
+         case-insensitively a probe for `Skill.md` answers with the artifact
+         just fetched, declaring the skill multi-file on evidence about
+         nothing. */}}
     {{- if or
         (findRE `^[a-zA-Z][a-zA-Z0-9+.-]*:` $target 1)
         (hasPrefix $target "//")
-        (eq $target "SKILL.md")
+        (eq (lower $target) "skill.md")
         (findRE `[\s%]` $target 1)
         (in $candidates $target) -}}
       {{- $keep = false -}}

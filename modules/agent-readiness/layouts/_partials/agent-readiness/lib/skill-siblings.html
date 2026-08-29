@@ -105,12 +105,14 @@
         {{- if not (hasPrefix $resolved (printf "%s/" $dir)) -}}
           {{- $outside = $outside | append $candidate -}}
           {{- $resolved = "" -}}
-        {{- else if eq $resolved $u.Path -}}
+        {{- else if eq (lower $resolved) (lower $u.Path) -}}
           {{/* The body referring to ITSELF -- `./SKILL.md`, or anything that
                normalizes back to the source. Probing it always succeeds,
                because it is the artifact that was just fetched, so it would
                declare every self-referencing skill multi-file on evidence
-               about nothing. */}}
+               about nothing. Case-insensitive, because an origin that
+               resolves paths case-insensitively answers a `./Skill.md`
+               probe with the same artifact. */}}
           {{- $resolved = "" -}}
         {{- else if not (strings.Contains (path.Base $resolved) ".") -}}
           {{- $resolved = "" -}}

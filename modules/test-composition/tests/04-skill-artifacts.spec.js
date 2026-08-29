@@ -49,6 +49,7 @@ const logs = {
 
 const ARTIFACT = '/.well-known/agent-skills/composition-skill/SKILL.md';
 const SECOND = '/.well-known/agent-skills/second-skill/SKILL.md';
+const SECOND_FILE = '/.well-known/agent-skills/second-skill/notes.md';
 const INDEX = '/.well-known/agent-skills/index.json';
 
 const manifestUrls = (tree) =>
@@ -60,11 +61,13 @@ const servedFile = (tree, url) => join(tree, url.slice(1));
 
 // Every artifact this build actually wrote, found by walking the tree rather
 // than by naming them, so an answer cannot be checked against the list that
-// produced it.
+// produced it. Everything under the directory except the index itself: the
+// SKILL.md artifacts AND any declared supporting file republished beside one,
+// because both reach the manifest only through the writes-hook answer.
 const artifactsOnDisk = (tree) =>
   readdirSync(join(tree, '.well-known', 'agent-skills'), {recursive: true})
     .map((name) => `/.well-known/agent-skills/${String(name).split('\\').join('/')}`)
-    .filter((url) => url.endsWith('/SKILL.md'))
+    .filter((url) => url !== INDEX && /\.[A-Za-z0-9]+$/.test(url))
     .sort();
 
 test('the configured skills really were fetched and republished', () => {
@@ -73,19 +76,21 @@ test('the configured skills really were fetched and republished', () => {
   // three tests would pass by agreeing about an absence.
   assert.deepEqual(
     artifactsOnDisk(trees.skills),
-    [ARTIFACT, SECOND].sort(),
-    'the skills build did not publish the two artifacts this suite is about',
+    [ARTIFACT, SECOND, SECOND_FILE].sort(),
+    'the skills build did not publish the three artifacts this suite is about',
   );
   assert.ok(existsSync(servedFile(trees.skills, INDEX)), 'the skills build published no index');
 });
 
 test('every artifact URL is listed although no page carries one', () => {
   const urls = manifestUrls(trees.skills);
-  // Set equality against the TREE, not a remembered list. Two artifacts is what
-  // gives this teeth: an answer that named a constant URL would satisfy any
-  // assertion about one artifact and is caught here.
+  // Set equality against the TREE, not a remembered list. Two artifact SHAPES
+  // is what gives this teeth: an answer that named a constant URL would
+  // satisfy any assertion about one artifact, and one that projected entry
+  // URLs alone would carry both SKILL.md files while silently dropping the
+  // declared supporting file republished beside one of them.
   assert.deepEqual(
-    urls.filter((url) => url.endsWith('/SKILL.md')).sort(),
+    urls.filter((url) => url.startsWith('/.well-known/agent-skills/') && url !== INDEX).sort(),
     artifactsOnDisk(trees.skills),
     'what the manifest lists and what the build wrote are different sets',
   );
@@ -113,6 +118,21 @@ test('and the index really does advertise a digest for the URL that was listed',
     `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
     'the advertised digest does not match the artifact this build published',
   );
+
+  // The declared supporting file carries the same guarantee through the
+  // entry's files member, so a vanished loose file would be just as visible
+  // to a verifying reader as a vanished SKILL.md.
+  const second = (index.skills ?? []).find((skill) => skill.url === SECOND);
+  assert.ok(second, `the index does not describe ${SECOND}`);
+  const file = (second.files ?? []).find((f) => f.url === SECOND_FILE);
+  assert.ok(file, `the index does not describe ${SECOND_FILE}`);
+  assert.equal(
+    file.digest,
+    `sha256:${createHash('sha256')
+      .update(readFileSync(servedFile(trees.skills, SECOND_FILE)))
+      .digest('hex')}`,
+    'the advertised file digest does not match the loose file this build published',
+  );
 });
 
 // THE LOAD-BEARING ONE. url_retirement.manifest.output_formats decides whether
@@ -128,6 +148,10 @@ test('the artifact is listed with the per-format URLs switched off as well', () 
   );
   const urls = manifestUrls(trees.oneUrl);
   assert.ok(urls.includes(ARTIFACT), 'the artifact was lost when output_formats was switched off');
+  assert.ok(
+    urls.includes(SECOND_FILE),
+    'the declared supporting file was lost when output_formats was switched off',
+  );
   // The index is a per-format document of the home page, so this mode lists it
   // nowhere -- which is the setting working, and is what makes the line above a
   // statement about the hook rather than about the format wiring.

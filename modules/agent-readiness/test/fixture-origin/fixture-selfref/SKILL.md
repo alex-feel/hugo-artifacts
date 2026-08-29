@@ -5,4 +5,4 @@ description: A single-file fixture skill whose body links back to itself, which 
 
 # Fixture selfref
 
-The canonical form of this document lives at [./SKILL.md](./SKILL.md), which is this file. Probing it always succeeds, because it is the artifact that was just fetched.
+The canonical form of this document lives at [./SKILL.md](./SKILL.md), which is this file. Probing it always succeeds, because it is the artifact that was just fetched. Some indexes spell it [./Skill.md](./Skill.md) instead, which is still this file on any origin that resolves paths case-insensitively.

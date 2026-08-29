@@ -2,9 +2,11 @@
   home.agentskills.json -- the Agent Skills discovery index.
 
   Publishes /.well-known/agent-skills/index.json alongside one republished
-  artifact per indexed skill: /.well-known/agent-skills/<name>/SKILL.md for a
-  skill distributed as a single file, /.well-known/agent-skills/<name>.tar.gz
-  or <name>.zip for one distributed as an archive.
+  artifact per indexed skill -- /.well-known/agent-skills/<name>/SKILL.md for
+  a skill distributed as a single file, /.well-known/agent-skills/<name>.tar.gz
+  or <name>.zip for one distributed as an archive -- plus, for a skill-md
+  entry declaring supporting files, one republished copy of each declared
+  file at its relative path beside the SKILL.md.
 
   FOUR GATES, and the file is emitted only when all four pass:
     1. cfg.enable            -- the module master switch.

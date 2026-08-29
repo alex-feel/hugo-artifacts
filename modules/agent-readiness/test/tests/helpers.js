@@ -309,9 +309,10 @@ export function parseDump(rel, dir) {
 // appends one `<method> <path>` line per request; the method is dropped here
 // because `resources.GetRemote` issues nothing but GET.
 //
-// A SET, not a list, and deliberately not a count. The log spans all twenty-two
-// builds, so a per-build count is neither derivable from it nor stable --
-// request counts were measured varying run to run on one route. What IS stable,
+// A SET, not a list, and deliberately not a count. The log spans all
+// twenty-four builds, so a per-build count is neither derivable from it nor
+// stable -- request counts were measured varying run to run on one route.
+// What IS stable,
 // and what the assertions built on this need, is whether a path was EVER asked
 // for: a guard that refuses to probe a candidate and a budget that stops after
 // four both claim exactly that, and a published tree cannot show it.

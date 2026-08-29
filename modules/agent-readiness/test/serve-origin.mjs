@@ -125,7 +125,17 @@ async function handle(req, res) {
   // The path under /weird/ is ignored and one body is always returned,
   // because the URL must carry NO extension Hugo recognizes: a .md suffix
   // resolves the media type on its own and the header never gets a say.
-  const unresolvable = path.startsWith('/weird/');
+  //
+  // The /WEIRDFILE suffix stages the same failure INSIDE a skill directory,
+  // where a declared supporting file resolves to. It fails FAST -- the
+  // response arrives and only its media type is unusable -- where a staged
+  // 500 would have Hugo retrying for its full default timeout on every
+  // build, because errors are never cached. The name is extensionLESS for
+  // the same reason /weird/'s paths are: measured at Hugo v0.164.0, a URL
+  // carrying an extension fetched successfully under this same unrecognized
+  // Content-Type, and only an extensionless URL reached the media-type
+  // error.
+  const unresolvable = path.startsWith('/weird/') || path.endsWith('/WEIRDFILE');
 
   // The transport-decompression trap: the bytes are a valid .tar.gz, but the
   // response claims them as gzip CONTENT-ENCODING, so any conforming client --

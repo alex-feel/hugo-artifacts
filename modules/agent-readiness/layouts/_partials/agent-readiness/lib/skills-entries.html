@@ -36,8 +36,10 @@
   Expected context: none is read; pass an empty dict.
 
   Return value: the resolved skill slice -- each entry a dict carrying .name,
-  .type, .description, .url and .digest -- or an empty slice when this build
-  publishes no index. ONE terminal return.
+  .type, .description, .url and .digest, plus .files (a slice of dicts
+  carrying .path, .url and .digest per republished supporting file) on a
+  skill-md entry that declares supporting files -- or an empty slice when
+  this build publishes no index. ONE terminal return.
 */}}
 
 {{- $entries := slice -}}

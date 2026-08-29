@@ -1,0 +1,151 @@
+{{/*
+  agent-readiness/lib/skill-files.html -- INTERNAL (lib tier).
+
+  Purpose: resolve and fetch the supporting files a `skill-md` entry DECLARES,
+  so the caller can republish each one beside the republished SKILL.md. This
+  is the declared counterpart of lib/skill-siblings.html: the probe verifies
+  names the body happens to mention, while this partial fetches names the
+  consumer explicitly wrote into the entry's `files` list -- a claim, not a
+  guess, which is why a name that fails here refuses the whole entry instead
+  of degrading. A published skill whose declared file is missing would carry
+  exactly the dangling reference the declaration exists to prevent.
+
+  EVERY PATH IS VALIDATED BEFORE ANY FETCH, with the guards the sibling probe
+  already earned, because both resolve consumer-supplied names against the
+  same source URL: no absolute path and no traversal outside the skill
+  directory (an archive may not carry either, and a republished tree cannot
+  serve either); no directory reference; no whitespace or percent sign
+  (path.Join performs no percent-encoding, so such a name cannot be resolved
+  faithfully); no fragment or query; and not the SKILL.md itself, which the
+  entry already publishes. A declared path is CLEANED before use -- `./x.md`
+  and `x.md` are one file -- and two declarations resolving to one file are
+  refused, because both copies would race for one published target and
+  resources.Copy hands the loser the winner's resource entirely.
+
+  Unlike a probe, a declared fetch carries NO short timeout and is not
+  budget-capped: the list is the consumer's own explicit choice, exactly as
+  the entry list itself is, and each file is as load-bearing as the SKILL.md
+  whose fetch also runs at Hugo's defaults.
+
+  Resolution stops at the FIRST failure. The caller refuses the entry either
+  way, so fetching the remainder would spend requests on an entry that
+  cannot publish.
+
+  Expected context (dict):
+  - .source (string) - The entry's source URL, already known http(s)-absolute.
+  - .files  (any)    - The entry's raw `files` value, unvalidated.
+
+  Return value: a dict carrying
+    .status (string) - "none" when nothing was declared (absent key, empty
+                       list, or an empty-after-trim sole element is NOT one of
+                       these -- an empty ELEMENT is invalid-path);
+                       "ok" when every declared file was fetched;
+                       else one of "not-a-list", "unresolvable-source",
+                       "invalid-path", "duplicate-path", "missing" or
+                       "fetch-failed";
+    .detail (string) - the offending declared path;
+    .reason (string) - for "invalid-path", the clause naming what is wrong
+                       with .detail, ready to embed in a warning; for
+                       "fetch-failed", the fetch error text;
+    .files  (slice)  - on "ok", one dict per declared file, in declaration
+                       order: .path (the cleaned relative path), .url (the
+                       absolute origin URL fetched) and .resource (the
+                       fetched remote resource).
+  ONE terminal return.
+*/}}
+
+{{- $source := .source | default "" -}}
+{{- $declared := .files -}}
+
+{{- $status := "none" -}}
+{{- $detail := "" -}}
+{{- $reason := "" -}}
+{{- $files := slice -}}
+
+{{/* An absent key, an empty list and every other falsy value are all "nothing
+     was declared" -- only a truthy non-slice (a bare string, a table) is the
+     shape mistake worth naming. */}}
+{{- if not $declared -}}
+{{- else if not (reflect.IsSlice $declared) -}}
+  {{- $status = "not-a-list" -}}
+{{- else -}}
+  {{/* try, for the same reason the probe wraps it: an unparseable-but-http(s)
+       source aborts the build otherwise. */}}
+  {{- $parsed := try (urls.Parse $source) -}}
+  {{- $u := $parsed.Value -}}
+  {{- $dir := "" -}}
+  {{- $base := "" -}}
+  {{- with $u -}}
+    {{- $dir = path.Dir .Path -}}
+    {{- $base = path.Base .Path -}}
+  {{- end -}}
+
+  {{- if or (not $u) (ne $u.RawQuery "") (eq $dir ".") (eq $dir "/") (not (strings.Contains $base ".")) -}}
+    {{- $status = "unresolvable-source" -}}
+  {{- else -}}
+    {{- $status = "ok" -}}
+    {{- $seen := slice -}}
+    {{- range $raw := $declared -}}
+      {{- if eq $status "ok" -}}
+        {{- $path := trim (printf "%v" $raw) " \t\n\r" -}}
+        {{- $bad := "" -}}
+        {{- if eq $path "" -}}
+          {{- $bad = "it is empty" -}}
+        {{- else if findRE `[\s%]` $path 1 -}}
+          {{- $bad = "it carries whitespace or a percent sign, which path resolution cannot handle faithfully" -}}
+        {{- else if findRE `[#?]` $path 1 -}}
+          {{- $bad = "it carries a fragment or query, and a published file name cannot" -}}
+        {{- else if hasPrefix $path "/" -}}
+          {{- $bad = "it is absolute, and a supporting file lives inside the skill's own directory" -}}
+        {{- else if hasSuffix $path "/" -}}
+          {{- $bad = "it names a directory rather than a file" -}}
+        {{- end -}}
+
+        {{- $rel := "" -}}
+        {{- if eq $bad "" -}}
+          {{- $resolved := path.Join $dir $path -}}
+          {{- if not (hasPrefix $resolved (printf "%s/" $dir)) -}}
+            {{- $bad = "it resolves outside the skill's own directory, which no archive may carry and no republished copy can serve" -}}
+          {{- else if eq (lower $resolved) (lower $u.Path) -}}
+            {{/* Case-insensitive, because an origin that resolves paths
+                 case-insensitively would answer a declared `Skill.md` with
+                 the entry's own body, and the files member would then
+                 re-advertise the SKILL.md under a second name. */}}
+            {{- $bad = "it names the SKILL.md itself, which the entry already publishes" -}}
+          {{- else -}}
+            {{- $rel = strings.TrimPrefix (printf "%s/" $dir) $resolved -}}
+          {{- end -}}
+        {{- end -}}
+
+        {{- if ne $bad "" -}}
+          {{- $status = "invalid-path" -}}
+          {{- $detail = printf "%v" $raw -}}
+          {{- $reason = $bad -}}
+        {{- else if in $seen $rel -}}
+          {{- $status = "duplicate-path" -}}
+          {{- $detail = printf "%v" $raw -}}
+        {{- else -}}
+          {{- $seen = $seen | append $rel -}}
+          {{- $fileURL := printf "%s://%s%s/%s" $u.Scheme $u.Host $dir $rel -}}
+          {{- $fetch := try (resources.GetRemote $fileURL) -}}
+          {{- with $fetch.Err -}}
+            {{- $status = "fetch-failed" -}}
+            {{- $detail = $rel -}}
+            {{- $reason = printf "%v" . -}}
+          {{- else with $fetch.Value -}}
+            {{- $files = $files | append (dict "path" $rel "url" $fileURL "resource" .) -}}
+          {{- else -}}
+            {{- $status = "missing" -}}
+            {{- $detail = $rel -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if ne $status "ok" -}}
+  {{- $files = slice -}}
+{{- end -}}
+
+{{- return (dict "status" $status "detail" $detail "reason" $reason "files" $files) -}}
