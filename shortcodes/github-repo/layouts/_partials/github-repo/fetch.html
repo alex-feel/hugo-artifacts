@@ -122,7 +122,7 @@
   "watchers" 0
   "license" ""
   "topics" (slice)
-  "updated" ""
+  "updatedISO" ""
   "url" $url
   "apiOk" false
   "languages" (slice)
@@ -257,11 +257,10 @@
   {{- $t = try (int $forksRaw) -}}
   {{- if not $t.Err -}}{{- with $t.Value -}}{{- $forksN = . -}}{{- end -}}{{- end -}}
 
-  {{/* Relative time from pushed_at. */}}
-  {{- $updatedStr := "" -}}
-  {{- with $json.pushed_at -}}
-    {{- $updatedStr = partial "github-repo/relative-time.html" . -}}
-  {{- end -}}
+  {{/* The raw pushed_at ISO 8601 timestamp is carried as-is; the display
+       label is derived at render time by updated.html, because the display
+       form is the shortcode's per-call `updated` parameter. */}}
+  {{- $updatedISO := or $json.pushed_at "" -}}
 
   {{/* Language color lookup. */}}
   {{- $lang := or $json.language "" -}}
@@ -299,7 +298,7 @@
     "watchers" (or $json.subscribers_count 0)
     "license" $license
     "topics" (or $json.topics (slice))
-    "updated" $updatedStr
+    "updatedISO" $updatedISO
     "url" $url
     "apiOk" true
     "languages" (slice)

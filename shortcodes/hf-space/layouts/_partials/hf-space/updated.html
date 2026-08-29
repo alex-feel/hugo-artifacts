@@ -1,0 +1,21 @@
+{{/*
+  Renders the hero variant's last-modified meta item: a clock icon plus a
+  <time> element, or nothing when the display mode is "none", the timestamp
+  is absent, or it fails to parse.
+
+  Context (dict):
+  - iso (string): The Space's lastModified ISO 8601 timestamp; may be "".
+  - mode (string): "relative", "date", or "none" (validated by the shortcode).
+
+  The <time> element's datetime attribute always carries the raw ISO 8601
+  value, so the machine-readable timestamp stays in the markup whatever the
+  display mode and a consuming site's own script can re-render the label on
+  every page load.
+*/}}
+
+{{- with partial "hf-space/time-label.html" . }}
+<span class="hf-space__meta-item hf-space__meta-item--updated">
+  {{- partial "hf-space/icon.html" (dict "name" "clock" "class" "hf-space__icon") }}
+  <time class="hf-space__time" datetime="{{ $.iso }}">{{ . }}</time>
+</span>
+{{- end -}}

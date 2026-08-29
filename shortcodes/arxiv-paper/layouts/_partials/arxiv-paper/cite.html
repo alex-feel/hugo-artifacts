@@ -25,7 +25,7 @@
      {{- with .primaryGroup }} data-arxiv-group="{{ . }}"{{ end }}>
   <div class="arxiv-paper__cite-head">
     {{ partial "arxiv-paper/icon.html" (dict "name" "quote" "class" "arxiv-paper__icon") }}
-    <span class="arxiv-paper__cite-label">Cite this paper</span>
+    <span class="arxiv-paper__cite-label">{{ T "arxiv_paper_cite_label" | default "Cite this paper" }}</span>
   </div>
   <p class="arxiv-paper__cite-ref">
     {{- with (partial "arxiv-paper/authors.html" (dict "authors" .authors "max" 3)) }}<span class="arxiv-paper__cite-authors">{{ . }}</span> {{ end -}}
@@ -46,7 +46,7 @@
     </a>
     {{- with .doiURL }}
     <a class="arxiv-paper__cite-link arxiv-paper__cite-journal-doi" href="{{ . }}" target="_blank" rel="noopener noreferrer">
-      {{- partial "arxiv-paper/icon.html" (dict "name" "external" "class" "arxiv-paper__icon") }} Published version
+      {{- partial "arxiv-paper/icon.html" (dict "name" "external" "class" "arxiv-paper__icon") }} {{ T "arxiv_paper_published_version" | default "Published version" }}
     </a>
     {{- end }}
   </div>

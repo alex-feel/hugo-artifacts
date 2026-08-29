@@ -12,16 +12,12 @@ hf_space_stat_sdk = "SDK"
 hf_space_stat_hardware = "Hardware"
 hf_space_stat_likes = "Likes"
 hf_space_open_in_spaces = "Open in Spaces"
-hf_space_just_now = "just now"
+hf_space_today = "today"
 hf_space_yesterday = "yesterday"
 
 [hf_space_likes_word]
 one = "like"
 other = "likes"
-
-[hf_space_hours_ago]
-one = "1 hour ago"
-other = "{{ .Count }} hours ago"
 
 [hf_space_days_ago]
 one = "1 day ago"

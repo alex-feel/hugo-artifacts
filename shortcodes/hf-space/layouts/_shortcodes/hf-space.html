@@ -10,11 +10,17 @@
   - description (string, optional): Description override (defaults to the Space's short_description).
   - emoji (string, optional): Tile emoji override (defaults to the Space's card emoji).
   - class (string, optional): Additional CSS class(es) appended to the root element.
+  - updated (string, optional): Display mode for the last-modified time label in the hero
+    variant. One of: relative, date, none. Default: "relative". "relative" renders a
+    calendar-day-granularity phrase ("today", "yesterday", "5 days ago") that stays accurate
+    while the site rebuilds at least daily; "date" renders the localized absolute date, which
+    never goes stale at any rebuild cadence; "none" omits the element entirely.
 
   Usage:
     hf-space id="owner/name"
     hf-space id="owner/name" variant="hero"
     hf-space url="https://huggingface.co/spaces/owner/name" variant="inline" class="featured"
+    hf-space id="owner/name" variant="hero" updated="date"
 */}}
 
 {{- $id := .Get "id" | default "" -}}
@@ -24,6 +30,7 @@
 {{- $description := .Get "description" | default "" -}}
 {{- $emoji := .Get "emoji" | default "" -}}
 {{- $class := .Get "class" | default "" -}}
+{{- $updated := .Get "updated" | default "relative" -}}
 
 {{/* Validate that at least one locator was supplied. */}}
 {{- if and (not $id) (not $url) -}}
@@ -34,6 +41,12 @@
 {{- $validVariants := slice "inline" "card" "wide" "stats" "hero" -}}
 {{- if not (in $validVariants $variant) -}}
   {{- errorf "The %q shortcode received invalid variant %q. Must be one of: inline, card, wide, stats, hero. See %s" .Name $variant .Position -}}
+{{- end -}}
+
+{{/* Validate the last-modified label display mode against allowed values. */}}
+{{- $validUpdated := slice "relative" "date" "none" -}}
+{{- if not (in $validUpdated $updated) -}}
+  {{- errorf "The %q shortcode received invalid updated %q. Must be one of: relative, date, none. See %s" .Name $updated .Position -}}
 {{- end -}}
 
 {{/* Fetch and normalize Space data. */}}
@@ -48,8 +61,8 @@
 -}}
 {{- $data := partial "hf-space/fetch.html" $ctx -}}
 
-{{/* Merge extra class into data. */}}
-{{- $data = merge $data (dict "extraClass" $class) -}}
+{{/* Merge the per-call presentation settings into the fetched data. */}}
+{{- $data = merge $data (dict "extraClass" $class "updatedMode" $updated) -}}
 
 {{/* Dispatch to variant partial. */}}
 {{- partial (printf "hf-space/%s.html" $variant) $data -}}

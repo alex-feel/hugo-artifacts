@@ -44,6 +44,10 @@ Graceful degradation is the contract every one of these modules claims, and noth
 
 That is the only remote failure this fixture can make deterministic. The other four modules address hosts they hard-code, so their fetch outcome is whatever the runner's network gives.
 
+## The time-label probes
+
+The three modules that render a human-visible time label -- `github-repo`, `hf-space` and `arxiv-paper` -- share one contract: the relative ladder counts calendar days and starts at "today", every shown label sits inside a `<time datetime="...">` element carrying the raw ISO 8601 value, and the display parameter offers `relative`, `date` and `none`. A fetched timestamp can never pin that ladder, so the fixture's home layout calls the modules' partials directly with inputs derived from the build's own clock IN THE UTC FRAME (`now.UTC`, `now.UTC.AddDate 0 0 -5`, and so on), which makes every expected label a build-time constant that `tests/02-time-labels.spec.js` asserts byte for byte, offline or online, on any machine in any timezone -- the UTC frame matters because the ladder counts UTC calendar days, and a local-zone derivation crossing a DST transition would move a probe's day count by one. The probe matrix is uniform across the three modules and crosses every ladder boundary (29/30 days, 364/365 days, unparseable and empty inputs, a malformed input under the `date` mode). The `now`-input probes are the discriminating ones: an hours-based ladder answers "just now" where the calendar-day ladder answers "today", so a regression to sub-day phrasing fails exactly there. Beside the matrix sit the rendered-element probes (each module's meta-item partial under `date` and `none`, plus arxiv-paper's unrevised case) and the variant probes: each time-bearing variant rendered from a synthetic data dict, which is the only execution of the hf-space and arxiv-paper hero templates anywhere in this repository and the only deterministic proof that a variant reads the display mode under the key its entry template merges. The same spec asserts both shipped languages of each module carry the calendar-day i18n vocabulary (`*_today`, `*_yesterday` and the `*_ago` plural tables with the full CLDR category set per language), none of the retired sub-day keys, and -- for arxiv-paper -- the full UI-label key set its README's Localization claim depends on.
+
 ## What this suite does NOT catch
 
 Worth stating plainly, because the gap is not obvious and was measured rather than assumed.
@@ -57,6 +61,8 @@ So this suite proves: every template parses, the paths the fixture exercises ren
 One page invokes each module exactly **once**. That is deliberate for the fetching ones: three of them open a host-down circuit breaker on first failure, so a second call site in the same build takes a different code path and emits a different warning, which would make the assertions depend on render order.
 
 The home page renders in two output formats, `html` and `markdown`. The second is what selects each module's `<name>.markdown.md` variant over its HTML entry template.
+
+The home layout additionally carries the time-label probe elements described above. They call partials directly rather than invoking any shortcode a second time, and they fetch nothing, so the once-per-module rule and the warning set are untouched.
 
 The fixture also carries a `[security.http] mediaTypes` entry for `application/atom+xml`, which `arxiv-paper` needs and which a module cannot ship because Hugo resolves security policy from the site configuration alone. The pattern is deliberately unanchored at the end: the response carries a `; charset=utf-8` suffix that a trailing `$` defeats.
 

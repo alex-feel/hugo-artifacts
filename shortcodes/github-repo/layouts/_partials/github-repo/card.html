@@ -15,7 +15,8 @@
   - .forks (int) - Fork count
   - .forksFormatted (string) - Formatted fork count
   - .license (string) - SPDX license identifier
-  - .updated (string) - Relative time since last push
+  - .updatedISO (string) - Raw pushed_at ISO 8601 timestamp
+  - .updatedMode (string) - Display mode for the last-push label (relative, date, none)
   - .apiOk (bool) - Whether API fetch succeeded
   - .extraClass (string) - Additional CSS classes
 
@@ -66,12 +67,7 @@
       {{ . }}
     </span>
     {{- end }}
-    {{- with .updated }}
-    <span class="github-repo__meta-item github-repo__meta-item--updated">
-      {{- partial "github-repo/icon.html" (dict "name" "clock") }}
-      {{ T "github_repo_updated" . | default (printf "updated %s" .) }}
-    </span>
-    {{- end }}
+    {{- partial "github-repo/updated.html" (dict "iso" .updatedISO "mode" .updatedMode) }}
   </div>
 </article>
 {{- else -}}

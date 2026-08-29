@@ -7,11 +7,17 @@
   - name (string, optional): Display name override (defaults to repo name from URL/API)
   - description (string, optional): Description text override (defaults to API description)
   - class (string, optional): Additional CSS class(es) appended to the root element
+  - updated (string, optional): Display mode for the last-push time label in the card and
+    hero variants. One of: relative, date, none. Default: "relative". "relative" renders a
+    calendar-day-granularity phrase ("today", "yesterday", "5 days ago") that stays accurate
+    while the site rebuilds at least daily; "date" renders the localized absolute date, which
+    never goes stale at any rebuild cadence; "none" omits the element entirely.
 
   Usage:
     github-repo url="https://github.com/owner/repo"
     github-repo url="https://github.com/owner/repo" variant="hero"
     github-repo url="https://github.com/owner/repo" variant="inline" name="My Fork" class="featured"
+    github-repo url="https://github.com/owner/repo" updated="date"
 */}}
 
 {{- $url := .Get "url" -}}
@@ -19,6 +25,7 @@
 {{- $name := .Get "name" | default "" -}}
 {{- $description := .Get "description" | default "" -}}
 {{- $class := .Get "class" | default "" -}}
+{{- $updated := .Get "updated" | default "relative" -}}
 
 {{/* Validate required url parameter */}}
 {{- if not $url -}}
@@ -31,6 +38,12 @@
   {{- errorf "The %q shortcode received invalid variant %q. Must be one of: inline, card, stats, lang, hero. See %s" .Name $variant .Position -}}
 {{- end -}}
 
+{{/* Validate the last-push label display mode against allowed values */}}
+{{- $validUpdated := slice "relative" "date" "none" -}}
+{{- if not (in $validUpdated $updated) -}}
+  {{- errorf "The %q shortcode received invalid updated %q. Must be one of: relative, date, none. See %s" .Name $updated .Position -}}
+{{- end -}}
+
 {{/* Fetch and normalize repository data */}}
 {{- $ctx := dict
   "url" $url
@@ -41,8 +54,8 @@
 -}}
 {{- $data := partial "github-repo/fetch.html" $ctx -}}
 
-{{/* Merge extra class into data */}}
-{{- $data = merge $data (dict "extraClass" $class) -}}
+{{/* Merge the per-call presentation settings into the fetched data */}}
+{{- $data = merge $data (dict "extraClass" $class "updatedMode" $updated) -}}
 
 {{/* Dispatch to variant partial */}}
 {{- partial (printf "github-repo/%s.html" $variant) $data -}}

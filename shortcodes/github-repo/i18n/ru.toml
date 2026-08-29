@@ -3,14 +3,14 @@
 github_repo_eyebrow_card = "GITHUB · РЕПОЗИТОРИЙ"
 github_repo_eyebrow_stats = "GITHUB / {{ . }}"
 github_repo_type_repository = "РЕПОЗИТОРИЙ"
-github_repo_updated = "обновлено {{ . }}"
+github_repo_updated = "обновлено"
 github_repo_view_on_github = "Открыть на GitHub"
 github_repo_sparkline_title = "Коммиты за последние 52 недели"
 github_repo_stat_language = "Язык"
 github_repo_stat_stars = "Звёзды"
 github_repo_stat_forks = "Форки"
 github_repo_stat_license = "Лицензия"
-github_repo_just_now = "только что"
+github_repo_today = "сегодня"
 github_repo_yesterday = "вчера"
 
 [github_repo_stars_word]
@@ -24,12 +24,6 @@ one = "форк"
 few = "форка"
 many = "форков"
 other = "форка"
-
-[github_repo_hours_ago]
-one = "{{ .Count }} час назад"
-few = "{{ .Count }} часа назад"
-many = "{{ .Count }} часов назад"
-other = "{{ .Count }} часа назад"
 
 [github_repo_days_ago]
 one = "{{ .Count }} день назад"

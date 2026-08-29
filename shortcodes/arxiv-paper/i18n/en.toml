@@ -1,12 +1,43 @@
 # Hugo arxiv-paper module -- English UI strings.
 # Every template lookup pipes through `| default "<English>"`, so a site language without
 # these keys still renders.
-# The citations key is a plural-form table selected by Hugo's CLDR rules from an integer
-# count. The word sits next to a compact-formatted number ("1.2k"), so at or above a
-# thousand the count passed for selection is 1000, whose category fits a rounded quantity;
-# raw counts below 1000 select their own form. This mirrors the sibling hf-space module,
-# where the same compact-number-plus-noun pairing is resolved the same way.
+# The citations and *_ago keys are plural-form tables selected by Hugo's CLDR rules from an
+# integer count. The citations word sits next to a compact-formatted number ("1.2k"), so at
+# or above a thousand the count passed for selection is 1000, whose category fits a rounded
+# quantity; raw counts below 1000 select their own form. This mirrors the sibling hf-space
+# module, where the same compact-number-plus-noun pairing is resolved the same way.
+
+arxiv_paper_submitted = "Submitted"
+arxiv_paper_revised = "Revised"
+arxiv_paper_today = "today"
+arxiv_paper_yesterday = "yesterday"
+arxiv_paper_code = "Code"
+arxiv_paper_view_on_arxiv = "View on arXiv"
+arxiv_paper_cite_label = "Cite this paper"
+arxiv_paper_published_version = "Published version"
+arxiv_paper_et_al = "et al."
+arxiv_paper_stat_subject = "Subject"
+arxiv_paper_stat_authors = "Authors"
+arxiv_paper_stat_version = "Version"
+arxiv_paper_stat_citations = "Citations"
+arxiv_paper_stat_upvotes = "HF upvotes"
 
 [arxiv_paper_citations_word]
 one = "citation"
 other = "citations"
+
+[arxiv_paper_authors_count]
+one = "({{ .Count }} author)"
+other = "({{ .Count }} authors)"
+
+[arxiv_paper_days_ago]
+one = "1 day ago"
+other = "{{ .Count }} days ago"
+
+[arxiv_paper_months_ago]
+one = "1 month ago"
+other = "{{ .Count }} months ago"
+
+[arxiv_paper_years_ago]
+one = "1 year ago"
+other = "{{ .Count }} years ago"

@@ -79,7 +79,7 @@ A card with the emoji tile, an owner eyebrow, description, and a 3-column metric
 {{</* hf-space id="owner/name" variant="hero" */>}}
 ```
 
-The largest variant. A gradient banner carrying the big emoji and faux app-window chrome, followed by the full metadata (tags, SDK, hardware, likes, last-updated) and an "Open in Spaces" call-to-action. The call-to-action is a visual affordance, not a second link; the stretched-link recipe in [Styling](#full-card-click-area-stretched-link) makes it clickable.
+The largest variant. A gradient banner carrying the big emoji and faux app-window chrome, followed by the full metadata (tags, SDK, hardware, likes, and a last-modified label -- see [The last-modified label](#the-last-modified-label)) and an "Open in Spaces" call-to-action. The call-to-action is a visual affordance, not a second link; the stretched-link recipe in [Styling](#full-card-click-area-stretched-link) makes it clickable.
 
 ## Parameters
 
@@ -92,6 +92,7 @@ The largest variant. A gradient banner carrying the big emoji and faux app-windo
 | `description` | string | no | API | Description override (defaults to the Space's `short_description`) |
 | `emoji` | string | no | API | Tile emoji override (defaults to the Space's card emoji) |
 | `class` | string | no | -- | Additional CSS class(es) appended to the root element |
+| `updated` | string | no | `relative` | Display mode for the hero variant's last-modified label: `relative`, `date`, `none` (see [The last-modified label](#the-last-modified-label)) |
 
 \* Provide either `id` or `url`. When both are given, `id` wins.
 
@@ -99,6 +100,7 @@ Validation:
 
 - Omitting both `id` and `url` fails the build with an error message.
 - Passing an invalid `variant` value fails the build with an error message.
+- Passing an invalid `updated` value fails the build with an error message.
 - A locator from which no `owner/name` can be parsed fails the build with an error message.
 
 ## Authentication
@@ -172,7 +174,21 @@ When all retries exhaust, the module does not break the build. It logs the struc
 
 - **`inline` variant:** Renders from the owner/name parsed from the locator; the like count is omitted (it is unknown without the API).
 - **`card`, `wide`, `stats`, `hero` variants:** Fall back to the inline chip layout (a single `<a>`, even for the card-family variants that normally render an `<article>`). The root element carries `data-api-ok="false"` so the consuming site can style the degraded state.
-- **Formatter safety:** an unparseable, non-finite, or implausibly large like count passes through the compact-number formatter verbatim, and an unparseable `lastModified` renders an empty relative time; neither breaks the build.
+- **Formatter safety:** an unparseable, non-finite, or implausibly large like count passes through the compact-number formatter verbatim, and an unparseable `lastModified` omits the last-modified element; neither breaks the build.
+
+## The last-modified label
+
+The hero variant shows when the Space was last modified. The visible label always sits inside a `<time>` element whose `datetime` attribute carries the raw ISO 8601 `lastModified` value, and the `updated` parameter chooses what a reader sees:
+
+| Mode | Output | Staleness |
+| --- | --- | --- |
+| `relative` (default) | `today`, `yesterday`, `5 days ago`, `2 months ago` | Accurate while the site rebuilds at least daily; drifts by the age of the build under rarer rebuilds |
+| `date` | `Aug 27, 2026` -- the localized absolute date via Hugo's `:date_medium` token | Never stale, at any rebuild cadence |
+| `none` | The element is not rendered at all | -- |
+
+The relative phrase counts calendar days between the modification's UTC date and the build's UTC date, never hours: a static site renders once and is then served as-is for at least a day, so the finest unit that stays truthful between daily rebuilds is the day, and a phrase like "2 hours ago" would be wrong within hours of the build. A site that rebuilds at least once a day therefore always shows an accurate relative label. A site that rebuilds less often has two honest options: `updated="date"` (an absolute date is a fact and cannot age) or `updated="none"`. The `datetime` attribute enables a third, site-owned option: the consuming site's own script can re-render the label on every page load from the machine-readable value -- the module itself ships no JavaScript.
+
+CSS hooks: the meta item carries `hf-space__meta-item--updated` and the `<time>` element carries `hf-space__time`, so a site can also restyle or hide the label visually without touching the parameter.
 
 ## Markdown output variant
 
@@ -221,8 +237,8 @@ All UI strings resolve through i18n keys shipped in the module's `i18n/` directo
 | `hf_space_stat_sdk` / `_hardware` / `_likes` | `SDK` / `Hardware` / `Likes` | Stats-card labels |
 | `hf_space_likes_word` | `like` / `likes` (plural forms) | Hero and Markdown-variant like-count word (raw counts below 1000 select their own plural form; a compact-formatted display such as `1.2k` selects the form of 1000, whose category fits a rounded quantity) |
 | `hf_space_open_in_spaces` | `Open in Spaces` | Hero call-to-action |
-| `hf_space_just_now` / `hf_space_yesterday` | `just now` / `yesterday` | Relative time |
-| `hf_space_hours_ago` / `_days_ago` / `_months_ago` / `_years_ago` | `1 hour ago` / `{{ .Count }} hours ago` (plural forms) | Relative time |
+| `hf_space_today` / `hf_space_yesterday` | `today` / `yesterday` | Relative time (calendar-day granularity) |
+| `hf_space_days_ago` / `_months_ago` / `_years_ago` | `1 day ago` / `{{ .Count }} days ago` (plural forms) | Relative time (calendar-day granularity) |
 
 ## Styling
 
@@ -331,7 +347,9 @@ shortcodes/hf-space/
         fetch-once.html           # Single-attempt fetch (normalized result dict)
         classify-error.html       # HTTP error -> (errorClass, waitHintSeconds, errorMessage)
         compact-number.html       # Number formatting (1500 -> "1.5k"; a rounding carry promotes tiers: 999950 -> "1M")
-        relative-time.html        # Timestamp formatting (e.g., "3 days ago")
+        relative-time.html        # Calendar-day relative time (e.g., "today", "3 days ago")
+        time-label.html           # Display-mode resolution (relative | date | none)
+        updated.html              # The hero last-modified meta item
         icon.html                 # Centralized inline SVG icon rendering
         inline.html               # V1 inline chip (also the degraded fallback)
         card.html                 # V2 editorial card (default)
