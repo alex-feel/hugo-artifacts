@@ -62,6 +62,12 @@
       name = 'composition-skill'
       source = 'http://127.0.0.1:1919/composition-skill/SKILL.md'
 
+    # The declared supporting file gives the artifact set a second SHAPE: a
+    # loose file republished beside a SKILL.md, which reaches the manifest only
+    # through the same writes-hook answer the SKILL.md artifacts ride. A hook
+    # that projected entry URLs alone would satisfy every SKILL.md assertion
+    # and silently drop this one.
     [[params.agent.skills]]
       name = 'second-skill'
+      files = ['notes.md']
       source = 'http://127.0.0.1:1919/second-skill/SKILL.md'

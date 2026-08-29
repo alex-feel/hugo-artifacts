@@ -19,14 +19,31 @@
   guessing.
 
   BOTH DISTRIBUTION TYPES. The draft defines `type` as "MUST be `"skill-md"`
-  (single `SKILL.md` file) or `"archive"` (bundled archive)", and a skill that
-  ships supporting files belongs in an archive: its `SKILL.md` addresses them
-  by relative path, and those paths resolve to nothing at all under a
-  republished single file. Hugo has no build-time archive writer -- and no
-  bitwise primitives with which to hand-assemble one -- so an archive is
-  FETCHED already built and republished byte for byte, exactly as a SKILL.md
-  is. What the module can then check, it checks; what it cannot see inside the
-  archive, the README states plainly is the publisher's to guarantee.
+  (single `SKILL.md` file) or `"archive"` (bundled archive)". A skill that
+  ships supporting files distributes as an archive when one exists: its
+  `SKILL.md` addresses those files by relative path, and those paths resolve
+  to nothing at all under a republished single file. Hugo has no build-time
+  archive writer -- and no bitwise primitives with which to hand-assemble one
+  -- so an archive is FETCHED already built and republished byte for byte,
+  exactly as a SKILL.md is. What the module can then check, it checks; what
+  it cannot see inside the archive, the README states plainly is the
+  publisher's to guarantee. Because skill developers rarely publish archives
+  at all, a `skill-md` entry may instead DECLARE its supporting files in a
+  `files` list: each one is fetched from the source directory through
+  lib/skill-files.html and republished at its relative path beside the
+  republished SKILL.md, so the published directory is the skill the way an
+  unpacked archive would deliver it, and the relative references inside the
+  body resolve over HTTP. The entry then carries a `files` member with each
+  file's path, URL and digest -- this module's own EXTENSION of the draft,
+  which defines no such field and whose "Clients MUST ignore unrecognized
+  fields" rule is what makes carrying one safe.
+
+  A DECLARED FILE THAT CANNOT PUBLISH REFUSES THE ENTRY. The declaration is
+  the consumer's own claim, not a heuristic's guess, so it fails closed the
+  way every other configuration failure here does: an invalid path, a
+  duplicate, a fetch error or a 404 omits the entry with a warning naming the
+  file, because publishing without it would carry exactly the dangling
+  reference the declaration exists to prevent.
 
   WHAT THE BYTES DECIDE. The published extension is chosen from the artifact's
   magic number rather than from the source URL or the response header, because
@@ -37,13 +54,16 @@
 
   SUPPORTING FILES, VERIFIED RATHER THAN GUESSED. A `skill-md` entry whose
   body appears to reference sibling files has those references RESOLVED
-  against its own source URL and probed. A sibling that really exists proves
-  the skill is multi-file, and the entry is reported -- warned about by
-  default, omitted when the consumer sets skills_index.on_supporting_files to
-  "omit". The default is to warn AND publish because the detector is
-  best-effort by construction: it can only nominate names the body itself
-  mentions, and a heuristic must not be able to delete a whole .well-known
-  surface, which is what refusing the last surviving entry would do.
+  against its own source URL and probed -- minus the ones the entry already
+  declares, whose references resolve against the published copies and are no
+  longer the probe's business. A sibling that really exists proves the skill
+  ships material this site would not serve, and the entry is reported --
+  warned about by default, omitted when the consumer sets
+  skills_index.on_supporting_files to "omit". The default is to warn AND
+  publish because the detector is best-effort by construction: it can only
+  nominate names the body itself mentions, and a heuristic must not be able
+  to delete a whole .well-known surface, which is what refusing the last
+  surviving entry would do.
 
   Field validation runs before the fetch wherever it can, so a malformed entry
   costs no network round trip: `name` is 1-64 characters of lowercase
@@ -160,6 +180,16 @@
       {{- end -}}
     {{- end -}}
 
+    {{/* A files list on an archive entry configures nothing: the archive
+         already carries the skill's whole directory, so the key is named and
+         ignored rather than refused -- what publishes is complete either
+         way. */}}
+    {{- if and $valid (eq $type "archive") $skill.files -}}
+      {{- partial "agent-readiness/lib/warn.html" (dict
+          "key" (printf "agent-readiness:warn:skill-files-on-archive:%s" $name)
+          "message" (printf "[agent-readiness] The agent skill %q declares a files list, but an archive already carries the skill's whole directory, so the list configures nothing and is ignored. It names loose supporting files for a skill-md entry only." $name)) -}}
+    {{- end -}}
+
     {{/* A forge's own source-archive endpoint, refused BEFORE the fetch --
          the browser-facing spellings redirect to the generator and
          resources.GetRemote follows redirects, so the configured URL is the
@@ -202,6 +232,7 @@
           {{- $content := $fetched.Content -}}
           {{- $sniff := partial "agent-readiness/lib/skill-archive.html" (dict "content" $content) -}}
           {{- $publish := "" -}}
+          {{- $skillFiles := dict "status" "none" "files" slice -}}
 
           {{- if eq $type "archive" -}}
             {{- if eq $sniff.format "" -}}
@@ -287,59 +318,124 @@
                         "key" (printf "agent-readiness:warn:skill-description:%s" $name)
                         "message" (printf "[agent-readiness] Skipping the agent skill %q: description must be 1-1024 characters. The value taken from its SKILL.md front matter is %d characters long." $name (strings.RuneCount $description))) -}}
                   {{- else -}}
-                    {{- $candidates := partial "agent-readiness/lib/skill-references.html" (dict "body" $content) -}}
-                    {{- $siblings := dict "verdict" "absent" "outside" slice "truncated" false "target" "" "url" "" "probes" 0 -}}
-                    {{- with $candidates -}}
-                      {{- $siblings = partial "agent-readiness/lib/skill-siblings.html" (dict
-                          "source" $source "candidates" . "limit" $probeLimit) -}}
-                    {{- end -}}
-
-                    {{- with $siblings.outside -}}
-                      {{/* Named individually up to a handful, counted beyond
-                           it: a body carrying hundreds of them would
-                           otherwise put a single unreadable kilobyte-long
-                           line in the consumer's build log. */}}
-                      {{- $shown := . -}}
-                      {{- $andMore := "" -}}
-                      {{- if gt (len .) 5 -}}
-                        {{- $shown = first 5 . -}}
-                        {{- $andMore = printf " and %d more" (sub (len .) 5) -}}
+                    {{/* Declared supporting files are resolved BEFORE the
+                         probe: a declared file that cannot be published
+                         refuses the entry outright -- a declaration is the
+                         consumer's own claim, and publishing without a file
+                         it names would carry exactly the dangling reference
+                         the declaration exists to prevent -- and a declared
+                         file that publishes is no longer the probe's
+                         business. */}}
+                    {{- $skillFiles = partial "agent-readiness/lib/skill-files.html" (dict
+                        "source" $source "files" $skill.files) -}}
+                    {{- if not (in (slice "none" "ok") $skillFiles.status) -}}
+                      {{- if eq $skillFiles.status "not-a-list" -}}
+                        {{- partial "agent-readiness/lib/warn.html" (dict
+                            "key" (printf "agent-readiness:warn:skill-files-shape:%s" $name)
+                            "message" (printf "[agent-readiness] Omitting the agent skill %q: its files key must be an array of relative paths, such as files = ['guide.md'], not a bare value." $name)) -}}
+                      {{- else if eq $skillFiles.status "unresolvable-source" -}}
+                        {{- partial "agent-readiness/lib/warn.html" (dict
+                            "key" (printf "agent-readiness:warn:skill-files-source:%s" $name)
+                            "message" (printf "[agent-readiness] Omitting the agent skill %q: it declares supporting files, but its source URL is not shaped like a file inside a skill directory, so no file URL can be resolved from it: %s. Point source at a URL of the form <origin>/<path>/<skill>/SKILL.md, without a query string." $name $source)) -}}
+                      {{- else if eq $skillFiles.status "invalid-path" -}}
+                        {{- partial "agent-readiness/lib/warn.html" (dict
+                            "key" (printf "agent-readiness:warn:skill-files-path:%s" $name)
+                            "message" (printf "[agent-readiness] Omitting the agent skill %q: its declared supporting file %q cannot be republished, because %s." $name $skillFiles.detail $skillFiles.reason)) -}}
+                      {{- else if eq $skillFiles.status "duplicate-path" -}}
+                        {{- partial "agent-readiness/lib/warn.html" (dict
+                            "key" (printf "agent-readiness:warn:skill-files-duplicate:%s" $name)
+                            "message" (printf "[agent-readiness] Omitting the agent skill %q: its files list names %q twice once the paths are cleaned, and two copies would race for one published target." $name $skillFiles.detail)) -}}
+                      {{- else if eq $skillFiles.status "missing" -}}
+                        {{- partial "agent-readiness/lib/warn.html" (dict
+                            "key" (printf "agent-readiness:warn:skill-files-missing:%s" $name)
+                            "message" (printf "[agent-readiness] Omitting the agent skill %q: its declared supporting file %q is not beside the SKILL.md at the source (the origin returned no resource, which is how an HTTP 404 arrives). Check the path and the pinned commit; a skill published without a file it declares would carry exactly the dangling reference the declaration exists to prevent." $name $skillFiles.detail)) -}}
+                      {{- else -}}
+                        {{- $hint := "" -}}
+                        {{- if strings.Contains $skillFiles.reason "media type" -}}
+                          {{- $hint = "\n  Hugo could resolve no media type for this response. It reads one from a URL extension it knows or from a Content-Type it knows; most origins serve documentary files as text/plain, which resolves." -}}
+                        {{- end -}}
+                        {{- partial "agent-readiness/lib/warn.html" (dict
+                            "key" (printf "agent-readiness:warn:skill-files-fetch:%s" $name)
+                            "message" (printf "[agent-readiness] Omitting the agent skill %q: fetching its declared supporting file %q failed (%s).%s" $name $skillFiles.detail $skillFiles.reason $hint)) -}}
                       {{- end -}}
-                      {{- partial "agent-readiness/lib/warn.html" (dict
-                          "key" (printf "agent-readiness:warn:skill-outside-refs:%s" $name)
-                          "message" (printf "[agent-readiness] The agent skill %q references %s from outside its own directory. The format specification says to \"use relative paths from the skill root\" and forbids an archive from carrying \"path traversal sequences (..) or absolute paths\", so such a reference cannot be packaged and will not resolve wherever the skill is used." $name (printf "%s%s" (delimit $shown ", " " and ") $andMore))) -}}
-                    {{- end -}}
-
-                    {{- $publish = printf "/.well-known/agent-skills/%s/SKILL.md" $name -}}
-
-                    {{- if eq $siblings.verdict "found" -}}
-                      {{- $consequence := "Publishing it anyway, because this check is best-effort and must not be able to remove a whole index; the republished body will carry a reference that resolves to nothing" -}}
-                      {{- if $strict -}}
-                        {{- $publish = "" -}}
-                        {{- $consequence = "Omitting it, because skills_index.on_supporting_files is set to \"omit\"" -}}
+                    {{- else -}}
+                      {{- $candidates := partial "agent-readiness/lib/skill-references.html" (dict "body" $content) -}}
+                      {{/* A candidate the entry already declares is served, so
+                           its reference resolves and the probe has nothing to
+                           say about it; the probe's budget is kept for the
+                           UNDECLARED remainder. */}}
+                      {{- with $skillFiles.files -}}
+                        {{- $declaredSet := slice -}}
+                        {{- range . -}}
+                          {{- $declaredSet = $declaredSet | append .path -}}
+                        {{- end -}}
+                        {{- $rest := slice -}}
+                        {{- range $candidates -}}
+                          {{- if not (in $declaredSet (path.Clean .)) -}}
+                            {{- $rest = $rest | append . -}}
+                          {{- end -}}
+                        {{- end -}}
+                        {{- $candidates = $rest -}}
                       {{- end -}}
-                      {{- partial "agent-readiness/lib/warn.html" (dict
-                          "key" (printf "agent-readiness:warn:skill-supporting-files:%s" $name)
-                          "message" (printf "[agent-readiness] The agent skill %q is a MULTI-FILE skill: its SKILL.md references %q, and that file really exists at %s. Republished as a single SKILL.md it would promise material this site never publishes, and the convention distributes such a skill as an archive instead. %s. Build a .tar.gz or .zip whose root is the skill directory and point this entry at it with type = 'archive'." $name $siblings.target $siblings.url $consequence)) -}}
-                    {{- else if eq $siblings.verdict "indeterminate" -}}
-                      {{- partial "agent-readiness/lib/warn.html" (dict
-                          "key" (printf "agent-readiness:warn:skill-supporting-indeterminate:%s" $name)
-                          "message" (printf "[agent-readiness] Could not determine whether the agent skill %q has supporting files: its source origin answered a check with an error rather than with the file or a 404, so this build cannot tell a single-file skill from a multi-file one. Publishing the entry; re-run when the origin is reachable, or declare the skill as type = 'archive' if it does have supporting files." $name)) -}}
-                    {{- else if eq $siblings.verdict "unverifiable" -}}
-                      {{/* No probe was issued at all, so this build knows
-                           NOTHING about this skill's supporting files --
-                           which is the same epistemic state as an origin
-                           that answered with an error, and is reported the
-                           same way. Publishing, for the same reason that
-                           branch publishes: "could not check" is not
-                           evidence against an entry. */}}
-                      {{- partial "agent-readiness/lib/warn.html" (dict
-                          "key" (printf "agent-readiness:warn:skill-supporting-unverifiable:%s" $name)
-                          "message" (printf "[agent-readiness] Could not check whether the agent skill %q has supporting files, because its source URL is not shaped like a file inside a skill directory: %s. A sibling would have to be requested against a directory this URL does not identify, or without a query string it may need, so nothing was requested at all. Publishing the entry; point `source` at a URL of the form <origin>/<path>/<skill>/SKILL.md to have the check run, or declare the skill as type = 'archive' if it does ship supporting files." $name $source)) -}}
-                    {{- else if $siblings.truncated -}}
-                      {{- partial "agent-readiness/lib/warn.html" (dict
-                          "key" (printf "agent-readiness:warn:skill-supporting-truncated:%s" $name)
-                          "message" (printf "[agent-readiness] The agent skill %q names more files than this build checks: %d of %d candidate references were probed and none exists, so the remainder were left unverified rather than spending further requests on someone else's origin. If the skill does ship supporting files, declare it as type = 'archive'." $name $siblings.probes (len $candidates))) -}}
+                      {{- $siblings := dict "verdict" "absent" "outside" slice "truncated" false "target" "" "url" "" "probes" 0 -}}
+                      {{- with $candidates -}}
+                        {{- $siblings = partial "agent-readiness/lib/skill-siblings.html" (dict
+                            "source" $source "candidates" . "limit" $probeLimit) -}}
+                      {{- end -}}
+
+                      {{- with $siblings.outside -}}
+                        {{/* Named individually up to a handful, counted beyond
+                             it: a body carrying hundreds of them would
+                             otherwise put a single unreadable kilobyte-long
+                             line in the consumer's build log. */}}
+                        {{- $shown := . -}}
+                        {{- $andMore := "" -}}
+                        {{- if gt (len .) 5 -}}
+                          {{- $shown = first 5 . -}}
+                          {{- $andMore = printf " and %d more" (sub (len .) 5) -}}
+                        {{- end -}}
+                        {{- partial "agent-readiness/lib/warn.html" (dict
+                            "key" (printf "agent-readiness:warn:skill-outside-refs:%s" $name)
+                            "message" (printf "[agent-readiness] The agent skill %q references %s from outside its own directory. The format specification says to \"use relative paths from the skill root\" and forbids an archive from carrying \"path traversal sequences (..) or absolute paths\", so such a reference cannot be packaged and will not resolve wherever the skill is used." $name (printf "%s%s" (delimit $shown ", " " and ") $andMore))) -}}
+                      {{- end -}}
+
+                      {{- $publish = printf "/.well-known/agent-skills/%s/SKILL.md" $name -}}
+
+                      {{- if eq $siblings.verdict "found" -}}
+                        {{- $consequence := "Publishing it anyway, because this check is best-effort and must not be able to remove a whole index; the republished body will carry a reference that resolves to nothing" -}}
+                        {{- if $strict -}}
+                          {{- $publish = "" -}}
+                          {{- $consequence = "Omitting it, because skills_index.on_supporting_files is set to \"omit\"" -}}
+                        {{- end -}}
+                        {{- if $skillFiles.files -}}
+                          {{- partial "agent-readiness/lib/warn.html" (dict
+                              "key" (printf "agent-readiness:warn:skill-supporting-files:%s" $name)
+                              "message" (printf "[agent-readiness] The agent skill %q declares supporting files, but its SKILL.md also references %q, which really exists at %s and is NOT declared -- the published copy would still promise material this site does not serve. %s. Add it to the entry's files list, or distribute the skill as an archive." $name $siblings.target $siblings.url $consequence)) -}}
+                        {{- else -}}
+                          {{- partial "agent-readiness/lib/warn.html" (dict
+                              "key" (printf "agent-readiness:warn:skill-supporting-files:%s" $name)
+                              "message" (printf "[agent-readiness] The agent skill %q is a MULTI-FILE skill: its SKILL.md references %q, and that file really exists at %s. Republished as a single SKILL.md it would promise material this site never publishes. %s. Declare the file in this entry's files list to republish it beside the SKILL.md, or build a .tar.gz or .zip whose root is the skill directory and point this entry at it with type = 'archive'." $name $siblings.target $siblings.url $consequence)) -}}
+                        {{- end -}}
+                      {{- else if eq $siblings.verdict "indeterminate" -}}
+                        {{- partial "agent-readiness/lib/warn.html" (dict
+                            "key" (printf "agent-readiness:warn:skill-supporting-indeterminate:%s" $name)
+                            "message" (printf "[agent-readiness] Could not determine whether the agent skill %q has supporting files: its source origin answered a check with an error rather than with the file or a 404, so this build cannot tell a single-file skill from a multi-file one. Publishing the entry; re-run when the origin is reachable, or declare its supporting files -- in the entry's files list, or by distributing the skill as an archive." $name)) -}}
+                      {{- else if eq $siblings.verdict "unverifiable" -}}
+                        {{/* No probe was issued at all, so this build knows
+                             NOTHING about this skill's supporting files --
+                             which is the same epistemic state as an origin
+                             that answered with an error, and is reported the
+                             same way. Publishing, for the same reason that
+                             branch publishes: "could not check" is not
+                             evidence against an entry. */}}
+                        {{- partial "agent-readiness/lib/warn.html" (dict
+                            "key" (printf "agent-readiness:warn:skill-supporting-unverifiable:%s" $name)
+                            "message" (printf "[agent-readiness] Could not check whether the agent skill %q has supporting files, because its source URL is not shaped like a file inside a skill directory: %s. A sibling would have to be requested against a directory this URL does not identify, or without a query string it may need, so nothing was requested at all. Publishing the entry; point `source` at a URL of the form <origin>/<path>/<skill>/SKILL.md to have the check run, or declare the skill as type = 'archive' if it does ship supporting files." $name $source)) -}}
+                      {{- else if $siblings.truncated -}}
+                        {{- partial "agent-readiness/lib/warn.html" (dict
+                            "key" (printf "agent-readiness:warn:skill-supporting-truncated:%s" $name)
+                            "message" (printf "[agent-readiness] The agent skill %q names more files than this build checks: %d of %d candidate references were probed and none exists, so the remainder were left unverified rather than spending further requests on someone else's origin. If the skill does ship supporting files, declare them in the entry's files list, or distribute it as an archive." $name $siblings.probes (len $candidates))) -}}
+                      {{- end -}}
                     {{- end -}}
                   {{- end -}}
                 {{- end -}}
@@ -351,13 +447,32 @@
             {{/* Republish same-origin, then hash the published copy. Calling
                  .RelPermalink is also what triggers publication. */}}
             {{- $copied := resources.Copy . $fetched -}}
-            {{- $entries = $entries | append (dict
+            {{- $entry := dict
                 "name" $name
                 "type" $type
                 "description" $description
                 "url" $copied.RelPermalink
-                "digest" (printf "sha256:%s" (crypto.SHA256 $copied.Content))
-            ) -}}
+                "digest" (printf "sha256:%s" (crypto.SHA256 $copied.Content)) -}}
+            {{/* Declared supporting files land beside the SKILL.md at their
+                 own relative paths, each hashed from its published copy under
+                 the same manufactured guarantee the SKILL.md digest carries.
+                 The `files` member itself is this module's EXTENSION of the
+                 discovery convention -- v0.2.0 defines no such field, and
+                 "Clients MUST ignore unrecognized fields" is what makes
+                 adding one safe -- so it is emitted only when a file was
+                 actually declared, never as an empty list. */}}
+            {{- $published := slice -}}
+            {{- range $skillFiles.files -}}
+              {{- $fileCopy := resources.Copy (printf "/.well-known/agent-skills/%s/%s" $name .path) .resource -}}
+              {{- $published = $published | append (dict
+                  "path" .path
+                  "url" $fileCopy.RelPermalink
+                  "digest" (printf "sha256:%s" (crypto.SHA256 $fileCopy.Content))) -}}
+            {{- end -}}
+            {{- with $published -}}
+              {{- $entry = merge $entry (dict "files" .) -}}
+            {{- end -}}
+            {{- $entries = $entries | append $entry -}}
           {{- end -}}
         {{- else -}}
           {{/* An HTTP 404 is not a failure to resources.GetRemote: it

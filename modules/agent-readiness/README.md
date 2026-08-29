@@ -240,7 +240,8 @@ Warnings are emitted for:
 - a fetched `SKILL.md` that is not one: no YAML front matter, TOML front matter, a block that is not valid YAML or not a mapping, or one declaring no `name` or no `description`;
 - a fetched `SKILL.md` whose front-matter `name` differs from the configured one, which the format specification does not allow, since the name it is published under is its directory name;
 - a `description` that differs from the one in the skill's own front matter, which the convention says it SHOULD match -- published, but named;
-- a skill PROVEN to ship supporting files, whose references cannot resolve under a republished single file; a skill referencing files outside its own directory, which no archive may carry; a sibling check the origin answered with an error rather than with the file or a 404; a source URL whose shape makes that check impossible at all; a body naming more candidate files than one build will check; and a zip whose root-level `SKILL.md` cannot be confirmed from its raw bytes;
+- a skill PROVEN to ship supporting files its entry does not declare, whose references cannot resolve under what this site republishes; a skill referencing files outside its own directory, which no archive may carry; a sibling check the origin answered with an error rather than with the file or a 404; a source URL whose shape makes that check impossible at all; a body naming more candidate files than one build will check; and a zip whose root-level `SKILL.md` cannot be confirmed from its raw bytes;
+- a `files` declaration that cannot be honored, each refusing the entry outright: a value that is not an array, a path that is empty, absolute, escaping the skill directory by traversal, naming a directory, carrying a fragment, query, whitespace or percent sign, or naming the `SKILL.md` itself, two declared paths resolving to one file, a declared file the origin answers with a 404 or a fetch error, and a `source` whose shape leaves no directory to resolve a declared file against; plus a `files` list on an `archive` entry, which configures nothing and is named once and ignored;
 - a scalar written where a list belongs (`robots.allow`, `robots.disallow`, `robots.bots`, `robots.bots_allow`, `robots.bots_disallow`, `robots.extra`, `llms.sections`, `llms.optional`, `facts.sections`, `frontmatter.<section>.keys`), which is read as a one-item list; and the two array-of-tables keys `skills` and `facts.identity.rows`, which are ignored;
 - a non-numeric `[[llms.sections]] limit`, which is read as `0` (complete).
 
@@ -682,7 +683,7 @@ The published path collides with a consumer's own content only if that consumer 
 
 ## Agent Skills index
 
-Publishes `/.well-known/agent-skills/index.json` through the `agentskills` output format, plus one republished artifact per indexed skill: `/.well-known/agent-skills/<name>/SKILL.md` for a skill distributed as a single file, `/.well-known/agent-skills/<name>.tar.gz` or `<name>.zip` for one distributed as an archive.
+Publishes `/.well-known/agent-skills/index.json` through the `agentskills` output format, plus one republished artifact per indexed skill: `/.well-known/agent-skills/<name>/SKILL.md` for a skill distributed as a single file, `/.well-known/agent-skills/<name>.tar.gz` or `<name>.zip` for one distributed as an archive -- and, for a `skill-md` entry that [declares supporting files](#a-skill-with-supporting-files-declare-them-or-distribute-an-archive), one republished copy of each declared file at its relative path beside the `SKILL.md`.
 
 > **Draft status.** The Agent Skills **discovery layer** (v0.2.0) is a Cloudflare-authored **draft RFC that may change incompatibly**. The `SKILL.md` format underneath it is the mature layer and is unaffected. This module is released on a `v0.x` line for exactly that reason, and `skills_index.schema` is a config key so a consumer can point at a newer schema without a module change.
 
@@ -700,8 +701,16 @@ on_supporting_files = 'warn'   # or 'omit'; see "Supporting files are detected, 
 name = 'my-skill'
 source = 'https://raw.githubusercontent.com/owner/repo/<commit SHA>/skills/my-skill/SKILL.md'
 
-# A skill that ships scripts, references or assets. `description` is required
-# here, because the module cannot read the SKILL.md inside an archive.
+# A multi-file skill whose developer publishes no archive: declare the
+# supporting files, and each one is fetched from the same directory as the
+# SKILL.md and republished beside it.
+[[params.agent.skills]]
+name = 'my-guide-skill'
+files = ['recovering-a-failed-run.md', 'references/deep-dive.md']
+source = 'https://raw.githubusercontent.com/owner/repo/<commit SHA>/skills/my-guide-skill/SKILL.md'
+
+# A skill that ships scripts, references or assets AS AN ARCHIVE. `description`
+# is required here, because the module cannot read the SKILL.md inside one.
 [[params.agent.skills]]
 name = 'my-big-skill'
 type = 'archive'
@@ -720,6 +729,25 @@ source = 'https://github.com/owner/repo/releases/download/v1.2.0/my-big-skill.ta
       "name": "my-skill",
       "type": "skill-md",
       "url": "/.well-known/agent-skills/my-skill/SKILL.md"
+    },
+    {
+      "description": "...",
+      "digest": "sha256:71c2ea90...",
+      "files": [
+        {
+          "digest": "sha256:0d44fc21...",
+          "path": "recovering-a-failed-run.md",
+          "url": "/.well-known/agent-skills/my-guide-skill/recovering-a-failed-run.md"
+        },
+        {
+          "digest": "sha256:e5b90a37...",
+          "path": "references/deep-dive.md",
+          "url": "/.well-known/agent-skills/my-guide-skill/references/deep-dive.md"
+        }
+      ],
+      "name": "my-guide-skill",
+      "type": "skill-md",
+      "url": "/.well-known/agent-skills/my-guide-skill/SKILL.md"
     },
     {
       "description": "...",
@@ -765,7 +793,7 @@ Each `source` is fetched at build time and **republished same-origin**, and the 
 Three consequences a consumer must understand:
 
 - **Pin `source` to a commit SHA, never a branch ref.** A branch moves, and a moved branch means the digest published last build describes bytes that have since changed.
-- **A build-time remote fetch runs inside the consuming site's render clock** and counts against its build timeout budget. One fetch per entry, plus up to four short-timeout checks for a `skill-md` entry whose body names candidate sibling files -- a skill that names none costs nothing extra, and a skill whose first candidate answers stops there.
+- **A build-time remote fetch runs inside the consuming site's render clock** and counts against its build timeout budget. One fetch per entry, plus one fetch per declared supporting file, plus up to four short-timeout checks for a `skill-md` entry whose body names candidate sibling files beyond the declared ones -- a skill that names none costs nothing extra, and a skill whose first candidate answers stops there.
 - **An entry whose digest does not match the served bytes fails closed** for any agent that verifies it, which is strictly worse than publishing nothing. Every failure path therefore omits the entry: a fetch error, an HTTP 404 (which `resources.GetRemote` reports as a nil resource rather than an error), or a field-validation failure each emit one deduplicated warning and drop that skill.
 
 **With zero valid skills, no file is emitted at all.** An empty JSON shell at a `.well-known` path is a claim of a capability that does not exist.
@@ -778,16 +806,23 @@ Field rules, validated before the fetch wherever they can be, so a malformed ent
 - **`type`** -- `'skill-md'` (the default, omit it) or `'archive'`. These are the convention's own two values; anything else is skipped.
 - **`description`** -- 1-1024 characters. Optional for a `skill-md` entry, where omitting it publishes the skill's own front-matter description verbatim; required for an `archive`, which the module cannot read inside. Supplying one that differs from the front matter publishes yours and warns.
 - **`source`** -- an absolute `http(s)` URL, and for a `skill-md` entry one ending in `.md`. Nothing validates the extension; two things depend on it. Hugo must be able to resolve SOME media type for the response, from a URL extension it knows or from a `Content-Type` it knows, and on v0.164.0 a `text/markdown` header alone does not resolve while a `.md` suffix always does -- so an extensionless source fails the fetch on many hosts. And the supporting-file check declines to run on a source that is not shaped like a file inside a directory, so an extensionless URL silently disables it.
+- **`files`** -- optional, `skill-md` only: an array of relative paths naming the skill's supporting files, each fetched from the `source` URL's own directory and [republished beside the `SKILL.md`](#a-skill-with-supporting-files-declare-them-or-distribute-an-archive). Every path must stay inside the skill directory -- no absolute path, no `..` escape, no directory reference, no fragment, query, whitespace or percent sign, and not `SKILL.md` itself -- and two spellings of one file are refused. A declaration that cannot be honored, a declared file the origin does not serve included, refuses the WHOLE entry: it fails closed, because an entry published without a file it declares carries exactly the dangling reference the declaration exists to prevent. On an `archive` entry the key configures nothing and is named once and ignored. One media-type boundary, measured at v0.164.0: a declared name carrying an extension fetched successfully even where the extension is one Hugo does not know and the response's `Content-Type` is unrecognized, while an extensionless name resolves through the response's `Content-Type` alone and fails when Hugo cannot use it -- most origins serve documentary files as `text/plain`, which resolves.
 
 Uniqueness is enforced for the same reason the digest is. The name is the sole path segment a skill is republished under, so two entries sharing one resolve to a single published artifact, and the first copy to reach that path keeps it. Measured on Hugo v0.164.0, `resources.Copy` called on a target another call already took returns that first call's resource entirely -- its name and its bytes, not the ones handed in -- and the digest is computed from the copy, so the second entry would advertise the FIRST entry's bytes and digest under its own description. Both entries then verify, and one of them describes a skill this site never published. The name is also the index key a client caches by and the URL your readers bookmark, so the duplicate is skipped with a warning rather than published.
 
 The name rule is not pedantry either: the format specification requires a skill's declared `name` to "match the parent directory name", and the parent directory here IS the configured name, so a mismatch would publish an artifact that is invalid the moment a client validates it. That entry is refused, deterministically and with no network involved, naming both values.
 
-### A skill with supporting files is an archive, and the module republishes rather than builds one
+### A skill with supporting files: declare them, or distribute an archive
 
-The convention defines two distribution types and the module implements both. A skill that is one file is `skill-md`. A skill that ships anything beside its `SKILL.md` -- `scripts/`, `references/`, `assets/`, a bundled `LICENSE.txt` -- is an `archive`: its body addresses those files by relative path, and those paths resolve to nothing at all under a republished single file.
+The convention defines two distribution types and the module implements both. A skill that is one file is `skill-md`. A skill that ships anything beside its `SKILL.md` -- `scripts/`, `references/`, `assets/`, a bundled `LICENSE.txt` -- has two routes into the index, because its body addresses those files by relative path and those paths resolve to nothing at all under a republished single file.
 
-**The module fetches an archive already built; it cannot build one.** Hugo has no build-time archive writer, and no bitwise primitives with which to hand-assemble even an uncompressed zip, so the only shape it can support is the one it already uses for a `SKILL.md`: one URL in, one artifact republished same-origin, one digest computed from the bytes served. Point `source` at an archive your own release pipeline produced -- a release asset, or a file committed beside the skill -- and the module treats it exactly as it treats a `SKILL.md`.
+**Route one: keep the entry `skill-md` and declare the files.** List the supporting files in the entry's `files` key, and the module fetches each one from the `source` URL's own directory and republishes it at its relative path beside the republished `SKILL.md` -- `/.well-known/agent-skills/<name>/recovering-a-failed-run.md`, `/.well-known/agent-skills/<name>/references/deep-dive.md`. The published directory then IS the skill, laid out the way an unpacked archive would deliver it, and every relative reference inside the published body resolves over HTTP with no archive anywhere in the chain. This is the route for the common case the archive route cannot serve: skill developers publish their skills as files in a repository, not as archives, and a consuming site cannot package what its own build has no archive writer to package. The entry's index record then carries a `files` member -- each declared file's `path`, `url` and `digest`, hashed from the published copy exactly as the `SKILL.md` digest is.
+
+**The `files` member is this module's extension of the convention, and it is safe to carry.** Discovery v0.2.0 defines five entry members and no file list; its own history is instructive -- v0.1.0 HAD a `files` array, and v0.2.0 replaced it and the `package` object with "a flat single-artifact model" -- and an open RFC issue asks for per-file integrity metadata again. The RFC requires that "Clients MUST ignore unrecognized fields", so a conforming client tolerates the member; it is also entitled to never read it, which costs nothing here, because the relative references inside the republished body resolve against its URL whether or not the reader ever saw the index. The member is emitted only when the entry declares files -- never as an empty list.
+
+**A declaration that cannot be honored refuses the whole entry.** The `files` list is your claim, not a heuristic's guess, so it fails closed the way every other configuration failure here does: a path that escapes the skill directory, names a directory, duplicates another spelling of the same file, or names the `SKILL.md` itself, and a declared file the origin answers with a 404 or a fetch error, each omit the entry with one warning naming the file -- because an entry published without a file it declares carries exactly the dangling reference the declaration exists to prevent. The [field rules](#agent-skills-index) above enumerate the shapes.
+
+**Route two: distribute an archive, which the module republishes rather than builds.** Hugo has no build-time archive writer, and no bitwise primitives with which to hand-assemble even an uncompressed zip, so the only archive shape it can support is the one it already uses for a `SKILL.md`: one URL in, one artifact republished same-origin, one digest computed from the bytes served. Point `source` at an archive your own release pipeline produced -- a release asset, or a file committed beside the skill -- and the module treats it exactly as it treats a `SKILL.md`. An archive stays the right shape where one already exists, and it is the only shape whose file set travels as a single verified unit.
 
 **Do not point `source` at a code forge's source-archive endpoint.** `codeload.github.com/<owner>/<repo>/tar.gz/<sha>`, `github.com/<owner>/<repo>/archive/...`, GitLab's `/-/archive/`, Gitea and Forgejo's `/archive/`, Bitbucket's `/get/` and `api.github.com/repos/<owner>/<repo>/tarball` all wrap their contents in one directory named for the repository and the ref, so `SKILL.md` is not at the archive root and the convention requires a client to reject it. Those URL shapes are refused before the fetch with a warning naming the remedy. The check is a heuristic over URL shape: it cannot recognize a forge it has not been told about, and it deliberately does not fire on `releases/download/`, which is the supported way to publish a purpose-built archive.
 
@@ -817,7 +852,7 @@ The convention places requirements on the SERVER, and a static site's server is 
 | a republished `.tar.gz`                | `application/gzip`              |
 | a republished `.zip`                   | `application/zip`               |
 
-Most hosts derive these from the file extension and need no help; where yours does not, the fix is a `_headers` file on Cloudflare Pages or Netlify, object metadata on S3 or R2, or a `types { }` block on nginx. `GET` and `HEAD` must both work, a missing skill must answer `404`, and CORS headers are worth setting if browser-based clients are meant to read the index.
+Most hosts derive these from the file extension and need no help; where yours does not, the fix is a `_headers` file on Cloudflare Pages or Netlify, object metadata on S3 or R2, or a `types { }` block on nginx. A republished declared supporting file is served with whatever type your host derives from its own extension; the convention constrains only the artifacts above. `GET` and `HEAD` must both work, a missing skill must answer `404`, and CORS headers are worth setting if browser-based clients are meant to read the index.
 
 **A `.tar.gz` must NOT be served with `Content-Encoding: gzip`.** That header tells every client to decompress the body in transit, so what the client hashes is not what you published and the digest can never match -- the feature fails closed at precisely the guarantee it exists to provide. The same trap catches the module on the way in, and it refuses such an entry rather than republishing a bare tar under a `.tar.gz` name.
 
@@ -827,11 +862,11 @@ One local check is worth distrusting: `hugo server` reports a republished archiv
 
 Pointing `source` at the `SKILL.md` of a multi-file skill used to publish a body whose every relative link 404s, silently, with every gate green: the fetch succeeded, the digest matched the bytes served, and a verifying agent got an intact, correctly-hashed document promising material this site never published. The module now looks for that case, and what it does about it is a decision you own.
 
-It works by nominating file names out of the fetched body -- relative Markdown links, slash-bearing paths, capitalized file names -- and then RESOLVING each one against the skill's own `source` URL and asking the origin whether that file is really there. Nothing is concluded from the body alone, so a paragraph that merely mentions a file name proves nothing and says nothing.
+It works by nominating file names out of the fetched body -- relative Markdown link destinations, slash-bearing paths, and bare file names with documentary extensions, whatever their case and in code spans included -- and then RESOLVING each one against the skill's own `source` URL and asking the origin whether that file is really there. Nothing is concluded from the body alone, so a paragraph that merely mentions a file name proves nothing and says nothing. Files the entry [declares](#a-skill-with-supporting-files-declare-them-or-distribute-an-archive) are excluded before any probe runs: a declared file is served beside the `SKILL.md`, so its reference resolves and there is nothing left to warn about. The probe guards exactly the UNDECLARED remainder -- which is also what it reports when it finds one on an entry that declares files: the declaration is incomplete, and the warning names the file it misses.
 
-**This is best-effort by construction, and you should not read it as a guarantee.** The module cannot enumerate a remote directory; no forge-independent way to do so exists. It can only check names the body itself supplies, so a skill whose supporting files are never named in its own text passes undetected.
+**This is best-effort by construction, and you should not read it as a guarantee.** The module cannot enumerate a remote directory; no forge-independent way to do so exists. It can only check names the body itself supplies, so a skill whose supporting files are never named in its own text passes undetected -- and passes SILENTLY, because a body nominating nothing is also what every genuinely single-file skill looks like, and warning on that state would warn on the common case. The `files` declaration is the remedy for material the body never names.
 
-Three further limits, each reported rather than hidden. A `source` carrying a query string, or one not shaped like a file inside a directory, makes a sibling request impossible -- the module says so and publishes, rather than pretending it checked. A `source` that REDIRECTS is checked against the URL you configured rather than the one that answered, because Hugo exposes no final URL; siblings then look absent when they exist, which is one more reason to configure the URL that actually serves the file. And a probe answered with an error rather than with the file or a `404` reads as "cannot tell" and is reported as such -- never as "absent", which would let a rate-limited origin quietly clear every multi-file skill. Nominating is deliberately generous and the probe supplies the precision, which is why the budget is capped at four requests per skill and a body naming more than that says so rather than reporting a clean bill of health it did not earn.
+Three further limits, each reported rather than hidden. A `source` carrying a query string, or one not shaped like a file inside a directory, makes a sibling request impossible -- the module says so and publishes, rather than pretending it checked. A `source` that REDIRECTS is checked against the URL you configured rather than the one that answered, because Hugo exposes no final URL; siblings then look absent when they exist, which is one more reason to configure the URL that actually serves the file. And a probe answered with an error rather than with the file or a `404` reads as "cannot tell" and is reported as such -- never as "absent", which would let a rate-limited origin quietly clear every multi-file skill. Nominating is deliberately generous and the probe supplies the precision, which is why the budget is capped at four requests per skill and a body naming more than that says so rather than reporting a clean bill of health it did not earn. The cap's flip side is worth knowing: a genuinely single-file skill whose body names five or more plausible file names that exist nowhere -- example names it tells the READER to create, say -- exhausts the budget on `404`s and draws that truncation warning on every build, with no per-entry way to silence it, because a cap that truncates in silence reads exactly like a clean result. Measured against the corpus above, no real skill body reaches that shape; the closest names two.
 
 When a supporting file IS proven to exist, the default is to publish the skill and warn, naming the file and the remedy:
 
@@ -840,9 +875,9 @@ When a supporting file IS proven to exist, the default is to publish the skill a
 on_supporting_files = 'omit'    # default: 'warn'
 ```
 
-`'omit'` refuses the entry instead, which is the stricter and arguably more honest reading -- an incomplete skill is worse than an absent one. It is not the default for one reason: **this index publishes no file at all when no entry survives**, so on a site with a single skill a detector that can only see what a body mentions would be able to delete the whole `/.well-known/agent-skills/` surface, and Hugo's remote-fetch cache never expires, so the same commit can reach a different verdict on a warm developer machine than on cold CI. A warning cannot do either of those things. Set `'omit'` when you would rather publish nothing than publish a skill whose supporting files your site does not serve.
+`'omit'` refuses the entry instead, which is the stricter and arguably more honest reading -- an incomplete skill is worse than an absent one. It is not the default for one reason: **this index publishes no file at all when no entry survives**, so on a site with a single skill a detector that can only see what a body mentions would be able to delete the whole `/.well-known/agent-skills/` surface, and Hugo's remote-fetch cache never expires, so the same commit can reach a different verdict on a warm developer machine than on cold CI. A warning cannot do either of those things. Set `'omit'` when you would rather publish nothing than publish a skill whose supporting files your site does not serve. Under either setting, a complete `files` declaration is what retires the warning: every file the body names is then declared and served, and the probe has nothing left to find.
 
-**Publishing the supporting files loose, beside the `SKILL.md`, is deliberately not offered.** It would keep relative links working over HTTP, but the convention specifies sibling loading only for archives -- "For archive-based skills, the `SKILL.md` body references additional files via relative links. Agents load these from the unpacked archive on demand" -- so no conforming client is specified to look for them, and none could learn what the file set even is. It would mean publishing an unbounded, unknowable, undigested file tree that nothing is required to read.
+**A proven file is reported, never adopted.** The probe stops at its first hit inside a four-request budget over names the body happens to mention, so what it sees is a partial view that can vary with cache state -- republishing it would advertise a file set that changes between builds without a configuration change. Publication is by explicit declaration only; the warning tells you which file to declare.
 
 ### Index length is a curation decision, not a completeness metric
 
@@ -908,7 +943,7 @@ Every surface this module ships is deliberately allowed to publish NOTHING: a tw
 
 So a site that also imports [`url-retirement`](../url-retirement/README.md) gets an answer rather than a guess. This module ships one small partial per format it owns, under `layouts/_partials/url-retirement/publishes/`, and that module's `/url-manifest.txt` asks them instead of trusting `.OutputFormats`: `markdown`, `llmstxt`, `llmsindex`, `agentfacts` and `agentskills`. Each answer delegates to `agent-readiness/surfaces.html` or `agent-readiness/twin-url.html` -- the same public resolvers a consumer would call -- so it can never drift from what the renderers actually do.
 
-The Agent Skills artifacts need a SECOND answer, and it is the only case in this repository that does. Each configured skill is republished as an artifact of its own -- `/.well-known/agent-skills/<name>/SKILL.md`, or `<name>.tar.gz` or `<name>.zip` for an archive -- keyed by the skill NAME, so those URLs are stable and a host really serves them, and none of them is a Page. The obvious mechanism, registering each one where it is published, cannot be placed reliably here: the artifacts are copied by whichever caller first reaches the shared skills resolution, and those callers sit in different render passes, so which one wins is decided by the CONSUMING SITE's configuration rather than by this module. Measured at Hugo v0.164.0, a registration placed at the copy was in time on every build at default settings and refused on every build under `url_retirement.manifest.output_formats = false`.
+The Agent Skills artifacts need a SECOND answer, and it is the only case in this repository that does. Each configured skill is republished as an artifact of its own -- `/.well-known/agent-skills/<name>/SKILL.md`, or `<name>.tar.gz` or `<name>.zip` for an archive, plus one copy of each declared supporting file beside a `skill-md` entry's `SKILL.md` -- keyed by the skill NAME and the declared relative path, so those URLs are stable and a host really serves them, and none of them is a Page. The obvious mechanism, registering each one where it is published, cannot be placed reliably here: the artifacts are copied by whichever caller first reaches the shared skills resolution, and those callers sit in different render passes, so which one wins is decided by the CONSUMING SITE's configuration rather than by this module. Measured at Hugo v0.164.0, a registration placed at the copy was in time on every build at default settings and refused on every build under `url_retirement.manifest.output_formats = false`.
 
 So this module answers instead of registering: `layouts/_partials/url-retirement/writes/agentskills.html` returns the artifact URLs, and `/url-manifest.txt` asks it during its own render pass, where an answer cannot be late. The answer comes from the same resolution the index itself is built from, so it names exactly the artifacts this build wrote and cannot drift from them. That matters more than tidiness here: `/.well-known/agent-skills/index.json` IS reachable by the page walk and advertises each artifact with a SHA-256 digest, so an artifact that vanished from production without the registry noticing would leave a published, verifiable-looking pointer at a 404.
 
@@ -977,6 +1012,7 @@ modules/agent-readiness/
 │               ├── section-pages.html
 │               ├── section.html
 │               ├── skill-archive.html
+│               ├── skill-files.html
 │               ├── skill-frontmatter.html
 │               ├── skill-references.html
 │               ├── skill-siblings.html

@@ -5,13 +5,15 @@
   `agentskills` output format this module owns -- besides
   /.well-known/agent-skills/index.json, what else did this format write?
 
-  It wrote one republished artifact per indexed skill:
+  It wrote one republished artifact per indexed skill --
   /.well-known/agent-skills/<name>/SKILL.md for a skill distributed as a single
   file, /.well-known/agent-skills/<name>.tar.gz or <name>.zip for one
-  distributed as an archive. Those are keyed by the skill NAME rather than by a
-  hash of their contents, so they are stable URLs a host really serves, and no
-  walk of .Site.Pages can see one: they are Resources, published because a
-  template read their URL.
+  distributed as an archive -- plus, for a skill-md entry declaring supporting
+  files, one republished copy of each declared file at its relative path
+  beside the SKILL.md. All of those are keyed by the skill NAME (and the
+  declared relative path) rather than by a hash of their contents, so they are
+  stable URLs a host really serves, and no walk of .Site.Pages can see one:
+  they are Resources, published because a template read their URL.
 
   WHY THIS MODULE ANSWERS RATHER THAN REGISTERS. The artifacts are copied by
   whichever caller first populates the shared skills resolution, and those
@@ -42,6 +44,11 @@
 {{- range partial "agent-readiness/lib/skills-entries.html" dict -}}
   {{- with .url -}}
     {{- $urls = $urls | append . -}}
+  {{- end -}}
+  {{- range .files -}}
+    {{- with .url -}}
+      {{- $urls = $urls | append . -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 {{- return $urls -}}

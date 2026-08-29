@@ -53,6 +53,11 @@ const PUBLISHED = [
   ['fixture-cdn-archive', 'archive'],
   ['fixture-archive-dot', 'archive'],
   ['fixture-archive-unclear', 'archive'],
+  ['fixture-prose', 'skill-md'],
+  ['fixture-prose-absent', 'skill-md'],
+  ['fixture-declared', 'skill-md'],
+  ['fixture-declared-incomplete', 'skill-md'],
+  ['fixture-archive-files', 'archive'],
 ];
 
 // Every configured entry that must be refused, with the warning that must name
@@ -101,6 +106,61 @@ const REFUSED = [
     'fixture-weird-skill',
     /Omitting the agent skill "fixture-weird-skill" from the index: fetching/,
   ],
+  // The files-declaration refusals, one per branch. A declaration is the
+  // consumer's own claim, so every one of these fails CLOSED: an entry
+  // published without a file it declares would carry exactly the dangling
+  // reference the declaration exists to prevent.
+  [
+    'fixture-declared-missing',
+    /Omitting the agent skill "fixture-declared-missing".*declared supporting file "gone\.md" is not beside the SKILL\.md/,
+  ],
+  [
+    'fixture-declared-outside',
+    /Omitting the agent skill "fixture-declared-outside".*"\.\.\/escape\.md".*resolves outside the skill's own directory/,
+  ],
+  [
+    'fixture-declared-scalar',
+    /Omitting the agent skill "fixture-declared-scalar".*files key must be an array of relative paths/,
+  ],
+  [
+    'fixture-declared-query',
+    /Omitting the agent skill "fixture-declared-query".*declares supporting files, but its source URL is not shaped like a file inside a skill directory/,
+  ],
+  [
+    'fixture-declared-dup',
+    /Omitting the agent skill "fixture-declared-dup".*names "\.\/guide\.md" twice once the paths are cleaned/,
+  ],
+  [
+    'fixture-declared-weird',
+    /Omitting the agent skill "fixture-declared-weird": fetching its declared supporting file "WEIRDFILE" failed/,
+  ],
+  // The six path-validation refusals, matched through their DISTINCT reason
+  // clauses, so a branch collapsing into another one is a red suite even
+  // though all six share the surrounding sentence.
+  [
+    'fixture-declared-empty',
+    /Omitting the agent skill "fixture-declared-empty".*because it is empty/,
+  ],
+  [
+    'fixture-declared-space',
+    /Omitting the agent skill "fixture-declared-space".*"my notes\.md".*carries whitespace or a percent sign/,
+  ],
+  [
+    'fixture-declared-fragment',
+    /Omitting the agent skill "fixture-declared-fragment".*"guide\.md#top".*carries a fragment or query/,
+  ],
+  [
+    'fixture-declared-abs',
+    /Omitting the agent skill "fixture-declared-abs".*"\/abs\/root\.md".*is absolute/,
+  ],
+  [
+    'fixture-declared-dir',
+    /Omitting the agent skill "fixture-declared-dir".*"references\/".*names a directory rather than a file/,
+  ],
+  [
+    'fixture-declared-self',
+    /Omitting the agent skill "fixture-declared-self".*"\.\/Skill\.md".*names the SKILL\.md itself/,
+  ],
 ];
 
 test('with no skills declared, NO file is emitted at all', () => {
@@ -139,7 +199,7 @@ test('the index parses and declares its schema', () => {
 
 // The metadata block is a fixed size no matter how many skills the index
 // carries, so this budget holds for a site publishing fifty of them exactly
-// as it does for the fixture's seventeen. It is generous enough for a longer
+// as it does for the fixture's twenty-two. It is generous enough for a longer
 // configured `$schema` URI, which is the only member here that can grow.
 const HEAD_BUDGET = 300;
 
@@ -221,6 +281,12 @@ test('every entry url resolves to a published file', () => {
       exists(entry.url.replace(/^\//, '')),
       `${entry.name}: ${entry.url} is advertised but not published`,
     );
+    for (const file of entry.files ?? []) {
+      assert.ok(
+        exists(file.url.replace(/^\//, '')),
+        `${entry.name}: the declared file ${file.url} is advertised but not published`,
+      );
+    }
   }
 });
 
@@ -241,6 +307,17 @@ test('every digest equals the SHA-256 of the bytes actually published', () => {
       entry.digest.slice('sha256:'.length),
       `${entry.name}: the published bytes do not match the advertised digest`,
     );
+    // The files member extends the same manufactured guarantee to every
+    // declared supporting file: each digest is computed from the republished
+    // copy, so the advertised hash and the served bytes cannot disagree.
+    for (const file of entry.files ?? []) {
+      assert.match(file.digest, /^sha256:[0-9a-f]{64}$/);
+      assert.equal(
+        sha256File(publishedPath(file.url, publicDir)),
+        file.digest.slice('sha256:'.length),
+        `${entry.name}/${file.path}: the published bytes do not match the advertised digest`,
+      );
+    }
   }
 });
 
@@ -418,34 +495,277 @@ test('a PROVEN multi-file skill is warned about and still published', () => {
   assert.ok(exists('.well-known/agent-skills/fixture-multi/SKILL.md'));
 });
 
-test("on_supporting_files = 'omit' refuses that skill, and only that skill", () => {
-  // The opt-in strictness, and the guard that it stays scoped: every other
-  // published entry must be identical to the default build, because the key
-  // governs proven supporting files and nothing else.
+test("on_supporting_files = 'omit' refuses every skill with a PROVEN undeclared file, and nothing else", () => {
+  // The opt-in strictness, and the guard that it stays scoped: the key
+  // governs proven UNDECLARED supporting files and nothing else, so exactly
+  // the three entries whose probe reaches a hit disappear -- the linked one,
+  // the prose-named one, and the one whose declaration the body outgrew --
+  // while every other published entry is identical to the default build.
   const strict = index(strictskillsDir).skills.map((s) => s.name);
-  assert.ok(!strict.includes('fixture-multi'), 'the proven multi-file skill is refused');
+  const OMITTED = ['fixture-multi', 'fixture-prose', 'fixture-declared-incomplete'];
+  for (const name of OMITTED) {
+    assert.ok(!strict.includes(name), `${name}: the proven multi-file skill is refused`);
+  }
   assert.ok(
     !exists('.well-known/agent-skills/fixture-multi/SKILL.md', strictskillsDir),
     'and its body is not republished either',
   );
+  assert.ok(
+    !exists('.well-known/agent-skills/fixture-declared-incomplete/guide.md', strictskillsDir),
+    'a refused entry republishes none of its declared files either',
+  );
   assert.deepEqual(
     strict,
-    PUBLISHED.map(([name]) => name).filter((name) => name !== 'fixture-multi'),
+    PUBLISHED.map(([name]) => name).filter((name) => !OMITTED.includes(name)),
     'nothing else moves',
   );
   assert.equal(
     warnCount(/agent skill "fixture-multi" is a MULTI-FILE skill.*Omitting it/s, 'strictskills'),
     1,
   );
+
+  // A COMPLETE declaration survives the strict disposition: every file the
+  // body names is declared and served, so there is nothing proven undeclared
+  // for 'omit' to act on.
+  assert.ok(strict.includes('fixture-declared'), 'a complete declaration is not refused');
+  assert.ok(
+    exists('.well-known/agent-skills/fixture-declared/references/deep-dive.md', strictskillsDir),
+    'and its declared files are republished there too',
+  );
 });
 
 test('a body naming a file that does not exist beside it says NOTHING', () => {
   // The other half of the detector's contract. `fixture-lonely` mentions a
-  // capitalised file name in prose, the probe gets a 404, and the entry
+  // capitalized file name in prose, the probe gets a 404, and the entry
   // publishes silently. Warning here would be the cheapest way to make every
   // supporting-file warning worth ignoring.
   assert.equal(warnCount(/fixture-lonely/), 0);
   assert.ok(index().skills.some((s) => s.name === 'fixture-lonely'));
+});
+
+test('a lowercase bare file name in plain prose is nominated, probed and proven', () => {
+  // The measured miss that motivated the bare-name nomination class: a real
+  // skill in the wild wrote "read recovering-a-failed-run.md in full" --
+  // lowercase, bare, no link syntax -- and the first three classes all walked
+  // past it, so a consumer republished a body whose one instruction resolved
+  // to nothing, with no warning anywhere. This fixture is that shape, with
+  // the file really present at the origin, and the request log is what
+  // proves the nomination reached the probe rather than the warning arriving
+  // some other way.
+  assert.ok(
+    originRequestedPaths().has('/fixture-prose/recovering-notes.md'),
+    'the prose-named sibling must have been probed',
+  );
+  assert.equal(
+    warnCount(
+      /agent skill "fixture-prose" is a MULTI-FILE skill: its SKILL\.md references "recovering-notes\.md", and that file really exists/,
+    ),
+    1,
+  );
+  assert.equal(warnCount(/"fixture-prose"/), 1, 'and nothing else is said about it');
+  assert.ok(index().skills.some((s) => s.name === 'fixture-prose'));
+
+  // The remedy now leads with the declaration, because that is the fix that
+  // keeps the entry AND heals the reference.
+  assert.equal(warnCount(/"fixture-prose".*Declare the file in this entry's files list/), 1);
+
+  // And the proven sibling is NOT republished on its own: publication is by
+  // explicit declaration only, never adopted from a probe hit, because the
+  // probe stops at its first hit and republishing its partial view would
+  // advertise a file set that varies with cache state.
+  assert.ok(!exists('.well-known/agent-skills/fixture-prose/recovering-notes.md'));
+  const entry = index().skills.find((s) => s.name === 'fixture-prose');
+  assert.ok(
+    !Object.prototype.hasOwnProperty.call(entry, 'files'),
+    'a probe hit must not manufacture a files member',
+  );
+});
+
+test('a lowercase name inside a code span is nominated too, and a 404 keeps it silent', () => {
+  // The other habitat and the other verdict: spans are where skills tell
+  // their reader to open a file, so the bare-name class scans them -- and a
+  // nomination the origin answers with a 404 stays silent, exactly as the
+  // capitalized twin fixture-lonely does.
+  assert.ok(
+    originRequestedPaths().has('/fixture-prose-absent/missing-notes.md'),
+    'the span-named candidate must have been probed',
+  );
+  assert.equal(warnCount(/fixture-prose-absent/), 0);
+  assert.ok(index().skills.some((s) => s.name === 'fixture-prose-absent'));
+
+  // This body is also the detector's negative subject, and the assertion is
+  // set equality so every fabrication is caught at once: it writes sketch.mdx
+  // and DRAFT.mdx, whose extensions only BEGIN with a documentary one, so an
+  // unanchored alternation in either casing class nominates a truncated name
+  // the body never wrote and spends a probe on it; and it writes Skill.md,
+  // which a case-sensitive self-exclusion would let through to a probe that a
+  // case-insensitive origin answers with the entry's own body. The positive
+  // control above is what makes the equality falsifiable.
+  assert.deepEqual(
+    [...originRequestedPaths()].filter((p) => p.startsWith('/fixture-prose-absent/')).sort(),
+    ['/fixture-prose-absent/SKILL.md', '/fixture-prose-absent/missing-notes.md'],
+    'a name the body never referenced was nominated and probed',
+  );
+});
+
+test('a body linking a case variant of its own SKILL.md is not a multi-file skill', () => {
+  // fixture-selfref also links ./Skill.md. On an origin that resolves paths
+  // case-insensitively that probe answers with the artifact just fetched, so
+  // an exact self-comparison would declare the skill multi-file on evidence
+  // about nothing; the lowered comparison skips it before any request, which
+  // the request log shows on every platform.
+  assert.deepEqual(
+    [...originRequestedPaths()].filter((p) => p.startsWith('/fixture-selfref/')).sort(),
+    ['/fixture-selfref/SKILL.md'],
+    'a case variant of the SKILL.md itself was probed',
+  );
+});
+
+test('a declared multi-file skill republishes every declared file, silently', () => {
+  // The declaration path end to end. Both declared files are fetched from the
+  // origin and republished at their relative paths beside the SKILL.md, so
+  // the relative references inside the published body resolve over HTTP --
+  // the dangling-instruction state is not producible for a correctly declared
+  // entry.
+  const entry = index().skills.find((s) => s.name === 'fixture-declared');
+  assert.ok(entry, 'the entry must publish');
+  assert.deepEqual(
+    entry.files.map((f) => f.path),
+    ['guide.md', 'references/deep-dive.md'],
+    'the files member lists the declared files in declaration order',
+  );
+  for (const file of entry.files) {
+    assert.equal(file.url, `/.well-known/agent-skills/fixture-declared/${file.path}`);
+    // Byte for byte the origin's file, which is what makes the per-file
+    // digest meaningful.
+    assert.deepEqual(
+      readFileSync(publishedPath(file.url, publicDir)),
+      readFileSync(resolve(moduleRoot, `test/fixture-origin/fixture-declared/${file.path}`)),
+      `${file.path}: the republished file must be the fetched file, unchanged`,
+    );
+  }
+
+  // SILENCE is the load-bearing half: the body names BOTH declared files, so
+  // no warning here is what proves declared candidates are excluded from the
+  // probe -- without the exclusion, the probe finds guide.md and this entry
+  // draws the multi-file warning.
+  assert.equal(warnCount(/"fixture-declared"/), 0);
+});
+
+test('an entry that declares nothing carries no files member', () => {
+  // The member is this module's extension of the discovery convention, so it
+  // appears only where a file was actually declared -- never as an empty
+  // list, which would put an unrecognized field on every entry for nothing.
+  for (const name of ['fixture-single', 'fixture-multi', 'fixture-archive']) {
+    const entry = index().skills.find((s) => s.name === name);
+    assert.ok(
+      !Object.prototype.hasOwnProperty.call(entry, 'files'),
+      `${name}: no files member without a declaration`,
+    );
+  }
+});
+
+test('an incomplete declaration is reported, and the declared part still publishes', () => {
+  // guide.md is declared and served; extra.md is named by the body, really
+  // exists, and is not declared. The probe checks exactly the undeclared
+  // remainder, so the entry publishes with its declared file and one warning
+  // naming the file the declaration misses.
+  const entry = index().skills.find((s) => s.name === 'fixture-declared-incomplete');
+  assert.ok(entry, 'the entry must publish');
+  assert.deepEqual(
+    entry.files.map((f) => f.path),
+    ['guide.md'],
+    'the declared file publishes',
+  );
+  assert.ok(exists('.well-known/agent-skills/fixture-declared-incomplete/guide.md'));
+  assert.ok(
+    !exists('.well-known/agent-skills/fixture-declared-incomplete/extra.md'),
+    'the undeclared file is not adopted',
+  );
+  assert.equal(
+    warnCount(
+      /agent skill "fixture-declared-incomplete" declares supporting files, but its SKILL\.md also references "extra\.md", which really exists at .* and is NOT declared/,
+    ),
+    1,
+  );
+  assert.equal(
+    warnCount(/"fixture-declared-incomplete"/),
+    1,
+    'and it is the only thing said about the entry',
+  );
+});
+
+test('a files list on an archive entry is named once, ignored, and the archive publishes', () => {
+  const entry = index().skills.find((s) => s.name === 'fixture-archive-files');
+  assert.ok(entry, 'the entry must publish');
+  assert.equal(entry.url, '/.well-known/agent-skills/fixture-archive-files.tar.gz');
+  assert.ok(
+    !Object.prototype.hasOwnProperty.call(entry, 'files'),
+    'the list configures nothing on an archive',
+  );
+  assert.equal(warnCount(/agent skill "fixture-archive-files" declares a files list/), 1);
+  assert.equal(warnCount(/"fixture-archive-files"/), 1, 'and nothing else is said about it');
+});
+
+test('a refused declaration leaves no artifact and no out-of-directory request', () => {
+  // The fail-closed half of the declaration contract, read from both records
+  // a build leaves: the published tree and the origin's request log.
+  const requested = originRequestedPaths();
+
+  // The missing file WAS really asked for -- the refusal is the origin's
+  // answer, not a guess -- and nothing of the entry published.
+  assert.ok(requested.has('/fixture-declared-missing/gone.md'));
+  assert.ok(!exists('.well-known/agent-skills/fixture-declared-missing/gone.md'));
+
+  // The escaping path was refused BEFORE any fetch. Asserting the absence of
+  // '/escape.md' alone would assert nothing -- the declared-file URL is built
+  // dir-prefixed, so even a deleted traversal guard requests
+  // '/fixture-declared-outside//escape.md', never '/escape.md' -- so the
+  // assertion is set equality over everything the entry's directory was ever
+  // asked for, which that mutant does change.
+  assert.deepEqual(
+    [...requested].filter((p) => p.startsWith('/fixture-declared-outside/')).sort(),
+    ['/fixture-declared-outside/SKILL.md'],
+    'a declared path outside the skill directory must never be requested',
+  );
+
+  // The six path-validation refusals likewise issue no request beyond the
+  // SKILL.md fetch: validation runs before any file fetch.
+  for (const name of [
+    'fixture-declared-empty',
+    'fixture-declared-space',
+    'fixture-declared-fragment',
+    'fixture-declared-abs',
+    'fixture-declared-dir',
+    'fixture-declared-self',
+  ]) {
+    assert.deepEqual(
+      [...requested].filter((p) => p.startsWith(`/${name}/`)).sort(),
+      [`/${name}/SKILL.md`],
+      `${name}: the entry's own SKILL.md is the only thing its directory was asked for`,
+    );
+  }
+
+  // The duplicate list fetched its one real file exactly as declared -- the
+  // refusal is about the second spelling, not the first fetch -- and still
+  // published nothing.
+  assert.ok(requested.has('/fixture-declared-dup/guide.md'));
+  assert.ok(!exists('.well-known/agent-skills/fixture-declared-dup/guide.md'));
+
+  // The unresolvable-source refusal never requests a sibling at all: no path
+  // under the skill's directory beyond the SKILL.md the entry fetches by
+  // configuration.
+  assert.deepEqual([...requested].filter((p) => p.startsWith('/fixture-declared-query/')).sort(), [
+    '/fixture-declared-query/SKILL.md',
+  ]);
+
+  // And the media-type failure carries its hint, because the remedy is not
+  // the same one a 404 needs.
+  const weird = buildLog()
+    .split(/^WARN\s+/m)
+    .find((block) => block.includes('"fixture-declared-weird"'));
+  assert.ok(weird, 'the fetch-failed refusal must be in the log');
+  assert.match(weird, /resolve no media type/);
 });
 
 test('the probe budget is reported when it runs out', () => {
@@ -756,6 +1076,13 @@ test('a subpath baseURL keeps every artifact URL resolvable', () => {
       `${entry.name}: ${entry.url} must carry the baseURL path`,
     );
     assert.ok(exists(entry.url.replace(/^\/docs\//, ''), edgeDir), `${entry.url} must exist`);
+    for (const file of entry.files ?? []) {
+      assert.ok(
+        file.url.startsWith('/docs/.well-known/agent-skills/'),
+        `${entry.name}/${file.path}: ${file.url} must carry the baseURL path`,
+      );
+      assert.ok(exists(file.url.replace(/^\/docs\//, ''), edgeDir), `${file.url} must exist`);
+    }
   }
 });
 
@@ -827,6 +1154,12 @@ test('under multihost every host publishes an index of its own', () => {
         exists(`${lang}${skill.url}`, multihostDir),
         `${lang} advertises ${skill.url} and does not serve it`,
       );
+      for (const file of skill.files ?? []) {
+        assert.ok(
+          exists(`${lang}${file.url}`, multihostDir),
+          `${lang} advertises ${file.url} and does not serve it`,
+        );
+      }
     }
   }
 });

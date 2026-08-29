@@ -280,7 +280,7 @@ enableRobotsTXT = true
     # bytes over real HTTP -- the digest guarantee cannot be proven any other
     # way -- while nothing outside this repository can change what they are.
     #
-    # SEVENTEEN of these publish and EIGHTEEN are refused; 04-skills.spec.js
+    # TWENTY-TWO of these publish and THIRTY are refused; 04-skills.spec.js
     # pins both sets, so an entry that starts publishing (or stops) is a red
     # suite rather than a silent change of contract.
 
@@ -459,6 +459,60 @@ enableRobotsTXT = true
       description = 'An archive whose root SKILL.md cannot be confirmed from its raw bytes, which is published with a warning rather than trusted.'
       source = 'http://127.0.0.1:1818/archives/unclear.zip'
 
+    # The measured shape that motivated the bare-name nomination class: a
+    # supporting file named in plain lowercase prose, no link, no slash, no
+    # capitals -- and really existing beside the SKILL.md. The probe proves
+    # it, the entry warns and publishes by default, and the `strictskills`
+    # environment omits it. The description is a VERBATIM copy of the front
+    # matter, so exactly one warning can name this entry.
+    [[params.agent.skills]]
+      name = 'fixture-prose'
+      description = 'A multi-file fixture skill whose body names its supporting file in plain lowercase prose, the shape the bare-name nomination class exists for.'
+      source = 'http://127.0.0.1:1818/fixture-prose/SKILL.md'
+
+    # The other half of the bare-name class, in the other habitat: a lowercase
+    # name inside a code span, nominated, answered with a 404, and passed over
+    # in silence -- the lowercase twin of fixture-lonely.
+    [[params.agent.skills]]
+      name = 'fixture-prose-absent'
+      description = 'A single-file fixture skill whose body mentions a lowercase file name in a code span, which is nominated, answered with a 404, and passed over in silence.'
+      source = 'http://127.0.0.1:1818/fixture-prose-absent/SKILL.md'
+
+    # The declared-files path, complete: both supporting files are fetched and
+    # republished beside the SKILL.md, the entry carries the files member, and
+    # NOTHING warns -- the body names both files, so silence here is what
+    # proves declared candidates are excluded from the probe. The body's own
+    # spelling of the first file is `./guide.md`, deliberately: the exclusion
+    # compares CLEANED candidate paths against the declared `guide.md`, and
+    # only a spelling that differs before cleaning proves the cleaning is
+    # load-bearing. Publishes under `strictskills` too, because a complete
+    # declaration leaves nothing proven undeclared.
+    [[params.agent.skills]]
+      name = 'fixture-declared'
+      description = 'A multi-file fixture skill that declares its supporting files, so each one is republished beside the SKILL.md and the probe has nothing left to check.'
+      files = ['guide.md', 'references/deep-dive.md']
+      source = 'http://127.0.0.1:1818/fixture-declared/SKILL.md'
+
+    # A declaration the body outgrows: guide.md is declared and served, but
+    # the body also names extra.md, which really exists undeclared. The probe
+    # catches exactly the remainder, the entry publishes with a warning naming
+    # the undeclared file, and `strictskills` omits it.
+    [[params.agent.skills]]
+      name = 'fixture-declared-incomplete'
+      description = 'A fixture skill that declares one supporting file while its body names another that really exists, so the declaration is reported as incomplete.'
+      files = ['guide.md']
+      source = 'http://127.0.0.1:1818/fixture-declared-incomplete/SKILL.md'
+
+    # A files list on an archive entry configures nothing -- the archive
+    # already carries the whole directory -- so the key is named once and
+    # ignored, and the archive publishes as it would without it.
+    [[params.agent.skills]]
+      name = 'fixture-archive-files'
+      type = 'archive'
+      description = 'A fixture skill archive that also declares a files list, which configures nothing on an archive and is ignored.'
+      files = ['anything.md']
+      source = 'http://127.0.0.1:1818/archives/rooted.tar.gz'
+
     # ---- Refused ----
 
     # A URL that passes the absolute-http(s) test and then fails to parse.
@@ -605,3 +659,110 @@ enableRobotsTXT = true
       name = 'fixture-single'
       description = 'A duplicate name, which must be refused so one artifact cannot answer to two entries.'
       source = 'http://127.0.0.1:1818/fixture-desc/SKILL.md'
+
+    # Every refusal a files declaration can earn, one entry per branch. Each
+    # fails CLOSED -- a declaration is the consumer's own claim, and an entry
+    # published without a file it declares would carry exactly the dangling
+    # reference the declaration exists to prevent.
+
+    # The declared file 404s at the origin. The fetch is really attempted --
+    # the request log shows it -- and the entry is refused.
+    [[params.agent.skills]]
+      name = 'fixture-declared-missing'
+      description = 'A fixture skill declaring a supporting file its origin does not have, which must refuse the entry rather than publish a dangling declaration.'
+      files = ['gone.md']
+      source = 'http://127.0.0.1:1818/fixture-declared-missing/SKILL.md'
+
+    # The declared path climbs out of the skill directory. Refused BEFORE any
+    # fetch: the request log must carry no request for /escape.md.
+    [[params.agent.skills]]
+      name = 'fixture-declared-outside'
+      description = 'A fixture skill whose declared supporting file climbs out of its own directory, which is refused before anything is fetched.'
+      files = ['../escape.md']
+      source = 'http://127.0.0.1:1818/fixture-declared-outside/SKILL.md'
+
+    # A bare string where an array belongs -- the same shape hazard the skills
+    # key itself guards against, one level down.
+    [[params.agent.skills]]
+      name = 'fixture-declared-scalar'
+      description = 'A fixture skill whose files key is a bare string rather than an array, which is a shape mistake worth naming.'
+      files = 'guide.md'
+      source = 'http://127.0.0.1:1818/fixture-declared-scalar/SKILL.md'
+
+    # A query-string source cannot resolve a file URL, and with files DECLARED
+    # that is a refusal rather than the publish-and-warn the undeclared
+    # fixture-unverifiable gets: the consumer claimed files this build cannot
+    # deliver.
+    [[params.agent.skills]]
+      name = 'fixture-declared-query'
+      description = 'A fixture skill declaring supporting files while its source URL carries a query string, so no file URL can be resolved and the entry is refused.'
+      files = ['references/GUIDE.md']
+      source = 'http://127.0.0.1:1818/fixture-declared-query/SKILL.md?token=abc'
+
+    # Two spellings of one file. Cleaned, both resolve to guide.md, and two
+    # copies would race for one published target -- resources.Copy hands the
+    # loser the winner's resource entirely.
+    [[params.agent.skills]]
+      name = 'fixture-declared-dup'
+      description = 'A fixture skill whose files list names one file twice once the paths are cleaned, which two copies would race to publish.'
+      files = ['guide.md', './guide.md']
+      source = 'http://127.0.0.1:1818/fixture-declared-dup/SKILL.md'
+
+    # The declared file answers with a media type Hugo can resolve from
+    # neither the URL nor the header -- the fast-failing fetch error, staged by
+    # the origin's /WEIRDFILE route, whose warning must carry the media-type
+    # hint. The declared name is extensionLESS deliberately: measured at Hugo
+    # v0.164.0, a URL carrying an extension -- even one Hugo does not know --
+    # fetched successfully under this same unrecognized Content-Type, and only
+    # an extensionless URL reaches the media-type error at all.
+    [[params.agent.skills]]
+      name = 'fixture-declared-weird'
+      description = 'A fixture skill whose declared supporting file is served with a media type Hugo cannot resolve, so the fetch fails and the entry is refused.'
+      files = ['WEIRDFILE']
+      source = 'http://127.0.0.1:1818/fixture-declared-weird/SKILL.md'
+
+    # The six path-validation refusals, one entry per reason string, so every
+    # branch of the declared-path validation renders its own warning in this
+    # build. None of these issues any request beyond the SKILL.md fetch:
+    # validation runs before any file fetch.
+    [[params.agent.skills]]
+      name = 'fixture-declared-empty'
+      description = 'A fixture skill whose files list carries an empty element, which names nothing and is refused.'
+      files = ['']
+      source = 'http://127.0.0.1:1818/fixture-declared-empty/SKILL.md'
+
+    [[params.agent.skills]]
+      name = 'fixture-declared-space'
+      description = 'A fixture skill whose declared supporting file carries whitespace, which path resolution cannot handle faithfully.'
+      files = ['my notes.md']
+      source = 'http://127.0.0.1:1818/fixture-declared-space/SKILL.md'
+
+    [[params.agent.skills]]
+      name = 'fixture-declared-fragment'
+      description = 'A fixture skill whose declared supporting file carries a fragment, and a published file name cannot.'
+      files = ['guide.md#top']
+      source = 'http://127.0.0.1:1818/fixture-declared-fragment/SKILL.md'
+
+    [[params.agent.skills]]
+      name = 'fixture-declared-abs'
+      description = 'A fixture skill whose declared supporting file is an absolute path, which is refused before anything is fetched.'
+      files = ['/abs/root.md']
+      source = 'http://127.0.0.1:1818/fixture-declared-abs/SKILL.md'
+
+    [[params.agent.skills]]
+      name = 'fixture-declared-dir'
+      description = 'A fixture skill whose declared supporting file names a directory rather than a file.'
+      files = ['references/']
+      source = 'http://127.0.0.1:1818/fixture-declared-dir/SKILL.md'
+
+    # Declared as `./Skill.md` rather than bare `SKILL.md`, so the guard is
+    # proven to act on the RESOLVED path compared case-insensitively: the
+    # spelling differs from the artifact's own name in both shape and case,
+    # and on an origin that resolves paths case-insensitively an exact
+    # comparison would fetch the entry's own body and republish it as a
+    # supporting file of itself.
+    [[params.agent.skills]]
+      name = 'fixture-declared-self'
+      description = 'A fixture skill whose files list names the SKILL.md itself, which the entry already publishes.'
+      files = ['./Skill.md']
+      source = 'http://127.0.0.1:1818/fixture-declared-self/SKILL.md'
