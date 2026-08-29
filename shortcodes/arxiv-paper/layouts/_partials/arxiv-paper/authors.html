@@ -20,7 +20,7 @@
   {{- if le $count $max -}}
     {{- $result = delimit $authors ", " -}}
   {{- else -}}
-    {{- $result = printf "%s et al." (delimit (first $max $authors) ", ") -}}
+    {{- $result = printf "%s %s" (delimit (first $max $authors) ", ") (T "arxiv_paper_et_al" | default "et al.") -}}
   {{- end -}}
 {{- end -}}
 {{- return $result -}}

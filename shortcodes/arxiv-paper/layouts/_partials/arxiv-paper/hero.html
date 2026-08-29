@@ -8,7 +8,7 @@
 
   Context expectations:
   - . (dict) - Normalized paper data from fetch.html (see card.html), plus
-    .categories, .updated, .updatedRelative, .venue, .hasCitations,
+    .categories, .updated, .revisedMode, .venue, .hasCitations,
     .citationCount, .metricsAsOf, .hasUpvotes, .upvotes, .codeRepo,
     .hasCodeStars, .codeStars, .aiKeywords.
 
@@ -42,7 +42,7 @@
     <p class="arxiv-paper__authors">
       {{- partial "arxiv-paper/icon.html" (dict "name" "authors" "class" "arxiv-paper__icon") }}
       <span class="arxiv-paper__author-list">{{ . }}</span>
-      {{- if gt $.authorCount 6 }} <span class="arxiv-paper__author-count">({{ $.authorCount }} authors)</span>{{ end }}
+      {{- if gt $.authorCount 6 }} <span class="arxiv-paper__author-count">{{ T "arxiv_paper_authors_count" $.authorCount | default (printf "(%d authors)" $.authorCount) }}</span>{{ end }}
     </p>
     {{- end }}
     {{- with .tldr }}
@@ -63,15 +63,10 @@
       {{- with .publishedYear }}
       <span class="arxiv-paper__meta-item">
         {{- partial "arxiv-paper/icon.html" (dict "name" "calendar" "class" "arxiv-paper__icon") }}
-        <span>Submitted <time datetime="{{ $.published }}">{{ . }}</time></span>
+        <span>{{ T "arxiv_paper_submitted" | default "Submitted" }} <time datetime="{{ $.published }}">{{ . }}</time></span>
       </span>
       {{- end }}
-      {{- if and .updatedRelative (ne .updated .published) }}
-      <span class="arxiv-paper__meta-item">
-        {{- partial "arxiv-paper/icon.html" (dict "name" "paper" "class" "arxiv-paper__icon") }}
-        <span>Revised <time datetime="{{ .updated }}">{{ .updatedRelative }}</time></span>
-      </span>
-      {{- end }}
+      {{- partial "arxiv-paper/revised.html" (dict "published" .published "updated" .updated "mode" .revisedMode) }}
       {{- with .venue }}
       <span class="arxiv-paper__meta-item arxiv-paper__venue">
         {{- partial "arxiv-paper/icon.html" (dict "name" "quote" "class" "arxiv-paper__icon") }} {{ . }}
@@ -89,12 +84,12 @@
       {{- end }}
       {{- with .codeRepo }}
       <span class="arxiv-paper__meta-item arxiv-paper__code" data-arxiv-code="{{ . }}">
-        {{- partial "arxiv-paper/icon.html" (dict "name" "code" "class" "arxiv-paper__icon") }} Code
+        {{- partial "arxiv-paper/icon.html" (dict "name" "code" "class" "arxiv-paper__icon") }} {{ T "arxiv_paper_code" | default "Code" }}
         {{- if $.hasCodeStars }} <span class="arxiv-paper__code-stars" data-arxiv-metrics-asof="{{ $.metricsAsOf }}">{{ partial "arxiv-paper/compact-number.html" $.codeStars }}</span>{{ end }}
       </span>
       {{- end }}
       <span class="arxiv-paper__cta">
-        View on arXiv
+        {{ T "arxiv_paper_view_on_arxiv" | default "View on arXiv" }}
         <span class="arxiv-paper__cta-arrow">
           {{- partial "arxiv-paper/icon.html" (dict "name" "external") -}}
         </span>

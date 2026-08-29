@@ -81,7 +81,7 @@ Reusable Hugo shortcode modules live under [`shortcodes/`](shortcodes/). Every o
 
 ### `shortcodes/github-repo`
 
-Renders a GitHub repository link in one of five display variants (`inline`, `card`, `stats`, `lang`, `hero`) with API-driven metadata, header-aware retries, and graceful degradation. See [`shortcodes/github-repo/README.md`](shortcodes/github-repo/README.md).
+Renders a GitHub repository link in one of five display variants (`inline`, `card`, `stats`, `lang`, `hero`) with API-driven metadata, a last-updated label at calendar-day granularity (relative, absolute date, or omitted -- a per-call choice), header-aware retries, and graceful degradation. See [`shortcodes/github-repo/README.md`](shortcodes/github-repo/README.md).
 
 ### `shortcodes/github-profile`
 
@@ -89,11 +89,11 @@ Renders a GitHub person-profile widget for presenting one's own activity and ach
 
 ### `shortcodes/hf-space`
 
-Renders a Hugging Face Space link in one of five display variants (`inline`, `card`, `wide`, `stats`, `hero`) with Hub API-driven metadata (emoji, SDK, hardware, likes, live status, gradient colors), header-aware retries, and graceful degradation. The sibling of `shortcodes/github-repo`. See [`shortcodes/hf-space/README.md`](shortcodes/hf-space/README.md).
+Renders a Hugging Face Space link in one of five display variants (`inline`, `card`, `wide`, `stats`, `hero`) with Hub API-driven metadata (emoji, SDK, hardware, likes, gradient colors, a last-modified label at calendar-day granularity with a relative / absolute-date / omitted per-call choice), header-aware retries, and graceful degradation. The sibling of `shortcodes/github-repo`. See [`shortcodes/hf-space/README.md`](shortcodes/hf-space/README.md).
 
 ### `shortcodes/arxiv-paper`
 
-Renders an [arXiv.org](https://arxiv.org/) paper reference in one of six display variants (`inline`, `card`, `wide`, `stats`, `hero`, `cite`) from the arXiv Atom API, with optional Semantic Scholar (one-sentence TLDR, resolved venue, citation count) and Hugging Face Papers (AI summary, keyword chips, code-repo badge, upvotes) enrichment, header-aware retries, and graceful degradation. Resolves subject codes to human-readable names from a shipped taxonomy map, and stamps volatile counts with a `data-arxiv-metrics-asof` freshness hook. Consuming sites must allow-list `application/atom+xml` in `security.http.mediaTypes` (one line, documented in the module README). See [`shortcodes/arxiv-paper/README.md`](shortcodes/arxiv-paper/README.md).
+Renders an [arXiv.org](https://arxiv.org/) paper reference in one of six display variants (`inline`, `card`, `wide`, `stats`, `hero`, `cite`) from the arXiv Atom API, with optional Semantic Scholar (one-sentence TLDR, resolved venue, citation count) and Hugging Face Papers (AI summary, keyword chips, code-repo badge, upvotes) enrichment, header-aware retries, and graceful degradation. Resolves subject codes to human-readable names from a shipped taxonomy map, renders the revision date at calendar-day granularity (relative, absolute date, or omitted -- a per-call choice), and stamps volatile counts with a `data-arxiv-metrics-asof` freshness hook. Consuming sites must allow-list `application/atom+xml` in `security.http.mediaTypes` (one line, documented in the module README). See [`shortcodes/arxiv-paper/README.md`](shortcodes/arxiv-paper/README.md).
 
 ### `shortcodes/youtube-embed`
 

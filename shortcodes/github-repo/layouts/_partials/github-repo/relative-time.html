@@ -1,43 +1,51 @@
 {{/*
-  Converts an ISO 8601 timestamp to a human-readable relative time string.
+  Converts an ISO 8601 timestamp to a relative time phrase at calendar-day
+  granularity: "today", "yesterday", "N days ago", "N months ago",
+  "N years ago".
 
   Context: an ISO 8601 date string (e.g., "2026-04-21T10:30:00Z")
 
-  Returns a string like "3 days ago", "2 months ago", "just now", or "" when
-  the timestamp is unparseable -- the input is remote-derived, so a malformed
-  value degrades to an empty string instead of failing the build. Every phrase
-  resolves through the shipped github_repo_* i18n keys (plural forms selected by
-  CLDR rules from the integer count) with English defaults, so a site language
-  without the keys still renders.
+  Returns "" when the timestamp is unparseable -- the input is remote-derived,
+  so a malformed value degrades to an empty string instead of failing the
+  build. Every phrase resolves through the shipped github_repo_* i18n keys
+  (plural forms selected by CLDR rules from the integer count) with English
+  defaults, so a site language without the keys still renders.
+
+  The difference is counted in CALENDAR DAYS between the two UTC dates, never
+  in hours or 24-hour blocks: a static build renders once and is served for at
+  least a day, so the finest unit that stays truthful between daily rebuilds
+  is the day, and a phrase like "2 hours ago" would be wrong within hours of
+  the build. Both endpoints are truncated to their UTC calendar date and
+  re-parsed in UTC explicitly, which keeps the difference an exact multiple of
+  86400 seconds regardless of the site's timeZone setting or DST. A future
+  timestamp (clock skew, a pre-dated value) maps to "today".
 */}}
 
 {{- $result := "" -}}
 {{- $t := try (time.AsTime .) -}}
-{{- $hours := 0.0 -}}
+{{- $days := 0 -}}
 {{- $parsedOk := false -}}
 {{- if not $t.Err -}}
   {{- with $t.Value -}}
-    {{- $hours = (now.Sub .).Hours -}}
+    {{- $thenMid := time.AsTime (.UTC.Format "2006-01-02") "UTC" -}}
+    {{- $nowMid := time.AsTime (now.UTC.Format "2006-01-02") "UTC" -}}
+    {{- $days = int (math.Div (sub $nowMid.Unix $thenMid.Unix) 86400) -}}
     {{- $parsedOk = true -}}
   {{- end -}}
 {{- end -}}
 
 {{- if not $parsedOk -}}
-{{- else if lt $hours 1.0 -}}
-  {{- $result = T "github_repo_just_now" | default "just now" -}}
-{{- else if lt $hours 24.0 -}}
-  {{- $n := int (math.Floor $hours) -}}
-  {{- $result = T "github_repo_hours_ago" $n | default (cond (eq $n 1) "1 hour ago" (printf "%d hours ago" $n)) -}}
-{{- else if lt $hours 48.0 -}}
+{{- else if le $days 0 -}}
+  {{- $result = T "github_repo_today" | default "today" -}}
+{{- else if eq $days 1 -}}
   {{- $result = T "github_repo_yesterday" | default "yesterday" -}}
-{{- else if lt $hours 720.0 -}}
-  {{- $n := int (math.Floor (math.Div $hours 24.0)) -}}
-  {{- $result = T "github_repo_days_ago" $n | default (cond (eq $n 1) "1 day ago" (printf "%d days ago" $n)) -}}
-{{- else if lt $hours 8760.0 -}}
-  {{- $n := int (math.Floor (math.Div $hours 720.0)) -}}
+{{- else if lt $days 30 -}}
+  {{- $result = T "github_repo_days_ago" $days | default (printf "%d days ago" $days) -}}
+{{- else if lt $days 365 -}}
+  {{- $n := int (math.Div $days 30) -}}
   {{- $result = T "github_repo_months_ago" $n | default (cond (eq $n 1) "1 month ago" (printf "%d months ago" $n)) -}}
 {{- else -}}
-  {{- $n := int (math.Floor (math.Div $hours 8760.0)) -}}
+  {{- $n := int (math.Div $days 365) -}}
   {{- $result = T "github_repo_years_ago" $n | default (cond (eq $n 1) "1 year ago" (printf "%d years ago" $n)) -}}
 {{- end -}}
 

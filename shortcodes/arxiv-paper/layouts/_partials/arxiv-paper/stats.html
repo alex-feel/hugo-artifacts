@@ -48,30 +48,30 @@
   {{- end }}
   <div class="arxiv-paper__stat-row">
     <span class="arxiv-paper__stat">
-      <span class="arxiv-paper__stat-label">Submitted</span>
+      <span class="arxiv-paper__stat-label">{{ T "arxiv_paper_submitted" | default "Submitted" }}</span>
       <span class="arxiv-paper__stat-value">{{ or .publishedYear "—" }}</span>
     </span>
     <span class="arxiv-paper__stat">
-      <span class="arxiv-paper__stat-label">Subject</span>
+      <span class="arxiv-paper__stat-label">{{ T "arxiv_paper_stat_subject" | default "Subject" }}</span>
       <span class="arxiv-paper__stat-value"{{ with .primaryCategory }} data-arxiv-category="{{ . }}"{{ end }}>{{ or .primaryCategory "—" }}</span>
     </span>
     <span class="arxiv-paper__stat">
-      <span class="arxiv-paper__stat-label">Authors</span>
+      <span class="arxiv-paper__stat-label">{{ T "arxiv_paper_stat_authors" | default "Authors" }}</span>
       <span class="arxiv-paper__stat-value">{{ or .authorCount "—" }}</span>
     </span>
     <span class="arxiv-paper__stat">
-      <span class="arxiv-paper__stat-label">Version</span>
+      <span class="arxiv-paper__stat-label">{{ T "arxiv_paper_stat_version" | default "Version" }}</span>
       <span class="arxiv-paper__stat-value">{{ with .version }}v{{ . }}{{ else }}—{{ end }}</span>
     </span>
     {{- if .hasCitations }}
     <span class="arxiv-paper__stat arxiv-paper__stat--citations" data-arxiv-metrics-asof="{{ .metricsAsOf }}">
-      <span class="arxiv-paper__stat-label">Citations</span>
+      <span class="arxiv-paper__stat-label">{{ T "arxiv_paper_stat_citations" | default "Citations" }}</span>
       <span class="arxiv-paper__stat-value">{{ partial "arxiv-paper/compact-number.html" .citationCount }}</span>
     </span>
     {{- end }}
     {{- if .hasUpvotes }}
     <span class="arxiv-paper__stat arxiv-paper__stat--upvotes" data-arxiv-metrics-asof="{{ .metricsAsOf }}">
-      <span class="arxiv-paper__stat-label">HF upvotes</span>
+      <span class="arxiv-paper__stat-label">{{ T "arxiv_paper_stat_upvotes" | default "HF upvotes" }}</span>
       <span class="arxiv-paper__stat-value">{{ partial "arxiv-paper/compact-number.html" .upvotes }}</span>
     </span>
     {{- end }}

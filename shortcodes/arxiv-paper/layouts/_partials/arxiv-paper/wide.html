@@ -7,7 +7,7 @@
 
   Context expectations:
   - . (dict) - Normalized paper data from fetch.html (see card.html), plus
-    .categories, .updatedRelative, .venue.
+    .categories, .venue.
 
   Output: An <article> element with BEM class arxiv-paper arxiv-paper--wide.
   The title is the single real link (arxiv-paper__title-link) to the abstract
@@ -39,7 +39,7 @@
     <p class="arxiv-paper__authors">
       {{- partial "arxiv-paper/icon.html" (dict "name" "authors" "class" "arxiv-paper__icon") }}
       <span class="arxiv-paper__author-list">{{ . }}</span>
-      {{- if gt $.authorCount 4 }} <span class="arxiv-paper__author-count">({{ $.authorCount }} authors)</span>{{ end }}
+      {{- if gt $.authorCount 4 }} <span class="arxiv-paper__author-count">{{ T "arxiv_paper_authors_count" $.authorCount | default (printf "(%d authors)" $.authorCount) }}</span>{{ end }}
     </p>
     {{- end }}
     {{- with (or .tldr .abstract) }}

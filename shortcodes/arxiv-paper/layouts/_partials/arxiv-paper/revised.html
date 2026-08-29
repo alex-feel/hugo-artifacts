@@ -1,0 +1,25 @@
+{{/*
+  Renders the hero variant's revision meta item: a paper icon, the localized
+  "Revised" label, and a <time> element -- or nothing when the retrieved
+  version's date equals the v1 date, the display mode is "none", the timestamp
+  is absent, or it fails to parse.
+
+  Context (dict):
+  - published (string): The v1 ISO 8601 date; may be "".
+  - updated (string): The retrieved version's ISO 8601 date; may be "".
+  - mode (string): "relative", "date", or "none" (validated by the shortcode).
+
+  The <time> element's datetime attribute always carries the raw ISO 8601
+  value, so the machine-readable timestamp stays in the markup whatever the
+  display mode and a consuming site's own script can re-render the label on
+  every page load.
+*/}}
+
+{{- if and .updated (ne .updated .published) -}}
+  {{- with partial "arxiv-paper/time-label.html" (dict "iso" .updated "mode" .mode) }}
+  <span class="arxiv-paper__meta-item arxiv-paper__meta-item--revised">
+    {{- partial "arxiv-paper/icon.html" (dict "name" "paper" "class" "arxiv-paper__icon") }}
+    <span>{{ T "arxiv_paper_revised" | default "Revised" }} <time class="arxiv-paper__time" datetime="{{ $.updated }}">{{ . }}</time></span>
+  </span>
+  {{- end -}}
+{{- end -}}

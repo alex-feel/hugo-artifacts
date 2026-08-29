@@ -135,20 +135,20 @@
         {{- end -}}
       {{- end -}}
 
-      {{/* Dates. `published` is the v1 date; `updated` the retrieved version's. */}}
+      {{/* Dates. `published` is the v1 date; `updated` the retrieved version's.
+           Both are carried raw; the revision's display label is derived at
+           render time by time-label.html, because the display form is the
+           shortcode's per-call `revised` parameter. The year cast is
+           try-wrapped: the value is remote-derived, so a malformed date
+           degrades to an empty year instead of failing the build. */}}
       {{- $published := or $entry.published "" -}}
       {{- $updated := or $entry.updated "" -}}
       {{- $publishedYear := "" -}}
       {{- with $published -}}
-        {{- $publishedYear = dateFormat "2006" . -}}
-      {{- end -}}
-      {{- $publishedRelative := "" -}}
-      {{- with $published -}}
-        {{- $publishedRelative = partial "arxiv-paper/relative-time.html" . -}}
-      {{- end -}}
-      {{- $updatedRelative := "" -}}
-      {{- with $updated -}}
-        {{- $updatedRelative = partial "arxiv-paper/relative-time.html" . -}}
+        {{- $yt := try (dateFormat "2006" .) -}}
+        {{- if not $yt.Err -}}
+          {{- $publishedYear = or $yt.Value "" -}}
+        {{- end -}}
       {{- end -}}
 
       {{/* Optional author-supplied fields. */}}
@@ -172,8 +172,6 @@
         "published" $published
         "updated" $updated
         "publishedYear" $publishedYear
-        "publishedRelative" $publishedRelative
-        "updatedRelative" $updatedRelative
         "primaryCategory" $primaryCategory
         "primaryCategoryLabel" $primaryCategoryLabel
         "primaryArchive" $primaryArchive

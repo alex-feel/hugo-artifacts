@@ -95,7 +95,7 @@ A card with the header, abstract/TLDR, and a metrics strip. The strip leads with
 {{< arxiv-paper id="2512.24601" variant="hero" >}}
 ```
 
-The largest variant. A banner carrying the identifier and primary subject, followed by the full metadata (authors, TLDR, the cross-list subject tags as a real `<ul class="arxiv-paper__tags">` list of `<li class="arxiv-paper__tag">` items, submitted/revised dates, venue, citations, upvotes, a "code available" badge) and a "View on arXiv" call-to-action. The call-to-action is a visual affordance, not a second link; the stretched-link recipe in [Styling](#full-card-click-area-stretched-link) makes it clickable.
+The largest variant. A banner carrying the identifier and primary subject, followed by the full metadata (authors, TLDR, the cross-list subject tags as a real `<ul class="arxiv-paper__tags">` list of `<li class="arxiv-paper__tag">` items, the submission year, a revised label -- see [The revised label](#the-revised-label) -- venue, citations, upvotes, a "code available" badge) and a "View on arXiv" call-to-action. The call-to-action is a visual affordance, not a second link; the stretched-link recipe in [Styling](#full-card-click-area-stretched-link) makes it clickable.
 
 #### cite -- Copy-ready citation block
 
@@ -116,6 +116,7 @@ A `<div>` rendering a formal reference -- authors, year, title, `arXiv:ID [subje
 | `abstract` | string | no | API | Abstract override (defaults to the summary) |
 | `enrich` | string | no | site param | Enricher selection (see [Enrichment](#enrichment)) |
 | `class` | string | no | -- | Additional CSS class(es) appended to the root element |
+| `revised` | string | no | `relative` | Display mode for the hero variant's revised label: `relative`, `date`, `none` (see [The revised label](#the-revised-label)) |
 
 \* Provide either `id` or `url`. When both are given, `id` wins.
 
@@ -123,6 +124,7 @@ Validation:
 
 - Omitting both `id` and `url` fails the build with an error message.
 - Passing an invalid `variant` value fails the build with an error message.
+- Passing an invalid `revised` value fails the build with an error message.
 - A locator from which no arXiv id can be parsed fails the build with an error message.
 
 ## Enrichment
@@ -210,6 +212,7 @@ When the arXiv fetch fails or resolves no paper, the module does not break the b
 
 - **`inline` variant:** Renders the identifier parsed from the locator, linking to the arXiv abstract page; the title and metadata are omitted.
 - **`card`, `wide`, `stats`, `hero`, `cite` variants:** Fall back to the inline chip layout. The root element carries `data-api-ok="false"` so the consuming site can style the degraded state.
+- **Formatter safety:** an unparseable `published` or `updated` timestamp in the Atom feed omits the submission year or the revised element rather than failing the build.
 
 Enrichers degrade **independently**: if Semantic Scholar or Hugging Face is unavailable, the card still renders fully from arXiv data, just without the TLDR / venue / citation / upvote fields. Enricher warnings are deduplicated to one per build.
 
@@ -248,6 +251,39 @@ Citation counts, HF upvotes, and code-repository stars are slow-drift numbers --
 Because a consumer may rebuild only occasionally, every element carrying such a count also carries a `data-arxiv-metrics-asof="<build RFC3339 timestamp>"` attribute. A daily-rebuilt site can ignore it; a site that rebuilds monthly can surface an honest "as of <date>" label so the snapshot never misleads. Rendering that label is the consuming site's choice -- the module only ships the data.
 
 Unlike the `hf-space` module's Space runtime stage, arXiv papers expose no minute-to-minute ephemeral state, so nothing is force-excluded.
+
+## The revised label
+
+The hero variant shows when the retrieved paper version was submitted, whenever that differs from the v1 date. The visible label always sits inside a `<time>` element whose `datetime` attribute carries the raw ISO 8601 `updated` value from the Atom feed, and the `revised` parameter chooses what a reader sees:
+
+| Mode | Output | Staleness |
+| --- | --- | --- |
+| `relative` (default) | `Revised today`, `Revised yesterday`, `Revised 5 days ago`, `Revised 2 months ago` | Accurate while the site rebuilds at least daily; drifts by the age of the build under rarer rebuilds |
+| `date` | `Revised Aug 27, 2026` -- the localized absolute date via Hugo's `:date_medium` token | Never stale, at any rebuild cadence |
+| `none` | The element is not rendered at all | -- |
+
+The relative phrase counts calendar days between the revision's UTC date and the build's UTC date, never hours: a static site renders once and is then served as-is for at least a day, so the finest unit that stays truthful between daily rebuilds is the day, and a phrase like "2 hours ago" would be wrong within hours of the build. A site that rebuilds at least once a day therefore always shows an accurate relative label. A site that rebuilds less often has two honest options: `revised="date"` (an absolute date is a fact and cannot age) or `revised="none"`. The `datetime` attribute enables a third, site-owned option: the consuming site's own script can re-render the label on every page load from the machine-readable value -- the module itself ships no JavaScript. The submission year beside it is an absolute fact and needs no mode: a year cannot go stale.
+
+CSS hooks: the meta item carries `arxiv-paper__meta-item--revised` and the `<time>` element carries `arxiv-paper__time`, so a site can also restyle or hide the label visually without touching the parameter.
+
+## Localization
+
+All UI strings resolve through i18n keys shipped in the module's `i18n/` directory (English and Russian included). Every lookup falls back to the English string, so a site language without translations still renders correctly. Override any key in the consuming site's own `i18n/<lang>.toml` to translate or reword. The `*_ago`, `arxiv_paper_citations_word`, and `arxiv_paper_authors_count` keys are plural-form tables: Hugo selects the `one`/`few`/`many`/`other` form from the integer count per the language's CLDR rules.
+
+| Key | English value | Used for |
+| --- | --- | --- |
+| `arxiv_paper_submitted` | `Submitted` | Hero and stats submission labels |
+| `arxiv_paper_revised` | `Revised` | Hero revised label |
+| `arxiv_paper_today` / `arxiv_paper_yesterday` | `today` / `yesterday` | Relative time (calendar-day granularity) |
+| `arxiv_paper_days_ago` / `_months_ago` / `_years_ago` | `1 day ago` / `{{ .Count }} days ago` (plural forms) | Relative time (calendar-day granularity) |
+| `arxiv_paper_citations_word` | `citation` / `citations` (plural forms) | Hero citation-count word (raw counts below 1000 select their own plural form; a compact-formatted display such as `1.2k` selects the form of 1000) |
+| `arxiv_paper_authors_count` | `({{ .Count }} author)` / `({{ .Count }} authors)` (plural forms) | The truncated-author-list count on the card, wide, and hero variants |
+| `arxiv_paper_et_al` | `et al.` | The author-list truncation marker |
+| `arxiv_paper_stat_subject` / `_stat_authors` / `_stat_version` / `_stat_citations` / `_stat_upvotes` | `Subject` / `Authors` / `Version` / `Citations` / `HF upvotes` | Stats-card labels |
+| `arxiv_paper_code` | `Code` | Hero code-available badge |
+| `arxiv_paper_view_on_arxiv` | `View on arXiv` | Hero call-to-action |
+| `arxiv_paper_cite_label` | `Cite this paper` | Cite-block heading |
+| `arxiv_paper_published_version` | `Published version` | Cite-block journal-DOI link text |
 
 ## Styling
 
@@ -340,7 +376,9 @@ shortcodes/arxiv-paper/
         parse-atom.html           # Atom feed -> normalized core paper dict
         authors.html              # Author-list truncation ("A, B, C et al.")
         compact-number.html       # Number formatting (e.g., 1500 -> "1.5k")
-        relative-time.html        # Timestamp formatting (e.g., "3 days ago")
+        relative-time.html        # Calendar-day relative time (e.g., "today", "3 days ago")
+        time-label.html           # Display-mode resolution (relative | date | none)
+        revised.html              # The hero revision meta item
         icon.html                 # Centralized inline SVG icon rendering
         inline.html               # V1 inline chip (also the degraded fallback)
         card.html                 # V2 editorial card (default)

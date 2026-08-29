@@ -6,7 +6,7 @@ hf_space_stat_sdk = "SDK"
 hf_space_stat_hardware = "Оборудование"
 hf_space_stat_likes = "Лайки"
 hf_space_open_in_spaces = "Открыть в Spaces"
-hf_space_just_now = "только что"
+hf_space_today = "сегодня"
 hf_space_yesterday = "вчера"
 
 [hf_space_likes_word]
@@ -14,12 +14,6 @@ one = "лайк"
 few = "лайка"
 many = "лайков"
 other = "лайка"
-
-[hf_space_hours_ago]
-one = "{{ .Count }} час назад"
-few = "{{ .Count }} часа назад"
-many = "{{ .Count }} часов назад"
-other = "{{ .Count }} часа назад"
 
 [hf_space_days_ago]
 one = "{{ .Count }} день назад"

@@ -1,3 +1,97 @@
 {{ define "main" }}
   {{ .Content }}
+  {{/* Time-label probes: deterministic subjects for the calendar-day relative
+       ladders and display modes of the three modules that render a time label
+       (github-repo, hf-space, arxiv-paper). The relative inputs derive from
+       the build's own clock IN THE UTC FRAME (now.UTC), because the ladder
+       counts UTC calendar days: a local-zone AddDate crossing a DST
+       transition shifts the wall-clock offset and moves a probe's day count
+       by one, so only UTC-frame derivation makes every expected label a
+       build-time constant on any machine in any timezone. The probe still
+       reads the clock twice (once here, once inside relative-time.html); a
+       build that crosses UTC midnight between those two reads -- a
+       microsecond-scale window -- would shift a relative label by one day,
+       which is accepted as unreachable in practice. The fixed 2023 date pins
+       the localized :date_medium rendering. Every probe goes through the
+       module's time-label.html with an explicit mode, so the mode dispatch is
+       executed too. The partials are called directly, because a second live
+       shortcode invocation would break this fixture's one-call-per-module
+       rule (see content/_index.md) and a fetched timestamp could never be
+       asserted exactly. The matrix is deliberately UNIFORM across the three
+       modules and crosses every ladder boundary: 29/30 days (days -> months),
+       364/365 days (months -> years), plus unparseable and empty inputs. */}}
+  {{ $fmt := "2006-01-02T15:04:05Z07:00" }}
+  {{ $u := now.UTC }}
+  {{ $fixed := "2023-01-27T10:00:00Z" }}
+  <div id="time-probe"
+       data-gr-today="{{ partial "github-repo/time-label.html" (dict "iso" ($u.Format $fmt) "mode" "relative") }}"
+       data-gr-future="{{ partial "github-repo/time-label.html" (dict "iso" (($u.AddDate 0 0 1).Format $fmt) "mode" "relative") }}"
+       data-gr-yesterday="{{ partial "github-repo/time-label.html" (dict "iso" (($u.AddDate 0 0 -1).Format $fmt) "mode" "relative") }}"
+       data-gr-days="{{ partial "github-repo/time-label.html" (dict "iso" (($u.AddDate 0 0 -5).Format $fmt) "mode" "relative") }}"
+       data-gr-days-max="{{ partial "github-repo/time-label.html" (dict "iso" (($u.AddDate 0 0 -29).Format $fmt) "mode" "relative") }}"
+       data-gr-months-min="{{ partial "github-repo/time-label.html" (dict "iso" (($u.AddDate 0 0 -30).Format $fmt) "mode" "relative") }}"
+       data-gr-months="{{ partial "github-repo/time-label.html" (dict "iso" (($u.AddDate 0 0 -65).Format $fmt) "mode" "relative") }}"
+       data-gr-months-max="{{ partial "github-repo/time-label.html" (dict "iso" (($u.AddDate 0 0 -364).Format $fmt) "mode" "relative") }}"
+       data-gr-years-min="{{ partial "github-repo/time-label.html" (dict "iso" (($u.AddDate 0 0 -365).Format $fmt) "mode" "relative") }}"
+       data-gr-years="{{ partial "github-repo/time-label.html" (dict "iso" (($u.AddDate 0 0 -800).Format $fmt) "mode" "relative") }}"
+       data-gr-bad="{{ partial "github-repo/time-label.html" (dict "iso" "not-a-date" "mode" "relative") }}"
+       data-gr-empty="{{ partial "github-repo/time-label.html" (dict "iso" "" "mode" "relative") }}"
+       data-gr-date="{{ partial "github-repo/time-label.html" (dict "iso" $fixed "mode" "date") }}"
+       data-gr-date-bad="{{ partial "github-repo/time-label.html" (dict "iso" "not-a-date" "mode" "date") }}"
+       data-gr-none="{{ partial "github-repo/time-label.html" (dict "iso" $fixed "mode" "none") }}"
+       data-hf-today="{{ partial "hf-space/time-label.html" (dict "iso" ($u.Format $fmt) "mode" "relative") }}"
+       data-hf-future="{{ partial "hf-space/time-label.html" (dict "iso" (($u.AddDate 0 0 1).Format $fmt) "mode" "relative") }}"
+       data-hf-yesterday="{{ partial "hf-space/time-label.html" (dict "iso" (($u.AddDate 0 0 -1).Format $fmt) "mode" "relative") }}"
+       data-hf-days="{{ partial "hf-space/time-label.html" (dict "iso" (($u.AddDate 0 0 -5).Format $fmt) "mode" "relative") }}"
+       data-hf-days-max="{{ partial "hf-space/time-label.html" (dict "iso" (($u.AddDate 0 0 -29).Format $fmt) "mode" "relative") }}"
+       data-hf-months-min="{{ partial "hf-space/time-label.html" (dict "iso" (($u.AddDate 0 0 -30).Format $fmt) "mode" "relative") }}"
+       data-hf-months="{{ partial "hf-space/time-label.html" (dict "iso" (($u.AddDate 0 0 -65).Format $fmt) "mode" "relative") }}"
+       data-hf-months-max="{{ partial "hf-space/time-label.html" (dict "iso" (($u.AddDate 0 0 -364).Format $fmt) "mode" "relative") }}"
+       data-hf-years-min="{{ partial "hf-space/time-label.html" (dict "iso" (($u.AddDate 0 0 -365).Format $fmt) "mode" "relative") }}"
+       data-hf-years="{{ partial "hf-space/time-label.html" (dict "iso" (($u.AddDate 0 0 -800).Format $fmt) "mode" "relative") }}"
+       data-hf-bad="{{ partial "hf-space/time-label.html" (dict "iso" "not-a-date" "mode" "relative") }}"
+       data-hf-empty="{{ partial "hf-space/time-label.html" (dict "iso" "" "mode" "relative") }}"
+       data-hf-date="{{ partial "hf-space/time-label.html" (dict "iso" $fixed "mode" "date") }}"
+       data-hf-date-bad="{{ partial "hf-space/time-label.html" (dict "iso" "not-a-date" "mode" "date") }}"
+       data-hf-none="{{ partial "hf-space/time-label.html" (dict "iso" $fixed "mode" "none") }}"
+       data-ax-today="{{ partial "arxiv-paper/time-label.html" (dict "iso" ($u.Format $fmt) "mode" "relative") }}"
+       data-ax-future="{{ partial "arxiv-paper/time-label.html" (dict "iso" (($u.AddDate 0 0 1).Format $fmt) "mode" "relative") }}"
+       data-ax-yesterday="{{ partial "arxiv-paper/time-label.html" (dict "iso" (($u.AddDate 0 0 -1).Format $fmt) "mode" "relative") }}"
+       data-ax-days="{{ partial "arxiv-paper/time-label.html" (dict "iso" (($u.AddDate 0 0 -5).Format $fmt) "mode" "relative") }}"
+       data-ax-days-max="{{ partial "arxiv-paper/time-label.html" (dict "iso" (($u.AddDate 0 0 -29).Format $fmt) "mode" "relative") }}"
+       data-ax-months-min="{{ partial "arxiv-paper/time-label.html" (dict "iso" (($u.AddDate 0 0 -30).Format $fmt) "mode" "relative") }}"
+       data-ax-months="{{ partial "arxiv-paper/time-label.html" (dict "iso" (($u.AddDate 0 0 -65).Format $fmt) "mode" "relative") }}"
+       data-ax-months-max="{{ partial "arxiv-paper/time-label.html" (dict "iso" (($u.AddDate 0 0 -364).Format $fmt) "mode" "relative") }}"
+       data-ax-years-min="{{ partial "arxiv-paper/time-label.html" (dict "iso" (($u.AddDate 0 0 -365).Format $fmt) "mode" "relative") }}"
+       data-ax-years="{{ partial "arxiv-paper/time-label.html" (dict "iso" (($u.AddDate 0 0 -800).Format $fmt) "mode" "relative") }}"
+       data-ax-bad="{{ partial "arxiv-paper/time-label.html" (dict "iso" "not-a-date" "mode" "relative") }}"
+       data-ax-empty="{{ partial "arxiv-paper/time-label.html" (dict "iso" "" "mode" "relative") }}"
+       data-ax-date="{{ partial "arxiv-paper/time-label.html" (dict "iso" $fixed "mode" "date") }}"
+       data-ax-date-bad="{{ partial "arxiv-paper/time-label.html" (dict "iso" "not-a-date" "mode" "date") }}"
+       data-ax-none="{{ partial "arxiv-paper/time-label.html" (dict "iso" $fixed "mode" "none") }}"></div>
+  {{/* The rendered element form of every module's time meta item: proves the
+       <time> datetime attribute carries the raw ISO value in every shown
+       mode, that mode "none" renders no element at all, and (for
+       arxiv-paper) that an unrevised paper renders nothing whatever the
+       mode. */}}
+  <div id="time-probe-updated">{{ partial "github-repo/updated.html" (dict "iso" $fixed "mode" "date") }}</div>
+  <div id="time-probe-updated-none">{{ partial "github-repo/updated.html" (dict "iso" $fixed "mode" "none") }}</div>
+  <div id="time-probe-hf-updated">{{ partial "hf-space/updated.html" (dict "iso" $fixed "mode" "date") }}</div>
+  <div id="time-probe-hf-updated-none">{{ partial "hf-space/updated.html" (dict "iso" $fixed "mode" "none") }}</div>
+  <div id="time-probe-ax-revised">{{ partial "arxiv-paper/revised.html" (dict "published" "2020-01-01T00:00:00Z" "updated" $fixed "mode" "date") }}</div>
+  <div id="time-probe-ax-revised-none">{{ partial "arxiv-paper/revised.html" (dict "published" "2020-01-01T00:00:00Z" "updated" $fixed "mode" "none") }}</div>
+  <div id="time-probe-ax-revised-equal">{{ partial "arxiv-paper/revised.html" (dict "published" $fixed "updated" $fixed "mode" "date") }}</div>
+  {{/* Variant-partial probes: each module's time-bearing variant rendered
+       from a synthetic data dict, which is the only way any build in this
+       repository executes the hf-space and arxiv-paper hero templates at all
+       (the live invocations use the default card variant) and the only
+       deterministic proof that the variant reads the mode under the key the
+       entry template merges (updatedMode / revisedMode). The dicts mirror the
+       normalized shape fetch.html returns. */}}
+  <div id="variant-probe-gr-date">{{ partial "github-repo/card.html" (dict "apiOk" true "extraClass" "" "fullName" "probe/repo" "url" "https://github.com/probe/repo" "owner" "probe" "name" "repo" "description" "Probe description." "language" "Go" "langColor" "#00ADD8" "stars" 5 "starsFormatted" "5" "forks" 2 "forksFormatted" "2" "license" "MIT" "updatedISO" $fixed "updatedMode" "date") }}</div>
+  <div id="variant-probe-gr-none">{{ partial "github-repo/card.html" (dict "apiOk" true "extraClass" "" "fullName" "probe/repo" "url" "https://github.com/probe/repo" "owner" "probe" "name" "repo" "description" "Probe description." "language" "Go" "langColor" "#00ADD8" "stars" 5 "starsFormatted" "5" "forks" 2 "forksFormatted" "2" "license" "MIT" "updatedISO" $fixed "updatedMode" "none") }}</div>
+  <div id="variant-probe-hf-date">{{ partial "hf-space/hero.html" (dict "apiOk" true "extraClass" "" "id" "probe/space" "url" "https://huggingface.co/spaces/probe/space" "owner" "probe" "name" "space" "title" "Probe" "emoji" "" "description" "" "sdk" "gradio" "sdkLabel" "Gradio" "sdkVersion" "" "hardware" "" "hardwareLabel" "" "likesCount" 5 "likesFormatted" "5" "updatedISO" $fixed "updatedMode" "date" "tags" (slice) "colorFrom" "" "colorTo" "" "colorFromHex" "" "colorToHex" "") }}</div>
+  <div id="variant-probe-hf-none">{{ partial "hf-space/hero.html" (dict "apiOk" true "extraClass" "" "id" "probe/space" "url" "https://huggingface.co/spaces/probe/space" "owner" "probe" "name" "space" "title" "Probe" "emoji" "" "description" "" "sdk" "gradio" "sdkLabel" "Gradio" "sdkVersion" "" "hardware" "" "hardwareLabel" "" "likesCount" 5 "likesFormatted" "5" "updatedISO" $fixed "updatedMode" "none" "tags" (slice) "colorFrom" "" "colorTo" "" "colorFromHex" "" "colorToHex" "") }}</div>
+  <div id="variant-probe-ax-date">{{ partial "arxiv-paper/hero.html" (dict "apiOk" true "extraClass" "" "id" "0000.00000" "version" 2 "absURL" "https://arxiv.org/abs/0000.00000" "pdfURL" "https://arxiv.org/pdf/0000.00000" "title" "Probe paper" "abstract" "" "tldr" "" "authors" (slice "A. Probe") "authorCount" 1 "categories" (slice) "published" "2020-01-01T00:00:00Z" "updated" $fixed "publishedYear" "2020" "revisedMode" "date" "venue" "" "hasCitations" false "citationCount" 0 "metricsAsOf" "" "hasUpvotes" false "upvotes" 0 "codeRepo" "" "hasCodeStars" false "codeStars" 0 "aiKeywords" (slice) "primaryCategory" "" "primaryCategoryLabel" "" "primaryArchive" "" "primaryGroup" "") }}</div>
+  <div id="variant-probe-ax-none">{{ partial "arxiv-paper/hero.html" (dict "apiOk" true "extraClass" "" "id" "0000.00000" "version" 2 "absURL" "https://arxiv.org/abs/0000.00000" "pdfURL" "https://arxiv.org/pdf/0000.00000" "title" "Probe paper" "abstract" "" "tldr" "" "authors" (slice "A. Probe") "authorCount" 1 "categories" (slice) "published" "2020-01-01T00:00:00Z" "updated" $fixed "publishedYear" "2020" "revisedMode" "none" "venue" "" "hasCitations" false "citationCount" 0 "metricsAsOf" "" "hasUpvotes" false "upvotes" 0 "codeRepo" "" "hasCodeStars" false "codeStars" 0 "aiKeywords" (slice) "primaryCategory" "" "primaryCategoryLabel" "" "primaryArchive" "" "primaryGroup" "") }}</div>
 {{ end }}

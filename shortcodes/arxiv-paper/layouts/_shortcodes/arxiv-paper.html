@@ -16,12 +16,19 @@
                  badge, HF upvotes, and artifact counts; "all" enables both.
                  Defaults to the site param params.arxiv_paper.enrich, else off.
   - class (string, optional): Additional CSS class(es) appended to the root.
+  - revised (string, optional): Display mode for the hero variant's revision time label.
+                 One of: relative, date, none. Default: "relative". "relative" renders a
+                 calendar-day-granularity phrase ("today", "yesterday", "5 days ago") that
+                 stays accurate while the site rebuilds at least daily; "date" renders the
+                 localized absolute date, which never goes stale at any rebuild cadence;
+                 "none" omits the element entirely.
 
   Usage:
     arxiv-paper id="2512.24601"
     arxiv-paper id="2512.24601" variant="hero"
     arxiv-paper url="https://arxiv.org/abs/1706.03762" variant="stats" enrich="all"
     arxiv-paper id="hep-th/9901001" variant="cite"
+    arxiv-paper id="2512.24601" variant="hero" revised="date"
 */}}
 
 {{- $id := .Get "id" | default "" -}}
@@ -31,6 +38,7 @@
 {{- $abstract := .Get "abstract" | default "" -}}
 {{- $enrich := .Get "enrich" | default "" -}}
 {{- $class := .Get "class" | default "" -}}
+{{- $revised := .Get "revised" | default "relative" -}}
 
 {{/* Validate that at least one locator was supplied. */}}
 {{- if and (not $id) (not $url) -}}
@@ -41,6 +49,12 @@
 {{- $validVariants := slice "inline" "card" "wide" "stats" "hero" "cite" -}}
 {{- if not (in $validVariants $variant) -}}
   {{- errorf "The %q shortcode received invalid variant %q. Must be one of: inline, card, wide, stats, hero, cite. See %s" .Name $variant .Position -}}
+{{- end -}}
+
+{{/* Validate the revision label display mode against allowed values. */}}
+{{- $validRevised := slice "relative" "date" "none" -}}
+{{- if not (in $validRevised $revised) -}}
+  {{- errorf "The %q shortcode received invalid revised %q. Must be one of: relative, date, none. See %s" .Name $revised .Position -}}
 {{- end -}}
 
 {{/* Fetch and normalize paper data. */}}
@@ -55,8 +69,8 @@
 -}}
 {{- $data := partial "arxiv-paper/fetch.html" $ctx -}}
 
-{{/* Merge extra class into data. */}}
-{{- $data = merge $data (dict "extraClass" $class) -}}
+{{/* Merge the per-call presentation settings into the fetched data. */}}
+{{- $data = merge $data (dict "extraClass" $class "revisedMode" $revised) -}}
 
 {{/* Dispatch to variant partial. */}}
 {{- partial (printf "arxiv-paper/%s.html" $variant) $data -}}

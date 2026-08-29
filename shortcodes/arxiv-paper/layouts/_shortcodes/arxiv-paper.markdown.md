@@ -16,9 +16,10 @@
   both output formats, so it re-emits no warnings.
 
   Parameters: identical to arxiv-paper.html -- id, url, variant, title,
-  abstract, enrich, class. The variant and class parameters are accepted for
-  call-site compatibility but do not change this compact rendering. Parameter
-  validation (missing locator, invalid variant) lives in the HTML entry
+  abstract, enrich, class, revised. The variant, class and revised parameters
+  are accepted for call-site compatibility but do not change this compact
+  rendering. Parameter validation (missing locator, invalid variant, invalid
+  revised mode) lives in the HTML entry
   template, which renders the same page in the HTML output format and already
   stops the build with errorf; this template does not duplicate those checks
   and renders nothing when no locator is present.

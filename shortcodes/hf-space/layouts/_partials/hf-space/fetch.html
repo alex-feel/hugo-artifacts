@@ -121,7 +121,6 @@
   "likes" 0
   "likesCount" 0
   "likesFormatted" "0"
-  "updated" ""
   "updatedISO" ""
   "tags" (slice)
   "colorFrom" ""
@@ -281,12 +280,11 @@
        days or weeks apart, so any stage baked in at build time would be stale
        almost immediately. The card only surfaces facts that age gracefully. */}}
 
-  {{/* Last-modified -> relative time. */}}
-  {{- $updatedStr := "" -}}
+  {{/* The raw lastModified ISO 8601 timestamp is carried as-is; the display
+       label is derived at render time by hero.html through time-label.html,
+       because the display form is the shortcode's per-call `updated`
+       parameter. */}}
   {{- $updatedISO := or $json.lastModified "" -}}
-  {{- with $updatedISO -}}
-    {{- $updatedStr = partial "hf-space/relative-time.html" . -}}
-  {{- end -}}
 
   {{/* Tags. Use the author-curated cardData.tags when present, else the
        top-level machine tags. Either way clean the list: drop namespaced
@@ -340,7 +338,6 @@
     "likes" $likesRaw
     "likesCount" $likesN
     "likesFormatted" $likesF
-    "updated" $updatedStr
     "updatedISO" $updatedISO
     "tags" $tags
     "colorFrom" $colorFrom

@@ -30,8 +30,10 @@
   shortcode fails the build regardless of output format; the compact
   rendering is the same for every variant), title / description / emoji
   (the same fetch-layer overrides; description does not appear in the
-  compact line), and class (accepted for call-site compatibility; a
-  Markdown line has no root element to class).
+  compact line), class (accepted for call-site compatibility; a Markdown
+  line has no root element to class), and updated (validated against the
+  same whitelist; the compact line renders no time label, so the mode
+  changes nothing here).
 
   Usage (identical calls; the output format picks the template):
     hf-space id="gradio/hello_world"
@@ -46,6 +48,7 @@
 {{- $title := .Get "title" | default "" -}}
 {{- $description := .Get "description" | default "" -}}
 {{- $emoji := .Get "emoji" | default "" -}}
+{{- $updated := .Get "updated" | default "relative" -}}
 
 {{/* Validate that at least one locator was supplied. */}}
 {{- if and (not $id) (not $url) -}}
@@ -56,6 +59,12 @@
 {{- $validVariants := slice "inline" "card" "wide" "stats" "hero" -}}
 {{- if not (in $validVariants $variant) -}}
   {{- errorf "The %q shortcode received invalid variant %q. Must be one of: inline, card, wide, stats, hero. See %s" .Name $variant .Position -}}
+{{- end -}}
+
+{{/* Validate the last-modified label display mode against allowed values. */}}
+{{- $validUpdated := slice "relative" "date" "none" -}}
+{{- if not (in $validUpdated $updated) -}}
+  {{- errorf "The %q shortcode received invalid updated %q. Must be one of: relative, date, none. See %s" .Name $updated .Position -}}
 {{- end -}}
 
 {{/* Fetch and normalize Space data through the shared cached fetch layer. */}}

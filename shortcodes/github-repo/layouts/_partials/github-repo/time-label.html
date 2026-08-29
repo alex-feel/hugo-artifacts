@@ -1,0 +1,31 @@
+{{/*
+  Resolves the display label for the last-push timestamp under the shortcode's
+  `updated` display parameter.
+
+  Context (dict):
+  - iso (string): ISO 8601 timestamp; may be "".
+  - mode (string): "relative", "date", or "none" (validated by the shortcode).
+
+  Returns "" when the mode is "none", the timestamp is absent, or it fails to
+  parse -- the input is remote-derived, so a malformed value degrades to an
+  empty label instead of failing the build. "relative" delegates to
+  relative-time.html (calendar-day granularity, accurate whenever the site
+  rebuilds at least daily); "date" formats the localized absolute date via the
+  :date_medium token, which never goes stale whatever the rebuild cadence.
+*/}}
+
+{{- $result := "" -}}
+{{- if and .iso (ne .mode "none") -}}
+  {{- if eq .mode "date" -}}
+    {{- $t := try (time.AsTime .iso) -}}
+    {{- if not $t.Err -}}
+      {{- with $t.Value -}}
+        {{- $result = time.Format ":date_medium" . -}}
+      {{- end -}}
+    {{- end -}}
+  {{- else -}}
+    {{- $result = partial "github-repo/relative-time.html" .iso -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return $result -}}

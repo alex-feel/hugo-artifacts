@@ -18,11 +18,12 @@
   warnings.
 
   Parameters: identical to github-repo.html -- url, variant, name,
-  description, class. The variant parameter is passed through to the fetch
-  layer so the request surface matches the HTML render of the same call (an
-  inline call still fetches nothing); it does not change this compact
-  rendering. The class parameter is accepted for call-site compatibility and
-  ignored -- a Markdown line has no root element. Parameter validation
+  description, class, updated. The variant parameter is passed through to the
+  fetch layer so the request surface matches the HTML render of the same call
+  (an inline call still fetches nothing); it does not change this compact
+  rendering. The class and updated parameters are accepted for call-site
+  compatibility and ignored -- a Markdown line has no root element and
+  renders no time label. Parameter validation
   (missing url, invalid variant) lives in the HTML entry template, which
   renders the same page in the HTML output format and already stops the build
   with errorf; this template does not duplicate those checks and renders

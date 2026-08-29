@@ -1,7 +1,46 @@
 # Hugo arxiv-paper module -- Russian UI strings.
 
+arxiv_paper_submitted = "Подано"
+arxiv_paper_revised = "Обновлено"
+arxiv_paper_today = "сегодня"
+arxiv_paper_yesterday = "вчера"
+arxiv_paper_code = "Код"
+arxiv_paper_view_on_arxiv = "Открыть на arXiv"
+arxiv_paper_cite_label = "Как цитировать"
+arxiv_paper_published_version = "Опубликованная версия"
+arxiv_paper_et_al = "и др."
+arxiv_paper_stat_subject = "Тематика"
+arxiv_paper_stat_authors = "Авторы"
+arxiv_paper_stat_version = "Версия"
+arxiv_paper_stat_citations = "Цитирования"
+arxiv_paper_stat_upvotes = "Апвоуты HF"
+
 [arxiv_paper_citations_word]
 one = "цитирование"
 few = "цитирования"
 many = "цитирований"
 other = "цитирования"
+
+[arxiv_paper_authors_count]
+one = "({{ .Count }} автор)"
+few = "({{ .Count }} автора)"
+many = "({{ .Count }} авторов)"
+other = "({{ .Count }} автора)"
+
+[arxiv_paper_days_ago]
+one = "{{ .Count }} день назад"
+few = "{{ .Count }} дня назад"
+many = "{{ .Count }} дней назад"
+other = "{{ .Count }} дня назад"
+
+[arxiv_paper_months_ago]
+one = "{{ .Count }} месяц назад"
+few = "{{ .Count }} месяца назад"
+many = "{{ .Count }} месяцев назад"
+other = "{{ .Count }} месяца назад"
+
+[arxiv_paper_years_ago]
+one = "{{ .Count }} год назад"
+few = "{{ .Count }} года назад"
+many = "{{ .Count }} лет назад"
+other = "{{ .Count }} года назад"

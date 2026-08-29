@@ -53,7 +53,7 @@ A minimal `<a>` element showing the GitHub icon, the owner/name pair (the `name`
 {{</* github-repo url="https://github.com/gohugoio/hugo" variant="card" */>}}
 ```
 
-Displays an `<article>` card with a linked title, description, and a metadata footer showing language (with colored dot), stars, forks, license, and last-updated time.
+Displays an `<article>` card with a linked title, description, and a metadata footer showing language (with colored dot), stars, forks, license, and a last-updated label (see [The last-updated label](#the-last-updated-label)).
 
 #### stats -- Stats card with avatar
 
@@ -88,11 +88,13 @@ The largest variant, an `<article>` card. Includes a breadcrumb header, a 52-wee
 | `name` | string | no | API/repo | Display name override (defaults to the repository name) |
 | `description` | string | no | API | Description override (defaults to the API description) |
 | `class` | string | no | -- | Additional CSS class(es) appended to the root element |
+| `updated` | string | no | `relative` | Display mode for the last-updated label in the card and hero variants: `relative`, `date`, `none` (see [The last-updated label](#the-last-updated-label)) |
 
 Validation:
 
 - Omitting `url` fails the build with an error message.
 - Passing an invalid `variant` value fails the build with an error message.
+- Passing an invalid `updated` value fails the build with an error message.
 
 ## Authentication
 
@@ -229,7 +231,21 @@ When all retries for an endpoint exhaust, the module does not break the build. I
 - **`card`, `stats`, `lang`, `hero` variants:** Fall back to the inline chip layout (an `<a>` root -- the degraded rendering is a full link even though the healthy card-family root is an `<article>`).
 - **`lang` variant, languages endpoint failure:** The language bar and legend are omitted; the rest of the card renders normally.
 - **`hero` variant, participation endpoint failure or HTTP 202:** The sparkline is omitted; the rest of the card renders normally.
-- **Formatter safety:** an unparseable, non-finite, or implausibly large star/fork count passes through the compact-number formatter verbatim, and an unparseable `pushed_at` timestamp renders an empty relative time; neither breaks the build.
+- **Formatter safety:** an unparseable, non-finite, or implausibly large star/fork count passes through the compact-number formatter verbatim, and an unparseable `pushed_at` timestamp omits the last-updated element; neither breaks the build.
+
+## The last-updated label
+
+The card and hero variants show when the repository last received a push. The visible label always sits inside a `<time>` element whose `datetime` attribute carries the raw ISO 8601 `pushed_at` value, and the `updated` parameter chooses what a reader sees:
+
+| Mode | Output | Staleness |
+| --- | --- | --- |
+| `relative` (default) | `updated today`, `updated yesterday`, `updated 5 days ago`, `updated 2 months ago` | Accurate while the site rebuilds at least daily; drifts by the age of the build under rarer rebuilds |
+| `date` | `updated Aug 27, 2026` -- the localized absolute date via Hugo's `:date_medium` token | Never stale, at any rebuild cadence |
+| `none` | The element is not rendered at all | -- |
+
+The relative phrase counts calendar days between the push's UTC date and the build's UTC date, never hours: a static site renders once and is then served as-is for at least a day, so the finest unit that stays truthful between daily rebuilds is the day, and a phrase like "2 hours ago" would be wrong within hours of the build. A site that rebuilds at least once a day therefore always shows an accurate relative label. A site that rebuilds less often has two honest options: `updated="date"` (an absolute date is a fact and cannot age) or `updated="none"`. The `datetime` attribute enables a third, site-owned option: the consuming site's own script can re-render the label on every page load from the machine-readable value -- the module itself ships no JavaScript.
+
+CSS hooks: the meta item carries `github-repo__meta-item--updated` and the `<time>` element carries `github-repo__time`, so a site can also restyle or hide the label visually without touching the parameter.
 
 ## Markdown output variant
 
@@ -260,13 +276,13 @@ All UI strings resolve through i18n keys shipped in the module's `i18n/` directo
 | `github_repo_eyebrow_card` | `GITHUB · REPOSITORY` | Card eyebrow |
 | `github_repo_eyebrow_stats` | `GITHUB / {{ . }}` | Stats eyebrow (`{{ . }}` is the uppercased owner) |
 | `github_repo_type_repository` | `REPOSITORY` | Lang-card eyebrow and hero breadcrumb |
-| `github_repo_updated` | `updated {{ . }}` | Card and hero updated line (`{{ . }}` is the relative time) |
+| `github_repo_updated` | `updated` | Card and hero updated-label prefix, rendered outside the `<time>` element so a site-owned re-render of the element's text keeps it |
 | `github_repo_view_on_github` | `View on GitHub` | Hero call-to-action |
 | `github_repo_sparkline_title` | `Last 52 weeks of commits` | Hero sparkline tooltip |
 | `github_repo_stat_language` / `_stars` / `_forks` / `_license` | `Language` / `Stars` / `Forks` / `License` | Stats-card labels |
 | `github_repo_stars_word` / `github_repo_forks_word` | `star`/`stars` / `fork`/`forks` (plural forms) | Hero and lang-card count words (raw counts below 1000 select their own plural form; a compact-formatted display such as `1.2k` selects the form of 1000) |
-| `github_repo_just_now` / `github_repo_yesterday` | `just now` / `yesterday` | Relative time |
-| `github_repo_hours_ago` / `_days_ago` / `_months_ago` / `_years_ago` | `1 hour ago` / `{{ .Count }} hours ago` (plural forms) | Relative time |
+| `github_repo_today` / `github_repo_yesterday` | `today` / `yesterday` | Relative time (calendar-day granularity) |
+| `github_repo_days_ago` / `_months_ago` / `_years_ago` | `1 day ago` / `{{ .Count }} days ago` (plural forms) | Relative time (calendar-day granularity) |
 
 ## Styling
 
@@ -367,7 +383,9 @@ shortcodes/github-repo/
         fetch-once.html             # Single-attempt fetch (normalized result dict)
         classify-error.html         # HTTP error -> (errorClass, waitHintSeconds, errorMessage)
         compact-number.html         # Number formatting (1500 -> "1.5k"; a rounding carry promotes tiers: 999950 -> "1M")
-        relative-time.html          # Timestamp formatting (e.g., "3 days ago")
+        relative-time.html          # Calendar-day relative time (e.g., "today", "3 days ago")
+        time-label.html             # Display-mode resolution (relative | date | none)
+        updated.html                # The shared last-updated meta item (card + hero)
         icon.html                   # Centralized SVG icon rendering
         inline.html                 # V1 inline chip
         card.html                   # V2 editorial card (default)

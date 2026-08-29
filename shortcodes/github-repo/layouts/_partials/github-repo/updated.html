@@ -1,0 +1,24 @@
+{{/*
+  Renders the last-push meta item shared by the card and hero variants: a
+  clock icon plus a <time> element, or nothing when the display mode is
+  "none", the timestamp is absent, or it fails to parse.
+
+  Context (dict):
+  - iso (string): The repository's pushed_at ISO 8601 timestamp; may be "".
+  - mode (string): "relative", "date", or "none" (validated by the shortcode).
+
+  The <time> element's datetime attribute always carries the raw ISO 8601
+  value, so the machine-readable timestamp stays in the markup whatever the
+  display mode and a consuming site's own script can re-render the label on
+  every page load. The localized "updated" prefix sits OUTSIDE the <time>
+  element for the same reason: a script replacing the element's text from its
+  datetime must not destroy the prefix.
+*/}}
+
+{{- $label := partial "github-repo/time-label.html" . -}}
+{{- with $label }}
+<span class="github-repo__meta-item github-repo__meta-item--updated">
+  {{- partial "github-repo/icon.html" (dict "name" "clock") }}
+  {{ T "github_repo_updated" | default "updated" }} <time class="github-repo__time" datetime="{{ $.iso }}">{{ . }}</time>
+</span>
+{{- end -}}

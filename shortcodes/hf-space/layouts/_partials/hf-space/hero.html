@@ -5,7 +5,7 @@
   - . (dict) - Normalized Space data from fetch.html partial
   - .url, .owner, .name, .id, .title, .emoji, .description
   - .sdk, .sdkLabel, .sdkVersion
-  - .hardware, .hardwareLabel, .likesFormatted, .updated, .tags
+  - .hardware, .hardwareLabel, .likesFormatted, .updatedISO, .updatedMode, .tags
   - .colorFrom, .colorTo, .colorFromHex, .colorToHex, .apiOk, .extraClass
 
   Output: An <article> element with BEM class hf-space hf-space--hero.
@@ -64,12 +64,7 @@
         {{- partial "hf-space/icon.html" (dict "name" "heart" "class" "hf-space__icon hf-space__icon--heart") }}
         <strong>{{ .likesFormatted }}</strong> {{ T "hf_space_likes_word" (cond (lt .likesCount 1000) .likesCount 1000) | default "likes" }}
       </span>
-      {{- with .updated }}
-      <span class="hf-space__meta-item">
-        {{- partial "hf-space/icon.html" (dict "name" "clock" "class" "hf-space__icon") }}
-        <time datetime="{{ $.updatedISO }}">{{ . }}</time>
-      </span>
-      {{- end }}
+      {{- partial "hf-space/updated.html" (dict "iso" .updatedISO "mode" .updatedMode) }}
       <span class="hf-space__cta">
         {{ T "hf_space_open_in_spaces" | default "Open in Spaces" }}
         <span class="hf-space__cta-arrow">
