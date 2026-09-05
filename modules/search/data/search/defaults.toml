@@ -125,16 +125,20 @@ results_limit = 8
 # Results per "show more" chunk on the dedicated search page.
 page_size = 10
 
-# Modal toggle hotkey. Grammar (case-insensitive): zero or more modifiers
-# from "mod", "ctrl", "alt", "shift" joined with "+", ending in exactly one
-# key -- a single printable character or a named key like "f1"; "mod" means
-# Ctrl on Windows/Linux and Cmd on macOS. Examples: "mod+k", "ctrl+shift+p",
-# "k". Empty string disables the hotkey entirely; an unparseable value warns
-# once (search:warn:bad-hotkey) and disables it.
+# Search hotkey. Grammar (case-insensitive): zero or more modifiers from
+# "mod", "ctrl", "alt", "shift" joined with "+", ending in exactly one key
+# -- a single printable character or a named key like "f1"; "mod" means
+# Ctrl on Windows/Linux and Cmd on macOS. Toggles the modal palette; when
+# no palette handles the chord (the page has none, or the palette's own
+# hotkey is disabled per call site and its dialog is closed) it moves
+# focus into the inline dropdown's input instead. Examples: "mod+k",
+# "ctrl+shift+p", "k". Empty string disables the hotkey entirely; an
+# unparseable value warns once (search:warn:bad-hotkey) and disables it.
 hotkey = "mod+k"
 
-# Also open the modal on "/" (off by default: single-character shortcuts
-# need an explicit opt-in and are suppressed while typing in any field).
+# Also trigger the hotkey action on "/" (off by default: single-character
+# shortcuts need an explicit opt-in and are suppressed while typing in any
+# field).
 hotkey_slash = false
 
 # --- Runtime ---

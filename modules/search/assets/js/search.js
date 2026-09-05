@@ -998,6 +998,56 @@ function isApplePlatform() {
   return /Mac|iPhone|iPad|iPod/.test(navigator.platform || '');
 }
 
+// Whether the event is exactly the parsed hotkey chord. "mod" resolves to
+// Meta on Apple platforms and Ctrl everywhere else, and the four modifier
+// states must match exactly, so a chord with an extra held modifier never
+// fires.
+function hotkeyChordMatches(event, hotkey, apple) {
+  if (!hotkey || typeof event.key !== 'string' || event.key.toLowerCase() !== hotkey.key) {
+    return false;
+  }
+  const wantMeta = hotkey.mod && apple;
+  const wantCtrl = hotkey.ctrl || (hotkey.mod && !apple);
+  return (
+    event.metaKey === wantMeta &&
+    event.ctrlKey === wantCtrl &&
+    event.altKey === hotkey.alt &&
+    event.shiftKey === hotkey.shift
+  );
+}
+
+// A hotkey with no non-typing modifier (a bare "k", or a shift-only
+// "shift+k" -- shift is how capitals are typed) is an ordinary character
+// in a field: firing there would eat the keystroke. Ctrl, Alt, and mod
+// chords never type text, so they keep working everywhere.
+function hotkeyTypesText(hotkey) {
+  return !(hotkey.mod || hotkey.ctrl || hotkey.alt);
+}
+
+// The ARIA spelling of the parsed hotkey ("Control+K", "Meta+K"), resolving
+// "mod" per platform exactly as the chord test does.
+function ariaKeyShortcuts(hotkey, apple) {
+  const parts = [];
+  if (hotkey.mod && apple) {
+    parts.push('Meta');
+  }
+  if (hotkey.ctrl || (hotkey.mod && !apple)) {
+    parts.push('Control');
+  }
+  if (hotkey.alt) {
+    parts.push('Alt');
+  }
+  if (hotkey.shift) {
+    parts.push('Shift');
+  }
+  parts.push(
+    hotkey.key.length === 1
+      ? hotkey.key.toUpperCase()
+      : hotkey.key.charAt(0).toUpperCase() + hotkey.key.slice(1),
+  );
+  return parts.join('+');
+}
+
 // One shared palette per page: the first dialog-carrying modal root to
 // enhance becomes the owner and wires the controller (the first election
 // in a JS context additionally registers the singleton document-level
@@ -1069,6 +1119,47 @@ function sweepModalTriggers() {
   }
 }
 
+// Inline placements with a hotkey or the slash opt-in, in enhancement
+// (DOM) order. The FIRST connected, intact record serves the shortcut, so
+// a multi-placement page behaves like the modal's first-dialog election.
+// A record whose root left the document is pruned at event time and
+// stashed by its root node, exactly like the modal's former owners: the
+// array must not retain detached subtrees for the lifetime of the
+// context, while a host cache restore that re-inserts the same root
+// (still wired, still enhanced, so init() skips it) gets its record
+// re-adopted from the stash on the rescan that announces it -- at the
+// tail, which is where a swapped-back placement lands in enhancement
+// order. The WeakMap ties each stashed record's lifetime to the host's
+// own retention of the root.
+const inlineHotkeyRecords = [];
+const stashedInlineHotkeyRecords = new WeakMap();
+
+function readoptInlineHotkeyRecord(root) {
+  const record = stashedInlineHotkeyRecords.get(root);
+  if (record && inlineHotkeyRecords.indexOf(record) === -1) {
+    inlineHotkeyRecords.push(record);
+  }
+}
+
+function currentInlineHotkeyRecord() {
+  for (let i = 0; i < inlineHotkeyRecords.length; i++) {
+    const record = inlineHotkeyRecords[i];
+    if (!record.root.isConnected) {
+      stashedInlineHotkeyRecords.set(record.root, record);
+      inlineHotkeyRecords.splice(i, 1);
+      i--;
+      continue;
+    }
+    if (record.input.isConnected && record.root.contains(record.input)) {
+      return record;
+    }
+    // A connected root whose input was moved out is gutted: it cannot be
+    // served, but a restore can heal it in place, so it is skipped
+    // without being pruned.
+  }
+  return null;
+}
+
 // The click-delegation and hotkey listeners are registered ONCE per JS
 // context and resolve the CURRENT owner at event time: per-owner document
 // listeners would accumulate across elections and retain each deposed
@@ -1089,28 +1180,32 @@ function wireModalDocumentListeners() {
       modalOwner.open();
     }
   });
+  wireHotkeyDocumentListener();
+}
+
+// One keydown singleton serves both hotkey consumers, wired from whichever
+// surface enhances first. The modal palette gets the event first: when its
+// own hotkey or slash opt-in matches, the palette toggles and the inline
+// branch never runs, and while its dialog is OPEN the background is inert,
+// so moving focus into a background inline input could not work and the
+// event stops there too. A CLOSED palette that did not handle the event
+// falls through, because hotkey and hotkey_slash resolve per call site:
+// a page may disable the palette's chord while its inline placement
+// carries one, and that inline hotkey still has to fire.
+let hotkeyDocumentListenerWired = false;
+
+function wireHotkeyDocumentListener() {
+  if (hotkeyDocumentListenerWired) {
+    return;
+  }
+  hotkeyDocumentListenerWired = true;
   document.addEventListener('keydown', (event) => {
     const owner = modalOwner;
-    if (!owner) {
-      return;
-    }
-    const hotkey = owner.hotkey;
-    if (hotkey && typeof event.key === 'string' && event.key.toLowerCase() === hotkey.key) {
-      const wantMeta = hotkey.mod && owner.apple;
-      const wantCtrl = hotkey.ctrl || (hotkey.mod && !owner.apple);
-      if (
-        event.metaKey === wantMeta &&
-        event.ctrlKey === wantCtrl &&
-        event.altKey === hotkey.alt &&
-        event.shiftKey === hotkey.shift
-      ) {
-        // A hotkey with no non-typing modifier (a bare "k", or a
-        // shift-only "shift+k" -- shift is how capitals are typed) is
-        // an ordinary character in a field: firing there would eat the
-        // keystroke, and with the palette open its own input would
-        // toggle it closed mid-word. Ctrl, Alt, and mod chords never
-        // type text, so they keep working everywhere.
-        if (!(hotkey.mod || hotkey.ctrl || hotkey.alt) && isTypingContext(event.target)) {
+    if (owner) {
+      if (hotkeyChordMatches(event, owner.hotkey, owner.apple)) {
+        // With the palette open, its own input would toggle it closed
+        // mid-word; the typing guard covers that case too.
+        if (hotkeyTypesText(owner.hotkey) && isTypingContext(event.target)) {
           return;
         }
         event.preventDefault();
@@ -1121,18 +1216,50 @@ function wireModalDocumentListeners() {
         }
         return;
       }
+      if (
+        owner.hotkeySlash &&
+        event.key === '/' &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        !isTypingContext(event.target) &&
+        !owner.isOpen()
+      ) {
+        event.preventDefault();
+        owner.open();
+        return;
+      }
+      if (owner.isOpen()) {
+        return;
+      }
+    }
+    const record = currentInlineHotkeyRecord();
+    if (!record) {
+      return;
+    }
+    if (hotkeyChordMatches(event, record.hotkey, record.apple)) {
+      if (hotkeyTypesText(record.hotkey) && isTypingContext(event.target)) {
+        return;
+      }
+      // Selecting the existing text lets the next keystroke replace it,
+      // matching how persistent search fields behave under their
+      // shortcuts elsewhere; on an empty input the selection is a no-op.
+      event.preventDefault();
+      record.input.focus();
+      record.input.select();
+      return;
     }
     if (
-      owner.hotkeySlash &&
+      record.hotkeySlash &&
       event.key === '/' &&
       !event.ctrlKey &&
       !event.metaKey &&
       !event.altKey &&
-      !isTypingContext(event.target) &&
-      !owner.isOpen()
+      !isTypingContext(event.target)
     ) {
       event.preventDefault();
-      owner.open();
+      record.input.focus();
+      record.input.select();
     }
   });
 }
@@ -1589,6 +1716,16 @@ function wireInline(root, config) {
   });
 
   wireIntentPrefetch(core, input);
+
+  const hotkey = parseHotkey(config.hotkey);
+  if (hotkey || config.hotkeySlash) {
+    const apple = isApplePlatform();
+    if (hotkey) {
+      input.setAttribute('aria-keyshortcuts', ariaKeyShortcuts(hotkey, apple));
+    }
+    inlineHotkeyRecords.push({root, input, hotkey, hotkeySlash: config.hotkeySlash, apple});
+    wireHotkeyDocumentListener();
+  }
 }
 
 // ---- Idempotent init ----
@@ -1627,6 +1764,9 @@ function init() {
         root.classList.add('search--enhanced');
       }
       readoptExternalChange(root);
+      if (root.dataset.searchSurface === 'inline') {
+        readoptInlineHotkeyRecord(root);
+      }
       continue;
     }
     const config = readConfig(root);
