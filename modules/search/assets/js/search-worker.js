@@ -139,7 +139,15 @@ export function createSearchBackend() {
   }
 
   async function init(payload) {
-    const indexUrl = payload.indexUrl;
+    // Absolutized BEFORE the fetch: a relative URL would resolve against the
+    // document's full base, which on a page navigated as
+    // https://user:pass@host/ still embeds the credentials the Fetch
+    // standard rejects ("Request cannot be constructed from a URL that
+    // includes credentials"). location.href never exposes userinfo, so the
+    // URL built here is credential-free in both worker and main-thread
+    // modes, and the browser attaches its cached authorization to the
+    // request itself.
+    const indexUrl = new URL(payload.indexUrl, globalThis.location.href).toString();
     const options = payload.options || {};
     const {envelope, byteLength} = await fetchEnvelope(indexUrl);
     if (!envelope || envelope.schemaVersion !== 1) {
