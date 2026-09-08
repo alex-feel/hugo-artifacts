@@ -23,16 +23,17 @@
   show-streak, show-rank, and name feed the shared fetch/derive layer so the
   request surface matches the HTML render of the same call; variant,
   sections, avatar, attribution, class, language-scope, org-rollup-limit,
-  and contributed-limit shape only the HTML widget and are accepted here for
-  call-site compatibility and ignored -- language-scope selects which
-  repositories the language ROW measures, and this variant renders no
-  language row, no rollup, and no contributed list. Parameter validation
-  (missing or malformed user, invalid enums) lives in the HTML entry
-  template, which renders the same page in the HTML output format and already
-  stops the build with errorf; this template does not duplicate those checks
-  and renders nothing when the user parameter is absent or malformed, and it
-  normalizes an invalid history to the default so no malformed API request is
-  issued while the HTML side is failing the build.
+  org-rollup-owners, and contributed-limit shape only the HTML widget and
+  are accepted here for call-site compatibility and ignored --
+  language-scope selects which repositories the language ROW measures, and
+  this variant renders no language row, no rollup, and no contributed
+  list. Parameter validation (missing or malformed user, invalid enums)
+  lives in the HTML entry template, which renders the same page in the
+  HTML output format and already stops the build with errorf; this
+  template does not duplicate those checks and renders nothing when the
+  user parameter is absent or malformed, and it normalizes an invalid
+  history to the default so no malformed API request is issued while the
+  HTML side is failing the build.
 
   Usage (identical calls; the output format picks the template):
     github-profile user="alex-feel"

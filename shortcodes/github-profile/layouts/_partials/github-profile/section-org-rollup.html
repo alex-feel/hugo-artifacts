@@ -1,8 +1,11 @@
 {{/*
   Per-organization contribution rollup: commits, issues, pull requests, and
-  reviews grouped by repository owner (the person's own account excluded) --
+  reviews grouped by repository owner (the person's own account excluded;
+  under org-rollup-owners="organizations" only organization-owned rows) --
   a composite GitHub itself never presents. Scoped to the snapshot's
   rolling-year window and the API's top-100-repositories-per-type ceiling.
+  The list names its owner-type selection in data-owners, so the claim
+  always matches the rows.
 
   Each stat carries a real unit word in the text layer
   (github-profile__org-roll-stat-unit) and the stats are separated by real
@@ -30,7 +33,7 @@
 {{- if gt (len $d.orgRollup) 0 -}}
 <section class="github-profile__section github-profile__section--org-rollup">
   {{- partial "github-profile/section-title.html" (dict "token" "org-rollup" "key" "github_profile_org_rollup_label" "fallback" "Contributions by organization") }}
-  <ul class="github-profile__org-rollup" aria-label="{{ T "github_profile_org_rollup_label" | default "Contributions by organization" }}" data-total="{{ $d.orgRollupTotal }}">
+  <ul class="github-profile__org-rollup" aria-label="{{ T "github_profile_org_rollup_label" | default "Contributions by organization" }}" data-total="{{ $d.orgRollupTotal }}" data-owners="{{ $d.orgRollupOwners }}">
     {{- range $d.orgRollup }}
     <li class="github-profile__org-roll"
         data-org="{{ .login }}"
