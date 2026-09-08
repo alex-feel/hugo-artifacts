@@ -33,6 +33,11 @@
     total. 0 renders every row. A truncated list says so: it carries its
     pre-cap total in data-total and renders a visible localized remainder
     note. Default: 10
+  - org-rollup-owners (string, optional): Which owner types the rollup
+    keeps. "all" (organizations and user accounts alike) or "organizations"
+    (rows owned by individual user accounts are dropped before the cap, so
+    data-total and the remainder note count only kept owners). The list
+    names its selection in data-owners either way. Default: "all"
   - contributed-limit (int, optional): How many contributed repositories
     render, top-N by stars. 0 renders every fetched one; the remainder note
     then reflects only what the API itself withheld past its 100-node
@@ -53,6 +58,7 @@
     github-profile user="alex-feel" sections="headline,calendar" show-streak="true"
     github-profile user="alex-feel" language-scope="worked-in"
     github-profile user="alex-feel" org-rollup-limit="0"
+    github-profile user="alex-feel" org-rollup-owners="organizations"
 */}}
 
 {{- $user := .Get "user" -}}
@@ -75,6 +81,7 @@
 {{- if isset .Params "contributed-limit" -}}
   {{- $contributedLimitRaw = .Get "contributed-limit" -}}
 {{- end -}}
+{{- $orgRollupOwners := .Get "org-rollup-owners" | default "all" -}}
 {{- $avatar := .Get "avatar" | default "fetch" -}}
 {{- $name := .Get "name" | default "" -}}
 {{- $attribution := ne (lower (printf "%v" (.Get "attribution" | default true))) "false" -}}
@@ -109,6 +116,10 @@
 {{- $validLanguageScope := slice "owned" "worked-in" -}}
 {{- if not (in $validLanguageScope $languageScope) -}}
   {{- errorf "The %q shortcode received invalid language-scope %q. Must be one of: owned, worked-in. See %s" .Name $languageScope .Position -}}
+{{- end -}}
+{{- $validOrgRollupOwners := slice "all" "organizations" -}}
+{{- if not (in $validOrgRollupOwners $orgRollupOwners) -}}
+  {{- errorf "The %q shortcode received invalid org-rollup-owners %q. Must be one of: all, organizations. See %s" .Name $orgRollupOwners .Position -}}
 {{- end -}}
 
 {{/* Validate the list limits: non-negative integers, 0 meaning every row.
@@ -184,6 +195,7 @@
   "nameOverride" $name
   "languageScope" $languageScope
   "orgRollupLimit" $orgRollupLimit
+  "orgRollupOwners" $orgRollupOwners
   "contributedLimit" $contributedLimit
 ) -}}
 

@@ -23,6 +23,9 @@
   - .orgRollupLimit (int) How many rollup rows survive the cap, top-N by
                          total; 0 keeps every row. Optional; omitting it
                          means 10 (the Markdown variant omits it).
+  - .orgRollupOwners (string) Which owner types the rollup keeps: "all" or
+                         "organizations". Optional; omitting it means
+                         "all" (the Markdown variant omits it).
   - .contributedLimit (int) The same cap for the contributed list, top-N by
                          stars; 0 keeps every fetched repository. Optional;
                          omitting it means 12.
@@ -65,6 +68,16 @@
   {{- $languageAttribution = "authorship-weighted" -}}
 {{- end -}}
 
+{{/* Normalized for the same reason languageScope is: any value other than
+     "organizations" already keeps every owner by falling through the filter
+     below, but it would reach data-owners unchanged and publish a claim the
+     rows do not match. The HTML entry template errorfs before a bad value
+     can arrive; this guard covers any other caller. */}}
+{{- $orgRollupOwners := .orgRollupOwners | default "all" -}}
+{{- if not (in (slice "all" "organizations") $orgRollupOwners) -}}
+  {{- $orgRollupOwners = "all" -}}
+{{- end -}}
+
 {{/* The list caps, read with isset rather than default: 0 is a legitimate
      value meaning "keep every row", and `default` would collapse it to the
      fallback because 0 is the int zero value. The entry template validates
@@ -91,6 +104,7 @@
   "historyEffective" "year"
   "languageScope" $languageScope
   "languageAttribution" $languageAttribution
+  "orgRollupOwners" $orgRollupOwners
 -}}
 
 {{- if $raw.apiOk -}}
@@ -487,7 +501,13 @@
      excluding the person's own account, yielding {commits, issues, prs,
      reviews, avatarUrl} per organization or external user -- the composite
      GitHub itself never presents. Scoped to the snapshot's rolling-year
-     window and to the API's top-100-repositories-per-type ceiling. */}}
+     window and to the API's top-100-repositories-per-type ceiling.
+
+     Under orgRollupOwners "organizations" only Organization-typed owners
+     enter the grouping at all -- an owner node that resolved without its
+     __typename is dropped too, because the filter keeps only what it can
+     prove -- so orgRollupTotal, the cap, and the remainder note all count
+     only kept owners. */}}
 {{- $roll := dict -}}
 {{- $rollSources := slice
   (dict "field" "commitContributionsByRepository" "key" "commits")
@@ -511,7 +531,7 @@
     {{- with index . "contributions" -}}
       {{- $count = partial "github-profile/to-int.html" (index . "totalCount") -}}
     {{- end -}}
-    {{- if and $ownerLogin (ne $ownerLogin $login) (gt $count 0) -}}
+    {{- if and $ownerLogin (ne $ownerLogin $login) (gt $count 0) (or (ne $orgRollupOwners "organizations") (eq $ownerType "Organization")) -}}
       {{- $entry := dict "login" $ownerLogin "type" $ownerType "avatarUrl" "" "commits" 0 "issues" 0 "prs" 0 "reviews" 0 "total" 0 -}}
       {{- with index $roll $ownerLogin -}}
         {{- $entry = . -}}
